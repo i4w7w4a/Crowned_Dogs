@@ -40,6 +40,8 @@ export interface KitWeapon extends WeaponSpec {
   noStancePenalty: number;
   /** Added to the share of damage that passes the shield on a guarded zone. */
   guardBonus: number;
+  /** No muzzle flash at night. Per gun: only the one in your hands can flash. */
+  suppressor: boolean;
 }
 
 /** Everything the fight needs to know about a Persona's kit. */
@@ -50,7 +52,6 @@ export interface CombatKit {
   armor: Record<Zone, number>;
   nvg: boolean;
   thermal: boolean;
-  suppressor: boolean;
   heatProof: boolean;
   grenade: GrenadeSpec;
   grenades: number;
@@ -197,6 +198,7 @@ export function applyWeaponEffects(spec: WeaponSpec, list: Effects[]): KitWeapon
     stanceTurns: stance,
     noStancePenalty: round(Math.max(0, NO_STANCE_PENALTY + sum(list, (e) => e.noStance))),
     guardBonus: round(sum(list, (e) => e.guard)),
+    suppressor: list.some((e) => e.suppressor),
   };
 }
 
@@ -229,8 +231,6 @@ export function compileKit(l: Loadout): CombatKit {
     armor,
     nvg: persona.some((e) => e.nvg),
     thermal: persona.some((e) => e.thermal),
-    // Only the gun in your hands can flash.
-    suppressor: mainFx.some((e) => e.suppressor),
     heatProof: persona.some((e) => e.heatProof),
     grenade: { ...grenade.grenade },
     grenades: 1 + sum(persona, (e) => e.grenades),

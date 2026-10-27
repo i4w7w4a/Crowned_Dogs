@@ -5,7 +5,7 @@ import { ITEMS, MOD_SLOTS, modsFor, type WeaponItem } from "../src/items.ts";
 import {
   STARTER, VETERAN_KITS, compileKit, describeItem, kitFighter, starterLoadout, validateLoadout, type Loadout,
 } from "../src/loadout.ts";
-import { createMatch, hitChance, resolveTurn, type FighterSetup, type Match, type Order, type Side } from "../src/match.ts";
+import { createMatch, hitChance, resolveTurn, weaponSpec, type FighterSetup, type Match, type Order, type Side } from "../src/match.ts";
 import { seedRng } from "../src/rng.ts";
 import { DEFAULT_ARMOR, GRENADE, WEAPONS, WEAPON_IDS, type WeaponId } from "../src/rules.ts";
 
@@ -138,6 +138,20 @@ test("night vision lifts the night penalty and camouflage hides you far away", (
   const far = hitChance(morning, 0, "rifle", 10, 1, false) - hitChance(hidden, 0, "rifle", 10, 1, false);
   assert.ok(Math.abs(far - 0.06) < 1e-9, String(far));
   assert.equal(hitChance(hidden, 0, "rifle", 4, 1, false), hitChance(morning, 0, "rifle", 4, 1, false), "camouflage does nothing up close");
+});
+
+test("a suppressor belongs to its gun", () => {
+  const quiet: Loadout = {
+    ...rifle,
+    weapon1: { item: "rifle-varyag", mods: { muzzle: "muzzle-tishina" } },
+    weapon2: { item: "pistol-pustelga" },
+  };
+  const m = duel(quiet, rifle, { time: "night" });
+  assert.equal(weaponSpec(m, 0, "rifle").suppressor, true);
+  assert.equal(weaponSpec(m, 0, "pistol").suppressor, false, "the sidearm still flashes");
+  const after = resolveTurn(m, [hold(), hold()]).match;
+  assert.equal(after.fighters[0].flash, false);
+  assert.equal(after.fighters[1].flash, true);
 });
 
 test("an EMP grenade drops the shield for the next turn", () => {

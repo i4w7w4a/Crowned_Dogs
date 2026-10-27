@@ -154,7 +154,7 @@ export function createMatch(config: MatchConfig): Match {
       weapon: kit ? (kit.weapon.id as WeaponId) : f.weapon,
       armor: kit ? { ...kit.armor } : { ...DEFAULT_ARMOR, ...f.armor },
       gear: kit
-        ? { nvg: kit.nvg, thermal: kit.thermal, suppressor: kit.suppressor, heatProof: kit.heatProof, ...f.gear }
+        ? { nvg: kit.nvg, thermal: kit.thermal, heatProof: kit.heatProof, ...f.gear }
         : { ...f.gear },
       hp,
       maxHp: hp,
@@ -184,7 +184,7 @@ export function createMatch(config: MatchConfig): Match {
 // ---------- kit ----------
 
 function plain(spec: (typeof WEAPONS)[AttackWeapon]): KitWeapon {
-  return { ...spec, doubleShot: 0, nightAcc: 0, tracking: 0, stanceTurns: STANCE_TURNS, noStancePenalty: NO_STANCE_PENALTY, guardBonus: 0 };
+  return { ...spec, doubleShot: 0, nightAcc: 0, tracking: 0, stanceTurns: STANCE_TURNS, noStancePenalty: NO_STANCE_PENALTY, guardBonus: 0, suppressor: false };
 }
 
 /** rules.ts weapons as they come from the factory, for fighters without a kit. */
@@ -481,7 +481,8 @@ export function resolveTurn(match: Match, orders: [Order | null, Order | null]):
     if (final[s]!.action.type === "grenade") f.grenades -= 1;
     f.lastDefend = [...final[s]!.defend];
     f.afkStreak = afk[s] ? f.afkStreak + 1 : 0;
-    f.flash = m.config.time === "night" && final[s]!.action.type === "shoot" && !f.gear.suppressor;
+    const silenced = f.gear.suppressor || weaponSpec(m, s, f.weapon).suppressor;
+    f.flash = m.config.time === "night" && final[s]!.action.type === "shoot" && !silenced;
   }
 
   const report: TurnReport = {
