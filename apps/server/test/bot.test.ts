@@ -72,7 +72,9 @@ test("from /start to a played turn against the bot", async () => {
 
     await tap(`t:${duel.id}:1:zh`);
     const stale = calls.filter((c) => c.method === "answerCallbackQuery").at(-1)!;
-    assert.equal(stale.payload.text, "Этот ход уже прошёл");
+    // A random bot weapon can end the fight in turn 1, so the old button
+    // is refused either as a past turn or as a finished fight.
+    assert.equal(stale.payload.text, duel.match.result ? "Этот бой уже закончился" : "Этот ход уже прошёл");
   } finally {
     duels.close();
   }
