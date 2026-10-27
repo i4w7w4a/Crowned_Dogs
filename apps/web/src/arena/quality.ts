@@ -32,6 +32,8 @@ export interface Quality {
   /** Haze in the air, lit by the opening, with the figures' shadows in it: march steps, 0 = none. */
   haze: number;
   hazeScale: number;
+  /** Reads of the painting for the blur behind the enemy (1 = one read of a blurred copy). */
+  dofTaps: number;
   /** Dust specks floating in the light. */
   dust: number;
   /** Texture size of the figures. */
@@ -49,25 +51,25 @@ export const QUALITY: Record<QualityId, Quality> = {
   low: {
     id: "low", name: "Низкая", maxDpr: 1, maxPixels: 0.5e6, ssaa: 1, msaa: 4,
     shadow: 0, shadowRadius: 0, shadowSamples: 0, taps: 5, mips: false,
-    rays: 0, raysScale: 0.5, haze: 0, hazeScale: 0.5, dust: 0,
+    rays: 0, raysScale: 0.5, haze: 0, hazeScale: 0.5, dofTaps: 1, dust: 0,
     textures: 512, anisotropy: 1, env: false, mirror: false, sharpBackdrop: false,
   },
   medium: {
     id: "medium", name: "Средняя", maxDpr: 2, maxPixels: 1.7e6, ssaa: 1, msaa: 4,
     shadow: 1024, shadowRadius: 3, shadowSamples: 8, taps: 8, mips: true,
-    rays: 28, raysScale: 0.5, haze: 0, hazeScale: 0.5, dust: 220,
+    rays: 28, raysScale: 0.5, haze: 0, hazeScale: 0.5, dofTaps: 8, dust: 220,
     textures: 1024, anisotropy: 4, env: true, mirror: true, sharpBackdrop: false,
   },
   high: {
     id: "high", name: "Высокая", maxDpr: 3, maxPixels: 3.8e6, ssaa: 1, msaa: 8,
     shadow: 2048, shadowRadius: 5, shadowSamples: 16, taps: 12, mips: true,
-    rays: 56, raysScale: 0.5, haze: 24, hazeScale: 0.5, dust: 600,
+    rays: 56, raysScale: 0.5, haze: 24, hazeScale: 0.5, dofTaps: 16, dust: 600,
     textures: 2048, anisotropy: 8, env: true, mirror: true, sharpBackdrop: true,
   },
   ultra: {
     id: "ultra", name: "Ультра", maxDpr: 3, maxPixels: 8e6, ssaa: 1.5, msaa: 8,
     shadow: 4096, shadowRadius: 9, shadowSamples: 32, taps: 18, mips: true,
-    rays: 96, raysScale: 0.75, haze: 64, hazeScale: 0.5, dust: 1500,
+    rays: 96, raysScale: 0.75, haze: 64, hazeScale: 0.5, dofTaps: 32, dust: 1500,
     textures: 4096, anisotropy: 16, env: true, mirror: true, sharpBackdrop: true,
   },
 };

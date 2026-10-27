@@ -271,7 +271,7 @@ export class Arena {
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
     this.renderer.toneMappingExposure = f.look.exposure;
     this.lens.setHorizon(k.hz);
-    this.lens.setBackdrop(f.src, f.src2x);
+    this.lens.setBackdrop(f.src, f.src2x, f.depth);
     this.lens.setLook(f.look.lens, f.look.exposure);
     this.makeEnv(f.src);
     this.rim.color.set(f.look.rim);

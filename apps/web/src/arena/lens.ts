@@ -33,6 +33,9 @@ export interface LensLook {
   /** Colour of the live figures against the painting: saturation (1 = as lit) and a tint. */
   saturation: number;
   tint: number;
+  /** Depth of field around the enemy: blur radius (share of the picture height) per 1/m behind him, and how much of it in front. */
+  dof: number;
+  dofNear: number;
   /** Light shafts from the openings, 0..1, and the haze in the air (density per metre, colour of its light). */
   rays: number;
   haze: number;
@@ -77,7 +80,9 @@ export class Lens {
   private lensMat: THREE.ShaderMaterial;
   private quad = new FullScreenQuad();
   private bg: THREE.Texture | null = null;
-  private srcs: { one: string; two?: string } = { one: "" };
+  private srcs: { one: string; two?: string; depth?: string } = { one: "" };
+  private depthMap: THREE.Texture | null = null;
+  private depthSrc = "";
   private loading = "";
   private look: LensLook | null = null;
   private view: View = { x: 0, y: 0, w: 1, h: 1 };
@@ -99,11 +104,12 @@ export class Lens {
     const v2 = () => ({ value: new THREE.Vector2(1, 1) });
     this.composeMat = shaderMaterial(composeShader, {
       tFig: { value: this.fig.texture }, tNear: { value: this.near.texture }, tBg: { value: null }, tHaze: { value: null },
+      tDepth: { value: null }, hasDepth: { value: 0 }, focusInv: { value: 1 / 8 }, dof: { value: 0 }, dofNear: { value: 0 },
       bgSize: v2(), nearSize: v2(), hazeSize: v2(), hasBg: { value: 0 }, exposure: { value: 1 }, saturation: { value: 1 }, tint: { value: new THREE.Color(0xffffff) },
     });
     this.hazeMat = shaderMaterial(hazeShader, {
       invProj: { value: new THREE.Matrix4() }, camWorld: { value: new THREE.Matrix4() }, camPos: { value: new THREE.Vector3() },
-      tFig: { value: this.fig.texture }, enemyDist: { value: 10 }, tShadow: { value: null }, shadowMatrix: { value: new THREE.Matrix4() }, hasShadow: { value: 0 },
+      tFig: { value: this.fig.texture }, enemyDist: { value: 10 }, tDepth: { value: null }, hasDepth: { value: 0 }, tShadow: { value: null }, shadowMatrix: { value: new THREE.Matrix4() }, hasShadow: { value: 0 },
       sunDir: { value: new THREE.Vector3(0, 0.5, -1).normalize() }, sunColor: { value: new THREE.Color() }, skyColor: { value: new THREE.Color() },
       density: { value: 0 }, time: { value: 0 },
     });
@@ -119,10 +125,31 @@ export class Lens {
     });
   }
 
-  /** The painted backdrop under the figures, and its double-size copy for the sharp levels. Until it loads, the canvas stays see-through over the page's picture. */
-  setBackdrop(one: string, two?: string): void {
-    this.srcs = { one, two };
+  /** The painted backdrop under the figures, its double-size copy for the sharp levels, and its depth map. Until it loads, the canvas stays see-through over the page's picture. */
+  setBackdrop(one: string, two?: string, depth?: string): void {
+    this.srcs = { one, two, depth };
     this.loadBackdrop();
+    this.loadDepth();
+  }
+
+  /** The painting's distances: 1/z in metres, 0..1 for 0..1/0.8 m, so the blur and the haze know what is near and far. */
+  private loadDepth(): void {
+    const url = this.srcs.depth ?? "";
+    if (url === this.depthSrc) return;
+    this.depthSrc = url;
+    const set = (t: THREE.Texture | null) => {
+      this.depthMap?.dispose();
+      this.depthMap = t;
+      for (const m of [this.composeMat, this.hazeMat]) { m.uniforms.tDepth!.value = t; m.uniforms.hasDepth!.value = t ? 1 : 0; }
+    };
+    if (!url) { set(null); return; }
+    new THREE.TextureLoader().load(url, (tex) => {
+      if (this.depthSrc !== url) { tex.dispose(); return; }
+      tex.colorSpace = THREE.NoColorSpace;
+      tex.generateMipmaps = false;
+      tex.minFilter = THREE.LinearFilter;
+      set(tex);
+    });
   }
 
   /** How far down the picture the horizon is (share from the top): only the sky and the windows above it shine shafts of light. */
@@ -138,6 +165,7 @@ export class Lens {
     u.glow!.value = look.glow; u.contrast!.value = look.contrast;
     c.saturation!.value = look.saturation; (c.tint!.value as THREE.Color).set(look.tint);
     c.exposure!.value = exposure;
+    c.dof!.value = look.dof; c.dofNear!.value = look.dofNear;
     const h = this.hazeMat.uniforms, col = new THREE.Color(look.hazeColor);
     (h.sunColor!.value as THREE.Color).copy(col).multiplyScalar(0.55);
     (h.skyColor!.value as THREE.Color).copy(col).multiplyScalar(0.16);
@@ -165,7 +193,7 @@ export class Lens {
       Object.assign(m.defines, defines);
       m.needsUpdate = true;
     };
-    set(this.composeMat, { ...(q.sharpBackdrop ? { SHARP_BG: 1 } : {}), ...(q.haze ? { HAZE: 1 } : {}) });
+    set(this.composeMat, { DOF_TAPS: q.dofTaps, ...(q.sharpBackdrop ? { SHARP_BG: 1 } : {}), ...(q.haze ? { HAZE: 1 } : {}) });
     set(this.lensMat, { TAPS: q.taps, ...(q.rays ? { RAYS: 1 } : {}) });
     set(this.blurMat, { STEPS: Math.max(1, q.rays) });
     set(this.hazeMat, { STEPS: Math.max(1, q.haze), OCTAVES: q.haze >= 48 ? 3 : 2 });
@@ -236,6 +264,8 @@ export class Lens {
       this.pass(this.hazeMat, this.haze);
     }
 
+    // the focus follows the enemy as he walks
+    this.composeMat.uniforms.focusInv!.value = 1 / Math.max(0.5, haze.enemyDepth);
     this.pass(this.composeMat, this.comp);
 
     if (this.raysA && this.raysB && look && hasBg) {
