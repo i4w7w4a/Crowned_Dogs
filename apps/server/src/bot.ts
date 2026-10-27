@@ -6,9 +6,10 @@ import type { InlineKeyboardButton, UserFromGetMe } from "grammy/types";
 import { WEAPON_IDS, other, type Side, type WeaponId } from "@crowned-dogs/core";
 import { decodeCommand } from "./draft.ts";
 import { DuelError, DuelService, type Duel, type DuelEvent } from "./duels.ts";
+import { OperatorRegistry, type Operator } from "./operators.ts";
 import {
-  RULES, WELCOME, escapeHtml, finalScreen, menuButtons, turnReport, turnScreen, weaponPicker,
-  type Button, type PickMode,
+  CONTRACT, RULES, WELCOME, contractButtons, finalScreen, menuButtons, nameWithTag, signedText, tagText,
+  turnReport, turnScreen, weaponPicker, type AfterContract, type Button, type PickMode,
 } from "./view.ts";
 
 function keyboard(rows: Button[][]): InlineKeyboard {
@@ -23,8 +24,12 @@ function notModified(err: unknown): boolean {
   return err instanceof GrammyError && err.description.includes("message is not modified");
 }
 
-export function createBot(token: string, opts: { botInfo?: UserFromGetMe } = {}): { bot: Bot; duels: DuelService } {
+export function createBot(
+  token: string,
+  opts: { botInfo?: UserFromGetMe; operators?: OperatorRegistry } = {},
+): { bot: Bot; duels: DuelService; operators: OperatorRegistry } {
   const bot = new Bot(token, opts.botInfo ? { botInfo: opts.botInfo } : {});
+  const operators = opts.operators ?? new OperatorRegistry();
   /** The message with the live turn buttons for each human side: `${duelId}:${side}`. */
   const screens = new Map<string, number>();
 
@@ -59,8 +64,8 @@ export function createBot(token: string, opts: { botInfo?: UserFromGetMe } = {})
         if (e.type === "start") {
           const foe = duel.players[other(side)];
           const intro = foe.bot
-            ? `Против тебя бот <b>${escapeHtml(foe.name)}</b>.\n\n`
-            : `Дуэль с <b>${escapeHtml(foe.name)}</b> началась. Приказы тайные.\n\n`;
+            ? `Против тебя бот ${nameWithTag(foe)}.\n\n`
+            : `Дуэль с ${nameWithTag(foe)} началась. Приказы тайные.\n\n`;
           await showTurn(duel, side, intro);
           continue;
         }
@@ -80,43 +85,92 @@ export function createBot(token: string, opts: { botInfo?: UserFromGetMe } = {})
 
   const duels = new DuelService({ onEvent });
 
-  function who(ctx: Context): { id: string; name: string } | null {
+  /** The player behind a private chat, with the tag once they have signed the contract. */
+  function who(ctx: Context): { id: string; name: string; tag?: string } | null {
     if (!ctx.from || ctx.chat?.type !== "private") return null;
-    return { id: String(ctx.from.id), name: ctx.from.first_name || ctx.from.username || "Оператор" };
+    const id = String(ctx.from.id);
+    return { id, name: ctx.from.first_name || ctx.from.username || "Оператор", tag: operators.byTelegram(id)?.tag };
+  }
+
+  /** Nothing happens before the contract is signed. True if the contract was shown instead. */
+  async function needsContract(ctx: Context, me: { tag?: string }, next: AfterContract = ""): Promise<boolean> {
+    if (me.tag) return false;
+    if (ctx.callbackQuery) await ctx.answerCallbackQuery();
+    await ctx.reply(CONTRACT, { ...html, reply_markup: keyboard(contractButtons(next)) });
+    return true;
   }
 
   async function askWeapon(ctx: Context, mode: PickMode, lead: string): Promise<void> {
     await ctx.reply(`${lead}\n\nВыбери оружие (в скобках дистанция, где оно сильнее всего):`, { ...html, reply_markup: keyboard(weaponPicker(mode)) });
   }
 
+  const LEADS = {
+    bot: "<b>Бой с ботом.</b>",
+    duel: "<b>Дуэль с другом.</b> Я дам ссылку, которую надо ему переслать.",
+  };
+
+  async function openInvite(ctx: Context, me: { id: string }, code: string): Promise<unknown> {
+    const invite = duels.inviteInfo(code);
+    if (!invite) return ctx.reply("Приглашение не найдено или устарело. Попроси друга прислать новое.");
+    if (invite.host.id === me.id) return ctx.reply("Это твоё приглашение. Перешли ссылку другу.");
+    return askWeapon(ctx, `join:${invite.code}`, `${nameWithTag(invite.host)} вызывает тебя на дуэль.`);
+  }
+
   bot.command("start", async (ctx) => {
     const me = who(ctx);
     if (!me) return ctx.reply("Напиши мне в личные сообщения.");
     const payload = ctx.match.trim();
-    if (payload.startsWith("duel_")) {
-      const invite = duels.inviteInfo(payload.slice(5));
-      if (!invite) return ctx.reply("Приглашение не найдено или устарело. Попроси друга прислать новое.");
-      if (invite.host.id === me.id) return ctx.reply("Это твоё приглашение. Перешли ссылку другу.");
-      return askWeapon(ctx, `join:${invite.code}`, `<b>${escapeHtml(invite.host.name)}</b> вызывает тебя на дуэль.`);
-    }
+    const invite = /^duel_([A-Z0-9]+)$/.exec(payload)?.[1];
+    if (await needsContract(ctx, me, invite ? `duel_${invite}` : "")) return;
+    if (invite) return openInvite(ctx, me, invite);
+    return ctx.reply(WELCOME, { ...html, reply_markup: keyboard(menuButtons()) });
+  });
+
+  bot.callbackQuery(/^c(?::(bot|duel|duel_[A-Z0-9]+))?$/, async (ctx) => {
+    const me = who(ctx);
+    if (!me) return ctx.answerCallbackQuery();
+    const fresh = !me.tag;
+    const op: Operator = operators.sign(me.id, me.name);
+    await ctx.answerCallbackQuery(fresh ? { text: `Жетон ${op.tag}` } : undefined);
+    await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard() }).catch(() => undefined);
+    if (fresh) await ctx.reply(signedText(op.tag), html);
+    const next = ctx.match[1] ?? "";
+    if (next.startsWith("duel_")) return openInvite(ctx, me, next.slice(5));
+    if (next === "bot" || next === "duel") return askWeapon(ctx, next, LEADS[next]);
     return ctx.reply(WELCOME, { ...html, reply_markup: keyboard(menuButtons()) });
   });
 
   bot.command("rules", (ctx) => ctx.reply(RULES, html));
   bot.command("help", (ctx) => ctx.reply(WELCOME, { ...html, reply_markup: keyboard(menuButtons()) }));
-  bot.command("fight", (ctx) => askWeapon(ctx, "bot", "<b>Бой с ботом.</b>"));
-  bot.command("duel", (ctx) => askWeapon(ctx, "duel", "<b>Дуэль с другом.</b> Я дам ссылку, которую надо ему переслать."));
+  bot.command("me", async (ctx) => {
+    const me = who(ctx);
+    if (!me) return ctx.reply("Напиши мне в личные сообщения.");
+    if (await needsContract(ctx, me)) return;
+    return ctx.reply(tagText(me.tag!, operators.byTelegram(me.id)!.name), html);
+  });
+  for (const mode of ["bot", "duel"] as const) {
+    bot.command(mode === "bot" ? "fight" : "duel", async (ctx) => {
+      const me = who(ctx);
+      if (!me) return ctx.reply("Напиши мне в личные сообщения.");
+      if (await needsContract(ctx, me, mode)) return;
+      return askWeapon(ctx, mode, LEADS[mode]);
+    });
+  }
 
   bot.callbackQuery(/^m:(bot|duel)$/, async (ctx) => {
-    await ctx.answerCallbackQuery();
+    const me = who(ctx);
     const mode = ctx.match[1] as "bot" | "duel";
-    await askWeapon(ctx, mode, mode === "bot" ? "<b>Бой с ботом.</b>" : "<b>Дуэль с другом.</b> Я дам ссылку, которую надо ему переслать.");
+    if (!me) return ctx.answerCallbackQuery();
+    if (await needsContract(ctx, me, mode)) return;
+    await ctx.answerCallbackQuery();
+    await askWeapon(ctx, mode, LEADS[mode]);
   });
 
   bot.callbackQuery(/^w:(bot|duel|join:[A-Z0-9]+):([a-z]+)$/, async (ctx) => {
     const me = who(ctx);
     const mode = ctx.match[1]!, weapon = ctx.match[2]!;
     if (!me || !isWeapon(weapon)) return ctx.answerCallbackQuery();
+    if (await needsContract(ctx, me, mode.startsWith("join:") ? `duel_${mode.slice(5)}` : mode as "bot" | "duel")) return;
     try {
       if (mode === "bot") {
         duels.startVsBot({ ...me, weapon });
@@ -171,5 +225,5 @@ export function createBot(token: string, opts: { botInfo?: UserFromGetMe } = {})
   bot.on("callback_query:data", (ctx) => ctx.answerCallbackQuery({ text: "Эта кнопка устарела" }));
 
   bot.catch((err) => console.error("bot error", err.error));
-  return { bot, duels };
+  return { bot, duels, operators };
 }

@@ -11,6 +11,8 @@ import { applyCommand, freshDraft, toOrder, type Command, type Draft } from "./d
 export interface Player {
   id: string;
   name: string;
+  /** Dog tag from the contract. Bots have none. */
+  tag?: string;
   weapon: WeaponId;
   bot: boolean;
 }

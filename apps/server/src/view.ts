@@ -209,6 +209,38 @@ export function finalScreen(duel: Duel, side: Side): Screen {
   return { text, buttons: menuButtons() };
 }
 
+// ---------- contract ----------
+
+export const CONTRACT = [
+  "<b>Контракт оператора</b>",
+  "",
+  "Ты поступаешь на службу в ЧВК на несколько лет. Сам ты живёшь на передовой базе, а в бой идёт Персона, боевой робот с твоим лицом. Ты чувствуешь всё, что чувствует она, и её смерть тоже. Отказаться от боя нельзя: это ведь не твоя смерть.",
+  "",
+  "Многие здесь подписали контракт прямо из тюрьмы. О прошлом не спрашивают.",
+  "",
+  "После подписи тебе выдадут жетон с личным номером.",
+].join("\n");
+
+/** After signing, the bot carries on with what the player wanted: an invite, a fight or a duel. */
+export type AfterContract = "" | "bot" | "duel" | `duel_${string}`;
+
+export function contractButtons(next: AfterContract = ""): Button[][] {
+  return [[btn("✍️ Подписать", next ? `c:${next}` : "c")]];
+}
+
+export function signedText(tag: string): string {
+  return `Контракт подписан. Твой жетон: <b>${tag}</b>.\nЭто твой номер в игре: по нему тебя найдут и в боте, и в клиенте.`;
+}
+
+export function tagText(tag: string, name: string): string {
+  return `Жетон <b>${tag}</b>, позывной <b>${escapeHtml(name)}</b>.`;
+}
+
+/** "<b>Аня</b> (K-417-093)", or just the name for a bot. */
+export function nameWithTag(p: { name: string; tag?: string }): string {
+  return `<b>${escapeHtml(p.name)}</b>${p.tag ? ` (${p.tag})` : ""}`;
+}
+
 // ---------- menus ----------
 
 export function menuButtons(): Button[][] {
@@ -232,6 +264,7 @@ export const WELCOME = [
   "/fight — бой с ботом",
   "/duel — ссылка, чтобы позвать друга",
   "/rules — коротко о правилах",
+  "/me — твой жетон",
 ].join("\n");
 
 export const RULES = [

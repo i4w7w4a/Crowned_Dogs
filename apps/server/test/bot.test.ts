@@ -38,7 +38,18 @@ test("from /start to a played turn against the bot", async () => {
 
   try {
     await send("/start");
+    assert.match(String(calls.at(-1)?.payload.text), /Контракт оператора/, "a new player sees the contract first");
+    await send("/fight");
+    assert.match(String(calls.at(-1)?.payload.text), /Контракт оператора/, "no fight before signing");
+    assert.match(JSON.stringify(calls.at(-1)?.payload.reply_markup), /"callback_data":"c:bot"/);
+
+    await tap("c");
+    const signed = calls.filter((c) => c.method === "sendMessage").at(-2)!;
+    assert.match(String(signed.payload.text), /Твой жетон: <b>K-\d{3}-\d{3}<\/b>/);
     assert.match(String(calls.at(-1)?.payload.text), /Crowned Dogs/);
+
+    await send("/me");
+    assert.match(String(calls.at(-1)?.payload.text), /Жетон <b>K-\d{3}-\d{3}<\/b>, позывной <b>Аня<\/b>/);
 
     await tap("m:bot");
     await tap("w:bot:rifle");
@@ -87,16 +98,24 @@ test("an invite link starts a duel between two players", async () => {
   };
   const ann = as(100, "Аня"), bob = as(200, "Боб");
   try {
+    await ann.tap("c:duel");
+    const tag = /K-\d{3}-\d{3}/.exec(String(calls.find((c) => /Твой жетон/.test(String(c.payload.text)))?.payload.text))?.[0];
+    assert.ok(tag, "Аня got a tag");
+    assert.match(String(calls.at(-1)?.payload.text), /Дуэль с другом/, "signing carries on with the duel");
     await ann.tap("w:duel:sniper");
     const linkMsg = calls.filter((c) => c.method === "sendMessage").at(-1)!;
     const code = /start=duel_([A-Z0-9]+)/.exec(String(linkMsg.payload.text))?.[1];
     assert.ok(code, "the reply holds an invite link");
     await bob.send(`/start duel_${code}`);
-    assert.match(String(calls.at(-1)?.payload.text), /Аня<\/b> вызывает тебя на дуэль/);
+    assert.match(String(calls.at(-1)?.payload.text), /Контракт оператора/, "Боб signs before he can accept");
+    await bob.tap(`c:duel_${code}`);
+    assert.match(String(calls.at(-1)?.payload.text), new RegExp(`Аня</b> \\(${tag}\\) вызывает тебя на дуэль`));
     await bob.tap(`w:join:${code}:shotgun`);
     await new Promise((r) => setTimeout(r, 10));
-    const starts = calls.filter((c) => c.method === "sendMessage" && /Дуэль с/.test(String(c.payload.text)));
+    const starts = calls.filter((c) => c.method === "sendMessage" && /Дуэль с .* началась/.test(String(c.payload.text)));
     assert.deepEqual(starts.map((c) => c.payload.chat_id).sort(), [100, 200], "both players get their own screen");
+    const bobSees = String(starts.find((c) => c.payload.chat_id === 200)?.payload.text);
+    assert.ok(bobSees.includes(`Дуэль с <b>Аня</b> (${tag}) началась`), "the foe is shown with the tag");
   } finally {
     duels.close();
   }

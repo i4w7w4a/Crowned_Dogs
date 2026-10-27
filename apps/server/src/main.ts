@@ -1,6 +1,7 @@
 // Starts the Telegram bot. Token comes from BOT_TOKEN (see .env.example).
 
 import { createBot } from "./bot.ts";
+import { OperatorRegistry } from "./operators.ts";
 
 const token = process.env.BOT_TOKEN?.trim();
 if (!token) {
@@ -8,7 +9,9 @@ if (!token) {
   process.exit(1);
 }
 
-const { bot, duels } = createBot(token);
+// Signed contracts and dog tags live in a file, so they survive a restart. Fights do not yet.
+const operators = new OperatorRegistry({ file: process.env.OPERATORS_FILE?.trim() || "data/operators.json" });
+const { bot, duels } = createBot(token, { operators });
 
 try {
   await bot.init();
@@ -21,6 +24,7 @@ await bot.api.setMyCommands([
   { command: "fight", description: "Бой с ботом" },
   { command: "duel", description: "Позвать друга на дуэль" },
   { command: "rules", description: "Правила коротко" },
+  { command: "me", description: "Мой жетон" },
 ]);
 
 const stop = () => {
