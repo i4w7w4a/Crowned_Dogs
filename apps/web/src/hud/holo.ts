@@ -8,8 +8,8 @@ import * as THREE from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 
-/** The box in CSS px; 62.5 px per metre; tilted ~9° down. */
-export const HOLO = { W: 58, H: 134, feet: 121, ppm: 62.5, tilt: 0.16 };
+/** The box in CSS px; 72 px per metre; tilted ~9° down. */
+export const HOLO = { W: 66, H: 154, feet: 140, ppm: 72, tilt: 0.16 };
 /** Metres: legs | groin | body | head. */
 const ZCUT = [0.8, 1.06, 1.5] as const;
 const ZI: Record<Zone, number> = { head: 0, body: 1, groin: 2, legs: 3 };

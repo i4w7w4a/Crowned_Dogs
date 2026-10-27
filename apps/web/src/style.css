@@ -44,7 +44,8 @@ button:disabled { cursor: default; }
 }
 
 /* ---------- scene ---------- */
-.scene { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; overflow: clip; background: #050606; } /* clip: focus must never scroll the scene */
+/* the picture fills the whole screen; the control panel lies over its foot */
+.scene { position: absolute; inset: 0; overflow: hidden; overflow: clip; background: #050606; } /* clip: focus must never scroll the scene */
 .stage { position: absolute; inset: 0; }
 .stage img.bg, .stage canvas.gl { position: absolute; display: block; max-width: none; user-select: none; -webkit-user-drag: none; }
 .stage canvas.gl { pointer-events: none; }
@@ -69,7 +70,7 @@ button:disabled { cursor: default; }
    its face is laid 1px inside, the cut pulled in by 0.6px so the edge keeps 1px along the diagonal.
    cr: cut bottom-right (the default), cl: cut bottom-left, cn: no cut. */
 .cut, .go {
-  --c: 6px; --ci: calc(var(--c) - .6px); --edge: rgba(236,232,223,.15); --face: #131414;
+  --c: 6px; --ci: calc(var(--c) - .6px); --edge: rgba(54,54,51,.94); --face: rgba(11,12,12,.86); /* near-solid edge: a bright spot behind must not read as a pick */
   position: relative; isolation: isolate; background: var(--edge); transition: background .18s, color .18s, opacity .18s;
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%);
 }
@@ -86,7 +87,7 @@ button:disabled { cursor: default; }
   position: absolute; left: 0; top: 0; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%;
   z-index: 4; display: grid; place-items: center; will-change: transform; color: #fff;
 }
-.ring svg { width: 40px; height: 40px; overflow: visible; filter: drop-shadow(0 0 3px rgba(0,0,0,.75)); transition: filter .18s; }
+.ring svg { width: 40px; height: 40px; overflow: visible; filter: drop-shadow(0 0 2px rgba(0,0,0,.8)); transition: filter .18s; }
 .ring .rc { fill: rgba(0,0,0,.1); stroke: currentColor; stroke-opacity: .95; stroke-width: 1.5; transition: fill .18s, stroke .18s, stroke-width .18s; }
 .ring:hover .rc { stroke-opacity: 1; fill: rgba(255,255,255,.08); }
 .ring.sel { color: var(--amber); }
@@ -94,6 +95,7 @@ button:disabled { cursor: default; }
 .ring.sel .rc { fill: rgba(233,172,63,.1); stroke-width: 2; }
 .ring.hint .rc { animation: hint 2.4s ease-in-out infinite; }
 @keyframes hint { 0%,100% { stroke-width: 1.5 } 50% { stroke-width: 2.4 } }
+.rings.idle .ring { opacity: .55; } /* no shot picked: a tap on a ring still makes one */
 .rings.off .ring { opacity: .18; pointer-events: none; }
 .rings.gone .ring { opacity: 0; pointer-events: none; }
 .tag {
@@ -121,7 +123,7 @@ button:disabled { cursor: default; }
 
 /* ---------- top: names, health and the turn clock ---------- */
 .hud { position: absolute; inset: 0 0 auto; z-index: 8; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 0; pointer-events: none;
-  color: var(--fg); text-shadow: 0 1px 10px rgba(0,0,0,.55); }
+  color: var(--fg); text-shadow: 0 1px 2px rgba(0,0,0,.55), 0 0 12px rgba(0,0,0,.5); } /* no gradient behind: the shadows keep it readable on a bright picture */
 .duel { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 12px; }
 .side { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .side.en { align-items: flex-end; }
@@ -133,7 +135,7 @@ button:disabled { cursor: default; }
 .side.en .hpl b { text-align: right; }
 .side.low .hpl b { color: var(--red); }
 /* a thin line running toward the clock, anchored at the number; the red piece behind is the last hit, draining a moment later */
-.bar { position: relative; flex: 1 1 auto; min-width: 0; height: 3px; margin-top: 2px; background: rgba(236,232,223,.14); }
+.bar { position: relative; flex: 1 1 auto; min-width: 0; height: 3px; margin-top: 2px; background: rgba(236,232,223,.14); box-shadow: 0 1px 4px rgba(0,0,0,.45); }
 .side.en .bar { transform: scaleX(-1); }
 .bar i { position: absolute; inset: 0 auto 0 0; width: 100%; background: var(--cyan); transition: width .45s ease; }
 .bar i.lag { background: rgba(224,88,63,.85); transition: width .7s ease .6s; }
@@ -145,7 +147,7 @@ button:disabled { cursor: default; }
 .turn { font: 500 11.5px/1.25 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
 
 /* ---------- bottom of the scene: the fight log line and the menu ---------- */
-.dock { position: absolute; z-index: 9; left: 12px; right: 12px; bottom: 10px; display: flex; gap: 8px; align-items: stretch; }
+.dock { position: absolute; z-index: 9; left: 12px; right: 12px; bottom: calc(var(--panel-h, 250px) + 6px); display: flex; gap: 8px; align-items: stretch; }
 .glass { --c: 7px; background: rgba(9,10,10,.66); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%); }
 .ticker { flex: 1 1 auto; min-width: 0; height: 36px; display: flex; align-items: center; gap: 9px; padding: 0 8px 0 12px; text-align: left; transition: background .2s; }
@@ -166,7 +168,7 @@ button:disabled { cursor: default; }
 .dockbtn:hover { background: rgba(20,22,22,.78); }
 
 /* the full log slides up over the scene */
-.logsheet { --c: 10px; position: absolute; z-index: 9; left: 12px; right: 12px; bottom: 54px; max-height: min(64%, 440px);
+.logsheet { --c: 10px; position: absolute; z-index: 9; left: 12px; right: 12px; bottom: calc(var(--panel-h, 250px) + 50px); max-height: min(64%, 440px);
   display: flex; flex-direction: column; background: rgba(9,10,10,.9); animation: sheetUp .22s ease-out; }
 @keyframes sheetUp { from { opacity: 0; translate: 0 12px } to { opacity: 1; translate: 0 0 } }
 .logsheet header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 13px 8px 11px 14px; border-bottom: 1px solid var(--line); }
@@ -194,10 +196,12 @@ button:disabled { cursor: default; }
 .ln .r.nil { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 
 /* ---------- panel ---------- */
-.panel { position: relative; z-index: 8; flex: 0 0 auto; padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px;
-  background: var(--panel); border-top: 1px solid var(--line); }
+/* no fill of its own: the picture runs under it, the plates keep a dark glass face, the words a shadow */
+.panel { position: absolute; z-index: 8; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px;
+  text-shadow: 0 0 2px rgba(0,0,0,.9), 0 1px 3px rgba(0,0,0,.8), 0 0 12px rgba(0,0,0,.65); }
+.panel .label { color: var(--dim); }
 /* defence | a hairline | movement and attack */
-.cols { display: grid; grid-template-columns: 124px minmax(0, 1fr); gap: 18px; align-items: start; }
+.cols { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 18px; align-items: start; }
 .label { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 14px; font: 500 11px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .label .v { color: var(--fg); letter-spacing: .06em; white-space: nowrap; }
 .label .v.warn { color: var(--amber); }
@@ -206,31 +210,23 @@ button:disabled { cursor: default; }
 .guard { display: flex; flex-direction: column; gap: 6px; }
 .label #pips { color: var(--muted); font-variant-numeric: tabular-nums; transition: color .18s; }
 .label #pips.done { color: var(--cyan); }
-.gbody { position: relative; height: 134px; }
-.holo { position: absolute; right: 0; top: 0; width: 58px; height: 134px; cursor: pointer; z-index: 1; }
+.gbody { position: relative; height: 154px; }
+.holo { position: absolute; right: 0; top: 0; width: 66px; height: 154px; cursor: pointer; z-index: 1; }
 .holo canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .7s ease;
   filter: drop-shadow(0 0 2.5px rgba(115,211,226,.5)); }
 .holo.live canvas { opacity: 1; }
 .holo.lock { cursor: default; }
-/* corner marks of the projection frame */
-.holo::before { content: ""; position: absolute; inset: 1px -3px 2px; pointer-events: none; opacity: .45;
-  background:
-    linear-gradient(var(--cyan), var(--cyan)) left top / 6px 1px, linear-gradient(var(--cyan), var(--cyan)) left top / 1px 6px,
-    linear-gradient(var(--cyan), var(--cyan)) right top / 6px 1px, linear-gradient(var(--cyan), var(--cyan)) right top / 1px 6px,
-    linear-gradient(var(--cyan), var(--cyan)) left bottom / 6px 1px, linear-gradient(var(--cyan), var(--cyan)) left bottom / 1px 6px,
-    linear-gradient(var(--cyan), var(--cyan)) right bottom / 6px 1px, linear-gradient(var(--cyan), var(--cyan)) right bottom / 1px 6px;
-  background-repeat: no-repeat; }
 .fig { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; transition: opacity .5s ease; }
 .holo.live .fig { opacity: 0; }
 .fig .ol > * { fill: none; stroke: rgba(115,211,226,.5); stroke-width: .8; stroke-linejoin: round; }
 .fig .zb { fill: rgba(115,211,226,.05); transition: fill .18s; }
 .fig .zb.on { fill: url(#zhatch); }
 .fig .ct { fill: none; stroke: rgba(115,211,226,.55); stroke-width: .6; }
-/* leader lines: half-pixel dashes, no end dots */
-.leads { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
-.lead path { fill: none; stroke: rgba(236,232,223,.55); stroke-width: .5; stroke-dasharray: 2 2; transition: stroke .18s; }
+/* leader lines: dashes half a pixel thick, no end dots */
+.leads { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; filter: drop-shadow(0 0 1px rgba(0,0,0,.9)); }
+.lead path { fill: none; stroke: rgba(236,232,223,.6); stroke-width: .5; stroke-dasharray: 5 3; transition: stroke .18s; }
 .lead.on path { stroke: var(--cyan); }
-.dz { position: absolute; left: 0; right: 58px; height: 25%; z-index: 3; display: flex; align-items: center; text-align: left; color: var(--muted); transition: color .18s; }
+.dz { position: absolute; left: 0; right: 66px; height: 25%; z-index: 3; display: flex; align-items: center; text-align: left; color: rgba(236,232,223,.72); transition: color .18s; }
 .dz[data-z="head"] { top: 0; } .dz[data-z="body"] { top: 25%; } .dz[data-z="groin"] { top: 50%; } .dz[data-z="legs"] { top: 75%; }
 .dz .zl { font: 500 11px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; }
 .dz:hover:not(:disabled) { color: var(--fg); }
@@ -245,50 +241,46 @@ button:disabled { cursor: default; }
 .mv { --c: 6px; height: 50px; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--fg); }
 .mv .ico { width: 18px; height: 18px; color: rgba(236,232,223,.78); }
 .mv b { font: 500 13px/1 var(--display); font-variant-numeric: tabular-nums; color: var(--muted); }
-.mv:hover:not(:disabled) { --face: #191a1a; }
-.mv.on { --edge: rgba(236,232,223,.78); --face: #1c1d1d; }
+.mv:hover:not(:disabled) { --face: rgba(24,25,25,.9); }
+.mv.on { --edge: rgba(236,232,223,.78); --face: rgba(30,31,31,.92); }
 .mv.on .ico { color: #fff; }
 .mv.on b { color: var(--fg); }
-.mv:disabled { opacity: .28; }
+/* disabled: the plate stays solid over the picture, only its content fades */
+.mv:disabled > * { opacity: .28; }
 /* attack: shot, knife or grenade */
-.acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.act { --c: 7px; height: 62px; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; padding: 9px 8px 9px 10px; text-align: left; color: var(--fg); }
+.acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.act { --c: 7px; height: 52px; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; text-align: left; color: var(--fg); }
 .act .ico { width: 22px; height: 22px; color: rgba(236,232,223,.8); }
-.act .an { font: 600 12px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.act .as { position: absolute; top: 10px; right: 8px; display: flex; align-items: center; gap: 2px; font: 500 11px/1 var(--display); color: var(--muted); font-variant-numeric: tabular-nums; }
+.act .at { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.act .an { font: 600 12px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.act .as { display: flex; align-items: center; gap: 2px; font: 500 11px/1 var(--display); color: var(--muted); font-variant-numeric: tabular-nums; }
 /* the steps after a range: small solid footprints */
 .act .as .ico { width: 14px; height: 14px; color: inherit; fill: currentColor; stroke: none; }
-.act:hover:not(:disabled) { --face: #191a1a; }
-.act.on { --edge: rgba(236,232,223,.78); --face: #1c1d1d; color: #fff; }
+.act:hover:not(:disabled) { --face: rgba(24,25,25,.9); }
+.act.on { --edge: rgba(236,232,223,.78); --face: rgba(30,31,31,.92); color: #fff; }
 .act.on .ico { color: #fff; }
 .act.on .as { color: var(--fg); }
-.act:disabled { opacity: .3; }
+.act:disabled > * { opacity: .3; }
 /* a kit with a second gun: taking it is the whole attack of the turn */
 .swap { --c: 6px; grid-column: 1 / -1; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 10px; text-align: left; color: var(--fg); }
 .swap .ico { width: 18px; height: 18px; color: rgba(236,232,223,.8); }
 .swap .an { font: 600 12px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .swap .as { margin-left: auto; font: 500 10px/1 var(--mono); color: var(--muted); white-space: nowrap; }
-.swap:hover:not(:disabled) { --face: #191a1a; }
-.swap.on { --edge: rgba(236,232,223,.78); --face: #1c1d1d; color: #fff; }
+.swap:hover:not(:disabled) { --face: rgba(24,25,25,.9); }
+.swap.on { --edge: rgba(236,232,223,.78); --face: rgba(30,31,31,.92); color: #fff; }
 .swap.on .ico { color: #fff; }
-.swap:disabled { opacity: .3; }
+.swap:disabled > * { opacity: .3; }
 /* phones: the attack names keep their full words */
 @media (max-width: 400px) {
-  .act { padding: 9px 5px 9px 7px; }
-  .acts { gap: 4px; }
-  .act .an { font-size: 11.5px; letter-spacing: .02em; }
-  .act .ico { width: 20px; height: 20px; }
-  .act .as { right: 6px; gap: 1px; }
-  .act .as .ico { width: 12px; height: 12px; }
+  .act .an { letter-spacing: .03em; }
   .swap .as { display: none; }
 }
 @media (max-width: 374px) {
-  .cols { grid-template-columns: 114px minmax(0, 1fr); gap: 14px; }
+  .cols { grid-template-columns: 120px minmax(0, 1fr); gap: 14px; }
   .controls::before { left: -7px; }
-  .act { padding: 9px 4px 9px 6px; }
-  .act .an { font-size: 11px; letter-spacing: 0; }
-  .act .ico { width: 18px; height: 18px; }
-  .act .as { right: 5px; }
+  .act { gap: 6px; padding: 0 6px 0 8px; }
+  .act .ico { width: 20px; height: 20px; }
+  .act .an { font-size: 11.5px; letter-spacing: 0; }
 }
 
 /* confirm the turn: a cream plate; dark and outlined while something is still missing */
@@ -296,7 +288,7 @@ button:disabled { cursor: default; }
   font: 600 15px/1.1 var(--display); letter-spacing: .08em; text-transform: uppercase; text-align: center; color: var(--cream-ink); }
 .go:hover:not(:disabled) { --edge: #f6eedc; --face: #f6eedc; }
 .go .gt { min-width: 0; }
-.go:disabled { --edge: rgba(236,232,223,.16); --face: #121313; color: rgba(236,232,223,.62); font-weight: 500; }
+.go:disabled { --edge: rgba(54,54,51,.94); --face: rgba(11,12,12,.86); color: rgba(236,232,223,.62); font-weight: 500; }
 
 /* ---------- menu sheet ---------- */
 .veil { position: absolute; inset: 0; z-index: 20; background: rgba(4,5,5,.6); display: flex; align-items: flex-end; }
