@@ -100,7 +100,9 @@ function layout(): void {
   const w = frame.w * s, h = frame.h * s;
   geo = { x: (cw - w) * 0.5, y: top, w, h };
   for (const el of [bg, canvas]) Object.assign(el.style, { width: w + "px", height: h + "px", left: geo.x + "px", top: geo.y + "px" });
-  arena?.resize(w, h);
+  // the part of the picture on screen, so the bodycam lens centres on what the player sees
+  const vx = Math.max(0, -geo.x), vy = Math.max(0, -geo.y);
+  arena?.resize(w, h, { x: vx / w, y: vy / h, w: (Math.min(w, cw - geo.x) - vx) / w, h: (Math.min(h, scene.clientHeight - geo.y) - vy) / h });
   placeRings();
 }
 
