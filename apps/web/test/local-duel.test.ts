@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { VETERAN_KITS } from "@crowned-dogs/core";
 import { LocalDuel, moveCommand } from "../src/game/local-duel.ts";
 
 const duel = (seed = "web-1") => new LocalDuel({
@@ -67,4 +68,29 @@ test("a whole fight against the bot ends", () => {
   }
   assert.ok(d.over, "the fight has a result");
   assert.equal(d.submit(), "Бой окончен");
+});
+
+test("a veteran sniper has a pistol to swap to, and the swap plays as a turn without a shot", () => {
+  const d = new LocalDuel({
+    seed: "vet", weather: "clear", time: "day",
+    player: { name: "Тень", weapon: "sniper", kit: VETERAN_KITS.sniper },
+    bot: { name: "Искра", weapon: "shotgun", kit: VETERAN_KITS.shotgun },
+  });
+  assert.equal(d.spare, "pistol");
+  assert.ok(d.match.config.fighters[1].kit, "the bot wears its kit too");
+  d.press({ type: "swap" });
+  d.press({ type: "guard", zone: "head" });
+  d.press({ type: "guard", zone: "body" });
+  assert.equal(d.missing, null, "a swap needs no target");
+  const r = d.submit();
+  assert.ok(typeof r === "object");
+  assert.equal(r.attacks[0], null);
+  assert.equal(d.match.fighters[0].weapon, "pistol");
+  assert.equal(d.spare, "sniper", "and back again next time");
+});
+
+test("without a kit there is nothing to swap to", () => {
+  const d = duel();
+  assert.equal(d.spare, null);
+  assert.equal(d.press({ type: "swap" }), "Второго оружия нет");
 });
