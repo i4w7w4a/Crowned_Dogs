@@ -4,7 +4,7 @@
 import { Bot, GrammyError, InlineKeyboard, type Context } from "grammy";
 import type { InlineKeyboardButton, UserFromGetMe } from "grammy/types";
 import { WEAPON_IDS, other, type Side, type WeaponId } from "@crowned-dogs/core";
-import { decodeCommand } from "./draft.ts";
+import { decodeCommand } from "./codes.ts";
 import { DuelError, DuelService, type Duel, type DuelEvent } from "./duels.ts";
 import { OperatorRegistry, type Operator } from "./operators.ts";
 import {

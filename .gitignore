@@ -3,4 +3,6 @@ node_modules/
 data/
 *.log
 .DS_Store
+apps/web/public/media/
+apps/web/dist/
 __pycache__/
