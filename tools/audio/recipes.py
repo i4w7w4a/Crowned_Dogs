@@ -27,6 +27,8 @@ SRC = {
     "gloves": "Pole Position - Hammerli 280 22LR/Hämmerli 280 - VAR SFX - Grabs With Gloves - XY - RSM191.wav",
     # impacts, melee, explosions
     "shield_block": "Justsoundeffects - Melee Weapons/WEAPArmr_Metal Shield Block Hits_JSE_MW.wav",
+    "esword": "Rogue Waves - Anime Studio/WEAPSwrd_Mecha Energy Sword Cut_RogueWaves_AnimeStudio.wav",
+    "screech": "Mechanical Wave - Torturing Metal/METLFric_Screeching Metal Rub-11_MWSFX_TM.wav",
     "axe_flesh": "Justsoundeffects - Melee Weapons/WEAPAxe_Long Two-Handed Axe Flesh Hit_JSE_MW.wav",
     "scrapes": "Justsoundeffects - Melee Weapons/WEAPSwrd_Weapon 03 Slow Scrapes_JSE_MW.wav",
     "rip13": "InMotionAudio - Torn T-Shirt/CLOTHRip_CottonRips13_InMotionAudio_TornTShirt.wav",
@@ -83,9 +85,9 @@ SRC = {
     "interf_cable": "Pole Position - Electric Guitar Pickup Interference/Interference - Cable - Buzz Hum - Swells to Sputtering Noise.wav",
     "interf_pickup": "Pole Position - Electric Guitar Pickup Interference/Interference - Guitar Pickup - Buzz Hum - Thin - Swells - Hits Thumps.wav",
     # ambience
-    "cave": "InMotionAudio - Cave Design/AMBUndr_CaveDesign01_InMotionAudio_CaveDesign.wav",
-    "drip": "InMotionAudio - Cave Design/WATRDrip_SingleDrip03_InMotionAudio_CaveDesign.wav",
-    "drip_lid": "Justsoundeffects - Water in Motion/WATRDrip_Dripping Water On Metal Pot Lid_JSE_WIM_Mono.wav",
+    "room_tone": "Jake Fielding - Chamber of Shadows - Morgue Room Tones/AMBRoom_Morgue Freezer Tone, Interior_JF_Morgue Tones_02.wav",
+    "groan_creaky": "Jake Fielding - Haunted Metal Vol.3 - Cinematic Tones & Textures/DSGNRise_Tense Metallic Creaky Hits, Groan_JF_Haunted Metal Vol 3_14.wav",
+    "groan_low": "Jake Fielding - Haunted Metal Vol.2 - Cinematic Creaks & Risers/DSGNRise_Cinematic Metallic Riser, Trailer, Designed Groan_JF_Haunted Metal Vol 2_08.wav",
     "hinge": "Jake Fielding - Squeaky Gates/DOORGate_Wooden Metal Hinge Creaks_Jake Fielding_Squeaky Gates.wav",
     "rails": "The Soundcatcher - Seismic Activities/Metal_Rails_Pack_Rumble_Rattle_Shake_Vibrate_Debris_Mkh8040_Seismic_Activities_03.Wav",
     "wind_concrete": "Sonik Sound Library - Spatial Countryside/WIND_Wind, Soft Wind Howling, Soft Leaves Rustle on Concrete_KS_Spatial Counstryside-Stereo_KSL_KS011.wav",
@@ -167,11 +169,14 @@ for i, ev in enumerate([0, 2, 4], 1):
         L("axe_flesh", ev=ev, dur=0.35, g=-8, lp=2500),
         L("box_imp", ev=0, dur=0.2, g=-10),
     ], punch=-13, hp=80)
-for i, ev in enumerate([0, 2], 1):
+# a small blade glancing off the shield: a light tink, a short scrape, the shield's crackle
+for i, (ev, st, t) in enumerate([(0, 4, 2.38), (2, 2, 2.30)], 1):
     SFX[f"knife-blocked-{i}"] = R([
-        L("shield_block", ev=ev, dur=0.6),
-        L("zap", t=0.0, dur=0.3, g=-14, hp=800, fo=0.2),
-    ], punch=-13)
+        L("spade", ev=ev, dur=0.22, st=st, hp=1500, fo=0.15),
+        L("screech", t=t, dur=0.14, g=-12, hp=2500, fi=0.01, fo=0.08, at=0.02),
+        L("esword", t=0.07, dur=0.26, g=-9, hp=600, fo=0.18),
+        L("sizzle", t=0.1, dur=0.2, g=-20, fo=0.15),
+    ], punch=-17, hp=300)
 
 # ---------- hits on a Persona ----------
 
@@ -313,20 +318,16 @@ SFX["artillery-far"] = R([L("mine", ev=0, dur=3.0, lp=900)], loud=-25, room=0.5,
 # ---------- ambience loops (stereo, crossfaded so they repeat without a seam) ----------
 
 AMB = {
-    # the ruined salt factory hall: cave air, drips, creaking metal, wind through broken windows
+    # the abandoned salt factory hall: dry and empty, wind through broken windows high up,
+    # the low hum of a big concrete room, the steel roof creaking now and then
     "amb-hall": R([
-        L("cave", t=0.5, dur=21.0, fi=1.5, fo=1.5, at=0.0),
-        L("cave", t=0.5, dur=21.0, fi=1.5, fo=1.5, at=19.5, st=-0.3),
-        L("cave", t=0.5, dur=21.0, fi=1.5, fo=1.5, at=39.0, st=0.2),
-        L("wind_concrete", t=12.0, dur=60.0, g=-9, hp=200, lp=3000, fi=2.0, fo=2.0),
-        L("rails", t=2.0, dur=29.0, g=-16, lp=1500, fi=2.0, fo=2.0, at=14.0),
-        L("hinge", t=1.0, dur=4.0, g=-14, fi=0.3, fo=1.0, at=9.0),
-        L("hinge", t=10.0, dur=4.0, g=-16, fi=0.3, fo=1.0, at=41.0),
-        L("drip_lid", t=0.0, dur=8.0, g=-10, fi=0.5, fo=1.0, at=4.0),
-        L("drip_lid", t=12.0, dur=8.0, g=-12, fi=0.5, fo=1.0, at=31.0),
-        L("drip", t=0.0, dur=0.15, g=-6, at=22.4),
-        L("drip", t=0.0, dur=0.15, g=-8, at=50.7, st=2),
-    ], loud=-30, stereo=True, loop=57.0, hp=30),
+        L("wind_concrete", t=12.0, dur=61.0, hp=250, lp=3500, fi=2.0, fo=2.0),
+        L("room_tone", t=20.0, dur=61.0, g=-42, hp=35, lp=250, fi=2.0, fo=2.0),
+        L("groan_creaky", t=0.3, dur=7.0, g=-28, lp=2500, fi=0.5, fo=2.5, at=7.0),
+        L("groan_low", t=2.1, dur=4.6, g=-39, fi=0.5, fo=2.0, at=33.0, st=1),
+        L("rails", t=2.0, dur=12.0, g=-28, lp=1200, fi=2.0, fo=3.0, at=21.0),
+        L("hinge", t=1.0, dur=4.0, g=-31, lp=3000, fi=0.3, fo=1.0, at=46.0),
+    ], loud=-30, stereo=True, loop=57.0, room=0.3, rt60=2.8, hp=30),
     # outside among ruined panel blocks
     "amb-blocks": R([
         L("wind_concrete", t=30.0, dur=62.0),

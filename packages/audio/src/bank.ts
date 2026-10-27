@@ -140,7 +140,7 @@ export const RADIO_PLAYLIST: TrackId[] = ["crazy-2", "fxck-wag-6", "fog-3", "try
 /**
  * Bus levels in dB. Effects files are mastered around −10…−25 dBFS of punch and
  * music files at −16 LUFS, so the fight music sits under the shots and the radio
- * well under that (Art: the menu music was too loud).
+ * well under that (Art: the menu music was too loud, then the fight music too).
  */
 export const MIX = {
   master: 0,
@@ -148,7 +148,7 @@ export const MIX = {
   ui: -3,
   amb: -2,
   music: 0,
-  fightMusic: -8,
+  fightMusic: -12,
   radioMusic: -17,
   /** Effects of the enemy fade by this much per step of distance... */
   distanceDbPerStep: 0.6,

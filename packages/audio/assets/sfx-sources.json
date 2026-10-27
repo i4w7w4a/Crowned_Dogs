@@ -45,13 +45,14 @@
  "amb/amb-hall.mp3": {
   "seconds": 57.0,
   "lufs": -30.0,
-  "punch_db": -21.7,
-  "peak_db": -3.4,
+  "punch_db": -23.3,
+  "peak_db": -1.4,
   "loop": true,
   "sources": [
-   "InMotionAudio - Cave Design",
+   "Jake Fielding - Chamber of Shadows - Morgue Room Tones",
+   "Jake Fielding - Haunted Metal Vol.2 - Cinematic Creaks & Risers",
+   "Jake Fielding - Haunted Metal Vol.3 - Cinematic Tones & Textures",
    "Jake Fielding - Squeaky Gates",
-   "Justsoundeffects - Water in Motion",
    "Sonik Sound Library - Spatial Countryside",
    "The Soundcatcher - Seismic Activities"
   ]
@@ -430,25 +431,29 @@
   ]
  },
  "sfx/knife-blocked-1.mp3": {
-  "seconds": 0.6,
-  "lufs": -18.7,
-  "punch_db": -13.0,
-  "peak_db": -2.0,
+  "seconds": 0.26,
+  "lufs": -24.5,
+  "punch_db": -19.5,
+  "peak_db": -1.0,
   "loop": false,
   "sources": [
-   "Justsoundeffects - Melee Weapons",
-   "Rescopic Sound - Parallax"
+   "BluezoneCorp - High Voltage",
+   "Mechanical Wave - Torturing Metal",
+   "Pole Position - The Metal Hit Sweeteners Library",
+   "Rogue Waves - Anime Studio"
   ]
  },
  "sfx/knife-blocked-2.mp3": {
-  "seconds": 0.6,
-  "lufs": -17.9,
-  "punch_db": -13.0,
-  "peak_db": -1.3,
+  "seconds": 0.26,
+  "lufs": -24.0,
+  "punch_db": -18.7,
+  "peak_db": -1.0,
   "loop": false,
   "sources": [
-   "Justsoundeffects - Melee Weapons",
-   "Rescopic Sound - Parallax"
+   "BluezoneCorp - High Voltage",
+   "Mechanical Wave - Torturing Metal",
+   "Pole Position - The Metal Hit Sweeteners Library",
+   "Rogue Waves - Anime Studio"
   ]
  },
  "sfx/knife-hit-1.mp3": {
