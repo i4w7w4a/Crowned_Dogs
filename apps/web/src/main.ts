@@ -280,7 +280,15 @@ function playTurn(r: TurnReport): void {
   const no = fightNo, later = (s: number, fn: () => void) => setTimeout(() => { if (no === fightNo) fn(); }, s * 1000);
   audio.play("ui.confirm");
   audio.turn(r, duel.match);
+  armBoth(); // a swap changes the gun before anyone moves
   arena?.move(r.distanceAfter, r.moves[0], r.moves[1]); // both walk first, then the shots
+  // each Persona starts its attack early enough that the shot (the stab, the throw) meets its sound
+  for (const s of [0, 1] as Side[]) {
+    const a = r.attacks[s];
+    if (!a) continue;
+    const t = s === duel.me ? TIMING.ourAttack : TIMING.enemyAttack;
+    arena?.attack(s === duel.me ? "me" : "enemy", a.weapon, a.weapon === "knife" ? t + TIMING.knifeLands : t);
+  }
   render();
   later(TIMING.ourAttack, () => strike(r, 0));
   later(TIMING.enemyAttack, () => {
@@ -295,6 +303,11 @@ function playTurn(r: TurnReport): void {
     audio.play("ui.turn");
     render(); startTimer();
   });
+}
+
+/** Both Personas take up the guns they carry now. */
+function armBoth(): void {
+  for (const s of [0, 1] as Side[]) arena?.arm(s === duel.me ? "me" : "enemy", duel.match.fighters[s].weapon);
 }
 
 /** One side's attack lands: the flash, the number, the flinch, and the fall if it was the last. */
@@ -363,7 +376,7 @@ function restart(keepSheet = false): void {
   endVeil.hidden = true;
   duel = newDuel(); busy = false;
   shown = { hp: duel.match.fighters.map((f) => f.hp), turn: duel.match.turn };
-  arena?.reset(duel.match.distance);
+  armBoth(); arena?.reset(duel.match.distance);
   const d = duel.match.distance;
   log.reset(`Запись идёт · ${FOE} ${GUN_WITH[duel.fighters[1].weapon]}, ${d} ${steps(d)}`);
   drawHeader(); render(); startTimer();
@@ -513,6 +526,7 @@ setFrame(frame);
 restart();
 arena?.load(MY_MODEL, FOE_MODEL, duel.match.distance)
   .then(() => {
+    armBoth(); arena?.reset(duel.match.distance);
     $("status").hidden = true;
     layout(); render();
     setTimeout(watchSpeed, 1500);
