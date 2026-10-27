@@ -164,7 +164,7 @@ export class Arena {
   }
 
   /** Loads the figure model (.glb, or .json with the .glb inside as base64) and starts drawing. */
-  async load(url: string, distance: number): Promise<void> {
+  async load(url: string, distance: number): Promise<GLTF> {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`model: ${res.status}`);
     let bytes: ArrayBuffer;
@@ -183,6 +183,12 @@ export class Arena {
     this.ready = true;
     this.reset(distance);
     this.renderer.setAnimationLoop((t) => this.tick(t));
+    return gltf;
+  }
+
+  /** Our own figure's model, for anything that mirrors its pose (the defence hologram). */
+  get myModel(): THREE.Object3D | null {
+    return this.me?.model ?? null;
   }
 
   setFrame(f: Frame): void {
