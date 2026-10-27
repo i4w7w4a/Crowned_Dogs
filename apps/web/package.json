@@ -1,0 +1,20 @@
+{
+  "name": "@crowned-dogs/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "assets": "node scripts/fetch-assets.ts"
+  },
+  "dependencies": {
+    "@crowned-dogs/core": "*",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "0.186.0",
+    "vite": "8.3.4"
+  }
+}

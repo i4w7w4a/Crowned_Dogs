@@ -1,8 +1,10 @@
 // The order a player is putting together, one tap at a time, before pressing "Готово".
 // Pure functions: the bot and the web client call them on every tap.
 
-import { canFlee, canThrowGrenade, canUseKnife, validateOrder, type Action, type Match, type Order, type Side } from "./match.ts";
-import { DASH_STEPS, RUN_STEPS, type Zone } from "./rules.ts";
+import {
+  canFlee, canThrowGrenade, canUseKnife, hitChance, plannedDistance, validateOrder, type Action, type Match, type Order, type Side,
+} from "./match.ts";
+import { DASH_STEPS, MAX_STEPS, RUN_STEPS, STANCE_TURNS, type Zone } from "./rules.ts";
 
 export type DraftKind = "shoot" | "knife" | "grenade" | "run" | "dash" | "flee";
 
@@ -120,4 +122,13 @@ export function toOrder(m: Match, side: Side, d: Draft): Order | string {
   const order: Order = { action: actionOf(d)!, defend: [...d.defend] };
   const err = validateOrder(m, side, order);
   return err ? `Так нельзя: ${err}` : order;
+}
+
+/** Hit chance of the planned shot or knife if the enemy stands still. Null when nothing is aimed. */
+export function draftChance(m: Match, side: Side, d: Draft): number | null {
+  if (d.kind !== "shoot" && d.kind !== "knife") return null;
+  const me = m.fighters[side];
+  const dist = Math.min(plannedDistance(m, d.move), MAX_STEPS);
+  const still = d.move === 0 ? Math.min(me.still + 1, STANCE_TURNS) : 0;
+  return hitChance(m, side, d.kind === "knife" ? "knife" : me.weapon, dist, still, false);
 }
