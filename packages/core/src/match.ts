@@ -2,6 +2,8 @@
 // Match, collects both secret orders, and calls resolveTurn once per turn.
 // Everything here is plain data, so a match can be stored or replayed.
 
+import { SMOKE_PENALTY, type GrenadeSpec } from "./items.ts";
+import type { CombatKit, KitWeapon } from "./loadout.ts";
 import { nextInt, roll, seedRng, type RngState } from "./rng.ts";
 import {
   AFK_LIMIT, BASE_STATS, DASH_EVADE, DASH_STEPS, DAY_FAR_ACCURACY, DAY_GUARD_BONUS, DEFAULT_ARMOR,
@@ -17,10 +19,12 @@ export const other = (side: Side): Side => (side === 0 ? 1 : 0);
 export interface Gear {
   /** Night vision: no night penalty. */
   nvg?: boolean;
-  /** Thermal sight: half the dust storm penalty. */
+  /** Thermal sight: half the dust storm and smoke penalty. */
   thermal?: boolean;
   /** Suppressor: no muzzle flash at night. */
   suppressor?: boolean;
+  /** The shield does not overheat in the midday heat. */
+  heatProof?: boolean;
 }
 
 export interface FighterSetup {
@@ -30,6 +34,8 @@ export interface FighterSetup {
   armor?: Partial<Record<Zone, number>>;
   gear?: Gear;
   hp?: number;
+  /** Items from compileKit. Replaces weapon, armor and gear; without it the fight uses rules.ts as is. */
+  kit?: CombatKit;
 }
 
 export interface FighterState {
@@ -50,6 +56,10 @@ export interface FighterState {
   flash: boolean;
   /** Evening: this Persona faces the low sun. */
   facesSun: boolean;
+  /** Turns left with the shield down after an EMP grenade. */
+  shieldOff: number;
+  /** Turns left hidden in own smoke, this one included: harder to hit. */
+  smoke: number;
 }
 
 export type StepMove = -1 | 0 | 1;
@@ -97,6 +107,10 @@ export interface AttackReport {
   blocked: boolean;
   /** The shot pushed through the shield (block break). */
   shieldBroken: boolean;
+  /** The hit landed twice (magazine mods); damage is the sum. */
+  double?: true;
+  /** A grenade that does more than damage: EMP or smoke. */
+  effect?: "emp" | "smoke";
 }
 
 export interface TurnReport {
@@ -133,20 +147,25 @@ export function createMatch(config: MatchConfig): Match {
   const sunSide = config.time === "evening" ? nextInt(rng, 2) : -1;
   const fighters = config.fighters.map((f, i): FighterState => {
     const hp = f.hp ?? BASE_STATS.hp;
+    const kit = f.kit;
     return {
       id: f.id,
       name: f.name,
-      weapon: f.weapon,
-      armor: { ...DEFAULT_ARMOR, ...f.armor },
-      gear: { ...f.gear },
+      weapon: kit ? (kit.weapon.id as WeaponId) : f.weapon,
+      armor: kit ? { ...kit.armor } : { ...DEFAULT_ARMOR, ...f.armor },
+      gear: kit
+        ? { nvg: kit.nvg, thermal: kit.thermal, heatProof: kit.heatProof, ...f.gear }
+        : { ...f.gear },
       hp,
       maxHp: hp,
       still: 1,
-      grenades: GRENADE.perFight,
+      grenades: kit ? kit.grenades : GRENADE.perFight,
       lastDefend: [],
       afkStreak: 0,
       flash: false,
       facesSun: sunSide === i,
+      shieldOff: 0,
+      smoke: 0,
     };
   }) as [FighterState, FighterState];
   return {
@@ -160,6 +179,42 @@ export function createMatch(config: MatchConfig): Match {
     result: null,
     history: [],
   };
+}
+
+// ---------- kit ----------
+
+function plain(spec: (typeof WEAPONS)[AttackWeapon]): KitWeapon {
+  return { ...spec, doubleShot: 0, nightAcc: 0, tracking: 0, stanceTurns: STANCE_TURNS, noStancePenalty: NO_STANCE_PENALTY, guardBonus: 0, suppressor: false };
+}
+
+/** rules.ts weapons as they come from the factory, for fighters without a kit. */
+const PLAIN = Object.fromEntries(Object.values(WEAPONS).map((w) => [w.id, plain(w)])) as Record<AttackWeapon, KitWeapon>;
+
+/** The weapon as this Persona carries it: with its mods if it has a kit. */
+export function weaponSpec(m: Match, side: Side, weapon: AttackWeapon): KitWeapon {
+  const kit = m.config.fighters[side].kit;
+  if (kit) {
+    if (weapon === "knife") return kit.knife;
+    if (weapon === kit.weapon.id) return kit.weapon;
+    if (kit.sidearm?.id === weapon) return kit.sidearm;
+  }
+  return PLAIN[weapon];
+}
+
+/** The grenade this Persona carries. */
+export function grenadeSpec(m: Match, side: Side): GrenadeSpec {
+  return m.config.fighters[side].kit?.grenade ?? { type: "frag", ...GRENADE };
+}
+
+/** Damage of this Persona's grenade on the target; half if it stepped, none if it ran. */
+export function grenadeHit(m: Match, side: Side, targetSteps: number): number {
+  return grenadeDamage(m.fighters[other(side)].armor.body, targetSteps, grenadeSpec(m, side));
+}
+
+/** Share of damage that passes the target's shield on a guarded zone, before heat and block breaks. */
+export function guardShare(m: Match, side: Side, weapon: AttackWeapon): number {
+  if (m.fighters[other(side)].shieldOff > 0) return 1;
+  return (weapon === "knife" ? KNIFE_GUARD : GUARD) + weaponSpec(m, side, weapon).guardBonus;
 }
 
 // ---------- rules helpers ----------
@@ -208,7 +263,8 @@ export function canFlee(m: Match): boolean {
 }
 
 export function canThrowGrenade(m: Match, side: Side): boolean {
-  return m.fighters[side].grenades > 0 && m.distance >= GRENADE.minDistance && m.distance <= GRENADE.maxDistance;
+  const g = grenadeSpec(m, side);
+  return m.fighters[side].grenades > 0 && m.distance >= g.minDistance && m.distance <= g.maxDistance;
 }
 
 export function canUseKnife(m: Match, move: number): boolean {
@@ -282,29 +338,60 @@ export function conditionAccuracy(m: Match, side: Side, distance: number): numbe
 export function hitChance(
   m: Match, side: Side, weapon: AttackWeapon, distance: number, stillAfter: number, targetDashing: boolean,
 ): number {
-  const w = WEAPONS[weapon];
+  const w = weaponSpec(m, side, weapon);
+  const target = m.config.fighters[other(side)].kit;
   let acc = w.accuracy[Math.min(distance, MAX_STEPS) - 1] ?? 0;
   if (acc <= 0) return 0;
+  if (m.config.time === "night") acc += w.nightAcc;
   if (weapon !== "knife") acc *= conditionAccuracy(m, side, distance);
-  if (w.needsStance && stillAfter < STANCE_TURNS) acc *= NO_STANCE_PENALTY;
+  if (w.needsStance && stillAfter < w.stanceTurns) acc *= w.noStancePenalty;
   let p = acc - BASE_STATS.dodge;
-  if (targetDashing) p -= DASH_EVADE;
+  if (target) p -= target.dodge + (weapon === "knife" ? 0 : target.camo[band(distance)]);
+  if (targetDashing) p -= Math.max(0, DASH_EVADE + (target?.dashEvade ?? 0) - w.tracking);
   if (m.fighters[other(side)].flash) p += MUZZLE_FLASH_BONUS;
+  if (m.fighters[other(side)].smoke > 0 && weapon !== "knife") p -= m.fighters[side].gear.thermal ? SMOKE_PENALTY / 2 : SMOKE_PENALTY;
   return clamp(p, 0.05, 0.95);
 }
 
-export function critChance(m: Match, weapon: AttackWeapon): number {
-  return clamp(BASE_STATS.critChance + WEAPONS[weapon].crit + WEATHER[m.config.weather].crit, 0, 0.9);
+/** Crit chance; pass the side to count the kit's mods. */
+export function critChance(m: Match, weapon: AttackWeapon, side?: Side): number {
+  const w = side === undefined ? WEAPONS[weapon] : weaponSpec(m, side, weapon);
+  return clamp(BASE_STATS.critChance + w.crit + WEATHER[m.config.weather].crit, 0, 0.9);
 }
 
 /** Expected damage of one attack into a zone, before luck. Used by the AI and the UI. */
 export function expectedHit(m: Match, side: Side, weapon: AttackWeapon, zone: Zone, distance: number): number {
-  const w = WEAPONS[weapon];
+  const w = weaponSpec(m, side, weapon);
   const target = m.fighters[other(side)];
-  const cc = critChance(m, weapon);
+  const cc = critChance(m, weapon, side);
   const crit = 1 + cc * (BASE_STATS.critMult + w.critBonus - 1);
   const armor = armorFactor(target.armor[zone], BASE_STATS.armorPen, w.flatPen, BASE_STATS.antiPen);
-  return baseDamage(w, distance) * ZONE_MULT[zone] * crit * armor;
+  return baseDamage(w, distance) * ZONE_MULT[zone] * crit * armor * (1 + w.doubleShot);
+}
+
+/** One bullet (or blade) that found its zone: crit, armour and shield. */
+function strike(
+  m: Match, side: Side, weapon: AttackWeapon, zone: Zone, distance: number, targetDefend: Zone[],
+): { damage: number; crit: boolean; blocked: boolean; shieldBroken: boolean } {
+  const rng = m.rng;
+  const w = weaponSpec(m, side, weapon);
+  const target = m.fighters[other(side)];
+  let dmg = baseDamage(w, distance) * ZONE_MULT[zone];
+  const crit = roll(rng, critChance(m, weapon, side));
+  if (crit) dmg *= BASE_STATS.critMult + w.critBonus;
+  dmg *= armorFactor(target.armor[zone], BASE_STATS.armorPen, w.flatPen, BASE_STATS.antiPen);
+  const blocked = targetDefend.includes(zone) && !(target.shieldOff > 0);
+  let shieldBroken = false;
+  if (blocked) {
+    let guard = guardShare(m, side, weapon);
+    if (m.config.time === "day" && !target.gear.heatProof) guard += DAY_GUARD_BONUS;
+    if (roll(rng, BASE_STATS.blockBreakChance)) {
+      guard += (1 - GUARD) * BASE_STATS.blockBreakPower;
+      shieldBroken = true;
+    }
+    dmg *= guard;
+  }
+  return { damage: Math.floor(dmg), crit, blocked, shieldBroken };
 }
 
 function rollAttack(
@@ -312,35 +399,33 @@ function rollAttack(
   targetDefend: Zone[], targetDashing: boolean, targetMove: number,
 ): AttackReport | null {
   const rng = m.rng;
-  const target = m.fighters[other(side)];
   if (action.type === "grenade") {
-    const damage = grenadeDamage(target.armor.body, targetMove);
-    return { weapon: "grenade", zone: null, chance: 1, hit: damage > 0, damage, crit: false, blocked: false, shieldBroken: false };
+    const g = grenadeSpec(m, side);
+    const damage = g.base > 0 ? grenadeHit(m, side, targetMove) : 0;
+    const report: AttackReport = { weapon: "grenade", zone: null, chance: 1, hit: damage > 0, damage, crit: false, blocked: false, shieldBroken: false };
+    // Smoke lands at the thrower's feet; an EMP needs the target to stay inside the blast.
+    if (g.type === "smoke") return { ...report, hit: true, effect: "smoke" };
+    if (g.type === "emp" && Math.abs(targetMove) < 2) return { ...report, hit: true, effect: "emp" };
+    return report;
   }
   if (action.type !== "shoot" && action.type !== "knife") return null;
   const weapon: AttackWeapon = action.type === "knife" ? "knife" : m.fighters[side].weapon;
-  const w = WEAPONS[weapon];
   const zone = action.zone;
   const chance = hitChance(m, side, weapon, distance, stillAfter, targetDashing);
   const miss: AttackReport = { weapon, zone, chance, hit: false, damage: 0, crit: false, blocked: false, shieldBroken: false };
   if (chance <= 0 || !roll(rng, chance)) return miss;
 
-  let dmg = baseDamage(w, distance) * ZONE_MULT[zone];
-  const crit = roll(rng, critChance(m, weapon));
-  if (crit) dmg *= BASE_STATS.critMult + w.critBonus;
-  dmg *= armorFactor(target.armor[zone], BASE_STATS.armorPen, w.flatPen, BASE_STATS.antiPen);
-  const blocked = targetDefend.includes(zone);
-  let shieldBroken = false;
-  if (blocked) {
-    let guard = weapon === "knife" ? KNIFE_GUARD : GUARD;
-    if (m.config.time === "day") guard += DAY_GUARD_BONUS;
-    if (roll(rng, BASE_STATS.blockBreakChance)) {
-      guard += (1 - GUARD) * BASE_STATS.blockBreakPower;
-      shieldBroken = true;
-    }
-    dmg *= guard;
+  const first = strike(m, side, weapon, zone, distance, targetDefend);
+  const report: AttackReport = { weapon, zone, chance, hit: true, ...first };
+  const twice = weaponSpec(m, side, weapon).doubleShot;
+  if (twice > 0 && roll(rng, twice)) {
+    const second = strike(m, side, weapon, zone, distance, targetDefend);
+    report.damage += second.damage;
+    report.crit ||= second.crit;
+    report.shieldBroken ||= second.shieldBroken;
+    report.double = true;
   }
-  return { weapon, zone, chance, hit: true, damage: Math.floor(dmg), crit, blocked, shieldBroken };
+  return report;
 }
 
 // ---------- the turn ----------
@@ -373,23 +458,31 @@ export function resolveTurn(match: Match, orders: [Order | null, Order | null]):
   const stillAfter = moves.map((mv, s) => (mv === 0 ? Math.min(m.fighters[s as Side].still + 1, STANCE_TURNS) : 0));
   const dashing = final.map((o) => o.action.type === "dash");
 
-  // 2. Both attacks fly at the new distance at the same moment.
+  // 2. Smoke goes down at once and hides the thrower this turn and the next.
+  for (const s of sides) {
+    if (final[s]!.action.type === "grenade" && grenadeSpec(m, s).type === "smoke") m.fighters[s].smoke = 2;
+  }
+
+  // 3. Both attacks fly at the new distance at the same moment.
   const attacks = sides.map((s) => {
     const t = other(s);
     return rollAttack(m, s, final[s]!.action, after, stillAfter[s]!, final[t]!.defend, dashing[t]!, moves[t]);
   }) as [AttackReport | null, AttackReport | null];
 
-  // 3. Apply everything.
+  // 4. Apply everything. Smoke and a downed shield last through the next turn.
   m.distance = after;
   for (const s of sides) {
     const f = m.fighters[s];
     const incoming = attacks[other(s)];
     if (incoming) f.hp = Math.max(0, f.hp - incoming.damage);
+    f.shieldOff = incoming?.effect === "emp" ? 1 : f.shieldOff > 0 ? f.shieldOff - 1 : 0;
+    f.smoke = f.smoke > 0 ? f.smoke - 1 : 0;
     f.still = stillAfter[s]!;
     if (final[s]!.action.type === "grenade") f.grenades -= 1;
     f.lastDefend = [...final[s]!.defend];
     f.afkStreak = afk[s] ? f.afkStreak + 1 : 0;
-    f.flash = m.config.time === "night" && final[s]!.action.type === "shoot" && !f.gear.suppressor;
+    const silenced = f.gear.suppressor || weaponSpec(m, s, f.weapon).suppressor;
+    f.flash = m.config.time === "night" && final[s]!.action.type === "shoot" && !silenced;
   }
 
   const report: TurnReport = {

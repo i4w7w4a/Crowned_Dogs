@@ -217,8 +217,10 @@ export function baseDamage(weapon: WeaponSpec, distance: number): number {
 }
 
 /** Grenade damage through the vest; half if the target stepped, none if it ran. */
-export function grenadeDamage(bodyArmor: number, targetSteps: number): number {
-  const full = GRENADE.base * armorFactor(bodyArmor, GRENADE.armorPen, 0, BASE_STATS.antiPen);
+export function grenadeDamage(
+  bodyArmor: number, targetSteps: number, grenade: { base: number; armorPen: number } = GRENADE,
+): number {
+  const full = grenade.base * armorFactor(bodyArmor, grenade.armorPen, 0, BASE_STATS.antiPen);
   const moved = Math.abs(targetSteps);
   return Math.floor(moved === 0 ? full : moved === 1 ? full / 2 : 0);
 }
