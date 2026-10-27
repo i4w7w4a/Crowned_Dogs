@@ -123,6 +123,13 @@ function afterSwap(m: Match, side: Side): Match {
   return { ...m, fighters };
 }
 
+/** The match as it will be after our dash: out of breath next turn. */
+function winded(m: Match, side: Side): Match {
+  const fighters = [...m.fighters] as [FighterState, FighterState];
+  fighters[side] = { ...fighters[side], winded: true };
+  return { ...m, fighters };
+}
+
 interface Candidate {
   action: Action;
   score: number;
@@ -165,7 +172,8 @@ function candidates(m: Match, side: Side, style: BotStyle): Candidate[] {
     const dashing = action.type === "dash";
     const take = shotThreat(m, enemy, d, foeStill, dashing, defendCount(action));
     // A swap deals nothing now; it pays off in the turns after, with the other gun.
-    const next = action.type === "swap" ? afterSwap(m, side) : m;
+    // A dash costs the next turn's aim.
+    const next = action.type === "swap" ? afterSwap(m, side) : action.type === "dash" ? winded(m, side) : m;
     const future = Math.max(advantage(next, side, d - 1), advantage(next, side, d), advantage(next, side, d + 1));
     return { action, score: deal - caution * take + style.foresight * future };
   });

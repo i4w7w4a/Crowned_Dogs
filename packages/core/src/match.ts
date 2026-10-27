@@ -6,7 +6,7 @@ import { SMOKE_PENALTY, type GrenadeSpec } from "./items.ts";
 import type { CombatKit, KitWeapon } from "./loadout.ts";
 import { nextInt, roll, seedRng, type RngState } from "./rng.ts";
 import {
-  AFK_LIMIT, BASE_STATS, DASH_EVADE, DASH_STEPS, DAY_FAR_ACCURACY, DAY_GUARD_BONUS, DEFAULT_ARMOR,
+  AFK_LIMIT, BASE_STATS, DASH_EVADE, DASH_STEPS, DASH_WINDED, DAY_FAR_ACCURACY, DAY_GUARD_BONUS, DEFAULT_ARMOR,
   GRENADE, GUARD, KNIFE_GUARD, KNIFE_REACH, MAPS, MAX_STEPS, MIN_DISTANCE_LIMIT, MUZZLE_FLASH_BONUS,
   NIGHT_ACCURACY, NO_STANCE_PENALTY, RUN_STEPS, SHRINK_AFTER_TURN, STANCE_TURNS, START_DISTANCE,
   SUN_ACCURACY, WEAPONS, WEATHER, ZONES, ZONE_MULT, armorFactor, band, baseDamage, grenadeDamage,
@@ -62,6 +62,8 @@ export interface FighterState {
   smoke: number;
   /** Holds the kit's sidearm instead of the main weapon. */
   sidearm: boolean;
+  /** Dashed last turn: this turn's attack is less accurate. */
+  winded: boolean;
 }
 
 export type StepMove = -1 | 0 | 1;
@@ -167,6 +169,7 @@ export function createMatch(config: MatchConfig): Match {
       lastDefend: [],
       afkStreak: 0,
       flash: false,
+      winded: false,
       facesSun: sunSide === i,
       shieldOff: 0,
       smoke: 0,
@@ -372,6 +375,7 @@ export function hitChance(
   if (target) p -= target.dodge + (weapon === "knife" ? 0 : target.camo[band(distance)]);
   if (targetDashing) p -= Math.max(0, DASH_EVADE + (target?.dashEvade ?? 0) - w.tracking);
   if (m.fighters[other(side)].flash) p += MUZZLE_FLASH_BONUS;
+  if (m.fighters[side].winded) p -= DASH_WINDED;
   if (m.fighters[other(side)].smoke > 0 && weapon !== "knife") p -= m.fighters[side].gear.thermal ? SMOKE_PENALTY / 2 : SMOKE_PENALTY;
   return clamp(p, 0.05, 0.95);
 }
@@ -510,6 +514,7 @@ export function resolveTurn(match: Match, orders: [Order | null, Order | null]):
     f.afkStreak = afk[s] ? f.afkStreak + 1 : 0;
     const silenced = f.gear.suppressor || weaponSpec(m, s, f.weapon).suppressor;
     f.flash = m.config.time === "night" && final[s]!.action.type === "shoot" && !silenced;
+    f.winded = final[s]!.action.type === "dash";
   }
 
   const report: TurnReport = {
