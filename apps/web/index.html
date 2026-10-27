@@ -16,10 +16,14 @@
   <symbol id="i-menu" viewBox="0 0 24 24"><circle class="fl" cx="5" cy="12" r="1.45"/><circle class="fl" cx="12" cy="12" r="1.45"/><circle class="fl" cx="19" cy="12" r="1.45"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
   <symbol id="i-chev-up" viewBox="0 0 24 24"><path d="M7 14.5l5-5 5 5"/></symbol>
-  <!-- movement, drawn facing forward; backwards is the same glyph mirrored -->
-  <symbol id="i-mv-0" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.8"/><path d="M3.5 12h4.5M16 12h4.5"/></symbol>
-  <symbol id="i-mv-1" viewBox="0 0 24 24"><path d="M5 12h14M14.5 7.5L19 12l-4.5 4.5"/></symbol>
+  <!-- movement in the fight log, drawn facing forward; backwards is the same glyph mirrored -->
   <symbol id="i-mv-2" viewBox="0 0 24 24"><path d="M3.5 12H19M14.5 7.5L19 12l-4.5 4.5M9.5 7.5L14 12l-4.5 4.5"/></symbol>
+  <!-- the distance column: chevrons up = toward the enemy (step, run, dash), the same flipped = back -->
+  <symbol id="i-up-1" viewBox="0 0 24 24"><path d="M5 15.5l7-7 7 7"/></symbol>
+  <symbol id="i-up-2" viewBox="0 0 24 24"><path d="M5 12l7-7 7 7M5 19l7-7 7 7"/></symbol>
+  <symbol id="i-up-3" viewBox="0 0 24 24"><path d="M5 9l7-6 7 6M5 15l7-6 7 6M5 21l7-6 7 6"/></symbol>
+  <!-- a guarded zone -->
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5l4.8 4.8L19.5 7"/></symbol>
   <symbol id="i-mv-3" viewBox="0 0 24 24"><path d="M9.5 12H20M15.5 7.5L20 12l-4.5 4.5M3.5 8.5H8M2.5 12H7M3.5 15.5H8"/></symbol>
   <!-- attack -->
   <symbol id="i-shot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.3"/><path d="M12 3v4.4M12 16.6V21M3 12h4.4M16.6 12H21"/><circle class="fl" cx="12" cy="12" r=".95"/></symbol>
@@ -75,14 +79,6 @@
       </header>
       <ol class="entries" id="logList"></ol>
     </div>
-    <div class="dock">
-      <button type="button" class="ticker glass" id="logBtn" aria-expanded="false" aria-controls="logSheet" aria-label="Запись боя">
-        <span class="recdot" aria-hidden="true"></span>
-        <span class="tx" id="ticker" aria-live="polite">Запись идёт</span>
-        <svg class="ico"><use href="#i-chev-up"/></svg>
-      </button>
-      <button type="button" class="dockbtn glass" id="moreBtn" aria-label="Меню"><svg class="ico"><use href="#i-menu"/></svg></button>
-    </div>
   </section>
 
   <header class="hud">
@@ -92,8 +88,8 @@
         <div class="hpl"><b id="hpMe">100</b><span class="bar"><i class="lag" id="ghostMe"></i><i id="barMe"></i></span></div>
       </div>
       <div class="mid">
-        <div class="clock" id="timer" role="timer" aria-label="Время на ход">01:00</div>
         <div class="turn" id="turn">Ход 1 / 15</div>
+        <div class="clock" id="timer" role="timer" aria-label="Время на ход">01:00</div>
       </div>
       <div class="side en" id="sideEn">
         <span class="who" id="nameEn">Искра</span>
@@ -103,52 +99,40 @@
   </header>
 
   <section class="panel" aria-label="Ход">
-    <div class="cols">
-      <div class="guard">
-        <div class="label"><span>Защита</span><span class="v" id="pips">0/2</span></div>
-        <div class="gbody" id="guardBody">
-          <div class="holo" id="holoBox" aria-hidden="true">
-<svg class="fig" viewBox="0 0 58 134" aria-hidden="true">
-  <!-- shown while the hologram loads, or if 3D cannot start: the same body, same zone cuts -->
-  <defs><clipPath id="figClip"><ellipse cx="29.0" cy="17.3" rx="5.1" ry="7.4"/><path d="M25.6 24.7 L25.6 28.4 L17.4 30.8 L19.6 35.9 L19.5 40.8 L21.0 53.1 L18.7 61.1 L18.4 69.2 L19.6 88.9 L19.3 98.8 L20.9 114.8 L19.6 121.0 L25.2 121.0 L24.6 114.8 L25.9 98.8 L25.6 88.9 L27.1 71.6 L29.0 69.8 L30.9 71.6 L32.4 88.9 L32.1 98.8 L33.4 114.8 L32.8 121.0 L38.4 121.0 L37.1 114.8 L38.7 98.8 L38.4 88.9 L39.6 69.2 L39.3 61.1 L37.0 53.1 L38.5 40.8 L38.4 35.9 L40.6 30.8 L32.4 28.4 L32.4 24.7Z"/><path d="M17.4 30.8 L14.3 34.6 L13.1 53.1 L12.4 67.9 L11.8 74.7 L13.2 77.8 L14.8 74.7 L15.6 67.9 L16.8 53.1 L19.6 35.9Z"/><path d="M40.6 30.8 L43.7 34.6 L44.9 53.1 L45.6 67.9 L46.2 74.7 L44.8 77.8 L43.2 74.7 L42.4 67.9 L41.2 53.1 L38.4 35.9Z"/></clipPath></defs>
-  <g clip-path="url(#figClip)">
-    <rect class="zb" data-z="head" x="0" y="6.9" width="58" height="21.6"/>
-    <rect class="zb" data-z="body" x="0" y="28.4" width="58" height="27.1"/>
-    <rect class="zb" data-z="groin" x="0" y="55.6" width="58" height="16.0"/>
-    <rect class="zb" data-z="legs" x="0" y="71.6" width="58" height="62.4"/>
-    <path class="ct" d="M0 71.6H58M0 55.6H58M0 28.4H58"/>
-  </g>
-  <g class="ol"><ellipse cx="29.0" cy="17.3" rx="5.1" ry="7.4"/><path d="M25.6 24.7 L25.6 28.4 L17.4 30.8 L19.6 35.9 L19.5 40.8 L21.0 53.1 L18.7 61.1 L18.4 69.2 L19.6 88.9 L19.3 98.8 L20.9 114.8 L19.6 121.0 L25.2 121.0 L24.6 114.8 L25.9 98.8 L25.6 88.9 L27.1 71.6 L29.0 69.8 L30.9 71.6 L32.4 88.9 L32.1 98.8 L33.4 114.8 L32.8 121.0 L38.4 121.0 L37.1 114.8 L38.7 98.8 L38.4 88.9 L39.6 69.2 L39.3 61.1 L37.0 53.1 L38.5 40.8 L38.4 35.9 L40.6 30.8 L32.4 28.4 L32.4 24.7Z"/><path d="M17.4 30.8 L14.3 34.6 L13.1 53.1 L12.4 67.9 L11.8 74.7 L13.2 77.8 L14.8 74.7 L15.6 67.9 L16.8 53.1 L19.6 35.9Z"/><path d="M40.6 30.8 L43.7 34.6 L44.9 53.1 L45.6 67.9 L46.2 74.7 L44.8 77.8 L43.2 74.7 L42.4 67.9 L41.2 53.1 L38.4 35.9Z"/></g>
-</svg>
-            <canvas id="holo"></canvas>
-          </div>
-          <svg class="leads" id="leads" aria-hidden="true"></svg>
-          <button type="button" class="dz" data-z="head" aria-label="Защита: голова"><span class="zl">Голова</span></button>
-          <button type="button" class="dz" data-z="body" aria-label="Защита: корпус"><span class="zl">Корпус</span></button>
-          <button type="button" class="dz" data-z="groin" aria-label="Защита: пах"><span class="zl">Пах</span></button>
-          <button type="button" class="dz" data-z="legs" aria-label="Защита: ноги"><span class="zl">Ноги</span></button>
-        </div>
+    <!-- distance: a column at the right edge; the middle reads the distance after the move and means "stay" -->
+    <div class="moves" id="moves" role="group" aria-label="Расстояние">
+      <button type="button" class="mv" data-m="3" aria-label="Рывок вперёд, 3 шага"><svg class="ico"><use href="#i-up-3"/></svg></button>
+      <button type="button" class="mv" data-m="2" aria-label="Перебежка вперёд, 2 шага"><svg class="ico"><use href="#i-up-2"/></svg></button>
+      <button type="button" class="mv" data-m="1" aria-label="Шаг вперёд"><svg class="ico"><use href="#i-up-1"/></svg></button>
+      <button type="button" class="mv stay" data-m="0" aria-label="Остаться на месте"><span id="distLabel">7 шагов</span><small id="distNote" hidden></small></button>
+      <button type="button" class="mv" data-m="-1" aria-label="Шаг назад"><svg class="ico down"><use href="#i-up-1"/></svg></button>
+      <button type="button" class="mv" data-m="-2" aria-label="Перебежка назад, 2 шага"><svg class="ico down"><use href="#i-up-2"/></svg></button>
+    </div>
+    <div class="ctl">
+      <div class="guard" id="guardList">
+        <div class="glabel">Защита <span id="pips">0/2</span></div>
+        <button type="button" class="dz" data-z="head" aria-label="Защита: голова"><svg class="ico ck"><use href="#i-check"/></svg><span class="zl">Голова</span></button>
+        <button type="button" class="dz" data-z="body" aria-label="Защита: корпус"><svg class="ico ck"><use href="#i-check"/></svg><span class="zl">Корпус</span></button>
+        <button type="button" class="dz" data-z="groin" aria-label="Защита: пах"><svg class="ico ck"><use href="#i-check"/></svg><span class="zl">Пах</span></button>
+        <button type="button" class="dz" data-z="legs" aria-label="Защита: ноги"><svg class="ico ck"><use href="#i-check"/></svg><span class="zl">Ноги</span></button>
       </div>
-      <div class="controls">
-        <div class="group">
-          <div class="label"><span>Расстояние</span><span class="v" id="distLabel">7 шагов</span></div>
-          <div class="moves" id="moves">
-            <button type="button" class="mv cut cl" data-m="-2" aria-label="Перебежка назад, 2 шага"><svg class="ico flip"><use href="#i-mv-2"/></svg><b>9</b></button>
-            <button type="button" class="mv cut cl" data-m="-1" aria-label="Шаг назад"><svg class="ico flip"><use href="#i-mv-1"/></svg><b>8</b></button>
-            <button type="button" class="mv cut cn" data-m="0" aria-label="Остаться на месте"><svg class="ico"><use href="#i-mv-0"/></svg><b>7</b></button>
-            <button type="button" class="mv cut cn" data-m="1" aria-label="Шаг вперёд"><svg class="ico"><use href="#i-mv-1"/></svg><b>6</b></button>
-            <button type="button" class="mv cut cr" data-m="2" aria-label="Перебежка вперёд, 2 шага"><svg class="ico"><use href="#i-mv-2"/></svg><b>5</b></button>
-            <button type="button" class="mv cut cr" data-m="3" aria-label="Рывок вперёд, 3 шага"><svg class="ico"><use href="#i-mv-3"/></svg><b>4</b></button>
-          </div>
-        </div>
+      <div class="actcol">
+        <button type="button" class="swap" id="swapBtn" hidden><svg class="ico"><use href="#i-swap"/></svg><span class="an" id="swapText">Взять пистолет</span><span class="as">без выстрела</span></button>
         <div class="acts">
-          <button type="button" class="act cut cn" id="knifeBtn"><svg class="ico"><use href="#i-knife"/></svg><span class="at"><span class="an">Нож</span><span class="as" id="knifeSub">≤2</span></span></button>
-          <button type="button" class="act cut" id="nadeBtn"><svg class="ico"><use href="#i-grenade"/></svg><span class="at"><span class="an">Граната</span><span class="as" id="nadeSub">×1</span></span></button>
-          <button type="button" class="swap cut" id="swapBtn" hidden><svg class="ico"><use href="#i-swap"/></svg><span class="an" id="swapText">Взять пистолет</span><span class="as">без выстрела</span></button>
+          <button type="button" class="act" id="knifeBtn"><svg class="ico"><use href="#i-knife"/></svg><span class="at"><span class="an">Нож</span><span class="as" id="knifeSub">≤2</span></span></button>
+          <button type="button" class="act" id="nadeBtn"><svg class="ico"><use href="#i-grenade"/></svg><span class="at"><span class="an">Граната</span><span class="as" id="nadeSub">×1</span></span></button>
         </div>
+        <button type="button" class="go" id="goBtn" disabled><span class="gt" id="goText">Выбери зону на враге</span></button>
       </div>
     </div>
-    <button type="button" class="go" id="goBtn" disabled><span class="gt" id="goText">Выбери зону на враге</span></button>
+    <div class="dock">
+      <button type="button" class="ticker glass" id="logBtn" aria-expanded="false" aria-controls="logSheet" aria-label="Запись боя">
+        <span class="recdot" aria-hidden="true"></span>
+        <span class="tx" id="ticker" aria-live="polite">Запись идёт</span>
+        <svg class="ico"><use href="#i-chev-up"/></svg>
+      </button>
+      <button type="button" class="dockbtn glass" id="moreBtn" aria-label="Меню"><svg class="ico"><use href="#i-menu"/></svg></button>
+    </div>
   </section>
 
   <div class="veil" id="infoVeil" hidden>
