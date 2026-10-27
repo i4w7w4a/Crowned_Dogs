@@ -66,17 +66,33 @@ button:disabled { cursor: default; }
 .ico .fine { stroke-width: .9; stroke-opacity: .6; }
 .ico.flip { transform: scaleX(-1); }
 
-/* Menu plates: a hairline edge and one cut corner. The plate itself is the edge colour;
-   its face is laid 1px inside, the cut pulled in by 0.6px so the edge keeps 1px along the diagonal. */
-.cut {
-  --c: 6px; --ci: calc(var(--c) - .6px); --edge: rgba(236,232,223,.16); --face: #171818;
-  position: relative; isolation: isolate; background: var(--edge); transition: background .18s, color .18s, opacity .18s;
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%);
+/* Liquid glass (Apple style), on every button of the fight and the menu: the same 15% black tint whatever the state,
+   a light blur, and a rim lit from the top left and the bottom right. In Chromium the picture also bends at the
+   rounded edge (hud/liquid.ts puts the lens filter into --lens). A picked button gets a solid white rim instead. */
+.glass {
+  --rim: linear-gradient(140deg, rgba(255,255,255,.66), rgba(255,255,255,.16) 26%, rgba(255,255,255,.06) 54%, rgba(255,255,255,.36));
+  --rim-w: 1px;
+  position: relative; border-radius: 12px; background: rgba(0,0,0,.15);
+  -webkit-backdrop-filter: blur(2px) saturate(1.6) brightness(1.05);
+  backdrop-filter: var(--lens,) blur(2px) saturate(1.6) brightness(1.05);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.14), inset 0 0 10px rgba(255,255,255,.06), 0 6px 18px rgba(0,0,0,.2);
+  transition: box-shadow .2s, color .18s;
 }
-.cut::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--face); transition: background .18s;
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--ci)), calc(100% - var(--ci)) 100%, 0 100%);
+.glass::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: var(--rim-w); background: var(--rim); pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
 }
+@media (hover: hover) {
+  .glass:hover:not(:disabled) { --rim: linear-gradient(140deg, rgba(255,255,255,.9), rgba(255,255,255,.28) 26%, rgba(255,255,255,.14) 54%, rgba(255,255,255,.55)); }
+}
+.glass.on, .glass[aria-pressed="true"]:not(.srow), .glass[aria-expanded="true"], .go.glass:not(:disabled) {
+  --rim: rgba(255,255,255,.95); --rim-w: 1.5px;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.14), inset 0 0 12px rgba(255,255,255,.1), 0 0 14px rgba(255,255,255,.14), 0 6px 18px rgba(0,0,0,.2);
+}
+.glass:disabled::before { opacity: .5; }
+.glass.round { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; }
+.glass.round .ico { width: 18px; height: 18px; }
 
 /* ---------- attack reticles on the enemy ---------- */
 .ring {
@@ -142,32 +158,32 @@ button:disabled { cursor: default; }
 .turn { font: 500 11.5px/1.25 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
 
 /* ---------- the fight log line and the menu: the last row of the panel ---------- */
+/* both are the same glass as the buttons above; while the log is open it stands in for the controls */
 .dock { display: flex; gap: 8px; align-items: stretch; }
-.glass { --c: 7px; background: rgba(9,10,10,.66); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%); }
-.ticker { flex: 1 1 auto; min-width: 0; height: 36px; display: flex; align-items: center; gap: 9px; padding: 0 8px 0 12px; text-align: left; transition: background .2s; }
-.ticker:hover { background: rgba(20,22,22,.78); }
+.ctl, .moves { transition: opacity .2s, visibility .2s; }
+.app:has(#logBtn[aria-expanded="true"]) :is(.ctl, .moves) { opacity: 0; visibility: hidden; }
+.ticker { flex: 1 1 auto; min-width: 0; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 13px; text-align: left; }
 .recdot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--red); box-shadow: 0 0 8px rgba(224,88,63,.7); animation: rec 1.6s steps(2, jump-none) infinite; }
 @keyframes rec { 50% { opacity: .25 } }
-.ticker .tx { flex: 1 1 auto; min-width: 0; font: 400 12.5px/1.2 var(--body); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker .tx { flex: 1 1 auto; min-width: 0; font: 400 13px/1.2 var(--body); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ticker .tx b { font: 600 11px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
 .ticker .tx em { font-style: normal; font-weight: 600; }
 .ticker .tx .ico { width: 12px; height: 12px; vertical-align: -1px; margin-left: 3px; stroke-width: 1.6; }
 .ticker .tx .us { color: var(--amber); } .ticker .tx .them { color: var(--red); } .ticker .tx .blk { color: var(--cyan); } .ticker .tx .nil { color: var(--muted); }
-.ticker > .ico { width: 18px; height: 18px; color: var(--muted); transition: transform .2s; }
+.ticker > .ico { width: 18px; height: 18px; color: rgba(236,232,223,.85); transition: transform .2s; }
 .ticker[aria-expanded="true"] > .ico { transform: rotate(180deg); }
 .ticker.fresh { animation: fresh .9s ease-out; }
-@keyframes fresh { 0% { background: rgba(236,230,216,.22) } 100% { background: rgba(9,10,10,.66) } }
-.dockbtn { flex: 0 0 auto; width: 36px; display: grid; place-items: center; color: var(--fg); }
-.dockbtn .ico { width: 18px; height: 18px; }
-.dockbtn:hover { background: rgba(20,22,22,.78); }
+@keyframes fresh { 0% { background: rgba(255,255,255,.3) } 100% { background: rgba(0,0,0,.15) } }
+.dockbtn { flex: 0 0 auto; width: 40px; display: grid; place-items: center; color: var(--fg); }
+.dockbtn .ico { width: 20px; height: 20px; }
 
-/* the full log slides up from the log line, over the controls */
-.logsheet { --c: 10px; position: absolute; z-index: 9; left: 16px; right: 16px; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); max-height: min(64%, 440px);
-  display: flex; flex-direction: column; background: rgba(9,10,10,.9); animation: sheetUp .22s ease-out; }
+/* the full log slides up from the log line, over the controls: the same glass, darker so the lines read */
+.logsheet.glass { position: absolute; z-index: 9; left: 18px; right: 18px; bottom: calc(58px + env(safe-area-inset-bottom, 0px)); max-height: min(64%, 440px);
+  display: flex; flex-direction: column; overflow: hidden; border-radius: 20px; background: rgba(10,11,11,.62);
+  -webkit-backdrop-filter: blur(10px) saturate(1.5); backdrop-filter: var(--lens,) blur(10px) saturate(1.5); animation: sheetUp .22s ease-out; }
 @keyframes sheetUp { from { opacity: 0; translate: 0 12px } to { opacity: 1; translate: 0 0 } }
 .logsheet header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 13px 8px 11px 14px; border-bottom: 1px solid var(--line); }
-.logsheet h3 { margin: 0 0 5px; font: 600 13px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; }
+.logsheet h3 { margin: 0 0 6px; font: 600 17px/1.1 var(--display); }
 .logsheet .meta { font: 400 10px/1.4 var(--mono); letter-spacing: .04em; color: var(--muted); }
 .logsheet .meta i { font-style: normal; color: var(--red); }
 .logsheet header button { width: 32px; height: 32px; display: grid; place-items: center; color: var(--muted); margin-top: -6px; }
@@ -211,17 +227,22 @@ button:disabled { cursor: default; }
 .mv.stay.on { color: #fff; font-weight: 600; }
 .mv.stay small { font: 500 11px/1 var(--body); color: var(--amber); }
 
-/* defence: the four zones, a tick on each guarded one; a hit on a zone flashes its line red, a block on the Zont cyan */
-.guard { position: relative; display: flex; flex-direction: column; min-width: 0; }
-.glabel { margin-bottom: 4px; font: 500 14px/1.2 var(--body); color: var(--dim); white-space: nowrap; }
+/* defence: four glass buttons, each with a small figure that lights its zone; a guarded zone gets the white rim.
+   A hit on a zone flashes its button red, a block on the Zont cyan */
+.guard { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.glabel { margin-bottom: 1px; font: 500 14px/1.2 var(--body); color: var(--dim); white-space: nowrap; }
 #pips { margin-left: 3px; font-variant-numeric: tabular-nums; transition: color .18s; }
 #pips.done { color: #fff; }
-.dz { height: 36px; display: flex; align-items: center; gap: 10px; text-align: left; font: 400 17px/1 var(--body); color: rgba(236,232,223,.62); transition: color .18s, opacity .18s; }
-.dz .ck { width: 18px; height: 18px; stroke-width: 2.2; opacity: 0; transition: opacity .18s; }
+.dz { height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 11px; text-align: left; font: 500 15px/1 var(--body); color: rgba(236,232,223,.8); }
+.dz .fig { --off: rgba(236,232,223,.3); flex: 0 0 auto; width: 13px; height: 22px; overflow: visible; filter: drop-shadow(0 0 1px rgba(0,0,0,.7));
+  --f-head: var(--off); --f-body: var(--off); --f-groin: var(--off); --f-legs: var(--off); }
+.dz[data-z="head"] .fig { --f-head: currentColor; }
+.dz[data-z="body"] .fig { --f-body: currentColor; }
+.dz[data-z="groin"] .fig { --f-groin: currentColor; }
+.dz[data-z="legs"] .fig { --f-legs: currentColor; }
+.dz .zl { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dz.on { color: #fff; font-weight: 600; }
-.dz.on .ck { opacity: 1; }
-.dz:hover:not(:disabled) { color: var(--fg); }
-.dz:disabled { opacity: .55; }
+.dz:disabled > * { opacity: .45; }
 .dz.hit { animation: zhit 1.3s ease-out; }
 .dz.blk { animation: zblk 1.3s ease-out; }
 @keyframes zhit { 0%, 35% { color: var(--red) } }
@@ -230,8 +251,7 @@ button:disabled { cursor: default; }
 /* attack other than a shot: knife and grenade side by side, edge to edge with the confirm button; the other gun above them when the kit has one */
 .actcol { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.act, .swap { min-width: 0; display: flex; align-items: center; gap: 8px; text-align: left; color: var(--fg);
-  border: 1px solid rgba(236,232,223,.24); border-radius: 10px; background: rgba(8,9,9,.3); transition: border-color .18s, background .18s, color .18s; }
+.act, .swap { min-width: 0; display: flex; align-items: center; gap: 8px; text-align: left; color: var(--fg); }
 .act { height: 48px; gap: 7px; padding: 0 6px 0 9px; }
 .act .ico { width: 20px; height: 20px; color: rgba(236,232,223,.85); }
 .act .at { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -243,74 +263,74 @@ button:disabled { cursor: default; }
 .swap .ico { width: 18px; height: 18px; color: rgba(236,232,223,.85); }
 .swap .an { font: 500 14px/1 var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .swap .as { margin-left: auto; font: 400 12px/1 var(--body); color: rgba(236,232,223,.62); white-space: nowrap; }
-.act:hover:not(:disabled), .swap:hover:not(:disabled) { border-color: rgba(236,232,223,.5); }
-.act.on, .swap.on { border-color: rgba(255,255,255,.9); background: rgba(255,255,255,.1); color: #fff; }
+.act.on, .swap.on { color: #fff; }
 .act.on .an, .swap.on .an { font-weight: 600; }
 .act.on .ico, .swap.on .ico { color: #fff; }
-.act:disabled, .swap:disabled { border-color: rgba(236,232,223,.12); }
 .act:disabled > *, .swap:disabled > * { opacity: .38; }
 
-/* confirm the turn: an outlined button, bright once the order is complete */
-.go { position: relative; height: 52px; display: flex; align-items: center; justify-content: center; padding: 0 14px;
-  border: 1.5px solid rgba(255,255,255,.9); border-radius: 10px; background: rgba(8,9,9,.3); color: #fff;
-  font: 500 18px/1.1 var(--body); text-align: center; transition: border-color .2s, background .2s, color .2s; }
-.go:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+/* confirm the turn: the same glass, its rim turns solid white once the order is complete */
+.go { height: 52px; display: flex; align-items: center; justify-content: center; padding: 0 14px; color: #fff;
+  font: 500 18px/1.1 var(--body); text-align: center; }
 .go .gt { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.go:disabled { border-color: rgba(236,232,223,.3); color: rgba(236,232,223,.66); font-size: 14.5px; }
+.go:disabled { color: rgba(236,232,223,.66); font-size: 14.5px; }
 
 @media (max-width: 374px) {
   .panel { padding-left: 14px; padding-right: 14px; }
+  .logsheet.glass { left: 14px; right: 14px; }
+  .sh-in .seg button { font-size: 12.5px; letter-spacing: -.01em; }
   .ctl { gap: 12px; }
-  .dz { font-size: 16px; gap: 8px; }
+  .dz { font-size: 14px; gap: 8px; padding: 0 8px 0 9px; }
   .act { gap: 6px; padding: 0 5px 0 8px; }
   .act .an { font-size: 13px; }
 }
 
-/* ---------- menu sheet ---------- */
-.veil { position: absolute; inset: 0; z-index: 20; background: rgba(4,5,5,.6); display: flex; align-items: flex-end; }
-.sheet { width: 100%; background: #121313; border-top: 1px solid var(--line); padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 14px; max-height: 100%; overflow-y: auto;
-  clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px); }
-.sheet > * { flex-shrink: 0; }
-.sheet .cut { --face: #171818; }
+/* ---------- menu: a floating sheet of the same glass, darker so the text reads; every control in it is glass too ---------- */
+.veil { position: absolute; inset: 0; z-index: 20; display: flex; align-items: flex-end; background: rgba(0,0,0,.4);
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
+.sheet.glass { width: 100%; max-height: 100%; display: flex; border-radius: 28px; overflow: hidden; background: rgba(12,13,13,.6);
+  -webkit-backdrop-filter: blur(12px) saturate(1.5); backdrop-filter: var(--lens,) blur(12px) saturate(1.5); animation: sheetUp .24s ease-out; }
+.sh-in { flex: 1 1 auto; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+.sh-in > * { flex-shrink: 0; }
 .sheet .sh-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.sheet h2 { margin: 0; font: 600 20px/1.1 var(--display); letter-spacing: .08em; text-transform: uppercase; }
-.sheet .sh-head button { width: 36px; height: 36px; display: grid; place-items: center; color: var(--muted); margin-right: -8px; }
-.sheet p, .sheet li { margin: 0; color: #cfcac0; font-size: 14px; line-height: 1.5; }
-.sheet ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
-.sheet .label { display: flex; align-items: center; gap: 10px; min-height: 14px; font: 500 11px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.sheet .label .ico { width: 16px; height: 16px; }
-.srow { --c: 7px; height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 14px; text-align: left; font: 500 15px/1 var(--body); }
+.sheet h2 { margin: 0 0 0 2px; font: 600 22px/1.1 var(--display); }
+.sheet p, .sheet li { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.5; }
+.sheet ul { margin: 0 0 4px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.sheet .label { margin: 6px 0 -2px 2px; font: 500 14px/1.2 var(--body); color: rgba(236,232,223,.62); }
+.srow { min-height: 52px; display: flex; align-items: center; gap: 12px; padding: 11px 12px 11px 14px; text-align: left; font: 500 15px/1.2 var(--body); }
 .srow .ico { width: 20px; height: 20px; }
 .srow .sl { min-width: 0; }
-.srow .sl small { display: block; margin-top: 4px; font: 400 12px/1.35 var(--body); color: var(--muted); }
-.srow:has(small) { height: auto; padding-top: 11px; padding-bottom: 11px; }
-.srow .st { margin-left: auto; font: 500 12px/1 var(--mono); color: var(--cyan); }
-.srow.off .st { color: var(--muted); }
+.srow .sl small { display: block; margin-top: 4px; font: 400 12px/1.35 var(--body); color: rgba(236,232,223,.6); }
+/* the switch: a white track with the dark knob on the right when on, a grey track with the knob on the left when off */
+.srow .st { position: relative; flex: 0 0 auto; margin-left: auto; width: 46px; height: 28px; border-radius: 14px; background: rgba(255,255,255,.9); font-size: 0; color: transparent; transition: background .2s; }
+.srow .st::after { content: ""; position: absolute; top: 3px; left: 21px; width: 22px; height: 22px; border-radius: 50%; background: #111212; box-shadow: 0 1px 3px rgba(0,0,0,.35); transition: left .2s, background .2s; }
+.srow.off .st { background: rgba(255,255,255,.16); }
+.srow.off .st::after { left: 3px; background: var(--fg); }
 .srow .mute { display: none; }
 .srow.off .mute { display: inline; } .srow.off .wave { display: none; }
 /* volume: fight sounds and music; the switch above stays the master mute */
-.vol { display: flex; flex-direction: column; padding: 0 2px 0 14px; transition: opacity .18s; }
+.vol { display: flex; flex-direction: column; padding: 0 4px 0 14px; transition: opacity .18s; }
 .srow.off + .vol { opacity: .45; }
-.vrow { display: grid; grid-template-columns: 88px minmax(0, 1fr) 28px; align-items: center; gap: 12px; min-height: 38px; font: 400 14px/1.2 var(--body); color: #cfcac0; }
-.vrow output { font: 500 12px/1 var(--mono); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.vrow { display: grid; grid-template-columns: 84px minmax(0, 1fr) 28px; align-items: center; gap: 12px; min-height: 40px; font: 400 14px/1.2 var(--body); color: var(--dim); }
+.vrow output { font: 500 12px/1 var(--body); color: rgba(236,232,223,.6); text-align: right; font-variant-numeric: tabular-nums; }
 .vrow input { --v: 100%; -webkit-appearance: none; appearance: none; width: 100%; height: 28px; margin: 0; background: transparent; cursor: pointer; }
-.vrow input:focus-visible { outline: 1.5px solid var(--fg); outline-offset: 2px; }
-.vrow input::-webkit-slider-runnable-track { height: 2px; background: linear-gradient(90deg, var(--fg) var(--v), rgba(236,232,223,.18) var(--v)); }
-.vrow input::-moz-range-track { height: 2px; background: rgba(236,232,223,.18); }
-.vrow input::-moz-range-progress { height: 2px; background: var(--fg); }
-/* the thumb is a fader cap */
-.vrow input::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 18px; margin-top: -8px; border: 0; border-radius: 1px; background: var(--cream); box-shadow: 0 0 0 3px #121313; }
-.vrow input::-moz-range-thumb { width: 6px; height: 18px; border: 0; border-radius: 1px; background: var(--cream); box-shadow: 0 0 0 3px #121313; }
-.seg { display: grid; grid-template-columns: repeat(var(--n, 2), 1fr); gap: 6px; }
-.seg button { --c: 6px; padding: 12px 4px; font: 500 13px/1.1 var(--body); color: var(--muted); }
-.seg button[aria-pressed="true"] { --edge: rgba(236,232,223,.7); --face: #1e1f1f; color: var(--fg); }
+.vrow input:focus-visible { outline: 1.5px solid var(--fg); outline-offset: 2px; border-radius: 6px; }
+.vrow input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, #fff var(--v), rgba(255,255,255,.18) var(--v)); }
+.vrow input::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,.18); }
+.vrow input::-moz-range-progress { height: 4px; border-radius: 2px; background: #fff; }
+/* the thumb: a round white knob */
+.vrow input::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -9px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.vrow input::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.seg { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 6px; }
+.seg button { height: 44px; padding: 0 2px; font: 500 14px/1.1 var(--body); color: rgba(236,232,223,.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg button[aria-pressed="true"] { color: #fff; font-weight: 600; }
 .sheet .gfx-note { margin-top: -6px; font-size: 12px; line-height: 1.4; color: var(--muted); }
-.tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.tracks button { --c: 6px; text-align: left; padding: 9px 10px; font: 500 13px/1.2 var(--body); color: var(--fg); }
-.tracks button small { display: block; font: 400 11px/1.2 var(--mono); color: var(--muted); margin-top: 3px; }
-.tracks button[aria-pressed="true"] { --edge: rgba(115,211,226,.6); --face: #142224; }
-.sheet .acts2 { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; }
-.ghost { --c: 8px; height: 50px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 500 16px/1 var(--body); }
+.tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tracks button { text-align: left; padding: 10px 12px; font: 500 14px/1.2 var(--body); color: rgba(236,232,223,.85); }
+.tracks button small { display: block; margin-top: 3px; font: 400 12px/1.2 var(--body); color: rgba(236,232,223,.55); }
+.tracks button[aria-pressed="true"] { color: #fff; }
+.tracks button[aria-pressed="true"] small { color: var(--cyan); }
+.sheet .acts2 { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; margin-top: 6px; }
+.ghost { height: 52px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 500 16px/1 var(--body); color: var(--fg); }
 .ghost .ico { width: 18px; height: 18px; }
 
 /* ---------- end of the fight ---------- */
@@ -328,6 +348,6 @@ button:disabled { cursor: default; }
 .stats span { font: 500 10px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .end .go { width: 240px; }
 @media (prefers-reduced-motion: reduce) {
-  .ring.hint .rc, .shake, .flash.on, .ripple, .recdot, .ticker.fresh, .logsheet { animation: none !important; }
+  .ring.hint .rc, .shake, .flash.on, .ripple, .recdot, .ticker.fresh, .logsheet, .sheet { animation: none !important; }
   .float { animation-duration: 2.4s; }
 }
