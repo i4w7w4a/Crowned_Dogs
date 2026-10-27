@@ -2,11 +2,12 @@
 // Pure functions: the bot and the web client call them on every tap.
 
 import {
-  canFlee, canThrowGrenade, canUseKnife, hitChance, plannedDistance, validateOrder, type Action, type Match, type Order, type Side,
+  canFlee, canSwap, canThrowGrenade, canUseKnife, grenadeSpec, hitChance, plannedDistance, validateOrder,
+  type Action, type Match, type Order, type Side,
 } from "./match.ts";
 import { DASH_STEPS, MAX_STEPS, RUN_STEPS, STANCE_TURNS, type Zone } from "./rules.ts";
 
-export type DraftKind = "shoot" | "knife" | "grenade" | "run" | "dash" | "flee";
+export type DraftKind = "shoot" | "knife" | "grenade" | "swap" | "run" | "dash" | "flee";
 
 export interface Draft {
   kind: DraftKind;
@@ -25,11 +26,19 @@ export type Command =
   | { type: "dash" }
   | { type: "knife" }
   | { type: "grenade" }
+  | { type: "swap" }
   | { type: "flee" };
 
 export function freshDraft(m: Match, side: Side): Draft {
   // Keep last turn's defence: most players guard the same way twice, it saves taps.
   return { kind: "shoot", move: 0, zone: null, defend: [...m.fighters[side].lastDefend].slice(0, 2) };
+}
+
+/** Why the grenade cannot be thrown now, in the words of a toast. */
+export function grenadeRefusal(m: Match, side: Side): string {
+  if (m.fighters[side].grenades <= 0) return "Гранаты больше нет";
+  const g = grenadeSpec(m, side);
+  return `Граната летит на ${g.minDistance}–${g.maxDistance} шагов`;
 }
 
 export function guardsNeeded(d: Draft): number {
@@ -76,8 +85,14 @@ export function applyCommand(m: Match, side: Side, d: Draft, c: Command): Draft 
       break;
     case "grenade":
       if (d.kind === "grenade") { next.kind = "shoot"; break; }
-      if (!canThrowGrenade(m, side)) return m.fighters[side].grenades > 0 ? "Граната летит на 2–8 шагов" : "Гранаты больше нет";
+      if (!canThrowGrenade(m, side)) return grenadeRefusal(m, side);
       next.kind = "grenade";
+      if (Math.abs(next.move) > 1) next.move = 0;
+      break;
+    case "swap":
+      if (d.kind === "swap") { next.kind = "shoot"; break; }
+      if (!canSwap(m, side)) return "Второго оружия нет";
+      next.kind = "swap";
       if (Math.abs(next.move) > 1) next.move = 0;
       break;
     case "flee":
@@ -98,7 +113,8 @@ export function actionOf(d: Draft): Action | null {
     case "knife":
       return d.zone ? { type: d.kind, move: d.move as -1 | 0 | 1, zone: d.zone } : null;
     case "grenade":
-      return { type: "grenade", move: d.move as -1 | 0 | 1 };
+    case "swap":
+      return { type: d.kind, move: d.move as -1 | 0 | 1 };
     case "run":
       return { type: "run", move: d.move === RUN_STEPS ? 2 : -2 };
     case "dash":

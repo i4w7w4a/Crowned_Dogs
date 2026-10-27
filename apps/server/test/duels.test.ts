@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyCommand, createMatch, freshDraft, toOrder, type Command, type Draft } from "@crowned-dogs/core";
+import { VETERAN_KITS, applyCommand, createMatch, freshDraft, toOrder, type Command, type Draft } from "@crowned-dogs/core";
 import { decodeCommand, encodeCommand } from "../src/codes.ts";
 import { DuelError, DuelService, type Clock, type DuelEvent } from "../src/duels.ts";
 import { turnReport, turnScreen, weaponPicker, finalScreen } from "../src/view.ts";
@@ -87,7 +87,7 @@ test("the knife steps in for you when one step is enough", () => {
 test("button codes survive the round trip and stay short", () => {
   const all: Command[] = [
     { type: "zone", zone: "legs" }, { type: "guard", zone: "groin" }, { type: "step", move: -1 },
-    { type: "run", move: 2 }, { type: "dash" }, { type: "knife" }, { type: "grenade" }, { type: "flee" },
+    { type: "run", move: 2 }, { type: "dash" }, { type: "knife" }, { type: "grenade" }, { type: "swap" }, { type: "flee" },
   ];
   for (const c of all) assert.deepEqual(decodeCommand(encodeCommand(c)), c);
   assert.equal(decodeCommand("zx"), null);
@@ -184,7 +184,38 @@ test("screens fit Telegram limits and speak plainly", () => {
   const turn = events[1]!;
   assert.equal(turn.type, "turn");
   if (turn.type === "turn") assert.match(turnReport(turn.duel, 0, turn.report), /^<b>Ход 1<\/b>/);
-  for (const row of weaponPicker("join:ABC234")) for (const b of row) assert.ok(Buffer.byteLength(b.data) <= 64);
+  for (const veteran of [false, true]) {
+    for (const row of weaponPicker("join:ABC234", veteran)) for (const b of row) assert.ok(Buffer.byteLength(b.data) <= 64);
+  }
+});
+
+test("a veteran kit plays against a veteran bot, and a second gun can be taken instead of a shot", () => {
+  const { duels, events } = service();
+  const duel = duels.startVsBot({ ...ann, weapon: "sniper", kit: VETERAN_KITS.sniper });
+  const bot = duel.players[1];
+  assert.deepEqual(bot.kit, VETERAN_KITS[bot.weapon], "the bot gets the veteran kit of its own weapon");
+  assert.ok(duel.match.config.fighters[0].kit?.sidearm, "the sniper carries a pistol");
+  const screen = turnScreen(duel, 0);
+  const swap = screen.buttons.flat().find((b) => b.text.includes("Взять пистолет"));
+  assert.ok(swap, "a button to take the pistol");
+
+  press(duels, ann.id, duel.id, [{ type: "swap" }, { type: "guard", zone: "head" }, { type: "guard", zone: "body" }]);
+  const turn = events[1]!;
+  assert.equal(turn.type, "turn");
+  if (turn.type !== "turn") return;
+  assert.equal(turn.report.attacks[0], null, "no shot on the turn of the swap");
+  assert.match(turnReport(turn.duel, 0, turn.report), /Ты: смена оружия/);
+  if (!turn.duel.match.result) {
+    assert.match(turnScreen(turn.duel, 0).text, /<b>Ты<\/b> · Пистолет/);
+    assert.ok(turnScreen(turn.duel, 0).buttons.flat().some((b) => b.text.includes("Взять снайперку")));
+  }
+});
+
+test("without a kit nobody has a second gun", () => {
+  const { duels } = service();
+  const duel = duels.startVsBot(ann);
+  assert.equal(duel.players[1].kit, undefined, "a starter player meets a starter bot");
+  assert.ok(!turnScreen(duel, 0).buttons.flat().some((b) => b.text.includes("Взять")));
 });
 
 test("the end screen names the winner from each side", () => {

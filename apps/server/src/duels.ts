@@ -3,9 +3,9 @@
 // Everything is in memory for now: a restart ends all running fights.
 
 import {
-  MAPS, REGION_EVENTS, TIMES, WEAPON_IDS, WEATHERS, applyCommand, botOrder, createMatch, freshDraft, nextInt,
-  pickWeighted, resolveTurn, seedRng, toOrder, turnSeconds, type Command, type Draft, type Match, type Order,
-  type Side, type TurnReport, type WeaponId,
+  MAPS, REGION_EVENTS, TIMES, VETERAN_KITS, WEAPON_IDS, WEATHERS, applyCommand, botOrder, compileKit, createMatch,
+  freshDraft, nextInt, pickWeighted, resolveTurn, seedRng, toOrder, turnSeconds, type Command, type Draft,
+  type FighterSetup, type Loadout, type Match, type Order, type Side, type TurnReport, type WeaponId,
 } from "@crowned-dogs/core";
 
 export interface Player {
@@ -14,6 +14,8 @@ export interface Player {
   /** Dog tag from the contract. Bots have none. */
   tag?: string;
   weapon: WeaponId;
+  /** Gear for the fight. Without it: the factory weapon and starter gear. */
+  kit?: Loadout;
   bot: boolean;
 }
 
@@ -60,6 +62,10 @@ export interface DuelServiceOptions {
   setting?: { mapId: string; weather: (typeof WEATHERS)[number]; time: (typeof TIMES)[number] };
 }
 
+function fighterOf(p: Player): FighterSetup {
+  return p.kit ? { id: p.id, name: p.name, weapon: p.weapon, kit: compileKit(p.kit) } : { id: p.id, name: p.name, weapon: p.weapon };
+}
+
 /** Thrown with a message that can be shown to the player as is. */
 export class DuelError extends Error {}
 
@@ -102,10 +108,13 @@ export class DuelService {
   startVsBot(player: Omit<Player, "bot">): Duel {
     this.ensureFree(player.id);
     const rng = seedRng(this.seed());
+    const weapon = WEAPON_IDS[nextInt(rng, WEAPON_IDS.length)]!;
     const bot: Player = {
       id: `bot:${nextInt(rng, 1e9)}`,
       name: BOT_NAMES[nextInt(rng, BOT_NAMES.length)]!,
-      weapon: WEAPON_IDS[nextInt(rng, WEAPON_IDS.length)]!,
+      weapon,
+      // a veteran meets a veteran
+      ...(player.kit ? { kit: VETERAN_KITS[weapon] } : {}),
       bot: true,
     };
     return this.start({ ...player, bot: false }, bot);
@@ -160,10 +169,7 @@ export class DuelService {
     const match = createMatch({
       seed,
       ...setting,
-      fighters: [
-        { id: a.id, name: a.name, weapon: a.weapon },
-        { id: b.id, name: b.name, weapon: b.weapon },
-      ],
+      fighters: [fighterOf(a), fighterOf(b)],
     });
     const duel: Duel = {
       id: this.newDuelId(),

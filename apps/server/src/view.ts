@@ -2,7 +2,7 @@
 // Plain data, so it can be tested without Telegram.
 
 import {
-  TIME_NAMES, WEAPONS, WEATHER, ZONES, ZONE_NAMES, canFlee, canThrowGrenade,
+  TIME_NAMES, WEAPONS, WEATHER, ZONES, ZONE_NAMES, canFlee, canThrowGrenade, swapWeapon,
   distanceLimit, draftChance, guardsNeeded, missing, other, turnLimit, type Action, type AttackReport, type Command,
   type Draft, type Side, type TurnReport, type WeaponId, type Zone,
 } from "@crowned-dogs/core";
@@ -23,6 +23,8 @@ export interface Screen {
 }
 
 const ZONE_LABEL: Record<Zone, string> = { head: "Голова", body: "Корпус", groin: "Пах", legs: "Ноги" };
+/** "Взять снайперку": the weapon after a verb. */
+const WEAPON_ACC: Record<WeaponId, string> = { pistol: "пистолет", shotgun: "дробовик", rifle: "автомат", sniper: "снайперку" };
 /** "Выстрел в голову": the zone after «в». */
 const ZONE_INTO: Record<Zone, string> = { head: "голову", body: "корпус", groin: "пах", legs: "ноги" };
 
@@ -75,6 +77,10 @@ function planText(duel: Duel, side: Side, d: Draft): string {
       return d.zone ? `нож в ${ZONE_INTO[d.zone]}, ${moveWords(d.move)}${chanceLine(duel, side, d)}` : `нож, ${moveWords(d.move)}`;
     case "grenade":
       return `граната, ${moveWords(d.move)}`;
+    case "swap": {
+      const next = swapWeapon(duel.match, side);
+      return `взять ${next ? WEAPON_ACC[next] : "другое оружие"}, без выстрела, ${moveWords(d.move)}`;
+    }
     case "run":
       return `перебежка ${d.move > 0 ? "вперёд" : "назад"} на 2 шага, без выстрела`;
     case "dash":
@@ -113,7 +119,7 @@ export function turnScreen(duel: Duel, side: Side): Screen {
     attackRow.push(cmd(duel, aimed ? `● ${ZONE_LABEL[z]}` : ZONE_LABEL[z], { type: "zone", zone: z }));
     guardRow.push(cmd(duel, d.defend.includes(z) ? `✓ ${ZONE_LABEL[z]}` : ZONE_LABEL[z], { type: "guard", zone: z }));
   }
-  const withShot = d.kind === "shoot" || d.kind === "knife" || d.kind === "grenade";
+  const withShot = d.kind === "shoot" || d.kind === "knife" || d.kind === "grenade" || d.kind === "swap";
   const mark = (on: boolean, text: string) => (on ? `● ${text}` : text);
   const stepRow: Button[] = [
     cmd(duel, mark(withShot && d.move === -1, "← Шаг назад"), { type: "step", move: -1 }),
@@ -128,6 +134,8 @@ export function turnScreen(duel: Duel, side: Side): Screen {
   const extra: Button[] = [];
   if (m.distance <= 3) extra.push(cmd(duel, mark(d.kind === "knife", "🔪 Нож"), { type: "knife" }));
   if (canThrowGrenade(m, side)) extra.push(cmd(duel, mark(d.kind === "grenade", "💣 Граната"), { type: "grenade" }));
+  const spare = swapWeapon(m, side);
+  if (spare) extra.push(cmd(duel, mark(d.kind === "swap", `🔁 Взять ${WEAPON_ACC[spare]}`), { type: "swap" }));
   if (canFlee(m)) extra.push(cmd(duel, mark(d.kind === "flee", "🚪 Уйти из боя"), { type: "flee" }));
 
   const gap = missing(d);
@@ -144,6 +152,7 @@ function attackWords(a: Action, r: AttackReport | null, move: number): string {
     case "run": return `перебежка ${move > 0 ? "вперёд" : "назад"}`;
     case "dash": return "рывок вперёд";
     case "flee": return "уходит из боя";
+    case "swap": return `смена оружия${move > 0 ? ", шаг вперёд" : move < 0 ? ", шаг назад" : ""}`;
     case "wait": return "пропустил ход";
     default: break;
   }
@@ -238,12 +247,19 @@ export function menuButtons(): Button[][] {
 
 export type PickMode = "bot" | "duel" | `join:${string}`;
 
-export function weaponPicker(mode: PickMode): Button[][] {
-  const ids: WeaponId[] = ["pistol", "shotgun", "rifle", "sniper"];
+/** Veteran kits: until the gear screen exists, the only way to fight with mods. */
+export function weaponPicker(mode: PickMode, veteran = false): Button[][] {
   const hint: Record<WeaponId, string> = { pistol: "3–5", shotgun: "1–3", rifle: "5–8", sniper: "7+" };
-  const row = (a: WeaponId, b: WeaponId) => [a, b].map((w) => btn(`${WEAPONS[w].name} · ${hint[w]}`, `w:${mode}:${w}`));
-  return [row("pistol", "shotgun"), row("rifle", "sniper")];
+  const kit = veteran ? ":v" : "";
+  const row = (a: WeaponId, b: WeaponId) => [a, b].map((w) => btn(`${WEAPONS[w].name} · ${hint[w]}`, `w:${mode}:${w}${kit}`));
+  return [
+    row("pistol", "shotgun"),
+    row("rifle", "sniper"),
+    [btn(veteran ? "● 🎖 Набор ветерана" : "🎖 Набор ветерана", `wk:${mode}:${veteran ? "s" : "v"}`)],
+  ];
 }
+
+export const VETERAN_NOTE = "Набор ветерана: оружие с обвесами, броня получше, у снайпера запасной пистолет. Бот получит такой же.";
 
 export const WELCOME = [
   "<b>Crowned Dogs</b> — пошаговые дуэли Персон.",
@@ -263,7 +279,8 @@ export const RULES = [
   "• Щит прикрывает 2 зоны и пропускает около четверти урона. Нож проходит щит наполовину.",
   "• С выстрелом можно сделать шаг вперёд или назад.",
   "• Перебежка на 2 шага и рывок на 3 шага вперёд заменяют выстрел. При рывке щит только на одну зону, зато попасть по тебе труднее.",
-  "• Нож бьёт с 2 шагов. Граната одна на бой, летит на 2–8 шагов, бьёт мимо щита, но не задевает того, кто убежал.",
+  "• Нож бьёт с 2 шагов. Граната бьёт мимо щита, но не задевает того, кто убежал. Обычная граната одна на бой и летит на 2–8 шагов.",
+  "• Если в наборе есть второй ствол, его можно взять вместо атаки. Шаг и щит при этом остаются.",
   "• После 6-го хода поле сжимается. Бой длится до 15 ходов (в грозу 10), потом побеждает тот, у кого больше здоровья.",
   "• Снайперке нужно стоять два хода подряд, иначе точность вдвое ниже.",
   "• Три пропущенных хода подряд — поражение.",

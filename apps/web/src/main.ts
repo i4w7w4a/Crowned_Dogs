@@ -3,7 +3,7 @@
 // (both walk, our attack lands, theirs lands, next turn).
 
 import {
-  TIME_NAMES, WEAPONS, WEATHER, ZONES, ZONE_NAMES, canThrowGrenade, canUseKnife, turnLimit, turnSeconds,
+  TIME_NAMES, WEAPONS, WEATHER, ZONES, ZONE_NAMES, canThrowGrenade, canUseKnife, grenadeSpec, turnLimit, turnSeconds,
   type AttackReport, type Side, type TurnReport, type Zone,
 } from "@crowned-dogs/core";
 import { Arena, type HitKind } from "./arena/arena.ts";
@@ -145,7 +145,8 @@ function render(): void {
   kb.classList.toggle("on", d.kind === "knife"); nb.classList.toggle("on", d.kind === "grenade");
   kb.setAttribute("aria-pressed", String(d.kind === "knife")); nb.setAttribute("aria-pressed", String(d.kind === "grenade"));
   $("knifeSub").textContent = knifeOk ? "вблизи" : "с 2 шагов";
-  $("nadeSub").textContent = me.grenades ? (nadeOk ? "мимо щита" : "2–8 шагов") : "нет";
+  const nade = grenadeSpec(m, 0);
+  $("nadeSub").textContent = me.grenades ? (nadeOk ? "мимо щита" : `${nade.minDistance}–${nade.maxDistance} шагов`) : "нет";
 
   const go = $<HTMLButtonElement>("goBtn");
   const msg = duel.over ? "Бой окончен" : busy ? "Ход идёт…" : duel.missing;

@@ -52,6 +52,14 @@ test("from /start to a played turn against the bot", async () => {
     assert.match(String(calls.at(-1)?.payload.text), /Жетон <b>K-\d{3}-\d{3}<\/b>, позывной <b>Аня<\/b>/);
 
     await tap("m:bot");
+    await tap("wk:bot:v");
+    assert.match(String(calls.filter((c) => c.method === "answerCallbackQuery").at(-1)!.payload.text), /Набор ветерана/);
+    const veteran = JSON.stringify(calls.filter((c) => c.method === "editMessageReplyMarkup").at(-1)!.payload.reply_markup);
+    assert.match(veteran, /"callback_data":"w:bot:rifle:v"/, "weapons now come with the veteran kit");
+    assert.match(veteran, /● 🎖 Набор ветерана/);
+    await tap("wk:bot:s");
+    assert.match(JSON.stringify(calls.filter((c) => c.method === "editMessageReplyMarkup").at(-1)!.payload.reply_markup), /"callback_data":"w:bot:rifle"/);
+
     await tap("w:bot:rifle");
     await tick();
     const duel = duels.duelOf("100");
