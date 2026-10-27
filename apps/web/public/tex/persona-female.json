@@ -1,0 +1,11 @@
+{
+ "sizes": [
+  2048,
+  4096
+ ],
+ "materials": {
+  "M_Fem_Body": "tex/persona-female/M_Fem_Body",
+  "M_Fem_Hair": "tex/persona-female/M_Fem_Hair",
+  "M_Fem_Head": "tex/persona-female/M_Fem_Head"
+ }
+}
