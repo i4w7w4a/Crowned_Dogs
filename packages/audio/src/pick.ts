@@ -1,0 +1,55 @@
+// Random choices that do not repeat: the same gunshot twice in a row sounds
+// like a machine, and the same song twice in a row sounds like a bug.
+
+export type Random = () => number;
+
+/** Index in [0, n) that differs from `last` whenever n > 1. */
+export function pickOther(n: number, last: number | undefined, random: Random = Math.random): number {
+  if (n <= 1) return 0;
+  if (last === undefined || last < 0 || last >= n) return Math.floor(random() * n);
+  const i = Math.floor(random() * (n - 1));
+  return i >= last ? i + 1 : i;
+}
+
+/** Remembers the last variant of every sound. */
+export class VariantPicker {
+  private last = new Map<string, number>();
+  private random: Random;
+
+  constructor(random: Random = Math.random) {
+    this.random = random;
+  }
+
+  pick<T>(key: string, items: readonly T[]): T {
+    const i = pickOther(items.length, this.last.get(key), this.random);
+    this.last.set(key, i);
+    return items[i]!;
+  }
+}
+
+/** A playlist that picks at random and never plays the same track twice in a row. */
+export class Shuffle<T> {
+  private current: T | undefined;
+  private items: readonly T[];
+  private random: Random;
+
+  constructor(items: readonly T[], random: Random = Math.random) {
+    if (items.length === 0) throw new Error("Empty playlist");
+    this.items = items;
+    this.random = random;
+  }
+
+  get now(): T | undefined {
+    return this.current;
+  }
+
+  next(): T {
+    const last = this.current === undefined ? undefined : this.items.indexOf(this.current);
+    this.current = this.items[pickOther(this.items.length, last, this.random)]!;
+    return this.current;
+  }
+}
+
+/** Uniform in [-spread, spread]. */
+export const jitter = (spread: number | undefined, random: Random = Math.random) =>
+  spread ? (random() * 2 - 1) * spread : 0;
