@@ -282,6 +282,8 @@ export class Arena {
       if (!(o instanceof THREE.Mesh)) return;
       o.castShadow = true; o.frustumCulled = false;
       const own = o.material as THREE.MeshStandardMaterial;
+      // hair strips are cut out by their texture: the antialiasing smooths the cut edges
+      if (own.alphaTest > 0) own.alphaToCoverage = true;
       if (own.map) return; // a textured Persona keeps its own suit; the bare mannequin gets painted
       o.material = /joint/i.test(own.name) ? joints : body;
     });
