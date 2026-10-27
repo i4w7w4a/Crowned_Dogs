@@ -50,7 +50,6 @@ button:disabled { cursor: default; }
 .stage { position: absolute; inset: 0; }
 .stage img.bg, .stage canvas.gl { position: absolute; display: block; max-width: none; user-select: none; -webkit-user-drag: none; }
 .stage canvas.gl { pointer-events: none; }
-.grain { position: absolute; inset: 0; pointer-events: none; opacity: .11; mix-blend-mode: overlay; z-index: 2; background-size: 128px 128px; }
 .flash { position: absolute; inset: 0; pointer-events: none; z-index: 3; opacity: 0; }
 .flash.ours { background: radial-gradient(60% 40% at 10% 100%, rgba(255,236,200,.75), rgba(255,236,200,0) 70%); }
 .flash.hurt { background: radial-gradient(130% 95% at 50% 50%, rgba(224,88,63,0) 50%, rgba(224,88,63,.5) 100%); }
@@ -324,6 +323,7 @@ button:disabled { cursor: default; }
 .seg { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 6px; }
 .seg button { height: 44px; padding: 0 2px; font: 500 14px/1.1 var(--body); color: rgba(236,232,223,.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .seg button[aria-pressed="true"] { color: #fff; font-weight: 600; }
+.sheet .gfx-note { margin-top: -6px; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .tracks button { text-align: left; padding: 10px 12px; font: 500 14px/1.2 var(--body); color: rgba(236,232,223,.85); }
 .tracks button small { display: block; margin-top: 3px; font: 400 12px/1.2 var(--body); color: rgba(236,232,223,.55); }

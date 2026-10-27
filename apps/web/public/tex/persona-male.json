@@ -1,0 +1,10 @@
+{
+ "sizes": [
+  2048,
+  4096
+ ],
+ "materials": {
+  "M_Male_Body": "tex/persona-male/M_Male_Body",
+  "M_Male_Head": "tex/persona-male/M_Male_Head"
+ }
+}

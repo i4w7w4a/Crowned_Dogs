@@ -10,6 +10,7 @@ import {
 } from "@crowned-dogs/core";
 import { Arena, type HitKind } from "./arena/arena.ts";
 import { CALIBRATION_FRAME, FRAMES, type Frame } from "./arena/frames.ts";
+import { QUALITY, QUALITY_IDS, keepQuality, startQuality, type QualityId } from "./arena/quality.ts";
 import { ArenaAudio, type VolumeKind } from "./audio/arena-audio.ts";
 import { LocalDuel } from "./game/local-duel.ts";
 import { FightLog, icon } from "./hud/log.ts";
@@ -48,6 +49,9 @@ let timerId: ReturnType<typeof setInterval> | null = null;
 let geo = { x: 0, y: 0, w: 1, h: 1 };
 /** Health changes when a hit lands, the turn number when the turn is over: not when the rules compute them. */
 let shown = { hp: [0, 0], turn: 1 };
+
+/** The graphics level; `byHand` once the player picked it in the menu (then the game never lowers it on its own). */
+let quality: QualityId = "low", byHand = false;
 
 const audio = new ArenaAudio();
 const log = new FightLog({ list: $("logList"), ticker: $("ticker"), button: $("logBtn"), sheet: $("logSheet") });
@@ -406,6 +410,10 @@ function renderMenu(): void {
     option(tracks, TRACKS[s].title + `<small>${now ? "в эфире" : "&nbsp;"}</small>`, now, () => { audio.tune(s); renderMenu(); });
   }
 
+  const gs = seg("gfxSeg", QUALITY_IDS.length);
+  for (const id of QUALITY_IDS) option(gs, QUALITY[id].name, id === quality, () => { if (id !== quality) { setQuality(id, true); renderMenu(); } });
+  $("gfxNote").textContent = GFX_NOTE[quality] + (byHand ? "" : " Подобрано под это устройство.");
+
   const fs = seg("frameSeg", frames.length);
   $("frameLabel").hidden = frames.length < 2; fs.hidden = frames.length < 2;
   for (const f of frames) option(fs, f.name, f === frame, () => { if (f !== frame) { setFrame(f); restart(); } });
@@ -424,6 +432,35 @@ for (const k of ["fx", "music"] as const) {
   input.addEventListener("input", () => { audio.setVolume(k, Number(input.value) / 100); drawVolume(k); });
   // letting go of the fight-sounds slider plays a click at the new level
   if (k === "fx") input.addEventListener("change", () => audio.play("ui.tap"));
+}
+
+const GFX_NOTE: Record<QualityId, string> = {
+  low: "Для слабых телефонов: без теней, дымки и пыли, картинка попроще.",
+  medium: "Для телефона: мягкие тени, лучи света из окон, пыль в воздухе.",
+  high: "Для компьютера: дымка с тенями бойцов, текстуры 2К, чёткий фон.",
+  ultra: "Для мощного ПК: всё на максимум, текстуры 4К, кадр рисуется крупнее экрана и сглаживается.",
+};
+
+function setQuality(id: QualityId, picked: boolean): void {
+  quality = id;
+  if (picked) { byHand = true; keepQuality(id); }
+  arena?.setQuality(QUALITY[id]);
+  layout();
+}
+
+/** A level the device was guessed to carry, which then runs slower than 24 frames a second, steps down by itself. */
+function watchSpeed(): void {
+  let frames = 0, t0 = 0;
+  const step = (t: number) => {
+    if (byHand) return;
+    if (document.hidden) { t0 = 0; frames = 0; requestAnimationFrame(step); return; }
+    if (!t0) t0 = t;
+    frames += 1;
+    if (t - t0 < 4000) { requestAnimationFrame(step); return; }
+    const i = QUALITY_IDS.indexOf(quality);
+    if (frames * 1000 / (t - t0) < 24 && i > 0) { setQuality(QUALITY_IDS[i - 1]!, false); setTimeout(watchSpeed, 1500); }
+  };
+  requestAnimationFrame(step);
 }
 
 function setFrame(f: Frame): void {
@@ -462,23 +499,13 @@ document.addEventListener("pointerdown", () => audio.unlock(), { once: true });
 document.addEventListener("keydown", () => audio.unlock(), { once: true });
 window.addEventListener("resize", layout);
 
-(function grain() {
-  const el = $("grain"), urls: string[] = [], c = document.createElement("canvas"); c.width = c.height = 128;
-  const ctx = c.getContext("2d")!;
-  for (let i = 0; i < 4; i++) {
-    const img = ctx.createImageData(128, 128);
-    for (let k = 0; k < img.data.length; k += 4) { const v = Math.random() * 255; img.data[k] = img.data[k + 1] = img.data[k + 2] = v; img.data[k + 3] = 255; }
-    ctx.putImageData(img, 0, 0); urls.push("url(" + c.toDataURL() + ")");
-  }
-  let n = 0;
-  el.style.backgroundImage = urls[0]!;
-  if (!reduceMotion) setInterval(() => { n = (n + 1) % urls.length; el.style.backgroundImage = urls[n]!; }, 90);
-})();
-
 // ---------- go ----------
 try {
   arena = new Arena(canvas);
   arena.onFrame = placeRings;
+  const start = startQuality(arena.gl);
+  quality = start.id; byHand = start.picked;
+  arena.setQuality(QUALITY[quality]);
 } catch {
   $("status").textContent = "3D не запустилось на этом устройстве";
 }
@@ -488,6 +515,7 @@ arena?.load(MY_MODEL, FOE_MODEL, duel.match.distance)
   .then(() => {
     $("status").hidden = true;
     layout(); render();
+    setTimeout(watchSpeed, 1500);
   })
   .catch(() => { $("status").textContent = "Модель не загрузилась. Обнови страницу."; });
 

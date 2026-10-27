@@ -9,9 +9,13 @@ import * as THREE from "three";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
+import { Dust } from "./dust.ts";
 import type { Frame } from "./frames.ts";
 import { Lens, type View } from "./lens.ts";
+import { tune } from "./materials.ts";
+import { QUALITY, type Quality } from "./quality.ts";
 import { findBones, pitch, roll, type Bones } from "./rig.ts";
+import { TextureTiers } from "./textures.ts";
 
 export type Who = "me" | "enemy";
 export type HitKind = "hit" | "blocked" | "grenade";
@@ -59,6 +63,8 @@ interface Mirror {
   tilt: THREE.Group;
   pairs: [THREE.Object3D, THREE.Object3D][];
   src: Figure;
+  model: THREE.Object3D;
+  mats: THREE.Material[];
 }
 
 interface Calibrated {
@@ -112,7 +118,17 @@ async function loadModel(url: string): Promise<GLTF> {
 }
 
 const smooth = (u: number) => u * u * (3 - 2 * u);
-const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
+const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpSize = new THREE.Vector2();
+
+/** The reflection fades away from the feet, like one in a thin layer of water, and is lit as the body above it is. */
+function mirrorShader(sh: THREE.WebGLProgramParametersWithUniforms): void {
+  sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying float vWorldY;")
+    .replace("#include <project_vertex>", "#include <project_vertex>\nvWorldY = (modelMatrix * vec4(transformed, 1.0)).y;");
+  sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vWorldY;")
+    // flipped upside down, its surfaces face the floor; light them as the real body's surfaces are lit
+    .replace("#include <normal_fragment_maps>", "#include <normal_fragment_maps>\n{ vec3 w = transpose(mat3(viewMatrix)) * normal; w.y = -w.y; normal = normalize(mat3(viewMatrix) * w); }")
+    .replace("#include <dithering_fragment>", "#include <dithering_fragment>\ngl_FragColor *= clamp(1.0 + vWorldY / 1.1, 0.0, 1.0);");
+}
 
 export class Arena {
   /** True once the model is loaded and the figures stand. */
@@ -139,10 +155,20 @@ export class Arena {
   private me: Figure | null = null;
   private mirror: Mirror | null = null;
   private lens: Lens;
+  private q: Quality = QUALITY.medium;
+  private catcher: THREE.Mesh;
+  private dust = new Dust();
+  private tiers: TextureTiers[] = [];
+  /** The hall's light for reflections on the figures, made from the painting. */
+  private env: THREE.Texture | null = null;
+  private envSrc = "";
+  private size = { w: 1, h: 1, view: { x: 0, y: 0, w: 1, h: 1 } as View };
+  private sunDir = new THREE.Vector3(0, 0.5, -1);
 
   /** Throws when the device has no WebGL. */
   constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
+    // the figures are drawn off screen with their own smoothing (lens.ts); the screen itself only gets the finished frame
+    this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false, powerPreference: "high-performance" });
     const r = this.renderer;
     r.setClearColor(0x000000, 0);
     r.outputColorSpace = THREE.SRGBColorSpace;
@@ -173,9 +199,9 @@ export class Arena {
     for (const l of [hemi, this.rim, this.fill, this.meKey, this.bounce, back]) l.layers.enable(NEAR);
 
     // Shadows fall on the painted floor through an invisible catcher.
-    const catcher = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ color: 0x0a0705, opacity: 0.58, depthWrite: false }));
+    const catcher = this.catcher = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ color: 0x0a0705, opacity: 0.58, depthWrite: false }));
     catcher.rotation.x = -Math.PI / 2; catcher.receiveShadow = true;
-    this.scene.add(catcher);
+    this.scene.add(catcher, this.dust.points);
 
     this.spark = new THREE.Sprite(new THREE.SpriteMaterial({
       map: softTexture([[0, "rgba(255,248,230,1)"], [0.25, "rgba(255,190,110,.85)"], [1, "rgba(255,120,40,0)"]]),
@@ -193,9 +219,46 @@ export class Arena {
     this.en = this.makeFigure(foe, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
     this.me = this.makeFigure(mine, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1, near: true });
     this.mirror = this.makeMirror(foe, this.en);
+    const foeLooks = [this.en.model, this.mirror.model];
+    this.tiers = theirs ? [new TextureTiers([this.me.model], meUrl), new TextureTiers(foeLooks, enemyUrl)] : [new TextureTiers([this.me.model, ...foeLooks], meUrl)];
     this.ready = true;
+    this.setQuality(this.q);
     this.reset(distance);
     this.renderer.setAnimationLoop((t) => this.tick(t));
+  }
+
+  /** The WebGL context, to tell what the device can carry. */
+  get gl(): WebGL2RenderingContext {
+    return this.renderer.getContext() as WebGL2RenderingContext;
+  }
+
+  /** The graphics level (quality.ts): drawing size, smoothing, shadows, reflections, light in the air, textures. */
+  setQuality(q: Quality): void {
+    this.q = q;
+    const r = this.renderer;
+    this.lens.setQuality(q);
+    r.shadowMap.enabled = q.shadow > 0;
+    this.rim.castShadow = q.shadow > 0;
+    this.catcher.visible = q.shadow > 0;
+    if (this.rim.shadow.mapSize.x !== q.shadow && q.shadow > 0) {
+      this.rim.shadow.mapSize.set(q.shadow, q.shadow);
+      this.rim.shadow.map?.dispose(); this.rim.shadow.map = null;
+    }
+    // softness in centimetres stays the same at every map size
+    this.rim.shadow.radius = q.shadowRadius;
+    this.scene.environment = q.env ? this.env : null;
+    // the hall's light takes over from the flat sky light, so the figures stay as bright as before
+    this.hemi.intensity = q.env ? 0.22 : 0.6;
+    this.dust.setCount(q.dust);
+    const mats = new Set<THREE.Material>([this.catcher.material as THREE.Material]);
+    for (const f of [this.en, this.me]) f?.model.traverse((o) => { if (o instanceof THREE.Mesh) mats.add(o.material as THREE.Material); });
+    for (const m of mats) tune(m, q);
+    if (this.mirror) {
+      this.mirror.group.visible = q.mirror;
+      this.mirror.mats.forEach((m) => tune(m, q, mirrorShader));
+    }
+    for (const t of this.tiers) void t.set(q.textures, Math.min(q.anisotropy, r.capabilities.getMaxAnisotropy()));
+    this.resize(this.size.w, this.size.h, this.size.view);
   }
 
   setFrame(f: Frame): void {
@@ -207,8 +270,10 @@ export class Arena {
     this.camera.projectionMatrix.makePerspective(-half, half, top, bottom, n, this.camera.far);
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
     this.renderer.toneMappingExposure = f.look.exposure;
-    this.lens.setBackdrop(f.src);
+    this.lens.setHorizon(k.hz);
+    this.lens.setBackdrop(f.src, f.src2x);
     this.lens.setLook(f.look.lens, f.look.exposure);
+    this.makeEnv(f.src);
     this.rim.color.set(f.look.rim);
     this.fill.color.set(f.look.fill);
     this.hemi.color.set(f.look.sky); this.hemi.groundColor.set(f.look.ground);
@@ -216,12 +281,33 @@ export class Arena {
     (this.scene.fog as THREE.Fog).color.set(f.look.fog);
   }
 
+  /** The hall's light for the figures' reflections: the painting blurred all round them. */
+  private makeEnv(src: string): void {
+    if (src === this.envSrc) return;
+    this.envSrc = src;
+    new THREE.TextureLoader().load(src, (tex) => {
+      if (this.envSrc !== src) { tex.dispose(); return; }
+      tex.mapping = THREE.EquirectangularReflectionMapping;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      const env = pmrem.fromEquirectangular(tex).texture;
+      pmrem.dispose(); tex.dispose();
+      this.env?.dispose();
+      this.env = env;
+      if (this.q.env) this.scene.environment = env;
+    });
+  }
+
   /** Size of the drawing buffer in CSS pixels (the canvas element is sized by the page), and the part of it on screen. */
   resize(width: number, height: number, view: View = { x: 0, y: 0, w: 1, h: 1 }): void {
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.size = { w: width, h: height, view };
+    // as sharp as the screen allows, within the level's pixel budget
+    const q = this.q, area = Math.max(1, width * height);
+    const ratio = Math.max(0.5, Math.min(window.devicePixelRatio || 1, q.maxDpr, Math.sqrt(q.maxPixels / area)));
+    this.renderer.setPixelRatio(ratio);
     this.renderer.setSize(Math.round(width), Math.round(height), false);
     const px = this.renderer.getDrawingBufferSize(new THREE.Vector2());
-    this.lens.setSize(px.x, px.y, view);
+    this.lens.setSize(px.x, px.y, width, height, view);
   }
 
   /** Both walk to the new distance; who moved decides who walks, the camera rides with us. */
@@ -321,18 +407,25 @@ export class Arena {
     };
   }
 
-  /** The wet floor reflects the enemy: a faint upside-down copy that repeats its pose every frame. */
+  /** The wet floor reflects the enemy: a faint upside-down copy in its own lit materials that repeats its pose every frame. */
   private makeMirror(gltf: GLTF, src: Figure): Mirror {
     const model = SkeletonUtils.clone(gltf.scene);
-    const mat = new THREE.MeshBasicMaterial({ color: 0xa89278, transparent: true, opacity: 0.42, depthWrite: false });
-    // fades out away from the feet, like a reflection in a thin layer of water
-    mat.onBeforeCompile = (sh) => {
-      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying float vWorldY;")
-        .replace("#include <project_vertex>", "#include <project_vertex>\nvWorldY = (modelMatrix * vec4(transformed, 1.0)).y;");
-      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vWorldY;")
-        .replace("#include <dithering_fragment>", "#include <dithering_fragment>\ngl_FragColor.a *= clamp(1.0 + vWorldY / 1.1, 0.0, 1.0);");
-    };
-    model.traverse((o) => { if (o instanceof THREE.Mesh) { o.material = mat; o.frustumCulled = false; } });
+    // the same materials as the body it mirrors (two copies of one model list their meshes in the same order)
+    const own: THREE.Mesh[] = [];
+    src.model.traverse((o) => { if (o instanceof THREE.Mesh) own.push(o); });
+    const copies = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+    let i = 0;
+    model.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      const from = (own[i++]?.material ?? o.material) as THREE.MeshStandardMaterial;
+      let m = copies.get(from);
+      if (!m) {
+        // the water darkens it a little
+        m = from.clone(); m.color.multiplyScalar(0.62); m.transparent = true; m.opacity = 0.5; m.depthWrite = false;
+        copies.set(from, m);
+      }
+      o.material = m; o.frustumCulled = false; o.castShadow = false;
+    });
     model.scale.copy(src.model.scale); model.position.copy(src.model.position);
     const flip = new THREE.Group(); flip.add(model); flip.scale.y = -1;
     const tilt = new THREE.Group(); tilt.add(flip);
@@ -341,7 +434,7 @@ export class Arena {
     const a: THREE.Object3D[] = [], b: THREE.Object3D[] = [];
     src.model.traverse((o) => { if ((o as THREE.Bone).isBone) a.push(o); });
     model.traverse((o) => { if ((o as THREE.Bone).isBone) b.push(o); });
-    return { group, tilt, pairs: a.map((bone, i) => [bone, b[i]!]), src };
+    return { group, tilt, model, pairs: a.map((bone, i) => [bone, b[i]!]), src, mats: [...copies.values()] };
   }
 
   private place(): void {
@@ -384,7 +477,12 @@ export class Arena {
       this.spark.scale.setScalar((this.spark.userData.size as number) * (0.6 + 0.8 * u));
       this.spark.visible = this.sparkLife > 0;
     }
-    this.lens.render(this.scene, this.camera, NEAR);
+    if (this.q.dust) {
+      this.lens.sunDirection(this.camera, this.sunDir);
+      const pxPerMetre = this.renderer.getDrawingBufferSize(tmpSize).y * this.k!.fn;
+      this.dust.update(this.timer.getElapsed(), pxPerMetre, this.sunDir, this.lens.raysTexture);
+    }
+    this.lens.render(this.scene, this.camera, NEAR, { enemyDepth: this.depth, light: this.rim });
     this.onFrame?.();
   }
 }
