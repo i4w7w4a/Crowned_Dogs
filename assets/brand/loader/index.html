@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Экран загрузки Crowned Dogs</title>
 <!-- Prototype of the loading screen. Serve the repo over http (e.g. `npx serve .`) and open assets/brand/loader/ ;
-     the 3D model is ../3d/crowned-dogs-maw.glb (clips Bite, Idle, Open). -->
+     the 3D model is ../3d/crowned-dogs-maw.glb, the screen plays its Idle clip. -->
 <style>body{margin:0}</style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -68,31 +68,7 @@ body {
 .fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 4; transition: opacity .5s ease; }
 .fade.on { opacity: 1; }
 
-/* review panel: not part of the game screen */
-.view {
-  position: fixed; z-index: 5;
-  top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
-  background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(6px);
-  font: 500 13px/1.2 var(--body); color: var(--bone); max-width: calc(100vw - 24px);
-}
-.view summary { list-style: none; cursor: pointer; padding: 9px 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.view summary::-webkit-details-marker { display: none; }
-.view summary::after { content: " +"; }
-.view[open] summary::after { content: " –"; }
-.view .body { display: grid; gap: 12px; padding: 4px 12px 12px; }
-.view fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
-.view legend { padding: 0; margin-bottom: 6px; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
-.seg { display: flex; flex-wrap: wrap; gap: 6px; }
-.seg label { position: relative; }
-.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
-.seg span { display: block; padding: 6px 10px; border: 1px solid var(--line); color: var(--muted); }
-.seg input:checked + span { border-color: var(--bone); color: var(--bone); }
-.seg input:focus-visible + span { outline: 2px solid var(--bone); outline-offset: 2px; }
-.view button { font: inherit; color: var(--bone); background: transparent; border: 1px solid var(--line); padding: 7px 10px; cursor: pointer; letter-spacing: .04em; }
-.view button:hover { border-color: var(--bone); }
-.view button:focus-visible { outline: 2px solid var(--bone); outline-offset: 2px; }
-.note { margin: 0; color: var(--dim); font-size: 12px; max-width: 30ch; }
-body.capture .view, body.noui .hud { display: none; }
+body.noui .hud { display: none; }
 @media (prefers-reduced-motion: reduce) { .grain { animation: none; } .fill { transition: none; } }
 </style>
 </head>
@@ -112,29 +88,6 @@ body.capture .view, body.noui .hud { display: none; }
 <div class="vignette" aria-hidden="true"></div>
 <div class="fade" id="fade" aria-hidden="true"></div>
 
-<details class="view" id="view">
-  <summary>Вид</summary>
-  <div class="body">
-    <fieldset>
-      <legend>Движение</legend>
-      <div class="seg">
-        <label><input type="radio" name="clip" id="clip-bite" value="Bite" checked><span>Щелчок</span></label>
-        <label><input type="radio" name="clip" id="clip-idle" value="Idle"><span>Дыхание</span></label>
-        <label><input type="radio" name="clip" id="clip-open" value="Open"><span>Открытие</span></label>
-      </div>
-    </fieldset>
-    <fieldset>
-      <legend>Металл</legend>
-      <div class="seg">
-        <label><input type="radio" name="mat" id="mat-bone" value="bone" checked><span>Кость</span></label>
-        <label><input type="radio" name="mat" id="mat-steel" value="steel"><span>Сталь</span></label>
-        <label><input type="radio" name="mat" id="mat-brass" value="brass"><span>Латунь</span></label>
-      </div>
-    </fieldset>
-    <button type="button" id="again">Загрузить заново</button>
-    <p class="note">Пасть можно крутить пальцем или мышью. Каждый щелчок двигает загрузку, в конце пасть раскрывается и экран уходит в темноту.</p>
-  </div>
-</details>
 
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"}}</script>
 <script type="module">
@@ -148,7 +101,7 @@ if (CAPTURE) document.body.classList.add('capture');
 if (q.get('ui') === '0') document.body.classList.add('noui');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const PERIOD = parseFloat(q.get('period') || '0');   // video export: make the sway loop every PERIOD seconds
-const FLOW = q.get('flow') !== '0';                   // flow=0: just the bite loop, no progress and no ending
+const FLOW = q.get('flow') !== '0';                   // flow=0: just the breathing loop, no progress and no ending
 const d2r = Math.PI / 180;
 
 const stage = document.getElementById('stage');
@@ -193,18 +146,12 @@ scene.add(dust);
 if (q.get('dust') === '0') dust.visible = false;
 
 const pivot = new THREE.Group();   // pose: turned and tilted on the diagonal
-const punch = new THREE.Group();   // small scale kick on each snap
+const punch = new THREE.Group();   // breathing scale and the final dive
 scene.add(pivot); pivot.add(punch);
 const BASE = { pitch: 16, yaw: -22, roll: -13 };
 let drag = { x: 0, y: 0 }, dragging = false, last = null;
 
-let model, mixer, actions = {}, current = 'Bite', mats = {}, radius = 1.6;
-
-const MATS = {
-  bone: null,
-  steel: { color: 0x6c7075, metalness: 1, roughness: 0.3, clearcoat: 0 },
-  brass: { color: 0xb8955a, metalness: 1, roughness: 0.28, clearcoat: 0 },
-};
+let model, mixer, idle, jawUp, jawLo, radius = 1.6;
 
 function fit() {
   const w = stage.clientWidth, h = stage.clientHeight;
@@ -231,68 +178,52 @@ stage.addEventListener('pointercancel', release);
 
 // ---------------------------------------------------------------- loading flow
 const STATUS = ['Проверка контракта', 'Жетон K-417-093 принят', 'Калибровка нейролинка', 'Синхронизация с Персоной', 'Загрузка региона: соляной комбинат', 'Готово'];
+// a believable download: uneven jumps, a stall in the middle (seconds, percent)
+const STEPS = [[0.5, 7], [1.1, 16], [1.6, 24], [2.5, 38], [3.0, 46], [4.2, 58], [4.6, 67], [5.4, 79], [6.0, 88], [6.9, 100]];
 const fillEl = document.getElementById('fill'), pctEl = document.getElementById('pct'), stEl = document.getElementById('status'), barEl = document.getElementById('bar');
 const fadeEl = document.getElementById('fade');
-let progress = 0, phase = 'load', phaseT = 0;
+let progress = -1, phase = 'load', phaseT = 0, loadT = 0;
 function setProgress(p) {
+  if (p === progress) return;
   progress = Math.min(100, p);
   fillEl.style.width = progress + '%';
   pctEl.textContent = Math.round(progress) + '%';
   barEl.setAttribute('aria-valuenow', Math.round(progress));
   stEl.textContent = STATUS[Math.min(STATUS.length - 1, Math.floor(progress / 100 * (STATUS.length - 1)))];
 }
+setProgress(0);
 function restart() {
   fadeEl.classList.remove('on');
-  phase = 'load'; phaseT = 0; setProgress(0);
-  play(current === 'Open' ? 'Open' : current, true);
-}
-document.getElementById('again').addEventListener('click', restart);
-
-function play(name, reset) {
-  if (!mixer) return;
-  const next = actions[name];
-  for (const [n, a] of Object.entries(actions)) if (n !== name) a.fadeOut(0.25);
-  next.reset().setEffectiveWeight(1).fadeIn(0.25).play();
-  next.setLoop(name === 'Open' ? THREE.LoopOnce : THREE.LoopRepeat);
-  next.clampWhenFinished = true;
-}
-document.querySelectorAll('input[name=clip]').forEach(r => r.addEventListener('change', () => { current = r.value; play(current); }));
-document.querySelectorAll('input[name=mat]').forEach(r => r.addEventListener('change', () => setMat(r.value)));
-
-function setMat(name) {
-  const spec = MATS[name];
-  const m = mats.bone;
-  if (!m) return;
-  if (!spec) { m.copy(mats.boneOrig); }
-  else { m.color.set(spec.color); m.metalness = spec.metalness; m.roughness = spec.roughness; m.clearcoat = spec.clearcoat; }
-  m.needsUpdate = true;
+  phase = 'load'; phaseT = 0; loadT = 0; setProgress(0);
 }
 
-// snap detection on the Bite clip: the jaws close at 0.53 s of each 2 s loop
-const SNAP = 0.533;
-let lastBiteT = 0, kick = 0;
-function onSnap() {
-  kick = 1;
-  if (phase === 'load' && FLOW) setProgress(progress + (CAPTURE ? 25 : 9 + Math.random() * 9));
-}
+// at 100% the jaws gape, the maw rushes at the camera and the screen goes dark
+const GAPE_UP = new THREE.Quaternion().setFromEuler(new THREE.Euler(-44 * d2r, 0, 0));
+const GAPE_LO = new THREE.Quaternion().setFromEuler(new THREE.Euler(12 * d2r, 0, 0));
+const easeOut = x => 1 - Math.pow(1 - x, 3);
 
 function update(t, dt) {
   if (mixer) mixer.update(dt);
-  const bite = actions.Bite;
-  if (bite && bite.isRunning() && current === 'Bite') {
-    const bt = bite.time % 2;
-    if (lastBiteT < SNAP && bt >= SNAP) onSnap();
-    lastBiteT = bt;
-  } else if (phase === 'load' && FLOW && current !== 'Bite') {
-    setProgress(progress + dt * 9);
+  if (phase === 'load' && FLOW) {
+    loadT += dt;
+    let p = 0;
+    for (const [at, v] of STEPS) if (loadT >= at) p = v;
+    setProgress(p);
+    if (progress >= 100) { phase = 'open'; phaseT = 0; }
   }
-  if (phase === 'load' && progress >= 100) { phase = 'open'; phaseT = 0; play('Open'); }
+  // breath 0..1 follows the Idle clip (jaws widest at 2 s of the 4 s loop)
+  const breath = idle ? 0.5 - 0.5 * Math.cos(2 * Math.PI * (idle.time % 4) / 4) : 0;
+  let scale = 1 + 0.012 * breath;
   if (phase === 'open') {
     phaseT += dt;
-    if (phaseT > 1.1) { fadeEl.classList.add('on'); }
+    const k = easeOut(Math.min(1, phaseT / 0.7));
+    jawUp.quaternion.slerp(GAPE_UP, k);
+    jawLo.quaternion.slerp(GAPE_LO, k);
+    const z = Math.max(0, phaseT - 0.35) / 1.3;
+    scale *= 1 + 0.9 * z * z;
+    if (phaseT > 1.1) fadeEl.classList.add('on');
     if (phaseT > 2.4 && !CAPTURE) restart();
   }
-  kick = Math.max(0, kick - dt * 5);
   const sway = reduced ? 0 : 1;
   if (!dragging) { drag.x *= 0.94; drag.y *= 0.94; }
   const w = PERIOD ? 2 * Math.PI / PERIOD : 0;
@@ -300,11 +231,8 @@ function update(t, dt) {
   pivot.rotation.set((BASE.pitch + drag.x + sway * 2 * Math.sin(t * f1)) * d2r,
                      (BASE.yaw + drag.y + sway * 9 * Math.sin(t * f2)) * d2r,
                      (BASE.roll + sway * 1.5 * Math.cos(t * f3)) * d2r, 'ZXY');
-  const s = 1 + 0.035 * kick * kick;
-  punch.scale.setScalar(s);
-  punch.position.y = -0.03 * kick;
-  rim.intensity = 4.2 + 5 * kick;
-  if (phase === 'open') { const k = Math.min(1, phaseT / 1.6); punch.scale.setScalar(1 + 0.9 * k * k); }
+  punch.scale.setScalar(scale);
+  rim.intensity = 4.2 + 1.6 * breath;
   const p = dust.geometry.attributes.position;
   for (let i = 0; i < N; i++) {
     p.array[i * 3 + 1] += dt * 0.05 * (0.4 + (seed[i] % 1));
@@ -318,22 +246,18 @@ function update(t, dt) {
 const bin = await (await fetch('../3d/crowned-dogs-maw.glb')).arrayBuffer();
 new GLTFLoader().parse(bin, '', gltf => {
   model = gltf.scene;
-  model.traverse(o => {
-    if (o.isMesh) {
-      o.castShadow = o.receiveShadow = true;
-      const ms = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of ms) if (m.name === 'Bone') { mats.bone = m; mats.boneOrig = m.clone(); }
-    }
-  });
+  model.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
+  jawUp = model.getObjectByName('JawUpper');
+  jawLo = model.getObjectByName('JawLower');
   const box = new THREE.Box3().setFromObject(model);
   const c = box.getCenter(new THREE.Vector3());
   model.position.sub(c);
   radius = box.getBoundingSphere(new THREE.Sphere()).radius * (q.has('fit') ? parseFloat(q.get('fit')) : 0.78);
   punch.add(model);
   mixer = new THREE.AnimationMixer(model);
-  for (const clip of gltf.animations) actions[clip.name] = mixer.clipAction(clip);
+  idle = mixer.clipAction(THREE.AnimationClip.findByName(gltf.animations, 'Idle'));
+  idle.play();
   fit();
-  play('Bite');
   if (CAPTURE) {
     // deterministic frames for video export: renderAt(t) renders the loop at time t (seconds)
     let prev = 0;

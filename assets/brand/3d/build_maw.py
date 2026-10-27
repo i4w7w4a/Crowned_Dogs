@@ -187,7 +187,7 @@ SLOTS = {0: (0.66, 0.16, 'spike'), 1: (0.36, 0.11, 'spike'), 2: (0.52, 0.14, 'sp
          8: (0.40, 0.12, 'spike')}
 
 
-def crown(name, k, height_scale, lean, curl):
+def crown(name, k, height_scale, lean, curl, back=None):
     bm = bmesh.new()
     lathe(bm, [(k * r, k * z) for r, z in PROFILE], 160)
     body = finish(name + 'Band', bm, True, 28, inner=True)
@@ -200,6 +200,7 @@ def crown(name, k, height_scale, lean, curl):
         if kind == 'canine':
             spike(bm, th, k, 1.0, TOP, 0.07, w * 1.1, 0.07, 0.03, 0.0, 0.2, S=2)   # diamond plate under the fang
         else:
+            h *= (back or {}).get(slot, 1.0)
             spike(bm, th, k, 1.0, TOP, h * height_scale, w, 0.11, 0.05, lean, 0.16 + 0.12 * h)
         # studs between the points
         gem(bm, th + math.pi / 16, k, 1.0, 0.15, 0.085, 0.045, 0.035)
@@ -248,11 +249,13 @@ def empty(name, loc=(0, 0, 0), parent=None):
     return e
 
 
-def crown_parts(name, k, hs, lean, curl):
-    return list(crown(name, k, hs, lean, curl))
+def crown_parts(name, k, hs, lean, curl, back=None):
+    return list(crown(name, k, hs, lean, curl, back))
 
 
 K_LO, K_UP = 0.90, 1.0
+# upper teeth next to the hinge swing forward when the jaw opens and would pierce the lower ring: keep them short
+BACK_UP = {7: 0.45, 8: 0.35}
 GAP = 0.16                                  # closed: upper point base sits this far above the lower point base
 Z_LO_TOP = K_LO * TOP
 Z_UP_EDGE = Z_LO_TOP + GAP                  # world z of the upper crown's point base (closed)
@@ -265,7 +268,7 @@ bpy.context.view_layer.update()
 
 lower = join_meshes('CrownLower', crown_parts('Lo', K_LO, 0.92, 0.06, 0.12), jaw_lo)
 # upper crown: same crown flipped about Y (front stays -Y), then lifted so its point base is at Z_UP_EDGE
-upper = join_meshes('CrownUpper', crown_parts('Up', K_UP, 1.0, 0.03, 0.10), jaw_up,
+upper = join_meshes('CrownUpper', crown_parts('Up', K_UP, 1.0, 0.03, 0.10, BACK_UP), jaw_up,
                     rot=(0, math.pi, 0), loc=(0, 0, Z_UP_EDGE + K_UP * TOP))
 
 # ---------------------------------------------------------------- baked ambient occlusion -> vertex colours (each jaw on its own)
