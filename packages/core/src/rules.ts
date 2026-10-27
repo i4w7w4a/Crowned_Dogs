@@ -47,6 +47,8 @@ export const MIN_DISTANCE_LIMIT = 4;
 export const AFK_LIMIT = 3;
 /** Being hit while dashing is 10 points harder. */
 export const DASH_EVADE = 0.1;
+/** Out of breath after a dash: the next turn's attack is this much less accurate. */
+export const DASH_WINDED = 0.1;
 /** At night a muzzle flash gives the enemy +10 points next turn. */
 export const MUZZLE_FLASH_BONUS = 0.1;
 
