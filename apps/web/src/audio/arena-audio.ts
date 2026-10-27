@@ -16,6 +16,14 @@ const WEATHER_LAYER: Partial<Record<Match["config"]["weather"], SoundId>> = { du
 /** The hall goes quieter behind the menu: about −8 dB (the amb slider is squared). */
 const AMB_IN_MENU = 0.62;
 
+/** The two volume sliders in the menu: the fight's sounds (effects, interface, ambience) and the music. */
+export type VolumeKind = "fx" | "music";
+const VOLUME_KEY: Record<VolumeKind, string> = { fx: "cd-vol-fx", music: "cd-vol-music" };
+const savedVolume = (k: VolumeKind): number => {
+  const v = Number(store.get(VOLUME_KEY[k]) ?? 1);
+  return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
+};
+
 /** Every gun a fighter can hold in this match: the main one and a sidearm. */
 function guns(m: Match, side: 0 | 1): WeaponId[] {
   const kit = m.config.fighters[side].kit;
@@ -31,6 +39,7 @@ export class ArenaAudio {
   private preloads: SoundId[] = [...UI];
   /** fight: the fight track; menu: the radio (end screen); paused: the menu sheet over a fight. */
   private mode: "fight" | "menu" | "paused" = "fight";
+  private levels: Record<VolumeKind, number> = { fx: savedVolume("fx"), music: savedVolume("music") };
 
   /** Call from the first tap. */
   unlock(): void {
@@ -43,6 +52,7 @@ export class ArenaAudio {
     const a = this.audio;
     void a.unlock();
     a.setVolume("master", this.on ? 1 : 0);
+    this.applyLevels();
     a.music.tune(this.picked);
     a.setAmbience(this.ambience);
     void a.preload(this.preloads).catch(() => {});
@@ -51,7 +61,6 @@ export class ArenaAudio {
       a.music.enterFight();
       if (this.mode === "paused") a.music.openMenu();
     }
-    this.ambLevel();
   }
 
   /** The painted frame's place and weather. */
@@ -107,6 +116,19 @@ export class ArenaAudio {
     this.audio?.setVolume("master", this.on ? 1 : 0);
   }
 
+  /** Slider positions, 0..1. */
+  get volume(): Readonly<Record<VolumeKind, number>> {
+    return this.levels;
+  }
+
+  /** Moves a slider; the level is kept for the next visit. */
+  setVolume(kind: VolumeKind, value: number): void {
+    const v = Math.min(1, Math.max(0, value));
+    this.levels[kind] = v;
+    store.set(VOLUME_KEY[kind], v.toFixed(2));
+    this.applyLevels();
+  }
+
   /** The station on the radio now (it plays on to the next track by itself). */
   get station(): Station {
     return (this.audio?.music.state.radioTrack as Station | undefined) ?? this.picked;
@@ -120,7 +142,17 @@ export class ArenaAudio {
     this.audio?.music.tune(s);
   }
 
+  private applyLevels(): void {
+    const a = this.audio;
+    if (!a) return;
+    const fx = this.levels.fx;
+    a.setVolume("sfx", fx);
+    a.setVolume("ui", fx);
+    a.setVolume("music", this.levels.music);
+    this.ambLevel();
+  }
+
   private ambLevel(): void {
-    this.audio?.setVolume("amb", this.mode === "fight" ? 1 : AMB_IN_MENU);
+    this.audio?.setVolume("amb", this.levels.fx * (this.mode === "fight" ? 1 : AMB_IN_MENU));
   }
 }
