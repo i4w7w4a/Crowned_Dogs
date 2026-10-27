@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Экран загрузки Crowned Dogs</title>
+<!-- Prototype of the loading screen. Serve the repo over http (e.g. `npx serve .`) and open assets/brand/loader/ ;
+     the 3D model is ../3d/crowned-dogs-maw.glb (clips Bite, Idle, Open). -->
+<style>body{margin:0}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Fira+Sans+Extra+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* One screen, game loading: the 3D maw fills the stage, wordmark and progress sit under it. Single dark look on purpose. */
+:root {
+  --bg: #0a0b0c;
+  --bg-glow: #1a1c1e;
+  --bone: #e9e3d3;
+  --muted: #8d897b;
+  --dim: #55534b;
+  --line: rgba(233, 227, 211, .16);
+  --panel: rgba(16, 17, 19, .82);
+  --display: "Black Ops One", "Impact", "Arial Black", sans-serif;
+  --body: "Fira Sans Extra Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: radial-gradient(ellipse 70% 55% at 50% 40%, var(--bg-glow), var(--bg) 70%) var(--bg);
+  color: var(--bone);
+  font: 500 16px/1.35 var(--body);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+.screen {
+  height: 100%;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 max(28px, env(safe-area-inset-bottom, 0px));
+  position: relative;
+}
+#stage { position: relative; min-height: 0; touch-action: none; cursor: grab; }
+#stage:active { cursor: grabbing; }
+#stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.grain {
+  position: fixed; inset: -50%; pointer-events: none; opacity: .07; z-index: 2;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+  animation: grain 1.2s steps(6) infinite;
+}
+@keyframes grain { 0% { transform: translate(0, 0); } 33% { transform: translate(-3%, 2%); } 66% { transform: translate(2%, -3%); } 100% { transform: translate(0, 0); } }
+.vignette { position: fixed; inset: 0; pointer-events: none; z-index: 2; box-shadow: inset 0 0 18vmin 4vmin rgba(0, 0, 0, .75); }
+.hud { display: grid; justify-items: center; gap: 14px; position: relative; z-index: 3; }
+.word {
+  margin: 0; font: 400 clamp(30px, 7.4vw, 56px)/1 var(--display); letter-spacing: .035em;
+  text-align: center; text-wrap: balance; color: var(--bone);
+}
+.tag { margin: -6px 0 4px; font: 500 12px/1 var(--mono); letter-spacing: .42em; color: var(--muted); padding-left: .42em; }
+.bar { width: min(360px, 78vw); display: grid; gap: 9px; }
+.track { height: 2px; background: var(--line); position: relative; overflow: hidden; }
+.fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: var(--bone); box-shadow: 0 0 10px rgba(233, 227, 211, .55); transition: width .25s cubic-bezier(.2, .9, .2, 1); }
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.status { font: 500 14px/1.2 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pct { font: 500 13px/1 var(--mono); color: var(--bone); font-variant-numeric: tabular-nums; }
+.fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 4; transition: opacity .5s ease; }
+.fade.on { opacity: 1; }
+
+/* review panel: not part of the game screen */
+.view {
+  position: fixed; z-index: 5;
+  top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+  background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(6px);
+  font: 500 13px/1.2 var(--body); color: var(--bone); max-width: calc(100vw - 24px);
+}
+.view summary { list-style: none; cursor: pointer; padding: 9px 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.view summary::-webkit-details-marker { display: none; }
+.view summary::after { content: " +"; }
+.view[open] summary::after { content: " –"; }
+.view .body { display: grid; gap: 12px; padding: 4px 12px 12px; }
+.view fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+.view legend { padding: 0; margin-bottom: 6px; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg label { position: relative; }
+.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span { display: block; padding: 6px 10px; border: 1px solid var(--line); color: var(--muted); }
+.seg input:checked + span { border-color: var(--bone); color: var(--bone); }
+.seg input:focus-visible + span { outline: 2px solid var(--bone); outline-offset: 2px; }
+.view button { font: inherit; color: var(--bone); background: transparent; border: 1px solid var(--line); padding: 7px 10px; cursor: pointer; letter-spacing: .04em; }
+.view button:hover { border-color: var(--bone); }
+.view button:focus-visible { outline: 2px solid var(--bone); outline-offset: 2px; }
+.note { margin: 0; color: var(--dim); font-size: 12px; max-width: 30ch; }
+body.capture .view, body.noui .hud { display: none; }
+@media (prefers-reduced-motion: reduce) { .grain { animation: none; } .fill { transition: none; } }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div id="stage" aria-label="Пасть из двух корон, 3D"></div>
+  <div class="hud">
+    <h1 class="word">CROWNED DOGS</h1>
+    <p class="tag">PMC · 2051</p>
+    <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bar">
+      <div class="track"><div class="fill" id="fill"></div></div>
+      <div class="row"><span class="status" id="status">Проверка контракта</span><span class="pct" id="pct">0%</span></div>
+    </div>
+  </div>
+</div>
+<div class="grain" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+<div class="fade" id="fade" aria-hidden="true"></div>
+
+<details class="view" id="view">
+  <summary>Вид</summary>
+  <div class="body">
+    <fieldset>
+      <legend>Движение</legend>
+      <div class="seg">
+        <label><input type="radio" name="clip" id="clip-bite" value="Bite" checked><span>Щелчок</span></label>
+        <label><input type="radio" name="clip" id="clip-idle" value="Idle"><span>Дыхание</span></label>
+        <label><input type="radio" name="clip" id="clip-open" value="Open"><span>Открытие</span></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Металл</legend>
+      <div class="seg">
+        <label><input type="radio" name="mat" id="mat-bone" value="bone" checked><span>Кость</span></label>
+        <label><input type="radio" name="mat" id="mat-steel" value="steel"><span>Сталь</span></label>
+        <label><input type="radio" name="mat" id="mat-brass" value="brass"><span>Латунь</span></label>
+      </div>
+    </fieldset>
+    <button type="button" id="again">Загрузить заново</button>
+    <p class="note">Пасть можно крутить пальцем или мышью. Каждый щелчок двигает загрузку, в конце пасть раскрывается и экран уходит в темноту.</p>
+  </div>
+</details>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const q = new URLSearchParams(location.search);
+const CAPTURE = q.has('capture');
+if (CAPTURE) document.body.classList.add('capture');
+if (q.get('ui') === '0') document.body.classList.add('noui');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const PERIOD = parseFloat(q.get('period') || '0');   // video export: make the sway loop every PERIOD seconds
+const FLOW = q.get('flow') !== '0';                   // flow=0: just the bite loop, no progress and no ending
+const d2r = Math.PI / 180;
+
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: CAPTURE });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.2;
+
+const cam = new THREE.PerspectiveCamera(24, 1, 0.1, 60);
+const key = new THREE.DirectionalLight(0xffeedd, 3.6);
+key.position.set(-4.2, 4.2, 2.6);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.left = key.shadow.camera.bottom = -2.2;
+key.shadow.camera.right = key.shadow.camera.top = 2.2;
+key.shadow.bias = -0.0004;
+key.shadow.normalBias = 0.02;
+const rim = new THREE.DirectionalLight(0xc8dcff, 4.2);
+rim.position.set(4, 2.2, -4.5);
+const under = new THREE.DirectionalLight(0xffffff, 0.35);
+under.position.set(1, -4, 2.5);
+scene.add(key, rim, under);
+
+// dust in the air
+const dustGeo = new THREE.BufferGeometry();
+const N = 220, pos = new Float32Array(N * 3), seed = new Float32Array(N);
+for (let i = 0; i < N; i++) {
+  pos[i * 3] = (Math.random() - 0.5) * 7; pos[i * 3 + 1] = (Math.random() - 0.5) * 5; pos[i * 3 + 2] = (Math.random() - 0.5) * 4 - 0.5;
+  seed[i] = Math.random() * 100;
+}
+dustGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ color: 0xe9e3d3, size: 0.012, transparent: true, opacity: 0.35, depthWrite: false }));
+scene.add(dust);
+if (q.get('dust') === '0') dust.visible = false;
+
+const pivot = new THREE.Group();   // pose: turned and tilted on the diagonal
+const punch = new THREE.Group();   // small scale kick on each snap
+scene.add(pivot); pivot.add(punch);
+const BASE = { pitch: 16, yaw: -22, roll: -13 };
+let drag = { x: 0, y: 0 }, dragging = false, last = null;
+
+let model, mixer, actions = {}, current = 'Bite', mats = {}, radius = 1.6;
+
+const MATS = {
+  bone: null,
+  steel: { color: 0x6c7075, metalness: 1, roughness: 0.3, clearcoat: 0 },
+  brass: { color: 0xb8955a, metalness: 1, roughness: 0.28, clearcoat: 0 },
+};
+
+function fit() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  cam.aspect = w / h;
+  const vh = cam.fov * d2r / 2, hh = Math.atan(Math.tan(vh) * cam.aspect);
+  const dist = radius / Math.sin(Math.min(vh, hh)) * 1.02;
+  cam.position.set(0, 0, dist);
+  cam.lookAt(0, 0, 0);
+  cam.updateProjectionMatrix();
+}
+addEventListener('resize', fit);
+
+stage.addEventListener('pointerdown', e => { dragging = true; last = [e.clientX, e.clientY]; stage.setPointerCapture(e.pointerId); });
+stage.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  drag.y += (e.clientX - last[0]) * 0.4; drag.x += (e.clientY - last[1]) * 0.3;
+  drag.x = Math.max(-50, Math.min(50, drag.x));
+  last = [e.clientX, e.clientY];
+});
+const release = () => { dragging = false; };
+stage.addEventListener('pointerup', release);
+stage.addEventListener('pointercancel', release);
+
+// ---------------------------------------------------------------- loading flow
+const STATUS = ['Проверка контракта', 'Жетон K-417-093 принят', 'Калибровка нейролинка', 'Синхронизация с Персоной', 'Загрузка региона: соляной комбинат', 'Готово'];
+const fillEl = document.getElementById('fill'), pctEl = document.getElementById('pct'), stEl = document.getElementById('status'), barEl = document.getElementById('bar');
+const fadeEl = document.getElementById('fade');
+let progress = 0, phase = 'load', phaseT = 0;
+function setProgress(p) {
+  progress = Math.min(100, p);
+  fillEl.style.width = progress + '%';
+  pctEl.textContent = Math.round(progress) + '%';
+  barEl.setAttribute('aria-valuenow', Math.round(progress));
+  stEl.textContent = STATUS[Math.min(STATUS.length - 1, Math.floor(progress / 100 * (STATUS.length - 1)))];
+}
+function restart() {
+  fadeEl.classList.remove('on');
+  phase = 'load'; phaseT = 0; setProgress(0);
+  play(current === 'Open' ? 'Open' : current, true);
+}
+document.getElementById('again').addEventListener('click', restart);
+
+function play(name, reset) {
+  if (!mixer) return;
+  const next = actions[name];
+  for (const [n, a] of Object.entries(actions)) if (n !== name) a.fadeOut(0.25);
+  next.reset().setEffectiveWeight(1).fadeIn(0.25).play();
+  next.setLoop(name === 'Open' ? THREE.LoopOnce : THREE.LoopRepeat);
+  next.clampWhenFinished = true;
+}
+document.querySelectorAll('input[name=clip]').forEach(r => r.addEventListener('change', () => { current = r.value; play(current); }));
+document.querySelectorAll('input[name=mat]').forEach(r => r.addEventListener('change', () => setMat(r.value)));
+
+function setMat(name) {
+  const spec = MATS[name];
+  const m = mats.bone;
+  if (!m) return;
+  if (!spec) { m.copy(mats.boneOrig); }
+  else { m.color.set(spec.color); m.metalness = spec.metalness; m.roughness = spec.roughness; m.clearcoat = spec.clearcoat; }
+  m.needsUpdate = true;
+}
+
+// snap detection on the Bite clip: the jaws close at 0.53 s of each 2 s loop
+const SNAP = 0.533;
+let lastBiteT = 0, kick = 0;
+function onSnap() {
+  kick = 1;
+  if (phase === 'load' && FLOW) setProgress(progress + (CAPTURE ? 25 : 9 + Math.random() * 9));
+}
+
+function update(t, dt) {
+  if (mixer) mixer.update(dt);
+  const bite = actions.Bite;
+  if (bite && bite.isRunning() && current === 'Bite') {
+    const bt = bite.time % 2;
+    if (lastBiteT < SNAP && bt >= SNAP) onSnap();
+    lastBiteT = bt;
+  } else if (phase === 'load' && FLOW && current !== 'Bite') {
+    setProgress(progress + dt * 9);
+  }
+  if (phase === 'load' && progress >= 100) { phase = 'open'; phaseT = 0; play('Open'); }
+  if (phase === 'open') {
+    phaseT += dt;
+    if (phaseT > 1.1) { fadeEl.classList.add('on'); }
+    if (phaseT > 2.4 && !CAPTURE) restart();
+  }
+  kick = Math.max(0, kick - dt * 5);
+  const sway = reduced ? 0 : 1;
+  if (!dragging) { drag.x *= 0.94; drag.y *= 0.94; }
+  const w = PERIOD ? 2 * Math.PI / PERIOD : 0;
+  const f1 = PERIOD ? w * 2 : 0.7, f2 = PERIOD ? w : 0.45, f3 = PERIOD ? w : 0.33;
+  pivot.rotation.set((BASE.pitch + drag.x + sway * 2 * Math.sin(t * f1)) * d2r,
+                     (BASE.yaw + drag.y + sway * 9 * Math.sin(t * f2)) * d2r,
+                     (BASE.roll + sway * 1.5 * Math.cos(t * f3)) * d2r, 'ZXY');
+  const s = 1 + 0.035 * kick * kick;
+  punch.scale.setScalar(s);
+  punch.position.y = -0.03 * kick;
+  rim.intensity = 4.2 + 5 * kick;
+  if (phase === 'open') { const k = Math.min(1, phaseT / 1.6); punch.scale.setScalar(1 + 0.9 * k * k); }
+  const p = dust.geometry.attributes.position;
+  for (let i = 0; i < N; i++) {
+    p.array[i * 3 + 1] += dt * 0.05 * (0.4 + (seed[i] % 1));
+    p.array[i * 3] += Math.sin(t * 0.3 + seed[i]) * dt * 0.02;
+    if (p.array[i * 3 + 1] > 2.5) p.array[i * 3 + 1] = -2.5;
+  }
+  p.needsUpdate = true;
+  renderer.render(scene, cam);
+}
+
+const bin = await (await fetch('../3d/crowned-dogs-maw.glb')).arrayBuffer();
+new GLTFLoader().parse(bin, '', gltf => {
+  model = gltf.scene;
+  model.traverse(o => {
+    if (o.isMesh) {
+      o.castShadow = o.receiveShadow = true;
+      const ms = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of ms) if (m.name === 'Bone') { mats.bone = m; mats.boneOrig = m.clone(); }
+    }
+  });
+  const box = new THREE.Box3().setFromObject(model);
+  const c = box.getCenter(new THREE.Vector3());
+  model.position.sub(c);
+  radius = box.getBoundingSphere(new THREE.Sphere()).radius * (q.has('fit') ? parseFloat(q.get('fit')) : 0.78);
+  punch.add(model);
+  mixer = new THREE.AnimationMixer(model);
+  for (const clip of gltf.animations) actions[clip.name] = mixer.clipAction(clip);
+  fit();
+  play('Bite');
+  if (CAPTURE) {
+    // deterministic frames for video export: renderAt(t) renders the loop at time t (seconds)
+    let prev = 0;
+    window.renderAt = t => { const dt = t - prev; prev = t; update(t, dt); return true; };
+    window.__ready = true;
+    return;
+  }
+  const clock = new THREE.Clock();
+  let t = 0;
+  renderer.setAnimationLoop(() => { const dt = Math.min(clock.getDelta(), 1 / 20); t += dt; update(t, dt); });
+}, err => { stEl.textContent = 'Модель не загрузилась'; console.error(err); });
+</script>
+</body>
+</html>
