@@ -95,6 +95,22 @@ function softTexture(stops: [number, string][]): THREE.CanvasTexture {
   return t;
 }
 
+/** Fetches and parses a figure model: a .glb, or a .json with the .glb inside as base64. */
+async function loadModel(url: string): Promise<GLTF> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`model: ${res.status}`);
+  let bytes: ArrayBuffer;
+  if (url.endsWith(".json")) {
+    const bin = atob(((await res.json()) as { data: string }).data);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    bytes = arr.buffer;
+  } else {
+    bytes = await res.arrayBuffer();
+  }
+  return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(bytes, "");
+}
+
 const smooth = (u: number) => u * u * (3 - 2 * u);
 const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
 
@@ -170,27 +186,18 @@ export class Arena {
     this.timer.connect(document);
   }
 
-  /** Loads the figure model (.glb, or .json with the .glb inside as base64) and starts drawing. */
-  async load(url: string, distance: number): Promise<GLTF> {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`model: ${res.status}`);
-    let bytes: ArrayBuffer;
-    if (url.endsWith(".json")) {
-      const bin = atob(((await res.json()) as { data: string }).data);
-      const arr = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      bytes = arr.buffer;
-    } else {
-      bytes = await res.arrayBuffer();
-    }
-    const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(bytes, "");
-    this.en = this.makeFigure(gltf, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
-    this.me = this.makeFigure(gltf, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1, near: true });
-    this.mirror = this.makeMirror(gltf, this.en);
+  /** Loads both figures' models (.glb, or .json with the .glb inside as base64) and starts drawing.
+   *  Resolves with our own model's file, which the defence hologram copies. */
+  async load(meUrl: string, enemyUrl: string, distance: number): Promise<GLTF> {
+    const [mine, theirs] = await Promise.all([loadModel(meUrl), enemyUrl === meUrl ? null : loadModel(enemyUrl)]);
+    const foe = theirs ?? mine;
+    this.en = this.makeFigure(foe, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
+    this.me = this.makeFigure(mine, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1, near: true });
+    this.mirror = this.makeMirror(foe, this.en);
     this.ready = true;
     this.reset(distance);
     this.renderer.setAnimationLoop((t) => this.tick(t));
-    return gltf;
+    return mine;
   }
 
   /** Our own figure's model, for anything that mirrors its pose (the defence hologram). */
@@ -288,7 +295,9 @@ export class Arena {
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model, true);
     const bones = findBones(model, box);
-    const s = HEIGHT / (box.max.y - box.min.y);
+    // a model made in metres keeps its own height (the female Persona is 1.70 m, 1.75 with her hair);
+    // anything else (the stand-in mannequin) is brought to a grown man's height
+    const tall = box.max.y - box.min.y, s = tall > 1.4 && tall < 2.2 ? 1 : HEIGHT / tall;
     model.scale.multiplyScalar(s);
     model.position.y = -box.min.y * s;
 
