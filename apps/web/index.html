@@ -23,7 +23,6 @@
   <symbol id="i-up-2" viewBox="0 0 24 24"><path d="M5 12l7-7 7 7M5 19l7-7 7 7"/></symbol>
   <symbol id="i-up-3" viewBox="0 0 24 24"><path d="M5 9l7-6 7 6M5 15l7-6 7 6M5 21l7-6 7 6"/></symbol>
   <!-- a guarded zone -->
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5l4.8 4.8L19.5 7"/></symbol>
   <symbol id="i-mv-3" viewBox="0 0 24 24"><path d="M9.5 12H20M15.5 7.5L20 12l-4.5 4.5M3.5 8.5H8M2.5 12H7M3.5 15.5H8"/></symbol>
   <!-- attack -->
   <symbol id="i-shot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.3"/><path d="M12 3v4.4M12 16.6V21M3 12h4.4M16.6 12H21"/><circle class="fl" cx="12" cy="12" r=".95"/></symbol>
@@ -111,10 +110,10 @@
     <div class="ctl">
       <div class="guard" id="guardList">
         <div class="glabel">Защита <span id="pips">0/2</span></div>
-        <button type="button" class="dz" data-z="head" aria-label="Защита: голова"><svg class="ico ck"><use href="#i-check"/></svg><span class="zl">Голова</span></button>
-        <button type="button" class="dz" data-z="body" aria-label="Защита: корпус"><svg class="ico ck"><use href="#i-check"/></svg><span class="zl">Корпус</span></button>
-        <button type="button" class="dz" data-z="groin" aria-label="Защита: пах"><svg class="ico ck"><use href="#i-check"/></svg><span class="zl">Пах</span></button>
-        <button type="button" class="dz" data-z="legs" aria-label="Защита: ноги"><svg class="ico ck"><use href="#i-check"/></svg><span class="zl">Ноги</span></button>
+        <button type="button" class="dz" data-z="head" aria-label="Защита: голова"><span class="rb" aria-hidden="true"></span><span class="zl">Голова</span></button>
+        <button type="button" class="dz" data-z="body" aria-label="Защита: корпус"><span class="rb" aria-hidden="true"></span><span class="zl">Корпус</span></button>
+        <button type="button" class="dz" data-z="groin" aria-label="Защита: пах"><span class="rb" aria-hidden="true"></span><span class="zl">Пах</span></button>
+        <button type="button" class="dz" data-z="legs" aria-label="Защита: ноги"><span class="rb" aria-hidden="true"></span><span class="zl">Ноги</span></button>
       </div>
       <div class="actcol">
         <button type="button" class="swap" id="swapBtn" hidden><svg class="ico"><use href="#i-swap"/></svg><span class="an" id="swapText">Взять пистолет</span><span class="as">без выстрела</span></button>
