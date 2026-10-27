@@ -1,4 +1,4 @@
-import { cpSync, createReadStream, existsSync, statSync } from "node:fs";
+import { cpSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
@@ -28,11 +28,36 @@ function audioAssets(): Plugin {
   };
 }
 
+// Figure models live in models/ as .glb. Artifact pages do not serve .glb, so the game
+// loads each one as models/<name>.json with the .glb inside as base64, in dev and in
+// the build alike.
+const MODELS = fileURLToPath(new URL("./models", import.meta.url));
+const wrapModel = (glb: string) => JSON.stringify({ data: readFileSync(join(MODELS, glb)).toString("base64") });
+const glbs = () => readdirSync(MODELS).filter((f) => f.endsWith(".glb"));
+
+function figureModels(): Plugin {
+  return {
+    name: "crowned-dogs-models",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const m = /^\/models\/([\w-]+)\.json$/.exec((req.url ?? "").split("?")[0]!);
+        if (!m || !glbs().includes(m[1] + ".glb")) return next();
+        res.setHeader("Content-Type", "application/json");
+        res.end(wrapModel(m[1] + ".glb"));
+      });
+    },
+    writeBundle(opts) {
+      mkdirSync(join(opts.dir!, "models"), { recursive: true });
+      for (const f of glbs()) writeFileSync(join(opts.dir!, "models", f.replace(/\.glb$/, ".json")), wrapModel(f));
+    },
+  };
+}
+
 // Relative paths, so the built game works from any folder or static host. Fixed file
 // names, so publishing a new build replaces the old files instead of piling up.
 export default defineConfig({
   base: "./",
-  plugins: [audioAssets()],
+  plugins: [audioAssets(), figureModels()],
   build: {
     target: "es2022",
     chunkSizeWarningLimit: 900,

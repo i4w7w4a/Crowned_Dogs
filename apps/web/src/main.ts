@@ -19,7 +19,7 @@ import { store } from "./store.ts";
 import "./style.css";
 
 /** The figure model: the .glb inside JSON as base64, since artifact pages do not serve .glb (see npm run assets). */
-const MODEL = import.meta.env.VITE_MODEL ?? "models/mannequin.json";
+const MODEL = import.meta.env.VITE_MODEL ?? "models/persona-male.json";
 const PLAYER = { name: "Тень", tag: "K-417-093" };
 const FOE = "Искра";
 
