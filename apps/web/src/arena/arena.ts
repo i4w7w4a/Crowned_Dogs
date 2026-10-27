@@ -1,0 +1,438 @@
+// Live 3D figures standing in a painted frame. A transparent three.js canvas lies
+// exactly over the picture, and an off-centre lens matched to the painting puts
+// the figures' feet on the painted floor. The fight code only calls move, hit,
+// fall and reset; everything else here is about looking right.
+
+import type { Zone } from "@crowned-dogs/core";
+import * as THREE from "three";
+import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
+import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
+import type { Frame } from "./frames.ts";
+
+export type Who = "me" | "enemy";
+export type HitKind = "hit" | "blocked" | "grenade";
+
+/** Every figure is scaled to this height, metres. */
+const HEIGHT = 1.8;
+/** Each step changes the distance by 7%, so every step reads the same on screen. */
+const STEP_GROWTH = 1.07;
+/** Where the sync connector sits on the nape: share of the head height up, share of it back. */
+const PORT = { up: 0.08, depth: 0.45 };
+
+interface Look {
+  body: number;
+  joints: number;
+  jointsRough?: number;
+  jointsMetal?: number;
+  /** Faint glow that keeps a backlit figure from turning into a hole. */
+  lift?: number;
+  /** Which way the figure falls: -1 to its right as seen from the camera. */
+  fallSide: number;
+}
+
+interface Bones {
+  head: THREE.Object3D; top: THREE.Object3D; neck: THREE.Object3D;
+  spine: THREE.Object3D; spine1: THREE.Object3D; spine2: THREE.Object3D; hips: THREE.Object3D;
+  rUpLeg: THREE.Object3D; rLeg: THREE.Object3D; lUpLeg: THREE.Object3D; lLeg: THREE.Object3D;
+}
+
+interface Figure {
+  group: THREE.Group;
+  tilt: THREE.Group;
+  model: THREE.Object3D;
+  blob: THREE.Mesh;
+  mixer: THREE.AnimationMixer;
+  actions: Record<string, THREE.AnimationAction>;
+  cur: THREE.AnimationAction | null;
+  port: THREE.Mesh;
+  kick: Record<Zone, number>;
+  /** 0..1 while falling, -1 when standing. */
+  fallT: number;
+  fallSide: number;
+  bones: Bones;
+}
+
+interface Mirror {
+  group: THREE.Group;
+  tilt: THREE.Group;
+  pairs: [THREE.Object3D, THREE.Object3D][];
+  src: Figure;
+}
+
+interface Calibrated {
+  /** Focal length in picture heights. */
+  fn: number;
+  aspect: number;
+  /** Distance to a figure 7 steps away, metres. */
+  d7: number;
+  camH: number;
+  /** Horizon height as a share of the picture from the top. */
+  hz: number;
+  /** Sideways offset of the enemy per metre of depth. */
+  kx: number;
+  me: Frame["cal"]["me"];
+}
+
+function calibrate(f: Frame): Calibrated {
+  const c = f.cal, aspect = f.w / f.h;
+  const fn = 0.5 / Math.tan(THREE.MathUtils.degToRad(c.fov) / 2);
+  return {
+    fn, aspect, d7: HEIGHT * fn / c.height, camH: c.camH,
+    hz: c.feet[1] - c.camH * c.height / HEIGHT,
+    kx: (c.feet[0] - 0.5) * aspect / fn,
+    me: c.me,
+  };
+}
+
+function softTexture(stops: [number, string][]): THREE.CanvasTexture {
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const g = c.getContext("2d")!, r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  for (const [at, col] of stops) r.addColorStop(at, col);
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+const smooth = (u: number) => u * u * (3 - 2 * u);
+const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
+
+export class Arena {
+  /** True once the model is loaded and the figures stand. */
+  ready = false;
+  /** Called after every rendered frame, e.g. to move the DOM rings with the body. */
+  onFrame: (() => void) | null = null;
+
+  private renderer: THREE.WebGLRenderer;
+  private scene = new THREE.Scene();
+  private camera = new THREE.PerspectiveCamera(45, 1024 / 1536, 0.1, 80);
+  private timer = new THREE.Timer();
+  private rim: THREE.DirectionalLight;
+  private fill: THREE.SpotLight;
+  private meKey: THREE.SpotLight;
+  private bounce: THREE.PointLight;
+  private spark: THREE.Sprite;
+  private sparkLife = 0;
+  private sparkMax = 0.18;
+  private k: Calibrated | null = null;
+  private depth = 0;
+  private walk: { from: number; to: number; t: number; dur: number } | null = null;
+  private en: Figure | null = null;
+  private me: Figure | null = null;
+  private mirror: Mirror | null = null;
+
+  /** Throws when the device has no WebGL. */
+  constructor(canvas: HTMLCanvasElement) {
+    this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
+    const r = this.renderer;
+    r.setClearColor(0x000000, 0);
+    r.outputColorSpace = THREE.SRGBColorSpace;
+    r.toneMapping = THREE.ACESFilmicToneMapping;
+    r.shadowMap.enabled = true;
+    r.shadowMap.type = THREE.PCFShadowMap;
+    this.scene.fog = new THREE.Fog(0x3d342c, 2.5, 30);
+
+    // Low warm sun from behind the enemy (the shafts in the hall), soft sky and ground.
+    const hemi = new THREE.HemisphereLight(0xc9b49a, 0x231e1a, 0.6);
+    this.rim = new THREE.DirectionalLight(0xffb06a, 3.4);
+    this.rim.castShadow = true;
+    this.rim.shadow.mapSize.set(1024, 1024);
+    this.rim.shadow.radius = 5;
+    this.rim.shadow.bias = -0.0004;
+    this.rim.shadow.normalBias = 0.02;
+    Object.assign(this.rim.shadow.camera, { left: -5, right: 5, top: 5, bottom: -5, near: 1, far: 40 });
+    // A narrow warm spot on the enemy only, and a soft cool one on our own back from over the camera,
+    // so our Persona reads as a body, not a hole.
+    this.fill = new THREE.SpotLight(0xd9c3a3, 2.4, 0, THREE.MathUtils.degToRad(17), 0.7, 0);
+    this.meKey = new THREE.SpotLight(0xaab0b4, 0.7, 0, THREE.MathUtils.degToRad(15), 0.8, 0);
+    this.bounce = new THREE.PointLight(0x46d8d8, 0.22, 3, 2); // the teal puddle near the enemy
+    const back = new THREE.DirectionalLight(0x8ea3b5, 0.45); // the open hall behind us
+    back.position.set(1, 3, 8);
+    this.scene.add(hemi, this.rim, this.rim.target, this.fill, this.fill.target, this.meKey, this.meKey.target, this.bounce, back);
+
+    // Shadows fall on the painted floor through an invisible catcher.
+    const catcher = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ color: 0x0a0705, opacity: 0.58, depthWrite: false }));
+    catcher.rotation.x = -Math.PI / 2; catcher.receiveShadow = true;
+    this.scene.add(catcher);
+
+    this.spark = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: softTexture([[0, "rgba(255,248,230,1)"], [0.25, "rgba(255,190,110,.85)"], [1, "rgba(255,120,40,0)"]]),
+      blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true, fog: false,
+    }));
+    this.spark.visible = false;
+    this.scene.add(this.spark);
+    this.timer.connect(document);
+  }
+
+  /** Loads the figure model (.glb, or .json with the .glb inside as base64) and starts drawing. */
+  async load(url: string, distance: number): Promise<void> {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`model: ${res.status}`);
+    let bytes: ArrayBuffer;
+    if (url.endsWith(".json")) {
+      const bin = atob(((await res.json()) as { data: string }).data);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      bytes = arr.buffer;
+    } else {
+      bytes = await res.arrayBuffer();
+    }
+    const gltf = await new GLTFLoader().parseAsync(bytes, "");
+    this.en = this.makeFigure(gltf, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
+    this.me = this.makeFigure(gltf, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1 });
+    this.mirror = this.makeMirror(gltf, this.en);
+    this.ready = true;
+    this.reset(distance);
+    this.renderer.setAnimationLoop((t) => this.tick(t));
+  }
+
+  setFrame(f: Frame): void {
+    const k = this.k = calibrate(f);
+    this.camera.position.set(0, k.camH, 0);
+    // Off-centre lens: the painted horizon is not in the middle of the picture, verticals stay vertical.
+    const n = this.camera.near;
+    const top = n * k.hz / k.fn, bottom = -n * (1 - k.hz) / k.fn, half = n * k.aspect / 2 / k.fn;
+    this.camera.projectionMatrix.makePerspective(-half, half, top, bottom, n, this.camera.far);
+    this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
+    this.renderer.toneMappingExposure = f.look.exposure;
+    this.rim.color.set(f.look.rim);
+    this.fill.color.set(f.look.fill);
+    (this.scene.fog as THREE.Fog).color.set(f.look.fog);
+  }
+
+  /** Size of the drawing buffer in CSS pixels; the canvas element is sized by the page. */
+  resize(width: number, height: number): void {
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setSize(Math.round(width), Math.round(height), false);
+  }
+
+  /** Both walk to the new distance; who moved decides who walks, the camera rides with us. */
+  move(distance: number, meMove: number, enemyMove: number): void {
+    if (!this.ready) return;
+    this.walk = { from: this.depth, to: this.depthOf(distance), t: 0, dur: meMove || enemyMove ? 0.75 : 0.01 };
+    if (enemyMove) play(this.en!, enemyMove >= 3 ? "run" : "walk", 0.15, enemyMove > 0 ? 1 : -1);
+    if (meMove) play(this.me!, meMove >= 3 ? "run" : "walk", 0.15, meMove > 0 ? 1 : -1);
+  }
+
+  /** A hit lands on a figure: it flinches, and a spark flies off the enemy. */
+  hit(who: Who, zone: Zone, kind: HitKind): void {
+    if (!this.ready) return;
+    const f = who === "enemy" ? this.en! : this.me!;
+    f.kick[zone] = Math.min(1.4, f.kick[zone] + (kind === "blocked" ? 0.45 : 1));
+    if (kind === "grenade") { f.kick.body = 1; f.kick.legs = 0.8; }
+    if (who !== "enemy") return;
+    zoneWorld(f, kind === "grenade" ? "legs" : zone, this.spark.position);
+    if (kind === "grenade") this.spark.position.y = 0.35;
+    this.spark.userData.size = kind === "grenade" ? 1.6 : 0.32;
+    this.spark.material.color.set(kind === "blocked" ? 0x7fe6f2 : 0xffffff);
+    this.sparkMax = kind === "grenade" ? 0.4 : 0.18;
+    this.sparkLife = this.sparkMax;
+    this.spark.visible = true;
+  }
+
+  fall(who: Who): void {
+    if (!this.ready) return;
+    const f = who === "enemy" ? this.en! : this.me!;
+    f.fallT = 0;
+    play(f, "idle", 0.2, 0.2);
+  }
+
+  reset(distance: number): void {
+    if (!this.ready) return;
+    this.walk = null;
+    this.depth = this.depthOf(distance);
+    resetFigure(this.en!, 0.0);
+    resetFigure(this.me!, 0.43);
+  }
+
+  /** Where a zone of the enemy is right now, as fractions of the canvas (0..1 from the top left). */
+  zoneOnScreen(zone: Zone): [number, number] {
+    if (!this.ready) return [0.645, { head: 0.26, body: 0.34, groin: 0.42, legs: 0.49 }[zone]];
+    zoneWorld(this.en!, zone, tmpA).project(this.camera);
+    return [(tmpA.x + 1) / 2, (1 - tmpA.y) / 2];
+  }
+
+  private depthOf(d: number): number {
+    return this.k!.d7 * Math.pow(STEP_GROWTH, d - 7);
+  }
+
+  private makeFigure(gltf: GLTF, look: Look): Figure {
+    const model = SkeletonUtils.clone(gltf.scene);
+    const body = new THREE.MeshStandardMaterial({ color: look.body, roughness: 0.82, metalness: 0.04, emissive: look.lift ?? 0x000000 });
+    const joints = new THREE.MeshStandardMaterial({ color: look.joints, roughness: look.jointsRough ?? 0.42, metalness: look.jointsMetal ?? 0.4 });
+    model.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      o.castShadow = true; o.frustumCulled = false;
+      o.material = /joint/i.test((o.material as THREE.Material).name) ? joints : body;
+    });
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(model, true);
+    const s = HEIGHT / (box.max.y - box.min.y);
+    model.scale.multiplyScalar(s);
+    model.position.y = -box.min.y * s;
+
+    const tilt = new THREE.Group(); tilt.add(model); // falls around the feet
+    const blob = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.7), new THREE.MeshBasicMaterial({
+      map: softTexture([[0, "rgba(0,0,0,.8)"], [0.55, "rgba(0,0,0,.35)"], [1, "rgba(0,0,0,0)"]]), transparent: true, depthWrite: false, fog: false,
+    }));
+    blob.rotation.x = -Math.PI / 2; blob.position.y = 0.004;
+    const group = new THREE.Group(); group.add(tilt, blob);
+    this.scene.add(group);
+
+    const bone = (n: string) => {
+      const b = model.getObjectByName("mixamorig" + n);
+      if (!b) throw new Error(`the model has no bone ${n}`);
+      return b;
+    };
+    const mixer = new THREE.AnimationMixer(model);
+    const actions: Record<string, THREE.AnimationAction> = {};
+    for (const clip of gltf.animations) actions[clip.name] = mixer.clipAction(clip);
+
+    // a small cyan light on the sync connector, as in the concept frames
+    const port = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), new THREE.MeshBasicMaterial({ color: 0x7ff3ff, fog: false }));
+    this.scene.add(port);
+
+    return {
+      group, tilt, model, blob, mixer, actions, cur: null, port,
+      kick: { head: 0, body: 0, groin: 0, legs: 0 }, fallT: -1, fallSide: look.fallSide,
+      bones: {
+        head: bone("Head"), top: bone("HeadTop_End"), neck: bone("Neck"), spine: bone("Spine"), spine1: bone("Spine1"), spine2: bone("Spine2"),
+        hips: bone("Hips"), rUpLeg: bone("RightUpLeg"), rLeg: bone("RightLeg"), lUpLeg: bone("LeftUpLeg"), lLeg: bone("LeftLeg"),
+      },
+    };
+  }
+
+  /** The wet floor reflects the enemy: a faint upside-down copy that repeats its pose every frame. */
+  private makeMirror(gltf: GLTF, src: Figure): Mirror {
+    const model = SkeletonUtils.clone(gltf.scene);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xa89278, transparent: true, opacity: 0.42, depthWrite: false });
+    // fades out away from the feet, like a reflection in a thin layer of water
+    mat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying float vWorldY;")
+        .replace("#include <project_vertex>", "#include <project_vertex>\nvWorldY = (modelMatrix * vec4(transformed, 1.0)).y;");
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vWorldY;")
+        .replace("#include <dithering_fragment>", "#include <dithering_fragment>\ngl_FragColor.a *= clamp(1.0 + vWorldY / 1.1, 0.0, 1.0);");
+    };
+    model.traverse((o) => { if (o instanceof THREE.Mesh) { o.material = mat; o.frustumCulled = false; } });
+    model.scale.copy(src.model.scale); model.position.copy(src.model.position);
+    const flip = new THREE.Group(); flip.add(model); flip.scale.y = -1;
+    const tilt = new THREE.Group(); tilt.add(flip);
+    const group = new THREE.Group(); group.add(tilt);
+    this.scene.add(group);
+    const a: THREE.Object3D[] = [], b: THREE.Object3D[] = [];
+    src.model.traverse((o) => { if ((o as THREE.Bone).isBone) a.push(o); });
+    model.traverse((o) => { if ((o as THREE.Bone).isBone) b.push(o); });
+    return { group, tilt, pairs: a.map((bone, i) => [bone, b[i]!]), src };
+  }
+
+  private place(): void {
+    const k = this.k!, D = this.depth, en = this.en!, me = this.me!;
+    const ex = k.kx * D, ez = -D;
+    en.group.position.set(ex, 0, ez);
+    en.group.rotation.y = Math.atan2(-ex, D); // faces the camera
+    const mx = k.me.x, mz = k.me.z;
+    me.group.position.set(mx, k.me.y, mz);
+    me.group.rotation.y = Math.atan2(ex - mx, ez - mz); // faces the enemy
+    this.rim.position.set(ex - 4, 7.5, ez - 14); this.rim.target.position.set(ex, 0.9, ez);
+    this.fill.position.set(ex - 2, 3.4, ez + 3.2); this.fill.target.position.set(ex, 1, ez);
+    this.meKey.position.set(mx - 1.4, 2.8, mz + 4.2); this.meKey.target.position.set(mx, 1.2, mz);
+    this.bounce.position.set(ex - 0.2, 0.12, ez + 0.9);
+  }
+
+  private tick(time: number): void {
+    this.timer.update(time);
+    // Slow devices skip time instead of jumping: animations stay smooth, just slower.
+    const dt = Math.min(this.timer.getDelta(), 0.05);
+    const w = this.walk;
+    if (w) {
+      w.t += dt;
+      const u = Math.min(1, w.t / w.dur);
+      this.depth = w.from + (w.to - w.from) * smooth(u);
+      if (u >= 1) {
+        this.walk = null;
+        for (const f of [this.en!, this.me!]) if (f.fallT < 0) play(f, "idle", 0.35);
+      }
+    }
+    this.place();
+    for (const f of [this.en!, this.me!]) { f.mixer.update(dt); applyReactions(f, dt); }
+    syncMirror(this.mirror!);
+    this.scene.updateMatrixWorld();
+    placePort(this.en!); placePort(this.me!);
+    if (this.sparkLife > 0) {
+      this.sparkLife = Math.max(0, this.sparkLife - dt);
+      const u = 1 - this.sparkLife / this.sparkMax;
+      this.spark.material.opacity = 1 - u;
+      this.spark.scale.setScalar((this.spark.userData.size as number) * (0.6 + 0.8 * u));
+      this.spark.visible = this.sparkLife > 0;
+    }
+    this.renderer.render(this.scene, this.camera);
+    this.onFrame?.();
+  }
+}
+
+function play(f: Figure, name: string, fade = 0.3, speed = 1): void {
+  const a = f.actions[name];
+  if (!a) return;
+  a.timeScale = speed;
+  if (f.cur === a) return;
+  a.reset().setEffectiveWeight(1).fadeIn(fade).play();
+  f.cur?.fadeOut(fade);
+  f.cur = a;
+}
+
+function resetFigure(f: Figure, offset: number): void {
+  f.fallT = -1; f.tilt.rotation.set(0, 0, 0);
+  f.blob.scale.set(1, 1, 1); f.blob.position.x = 0;
+  for (const z of Object.keys(f.kick) as Zone[]) f.kick[z] = 0;
+  f.cur = null;
+  for (const a of Object.values(f.actions)) a.stop();
+  play(f, "idle", 0);
+  const idle = f.actions.idle;
+  if (idle) idle.time = offset * idle.getClip().duration;
+}
+
+function syncMirror(m: Mirror): void {
+  m.group.position.copy(m.src.group.position); m.group.rotation.copy(m.src.group.rotation);
+  const r = m.src.tilt.rotation;
+  m.tilt.rotation.set(-r.x, r.y, -r.z); // mirrored in the floor
+  for (const [a, b] of m.pairs) { b.position.copy(a.position); b.quaternion.copy(a.quaternion); }
+}
+
+/** Hit reactions and the fall, layered on top of whatever the animation is doing this frame. */
+function applyReactions(f: Figure, dt: number): void {
+  const k = f.kick, b = f.bones, decay = Math.exp(-dt * 6.5);
+  if (k.head) { b.head.rotateX(-0.6 * k.head); b.neck.rotateX(-0.25 * k.head); }
+  if (k.body) { b.spine2.rotateX(-0.32 * k.body); b.spine1.rotateX(-0.22 * k.body); }
+  if (k.groin) { b.spine.rotateX(0.42 * k.groin); b.spine1.rotateX(0.2 * k.groin); }
+  if (k.legs) { b.rUpLeg.rotateX(0.35 * k.legs); b.rLeg.rotateX(-0.75 * k.legs); }
+  for (const z of Object.keys(k) as Zone[]) k[z] = k[z] * decay < 0.01 ? 0 : k[z] * decay;
+
+  if (f.fallT >= 0) {
+    // falls on its side: from this low camera a body lying sideways reads best
+    f.fallT = Math.min(f.fallT + dt / 0.9, 1);
+    const t = f.fallT, e = smooth(t), g = t * t, side = f.fallSide;
+    b.lUpLeg.rotateX(0.35 * e); b.lLeg.rotateX(-0.5 * e);
+    b.rUpLeg.rotateX(0.2 * e); b.rLeg.rotateX(-0.3 * e);
+    b.spine.rotateX(0.25 * e); b.spine2.rotateX(0.15 * e); b.head.rotateZ(-side * 0.35 * e);
+    f.tilt.rotation.set(-0.25 * g, 0, side * 1.5 * g);
+    f.blob.scale.set(1 + 1.9 * g, 1, 1.1); f.blob.position.x = -side * 0.85 * g;
+  }
+}
+
+/** The sync connector sits on the nape, so it shows on our Persona and hides behind the enemy's head. */
+function placePort(f: Figure): void {
+  f.bones.head.getWorldPosition(tmpA); f.bones.top.getWorldPosition(tmpB);
+  const r = tmpA.distanceTo(tmpB) * PORT.depth, yaw = f.group.rotation.y;
+  tmpA.lerp(tmpB, PORT.up);
+  f.port.position.set(tmpA.x - Math.sin(yaw) * r, tmpA.y, tmpA.z - Math.cos(yaw) * r);
+  f.port.visible = f.fallT < 0;
+}
+
+/** A point on the body for each attack zone. */
+function zoneWorld(f: Figure, z: Zone, out: THREE.Vector3): THREE.Vector3 {
+  const b = f.bones;
+  if (z === "head") { b.head.getWorldPosition(out); b.top.getWorldPosition(tmpB); return out.lerp(tmpB, 0.45); }
+  if (z === "body") { b.spine1.getWorldPosition(out); b.spine2.getWorldPosition(tmpB); return out.lerp(tmpB, 0.75); }
+  if (z === "groin") { b.hips.getWorldPosition(out); out.y -= 0.08; return out; }
+  b.rLeg.getWorldPosition(out); b.rUpLeg.getWorldPosition(tmpB);
+  return out.lerp(tmpB, 0.15);
+}
