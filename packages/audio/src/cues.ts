@@ -23,6 +23,8 @@ export interface TurnSoundContext {
   viewer: Side;
   /** Armour per zone; a zone with armour above 0 rings like a plate when hit. */
   armor?: [Partial<Record<Zone, number>>, Partial<Record<Zone, number>>];
+  /** The guns in hand after the turn; a swap plays the new gun being drawn. */
+  weapons?: [WeaponId, WeaponId];
 }
 
 /** When each part of the turn plays, in seconds (the arena uses the same beats). */
@@ -40,10 +42,13 @@ export const TIMING = {
 
 const PAN = { ours: -0.3, theirs: 0.15 } as const;
 
-/** Everything a fight between these weapons can play, to preload when it starts. */
-export function fightSounds(ours: WeaponId, theirs: WeaponId): SoundId[] {
+/** Everything a fight between these guns can play, to preload when it starts. List a sidearm too. */
+export function fightSounds(ours: WeaponId | readonly WeaponId[], theirs: WeaponId | readonly WeaponId[]): SoundId[] {
+  const list = (w: WeaponId | readonly WeaponId[]): readonly WeaponId[] => (typeof w === "string" ? [w] : w);
+  const draws = (guns: readonly WeaponId[]) => (guns.length > 1 ? guns.map((w) => `equip.${w}` as const) : []);
   return [...new Set<SoundId>([
-    `shot.${ours}.near`, `shot.${theirs}.far`, "casing",
+    ...list(ours).map((w) => `shot.${w}.near` as const), ...list(theirs).map((w) => `shot.${w}.far` as const), "casing",
+    ...draws(list(ours)), ...draws(list(theirs)),
     "knife.swing", "knife.hit", "knife.blocked",
     "hit.armor", "hit.suit", "hit.head", "hit.crit", "shield.block", "shield.break", "miss.near", "miss.far",
     "grenade.pin", "grenade.throw", "grenade.bounce", "grenade.blast",
@@ -67,9 +72,11 @@ export function cuesForTurn(report: TurnReport, ctx: TurnSoundContext): Cue[] {
 
   let lastHit: number = TIMING.ourAttack;
   for (const s of [me, them]) {
+    const t = s === me ? TIMING.ourAttack : TIMING.enemyAttack;
+    const drawn = ctx.weapons?.[s];
+    if (report.actions[s].type === "swap" && drawn) add(`equip.${drawn}`, t, s);
     const attack = report.attacks[s];
     if (!attack) continue;
-    const t = s === me ? TIMING.ourAttack : TIMING.enemyAttack;
     lastHit = Math.max(lastHit, attackCues(attack, report.actions[s], s, t, ctx, add));
   }
 
@@ -106,6 +113,7 @@ function movement(action: Action, s: Side, add: Add) {
     case "shoot":
     case "knife":
     case "grenade":
+    case "swap":
       if (action.move !== 0) steps(1, 0);
       break;
   }

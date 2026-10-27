@@ -3,7 +3,7 @@
 // - menus and the gear screen play the other tracks from an in-world radio, quietly;
 // - opening the menu during a fight pauses the fight track; closing it resumes.
 
-import { FIGHT_PLAYLIST, RADIO_PLAYLIST, type SoundId, type TrackId } from "./bank.ts";
+import { FIGHT_PLAYLIST, RADIO_PLAYLIST, type SoundId, type Station, type TrackId } from "./bank.ts";
 import { Shuffle, type Random } from "./pick.ts";
 
 export type Channel = "fight" | "radio";
@@ -25,10 +25,12 @@ export type Scene = "silent" | "menu" | "fight";
 export class MusicDirector {
   private deck: MusicDeck;
   private fightList: Shuffle<TrackId>;
-  private radioList: Shuffle<TrackId>;
+  private radioList: Shuffle<Station>;
   private scene: Scene = "silent";
   private menuOpen = false;
   private radioOn = false;
+  /** The station was changed while the radio was off: start it fresh next time. */
+  private retuned = false;
   private fightPaused = false;
 
   constructor(deck: MusicDeck, random: Random = Math.random) {
@@ -107,13 +109,28 @@ export class MusicDirector {
     this.deck.play("radio", this.radioList.next());
   }
 
+  /** A station picked from a list. With the radio off it plays when the radio comes on. */
+  tune(station: Station) {
+    if (this.radioList.now === station) return;
+    this.radioList.set(station);
+    if (this.radioOn) {
+      this.deck.cue("radio.tune");
+      this.deck.play("radio", station);
+    } else {
+      this.retuned = true;
+    }
+  }
+
   private radioUp() {
     if (this.radioOn) return;
     this.radioOn = true;
     this.deck.cue("radio.on");
     // pick up the station where it was, like a real radio left on
-    if (this.radioList.now === undefined) this.deck.play("radio", this.radioList.next());
+    const station = this.radioList.now;
+    if (station === undefined) this.deck.play("radio", this.radioList.next());
+    else if (this.retuned) this.deck.play("radio", station);
     else this.deck.resume("radio");
+    this.retuned = false;
   }
 
   private radioDown() {

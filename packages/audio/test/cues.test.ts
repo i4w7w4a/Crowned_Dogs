@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  botOrder, createMatch, MAPS, resolveTurn, TIMES, WEAPON_IDS, WEATHERS,
-  type Action, type AttackReport, type Side, type TurnReport,
+  botOrder, canSwap, createMatch, kitFighter, MAPS, resolveTurn, TIMES, validateOrder, VETERAN_KITS, WEAPON_IDS, WEATHERS,
+  type Order,
+  type Action, type AttackReport, type Side, type TurnReport, type WeaponId,
 } from "@crowned-dogs/core";
 import { SOUNDS, type SoundId } from "../src/bank.ts";
 import { cuesForTurn, fightSounds, TIMING, type Cue } from "../src/cues.ts";
@@ -127,22 +128,31 @@ test("the enemy grows quieter with distance, never by more than the cap", () => 
 
 test("whole bot fights only ever ask for sounds that exist, in time order", () => {
   const maps = Object.keys(MAPS);
+  let swaps = 0;
   for (let i = 0; i < 40; i++) {
     const weapons = [WEAPON_IDS[i % 4]!, WEAPON_IDS[(i >> 2) % 4]!] as const;
+    // veteran kits: the sniper carries a pistol as a sidearm
+    const fighters = weapons.map((w, k) => kitFighter(String(k), String(k), VETERAN_KITS[w]));
+    const guns = fighters.map((f) => [f.kit!.weapon.id, f.kit!.sidearm?.id].filter((g) => g !== undefined) as WeaponId[]);
     let m = createMatch({
       seed: `audio-${i}`,
       mapId: maps[i % maps.length]!,
       weather: WEATHERS[i % WEATHERS.length]!,
       time: TIMES[i % TIMES.length]!,
-      fighters: [
-        { id: "a", name: "a", weapon: weapons[0] },
-        { id: "b", name: "b", weapon: weapons[1] },
-      ],
+      fighters: [fighters[0]!, fighters[1]!],
     });
-    const preload = new Set<SoundId>(fightSounds(weapons[0], weapons[1]));
+    const preload = new Set<SoundId>(fightSounds(guns[0]!, guns[1]!));
     while (!m.result) {
-      const step = resolveTurn(m, [botOrder(m, 0), botOrder(m, 1)]);
-      const cues = cuesForTurn(step.report, { viewer: 0 });
+      // the bot rarely swaps on its own, so make it swap every few turns
+      const orders = ([0, 1] as const).map((side): Order => {
+        const o = botOrder(m, side);
+        const swap: Order = { ...o, action: { type: "swap", move: 0 } };
+        return m.turn % 3 === 1 && canSwap(m, side) && !validateOrder(m, side, swap) ? swap : o;
+      });
+      const step = resolveTurn(m, [orders[0]!, orders[1]!]);
+      const inHand: [WeaponId, WeaponId] = [step.match.fighters[0].weapon, step.match.fighters[1].weapon];
+      const cues = cuesForTurn(step.report, { viewer: 0, weapons: inHand });
+      swaps += step.report.actions.filter((a) => a.type === "swap").length;
       cues.forEach((c, k) => {
         assert.ok(SOUNDS[c.sound], c.sound);
         assert.ok(preload.has(c.sound), `${c.sound} is not preloaded`);
@@ -152,4 +162,15 @@ test("whole bot fights only ever ask for sounds that exist, in time order", () =
       m = step.match;
     }
   }
+  assert.ok(swaps > 10, `only ${swaps} swaps`);
+});
+
+test("a swap draws the other gun on the attack beat", () => {
+  const swap = report({ actions: [{ type: "swap", move: 1 }, { type: "swap", move: 0 }] });
+  const cues = cuesForTurn(swap, { viewer: 0, weapons: ["pistol", "sniper"] });
+  assert.deepEqual(sounds(cues), ["step", "gear.rustle", "equip.pistol", "equip.sniper"]);
+  assert.equal(cues.find((c) => c.sound === "equip.pistol")!.at, TIMING.ourAttack);
+  assert.equal(cues.find((c) => c.sound === "equip.sniper")!.at, TIMING.enemyAttack);
+  // without the guns in hand there is nothing to draw, only the step
+  assert.deepEqual(sounds(cuesForTurn(swap, { viewer: 0 })), ["step", "gear.rustle"]);
 });

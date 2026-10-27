@@ -4,6 +4,8 @@ import { FIGHT_PLAYLIST, RADIO_PLAYLIST, type SoundId, type TrackId } from "../s
 import { MusicDirector, type Channel, type MusicDeck } from "../src/music.ts";
 import { seeded } from "./seeded.ts";
 
+const isStation = (t: TrackId | undefined) => t !== undefined && (RADIO_PLAYLIST as readonly TrackId[]).includes(t);
+
 class FakeDeck implements MusicDeck {
   log: string[] = [];
   playing: Partial<Record<Channel, TrackId>> = {};
@@ -57,7 +59,7 @@ test("menus play the other tracks from the radio, never in a fight", () => {
   const music = new MusicDirector(deck, seeded("radio"));
   music.enterMenu();
   assert.ok(deck.on("radio"));
-  assert.ok(RADIO_PLAYLIST.includes(deck.playing.radio!));
+  assert.ok(isStation(deck.playing.radio));
   assert.ok(!deck.on("fight"));
   assert.ok(deck.log.includes("cue radio.on"));
 
@@ -126,4 +128,30 @@ test("menu calls outside a fight do nothing, silence stops everything", () => {
   music.silence();
   assert.ok(!deck.on("fight") && !deck.on("radio"));
   assert.equal(music.state.scene, "silent");
+});
+
+test("a station picked from the list plays at once, or when the radio comes on", () => {
+  const deck = new FakeDeck();
+  const music = new MusicDirector(deck, seeded("tune"));
+  music.enterMenu();
+  const other = RADIO_PLAYLIST.find((t) => t !== deck.playing.radio)!;
+  music.tune(other);
+  assert.equal(deck.playing.radio, other);
+  assert.deepEqual(deck.log.slice(-2), ["cue radio.tune", `play radio ${other}`]);
+
+  // the same station again changes nothing
+  const n = deck.log.length;
+  music.tune(other);
+  assert.equal(deck.log.length, n);
+
+  // picked while the radio is off: it starts from the top when the radio comes back
+  music.enterFight();
+  const next = RADIO_PLAYLIST.find((t) => t !== other)!;
+  music.tune(next);
+  assert.ok(!deck.on("radio"));
+  music.openMenu();
+  assert.equal(deck.playing.radio, next);
+  assert.ok(deck.on("radio"));
+  assert.equal(deck.log.at(-1), `play radio ${next}`);
+  assert.ok(deck.on("radio") && !deck.on("fight"));
 });

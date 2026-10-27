@@ -48,6 +48,12 @@ export class Shuffle<T> {
     this.current = this.items[pickOther(this.items.length, last, this.random)]!;
     return this.current;
   }
+
+  /** Jump to a chosen item; the random picks carry on from it. */
+  set(item: T): void {
+    if (!this.items.includes(item)) throw new Error("Not in the playlist");
+    this.current = item;
+  }
 }
 
 /** Uniform in [-spread, spread]. */

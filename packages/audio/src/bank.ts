@@ -135,7 +135,10 @@ export type TrackId = keyof typeof TRACKS;
 /** Art, 2026-10-27: these play in a fight, picked at random. */
 export const FIGHT_PLAYLIST: TrackId[] = ["the-limbo-3", "404-room", "in-the-middle-of-nowhere"];
 /** The rest plays from the radio in the operator's room: menu, gear, results. */
-export const RADIO_PLAYLIST: TrackId[] = ["crazy-2", "fxck-wag-6", "fog-3", "try-to-fake"];
+export const RADIO_PLAYLIST = ["crazy-2", "fxck-wag-6", "fog-3", "try-to-fake"] as const satisfies readonly TrackId[];
+
+/** A track the radio can be tuned to. */
+export type Station = (typeof RADIO_PLAYLIST)[number];
 
 /**
  * Bus levels in dB. Effects files are mastered around −10…−25 dBFS of punch and

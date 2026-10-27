@@ -38,14 +38,16 @@ button.addEventListener("pointerdown", () => audio.unlock(), { once: true }); //
 audio.music.enterMenu();                       // главный экран: рация
 audio.setAmbience(["amb.base"]);
 
-await audio.preload(fightSounds("rifle", "sniper"));
+await audio.preload(fightSounds("rifle", ["sniper", "pistol"])); // у врага есть запасной пистолет
 audio.music.enterFight();                      // бой: случайный боевой трек
 audio.setAmbience(["amb.hall", "amb.storm"]);  // локация + погода
 
-audio.playCues(cuesForTurn(report, { viewer: mySide }));  // озвучить разыгранный ход
+const inHand = [match.fighters[0].weapon, match.fighters[1].weapon];
+audio.playCues(cuesForTurn(report, { viewer: mySide, weapons: inHand }));  // озвучить разыгранный ход
 audio.play("ui.tap");                                      // отдельный звук
 
 audio.music.openMenu();  // пауза боя, рация
+audio.music.tune("fog-3"); // станция, выбранная из списка
 audio.music.closeMenu(); // бой продолжается
 audio.setVolume("music", 0.6); // ползунки настроек: master, sfx, ui, amb, music
 ```
@@ -69,7 +71,7 @@ audio.setVolume("music", 0.6); // ползунки настроек: master, sfx
 | `persona.powerup` | Персона включилась (начало боя) |
 | `ui.*` | касания, выбор защиты и шага, подтверждение, таймер, открыть/закрыть, новый ход, ошибка, соперник найден, победа, поражение |
 | `loot.water`, `loot.scrap` | добыча: вода, металлолом |
-| `equip.*` | надеть оружие или снаряжение |
+| `equip.*` | надеть оружие или снаряжение; в бою смена оружия на запасное |
 | `radio.on`, `radio.off`, `radio.tune` | рация: включить, выключить, сменить станцию |
 | `thunder`, `helicopter.flyby`, `artillery.far` | редкие события мира |
 | `amb.hall`, `amb.blocks`, `amb.base` | фон локаций: зал, кварталы, база |
