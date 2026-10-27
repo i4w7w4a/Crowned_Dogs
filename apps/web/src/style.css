@@ -132,7 +132,9 @@ button:disabled { cursor: default; }
 .who { max-width: 100%; font: 500 11.5px/1.25 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hpl { display: flex; align-items: center; gap: 10px; width: 100%; }
 .side.en .hpl { flex-direction: row-reverse; }
-.hpl b { font: 600 24px/1 var(--display); letter-spacing: -.01em; font-variant-numeric: tabular-nums; transition: color .3s; }
+/* the number keeps a three-digit width, so the line never changes length as health falls */
+.hpl b { min-width: 1.75em; font: 600 24px/1 var(--display); letter-spacing: -.01em; font-variant-numeric: tabular-nums; transition: color .3s; }
+.side.en .hpl b { text-align: right; }
 .side.low .hpl b { color: var(--red); }
 /* a thin line running toward the clock, anchored at the number; the red piece behind is the last hit, draining a moment later */
 .bar { position: relative; flex: 1 1 auto; min-width: 0; height: 3px; margin-top: 2px; background: rgba(236,232,223,.14); }
@@ -294,11 +296,11 @@ button:disabled { cursor: default; }
 }
 
 /* confirm the turn: a cream plate; dark and outlined while something is still missing */
-.go { --c: 10px; --edge: var(--cream); --face: var(--cream); height: 52px; display: flex; align-items: center; justify-content: center; padding: 0 16px; color: var(--cream-ink); }
+.go { --c: 10px; --edge: var(--cream); --face: var(--cream); height: 52px; display: flex; align-items: center; justify-content: center; padding: 0 16px;
+  font: 600 15px/1.1 var(--display); letter-spacing: .08em; text-transform: uppercase; text-align: center; color: var(--cream-ink); }
 .go:hover:not(:disabled) { --edge: #f6eedc; --face: #f6eedc; }
-.go .gt { font: 600 15px/1.1 var(--display); letter-spacing: .08em; text-transform: uppercase; text-align: center; min-width: 0; }
-.go:disabled { --edge: rgba(236,232,223,.16); --face: #121313; color: rgba(236,232,223,.62); }
-.go:disabled .gt { font-weight: 500; }
+.go .gt { min-width: 0; }
+.go:disabled { --edge: rgba(236,232,223,.16); --face: #121313; color: rgba(236,232,223,.62); font-weight: 500; }
 
 /* ---------- menu sheet ---------- */
 .veil { position: absolute; inset: 0; z-index: 20; background: rgba(4,5,5,.6); display: flex; align-items: flex-end; }
@@ -336,14 +338,14 @@ button:disabled { cursor: default; }
 .vrow input::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 18px; margin-top: -8px; border: 0; border-radius: 1px; background: var(--cream); box-shadow: 0 0 0 3px #121313; }
 .vrow input::-moz-range-thumb { width: 6px; height: 18px; border: 0; border-radius: 1px; background: var(--cream); box-shadow: 0 0 0 3px #121313; }
 .seg { display: grid; grid-template-columns: repeat(var(--n, 2), 1fr); gap: 6px; }
-.seg button { --c: 6px; padding: 12px 6px; font: 500 14px/1.1 var(--body); color: var(--muted); }
+.seg button { --c: 6px; padding: 12px 4px; font: 500 13px/1.1 var(--body); color: var(--muted); }
 .seg button[aria-pressed="true"] { --edge: rgba(236,232,223,.7); --face: #1e1f1f; color: var(--fg); }
 .tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .tracks button { --c: 6px; text-align: left; padding: 9px 10px; font: 500 13px/1.2 var(--body); color: var(--fg); }
 .tracks button small { display: block; font: 400 11px/1.2 var(--mono); color: var(--muted); margin-top: 3px; }
 .tracks button[aria-pressed="true"] { --edge: rgba(115,211,226,.6); --face: #142224; }
 .sheet .acts2 { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; }
-.ghost { --c: 8px; height: 50px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 500 15px/1 var(--body); }
+.ghost { --c: 8px; height: 50px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 600 14px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; }
 .ghost .ico { width: 18px; height: 18px; }
 
 /* ---------- end of the fight ---------- */
