@@ -44,10 +44,11 @@ packages/core/src/
   ai.ts      бот-соперник
   rng.ts     кости с зерном: бой можно сохранить и переиграть точь-в-точь
   tag.ts     жетон игрока K-XXX-XXX
+  draft.ts   приказ, который игрок собирает по одному нажатию
 apps/server/src/
   operators.ts  подписанные контракты и жетоны, файл data/operators.json
   duels.ts   живые бои, приглашения, таймер хода
-  draft.ts   приказ, который игрок собирает кнопками
+  codes.ts   нажатия кнопок в коротких кодах для Telegram
   view.ts    тексты и кнопки
   bot.ts     подключение к Telegram (grammY)
   main.ts    запуск

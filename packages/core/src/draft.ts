@@ -1,10 +1,8 @@
-// The order a player is putting together with buttons, before pressing "Готово".
-// Pure functions: the bot calls them on every button press.
+// The order a player is putting together, one tap at a time, before pressing "Готово".
+// Pure functions: the bot and the web client call them on every tap.
 
-import {
-  DASH_STEPS, RUN_STEPS, ZONES, canFlee, canThrowGrenade, canUseKnife, validateOrder,
-  type Action, type Match, type Order, type Side, type Zone,
-} from "@crowned-dogs/core";
+import { canFlee, canThrowGrenade, canUseKnife, validateOrder, type Action, type Match, type Order, type Side } from "./match.ts";
+import { DASH_STEPS, RUN_STEPS, type Zone } from "./rules.ts";
 
 export type DraftKind = "shoot" | "knife" | "grenade" | "run" | "dash" | "flee";
 
@@ -122,41 +120,4 @@ export function toOrder(m: Match, side: Side, d: Draft): Order | string {
   const order: Order = { action: actionOf(d)!, defend: [...d.defend] };
   const err = validateOrder(m, side, order);
   return err ? `Так нельзя: ${err}` : order;
-}
-
-export const ZONE_KEYS: Record<string, Zone> = Object.fromEntries(ZONES.map((z) => [z[0]!, z])) as Record<string, Zone>;
-
-/** Short callback codes: Telegram allows only 64 bytes per button. */
-export function encodeCommand(c: Command): string {
-  switch (c.type) {
-    case "zone": return `z${c.zone[0]}`;
-    case "guard": return `g${c.zone[0]}`;
-    case "step": return `s${c.move}`;
-    case "run": return `r${c.move}`;
-    case "dash": return "d";
-    case "knife": return "k";
-    case "grenade": return "n";
-    case "flee": return "f";
-  }
-}
-
-export function decodeCommand(s: string): Command | null {
-  const head = s[0], rest = s.slice(1);
-  switch (head) {
-    case "z":
-    case "g": {
-      const zone = ZONE_KEYS[rest];
-      if (!zone) return null;
-      return head === "z" ? { type: "zone", zone } : { type: "guard", zone };
-    }
-    case "s":
-      return rest === "-1" || rest === "0" || rest === "1" ? { type: "step", move: Number(rest) as -1 | 0 | 1 } : null;
-    case "r":
-      return rest === "2" || rest === "-2" ? { type: "run", move: Number(rest) as -2 | 2 } : null;
-    case "d": return rest ? null : { type: "dash" };
-    case "k": return rest ? null : { type: "knife" };
-    case "n": return rest ? null : { type: "grenade" };
-    case "f": return rest ? null : { type: "flee" };
-    default: return null;
-  }
 }

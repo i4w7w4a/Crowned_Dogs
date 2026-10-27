@@ -3,10 +3,10 @@
 
 import {
   MAX_STEPS, STANCE_TURNS, TIME_NAMES, WEAPONS, WEATHER, ZONES, ZONE_NAMES, canFlee, canThrowGrenade,
-  distanceLimit, hitChance, other, turnLimit, type Action, type AttackReport, type Side, type TurnReport,
-  type WeaponId, type Zone,
+  distanceLimit, guardsNeeded, hitChance, missing, other, turnLimit, type Action, type AttackReport, type Command,
+  type Draft, type Side, type TurnReport, type WeaponId, type Zone,
 } from "@crowned-dogs/core";
-import { encodeCommand, guardsNeeded, missing, type Command, type Draft } from "./draft.ts";
+import { encodeCommand } from "./codes.ts";
 import type { Duel } from "./duels.ts";
 
 export interface Button {
