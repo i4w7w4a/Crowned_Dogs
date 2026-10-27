@@ -1,6 +1,7 @@
-// Live 3D figures standing in a painted frame. A transparent three.js canvas lies
-// exactly over the picture, and an off-centre lens matched to the painting puts
-// the figures' feet on the painted floor. The fight code only calls move, hit,
+// Live 3D figures standing in a painted frame. The three.js canvas lies exactly
+// over the picture, an off-centre lens matched to the painting puts the figures'
+// feet on the painted floor, and the bodycam lens (lens.ts) lays them over the
+// painting and shoots both through the same glass. The fight code only calls move, hit,
 // fall and reset; everything else here is about looking right.
 
 import type { Zone } from "@crowned-dogs/core";
@@ -9,6 +10,7 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import type { Frame } from "./frames.ts";
+import { Lens } from "./lens.ts";
 import { findBones, pitch, roll, type Bones } from "./rig.ts";
 
 export type Who = "me" | "enemy";
@@ -115,6 +117,7 @@ export class Arena {
   private en: Figure | null = null;
   private me: Figure | null = null;
   private mirror: Mirror | null = null;
+  private lens: Lens;
 
   /** Throws when the device has no WebGL. */
   constructor(canvas: HTMLCanvasElement) {
@@ -125,6 +128,7 @@ export class Arena {
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFShadowMap;
+    this.lens = new Lens(r);
     this.scene.fog = new THREE.Fog(0x3d342c, 2.5, 30);
 
     // Low warm sun from behind the enemy (the shafts in the hall), soft sky and ground.
@@ -196,6 +200,8 @@ export class Arena {
     this.camera.projectionMatrix.makePerspective(-half, half, top, bottom, n, this.camera.far);
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
     this.renderer.toneMappingExposure = f.look.exposure;
+    this.lens.setBackdrop(f.src);
+    this.lens.setLook(f.look.lens, f.look.exposure);
     this.rim.color.set(f.look.rim);
     this.fill.color.set(f.look.fill);
     (this.scene.fog as THREE.Fog).color.set(f.look.fog);
@@ -205,6 +211,8 @@ export class Arena {
   resize(width: number, height: number): void {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setSize(Math.round(width), Math.round(height), false);
+    const px = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    this.lens.setSize(px.x, px.y);
   }
 
   /** Both walk to the new distance; who moved decides who walks, the camera rides with us. */
@@ -360,7 +368,7 @@ export class Arena {
       this.spark.scale.setScalar((this.spark.userData.size as number) * (0.6 + 0.8 * u));
       this.spark.visible = this.sparkLife > 0;
     }
-    this.renderer.render(this.scene, this.camera);
+    this.lens.render(this.scene, this.camera);
     this.onFrame?.();
   }
 }
