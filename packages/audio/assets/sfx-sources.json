@@ -1,0 +1,1168 @@
+{
+ "amb/amb-base.mp3": {
+  "seconds": 59.0,
+  "lufs": -32.0,
+  "punch_db": -34.9,
+  "peak_db": -20.9,
+  "loop": true,
+  "sources": [
+   "Jake Fielding - Circus Ambiences",
+   "Jake Fielding - Fridge Hums",
+   "Pole Position - The Warfare 2 Library"
+  ]
+ },
+ "amb/amb-blocks.mp3": {
+  "seconds": 59.0,
+  "lufs": -29.0,
+  "punch_db": -23.2,
+  "peak_db": -1.5,
+  "loop": true,
+  "sources": [
+   "Sonik Sound Library - Spatial Countryside",
+   "The Soundcatcher - Seismic Activities"
+  ]
+ },
+ "amb/amb-dust.mp3": {
+  "seconds": 60.0,
+  "lufs": -27.0,
+  "punch_db": -22.4,
+  "peak_db": -1.0,
+  "loop": true,
+  "sources": [
+   "Sonik Sound Library - Spatial Countryside"
+  ]
+ },
+ "amb/amb-fog.mp3": {
+  "seconds": 31.0,
+  "lufs": -33.0,
+  "punch_db": -35.7,
+  "peak_db": -19.9,
+  "loop": true,
+  "sources": [
+   "Rescopic Sound - Parallax"
+  ]
+ },
+ "amb/amb-hall.mp3": {
+  "seconds": 57.0,
+  "lufs": -30.0,
+  "punch_db": -23.3,
+  "peak_db": -1.4,
+  "loop": true,
+  "sources": [
+   "Jake Fielding - Chamber of Shadows - Morgue Room Tones",
+   "Jake Fielding - Haunted Metal Vol.2 - Cinematic Creaks & Risers",
+   "Jake Fielding - Haunted Metal Vol.3 - Cinematic Tones & Textures",
+   "Jake Fielding - Squeaky Gates",
+   "Sonik Sound Library - Spatial Countryside",
+   "The Soundcatcher - Seismic Activities"
+  ]
+ },
+ "amb/amb-storm.mp3": {
+  "seconds": 59.0,
+  "lufs": -27.0,
+  "punch_db": -18.1,
+  "peak_db": -3.0,
+  "loop": true,
+  "sources": [
+   "Sonik Sound Library - Spatial Rain & Thunders"
+  ]
+ },
+ "sfx/artillery-far.mp3": {
+  "seconds": 3.95,
+  "lufs": -25.0,
+  "punch_db": -17.7,
+  "peak_db": -5.2,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Warfare 2 Library"
+  ]
+ },
+ "sfx/body-fall.mp3": {
+  "seconds": 1.31,
+  "lufs": -20.0,
+  "punch_db": -13.6,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Mechanical Wave - Cardboard and Paper",
+   "Mechanical Wave - Torturing Metal",
+   "Pole Position - The Metal Hit Sweeteners Library",
+   "Pole Position - The Plastic Textures Library"
+  ]
+ },
+ "sfx/casing-1.mp3": {
+  "seconds": 0.155,
+  "lufs": -32.0,
+  "punch_db": -26.0,
+  "peak_db": -7.1,
+  "loop": false,
+  "sources": [
+   "Pole Position - Lynx 50 Cal Sniper Rifle"
+  ]
+ },
+ "sfx/casing-2.mp3": {
+  "seconds": 0.215,
+  "lufs": -32.0,
+  "punch_db": -26.0,
+  "peak_db": -8.4,
+  "loop": false,
+  "sources": [
+   "Pole Position - Lynx 50 Cal Sniper Rifle"
+  ]
+ },
+ "sfx/casing-3.mp3": {
+  "seconds": 0.37,
+  "lufs": -31.0,
+  "punch_db": -26.0,
+  "peak_db": -7.5,
+  "loop": false,
+  "sources": [
+   "Pole Position - Lynx 50 Cal Sniper Rifle"
+  ]
+ },
+ "sfx/dash-whoosh.mp3": {
+  "seconds": 0.579,
+  "lufs": -24.0,
+  "punch_db": -20.7,
+  "peak_db": -9.3,
+  "loop": false,
+  "sources": [
+   "Rescopic Sound - Distinct Whooshes"
+  ]
+ },
+ "sfx/equip-armor.mp3": {
+  "seconds": 0.45,
+  "lufs": -23.0,
+  "punch_db": -20.1,
+  "peak_db": -2.9,
+  "loop": false,
+  "sources": [
+   "InMotionAudio - Torn T-Shirt",
+   "Pole Position - The Metal Hit Sweeteners Library"
+  ]
+ },
+ "sfx/equip-boots.mp3": {
+  "seconds": 0.3,
+  "lufs": -24.0,
+  "punch_db": -16.0,
+  "peak_db": -3.0,
+  "loop": false,
+  "sources": [
+   "Mechanical Wave - Cardboard and Paper",
+   "Sonic Bat - Videogame Foley Essentials Vol. II"
+  ]
+ },
+ "sfx/equip-chevron.mp3": {
+  "seconds": 0.295,
+  "lufs": -24.0,
+  "punch_db": -19.7,
+  "peak_db": -4.6,
+  "loop": false,
+  "sources": [
+   "InMotionAudio - Torn T-Shirt"
+  ]
+ },
+ "sfx/equip-grenade.mp3": {
+  "seconds": 0.36,
+  "lufs": -24.0,
+  "punch_db": -21.0,
+  "peak_db": -6.1,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Industrial Lever Switch",
+   "BluezoneCorp - Tiny Gears - Small Mechanism"
+  ]
+ },
+ "sfx/equip-helmet.mp3": {
+  "seconds": 0.585,
+  "lufs": -24.0,
+  "punch_db": -16.3,
+  "peak_db": -2.1,
+  "loop": false,
+  "sources": [
+   "InMotionAudio - Mask Foley"
+  ]
+ },
+ "sfx/equip-knife.mp3": {
+  "seconds": 0.895,
+  "lufs": -23.0,
+  "punch_db": -21.4,
+  "peak_db": -10.7,
+  "loop": false,
+  "sources": [
+   "Justsoundeffects - Melee Weapons"
+  ]
+ },
+ "sfx/equip-pistol.mp3": {
+  "seconds": 0.7,
+  "lufs": -25.6,
+  "punch_db": -17.9,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - Desert Eagle .44"
+  ]
+ },
+ "sfx/equip-rifle.mp3": {
+  "seconds": 0.6,
+  "lufs": -21.3,
+  "punch_db": -19.2,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Dramatic Cat - Saiga-12",
+   "Pole Position - Hammerli 280 22LR"
+  ]
+ },
+ "sfx/equip-shotgun.mp3": {
+  "seconds": 0.7,
+  "lufs": -26.1,
+  "punch_db": -18.9,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - Franchi SPAS-12 Combat Shotgun"
+  ]
+ },
+ "sfx/equip-sniper.mp3": {
+  "seconds": 0.715,
+  "lufs": -29.2,
+  "punch_db": -18.8,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Dramatic Cat - SVD Dragunov"
+  ]
+ },
+ "sfx/equip-suit.mp3": {
+  "seconds": 0.87,
+  "lufs": -25.0,
+  "punch_db": -20.1,
+  "peak_db": -1.7,
+  "loop": false,
+  "sources": [
+   "TheWorkRoom Audio Post - Neoprene - Dry - Wetsuit"
+  ]
+ },
+ "sfx/gear-rustle-1.mp3": {
+  "seconds": 0.27,
+  "lufs": -27.0,
+  "punch_db": -20.4,
+  "peak_db": -2.7,
+  "loop": false,
+  "sources": [
+   "TheWorkRoom Audio Post - Neoprene - Dry - Wetsuit"
+  ]
+ },
+ "sfx/gear-rustle-2.mp3": {
+  "seconds": 0.3,
+  "lufs": -27.0,
+  "punch_db": -22.5,
+  "peak_db": -9.9,
+  "loop": false,
+  "sources": [
+   "TheWorkRoom Audio Post - Neoprene - Dry - Wetsuit"
+  ]
+ },
+ "sfx/grenade-blast.mp3": {
+  "seconds": 2.87,
+  "lufs": -16.5,
+  "punch_db": -12.5,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "DavidDumais - Explosion SFX Pack",
+   "Mechanical Wave - Torturing Metal",
+   "Pole Position - The Metal Hit Sweeteners Library",
+   "Pole Position - The Warfare 2 Library"
+  ]
+ },
+ "sfx/grenade-bounce.mp3": {
+  "seconds": 0.425,
+  "lufs": -26.8,
+  "punch_db": -21.4,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Stone Impact",
+   "Sonic Bat - Videogame Foley Essentials Vol. II"
+  ]
+ },
+ "sfx/grenade-pin.mp3": {
+  "seconds": 0.4,
+  "lufs": -23.0,
+  "punch_db": -21.2,
+  "peak_db": -4.3,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Industrial Lever Switch",
+   "BluezoneCorp - Tiny Gears - Small Mechanism"
+  ]
+ },
+ "sfx/grenade-throw.mp3": {
+  "seconds": 0.412,
+  "lufs": -21.0,
+  "punch_db": -17.7,
+  "peak_db": -7.7,
+  "loop": false,
+  "sources": [
+   "Rescopic Sound - Distinct Whooshes"
+  ]
+ },
+ "sfx/helicopter-flyby.mp3": {
+  "seconds": 19.51,
+  "lufs": -25.0,
+  "punch_db": -25.2,
+  "peak_db": -8.2,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Aircraft Ambient Library"
+  ]
+ },
+ "sfx/hit-armor-1.mp3": {
+  "seconds": 0.34,
+  "lufs": -20.7,
+  "punch_db": -14.2,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Metal Hit Sweeteners Library",
+   "Pole Position - The Plastic Textures Library"
+  ]
+ },
+ "sfx/hit-armor-2.mp3": {
+  "seconds": 0.335,
+  "lufs": -23.4,
+  "punch_db": -16.9,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Metal Hit Sweeteners Library",
+   "Pole Position - The Plastic Textures Library"
+  ]
+ },
+ "sfx/hit-armor-3.mp3": {
+  "seconds": 0.34,
+  "lufs": -22.3,
+  "punch_db": -14.8,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Metal Hit Sweeteners Library",
+   "Pole Position - The Plastic Textures Library"
+  ]
+ },
+ "sfx/hit-crit-1.mp3": {
+  "seconds": 0.395,
+  "lufs": -19.4,
+  "punch_db": -18.0,
+  "peak_db": -4.3,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - High Voltage"
+  ]
+ },
+ "sfx/hit-crit-2.mp3": {
+  "seconds": 0.4,
+  "lufs": -18.8,
+  "punch_db": -18.0,
+  "peak_db": -3.8,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - High Voltage"
+  ]
+ },
+ "sfx/hit-head-1.mp3": {
+  "seconds": 0.35,
+  "lufs": -23.5,
+  "punch_db": -17.8,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Metal Hit Sweeteners Library",
+   "Sonic Bat - Videogame Foley Essentials Vol. II"
+  ]
+ },
+ "sfx/hit-head-2.mp3": {
+  "seconds": 0.315,
+  "lufs": -23.1,
+  "punch_db": -17.2,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Metal Hit Sweeteners Library",
+   "Sonic Bat - Videogame Foley Essentials Vol. II"
+  ]
+ },
+ "sfx/hit-suit-1.mp3": {
+  "seconds": 0.3,
+  "lufs": -20.5,
+  "punch_db": -13.5,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Justsoundeffects - Melee Weapons",
+   "Mechanical Wave - Cardboard and Paper",
+   "Mechanical Wave - Torturing Metal"
+  ]
+ },
+ "sfx/hit-suit-2.mp3": {
+  "seconds": 0.318,
+  "lufs": -20.6,
+  "punch_db": -13.4,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Justsoundeffects - Melee Weapons",
+   "Mechanical Wave - Cardboard and Paper",
+   "Mechanical Wave - Torturing Metal"
+  ]
+ },
+ "sfx/hit-suit-3.mp3": {
+  "seconds": 0.3,
+  "lufs": -20.5,
+  "punch_db": -13.5,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Justsoundeffects - Melee Weapons",
+   "Mechanical Wave - Cardboard and Paper",
+   "Mechanical Wave - Torturing Metal"
+  ]
+ },
+ "sfx/knife-blocked-1.mp3": {
+  "seconds": 0.26,
+  "lufs": -24.5,
+  "punch_db": -19.5,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - High Voltage",
+   "Mechanical Wave - Torturing Metal",
+   "Pole Position - The Metal Hit Sweeteners Library",
+   "Rogue Waves - Anime Studio"
+  ]
+ },
+ "sfx/knife-blocked-2.mp3": {
+  "seconds": 0.26,
+  "lufs": -24.0,
+  "punch_db": -18.7,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - High Voltage",
+   "Mechanical Wave - Torturing Metal",
+   "Pole Position - The Metal Hit Sweeteners Library",
+   "Rogue Waves - Anime Studio"
+  ]
+ },
+ "sfx/knife-hit-1.mp3": {
+  "seconds": 0.35,
+  "lufs": -17.3,
+  "punch_db": -13.0,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "InMotionAudio - Torn T-Shirt",
+   "Justsoundeffects - Melee Weapons",
+   "Mechanical Wave - Cardboard and Paper"
+  ]
+ },
+ "sfx/knife-hit-2.mp3": {
+  "seconds": 0.35,
+  "lufs": -17.4,
+  "punch_db": -13.2,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "InMotionAudio - Torn T-Shirt",
+   "Justsoundeffects - Melee Weapons",
+   "Mechanical Wave - Cardboard and Paper"
+  ]
+ },
+ "sfx/knife-hit-3.mp3": {
+  "seconds": 0.35,
+  "lufs": -17.3,
+  "punch_db": -13.5,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "InMotionAudio - Torn T-Shirt",
+   "Justsoundeffects - Melee Weapons",
+   "Mechanical Wave - Cardboard and Paper"
+  ]
+ },
+ "sfx/knife-swing-1.mp3": {
+  "seconds": 0.333,
+  "lufs": -23.2,
+  "punch_db": -19.0,
+  "peak_db": -8.6,
+  "loop": false,
+  "sources": [
+   "Justsoundeffects - Melee Weapons",
+   "Rescopic Sound - Distinct Whooshes"
+  ]
+ },
+ "sfx/knife-swing-2.mp3": {
+  "seconds": 0.307,
+  "lufs": -23.7,
+  "punch_db": -19.0,
+  "peak_db": -7.6,
+  "loop": false,
+  "sources": [
+   "Justsoundeffects - Melee Weapons",
+   "Rescopic Sound - Distinct Whooshes"
+  ]
+ },
+ "sfx/loot-scrap.mp3": {
+  "seconds": 0.6,
+  "lufs": -23.0,
+  "punch_db": -16.6,
+  "peak_db": -3.6,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Tiny Gears - Small Mechanism",
+   "Pole Position - The Metal Hit Sweeteners Library"
+  ]
+ },
+ "sfx/loot-water.mp3": {
+  "seconds": 1.05,
+  "lufs": -25.9,
+  "punch_db": -24.3,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Eiravaein Works - Flask"
+  ]
+ },
+ "sfx/miss-far-1.mp3": {
+  "seconds": 1.445,
+  "lufs": -30.7,
+  "punch_db": -22.0,
+  "peak_db": -8.2,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Stone Impact",
+   "Justsoundeffects - Steampunk Gadgets"
+  ]
+ },
+ "sfx/miss-far-2.mp3": {
+  "seconds": 1.35,
+  "lufs": -30.8,
+  "punch_db": -22.0,
+  "peak_db": -8.5,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Stone Impact",
+   "Justsoundeffects - Steampunk Gadgets"
+  ]
+ },
+ "sfx/miss-near-1.mp3": {
+  "seconds": 0.84,
+  "lufs": -23.3,
+  "punch_db": -16.0,
+  "peak_db": -5.1,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Stone Impact",
+   "Justsoundeffects - Steampunk Gadgets"
+  ]
+ },
+ "sfx/miss-near-2.mp3": {
+  "seconds": 0.845,
+  "lufs": -22.0,
+  "punch_db": -16.0,
+  "peak_db": -2.0,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Stone Impact",
+   "Justsoundeffects - Steampunk Gadgets"
+  ]
+ },
+ "sfx/miss-near-3.mp3": {
+  "seconds": 0.845,
+  "lufs": -23.6,
+  "punch_db": -16.0,
+  "peak_db": -2.8,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Stone Impact",
+   "Justsoundeffects - Steampunk Gadgets"
+  ]
+ },
+ "sfx/persona-powerdown.mp3": {
+  "seconds": 2.69,
+  "lufs": -21.0,
+  "punch_db": -18.8,
+  "peak_db": -3.8,
+  "loop": false,
+  "sources": [
+   "DavidDumais - Robotic Creatures Sound FX",
+   "Unreal SFX - Battle Droid"
+  ]
+ },
+ "sfx/persona-powerup.mp3": {
+  "seconds": 2.4,
+  "lufs": -20.0,
+  "punch_db": -18.5,
+  "peak_db": -5.1,
+  "loop": false,
+  "sources": [
+   "DavidDumais - Robotic Creatures Sound FX",
+   "Unreal SFX - Battle Droid"
+  ]
+ },
+ "sfx/radio-off.mp3": {
+  "seconds": 0.215,
+  "lufs": -27.0,
+  "punch_db": -19.8,
+  "peak_db": -2.0,
+  "loop": false,
+  "sources": [
+   "Bolt - ARP 2600- Droids, Blips, Drones & more",
+   "Pole Position - Electric Guitar Pickup Interference"
+  ]
+ },
+ "sfx/radio-on.mp3": {
+  "seconds": 0.445,
+  "lufs": -27.0,
+  "punch_db": -21.0,
+  "peak_db": -7.8,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - High Voltage",
+   "Pole Position - Electric Guitar Pickup Interference"
+  ]
+ },
+ "sfx/radio-tune.mp3": {
+  "seconds": 0.8,
+  "lufs": -29.5,
+  "punch_db": -27.6,
+  "peak_db": -15.5,
+  "loop": false,
+  "sources": [
+   "Pole Position - Electric Guitar Pickup Interference"
+  ]
+ },
+ "sfx/shield-block-1.mp3": {
+  "seconds": 0.55,
+  "lufs": -16.6,
+  "punch_db": -12.0,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - High Voltage",
+   "Justsoundeffects - Melee Weapons",
+   "Rescopic Sound - Parallax"
+  ]
+ },
+ "sfx/shield-block-2.mp3": {
+  "seconds": 0.55,
+  "lufs": -16.5,
+  "punch_db": -12.0,
+  "peak_db": -1.2,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - High Voltage",
+   "Justsoundeffects - Melee Weapons",
+   "Rescopic Sound - Parallax"
+  ]
+ },
+ "sfx/shield-block-3.mp3": {
+  "seconds": 0.55,
+  "lufs": -16.0,
+  "punch_db": -12.2,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - High Voltage",
+   "Justsoundeffects - Melee Weapons",
+   "Rescopic Sound - Parallax"
+  ]
+ },
+ "sfx/shield-break.mp3": {
+  "seconds": 0.58,
+  "lufs": -16.6,
+  "punch_db": -13.7,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - High Voltage",
+   "Justsoundeffects - Melee Weapons",
+   "Mechanical Wave - Glass"
+  ]
+ },
+ "sfx/shot-pistol-far-1.mp3": {
+  "seconds": 1.565,
+  "lufs": -26.9,
+  "punch_db": -16.0,
+  "peak_db": -4.7,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Indoor Gun Acoustics 2 Library"
+  ]
+ },
+ "sfx/shot-pistol-far-2.mp3": {
+  "seconds": 1.63,
+  "lufs": -26.4,
+  "punch_db": -16.0,
+  "peak_db": -5.2,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Indoor Gun Acoustics 2 Library"
+  ]
+ },
+ "sfx/shot-pistol-far-3.mp3": {
+  "seconds": 1.635,
+  "lufs": -26.6,
+  "punch_db": -16.0,
+  "peak_db": -5.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Indoor Gun Acoustics 2 Library"
+  ]
+ },
+ "sfx/shot-pistol-near-1.mp3": {
+  "seconds": 1.26,
+  "lufs": -26.2,
+  "punch_db": -13.2,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - Smith & Wesson .38 Chiefs Special Model 60"
+  ]
+ },
+ "sfx/shot-pistol-near-2.mp3": {
+  "seconds": 1.325,
+  "lufs": -26.4,
+  "punch_db": -13.6,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - Smith & Wesson .38 Chiefs Special Model 60"
+  ]
+ },
+ "sfx/shot-pistol-near-3.mp3": {
+  "seconds": 1.235,
+  "lufs": -26.0,
+  "punch_db": -13.0,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - Smith & Wesson .38 Chiefs Special Model 60"
+  ]
+ },
+ "sfx/shot-rifle-far-1.mp3": {
+  "seconds": 1.985,
+  "lufs": -24.7,
+  "punch_db": -18.0,
+  "peak_db": -2.9,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Indoor Gun Acoustics 2 Library"
+  ]
+ },
+ "sfx/shot-rifle-far-2.mp3": {
+  "seconds": 1.88,
+  "lufs": -25.9,
+  "punch_db": -18.0,
+  "peak_db": -3.4,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Indoor Gun Acoustics 2 Library"
+  ]
+ },
+ "sfx/shot-rifle-far-3.mp3": {
+  "seconds": 1.895,
+  "lufs": -24.8,
+  "punch_db": -18.0,
+  "peak_db": -3.8,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Indoor Gun Acoustics 2 Library"
+  ]
+ },
+ "sfx/shot-rifle-near-1.mp3": {
+  "seconds": 1.155,
+  "lufs": -21.1,
+  "punch_db": -15.6,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Indoor Gun Acoustics 2 Library"
+  ]
+ },
+ "sfx/shot-rifle-near-2.mp3": {
+  "seconds": 1.195,
+  "lufs": -20.5,
+  "punch_db": -15.0,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Indoor Gun Acoustics 2 Library"
+  ]
+ },
+ "sfx/shot-rifle-near-3.mp3": {
+  "seconds": 1.095,
+  "lufs": -20.1,
+  "punch_db": -14.6,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Indoor Gun Acoustics 2 Library"
+  ]
+ },
+ "sfx/shot-rifle-near-4.mp3": {
+  "seconds": 1.12,
+  "lufs": -20.0,
+  "punch_db": -14.5,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - The Indoor Gun Acoustics 2 Library"
+  ]
+ },
+ "sfx/shot-shotgun-far-1.mp3": {
+  "seconds": 1.64,
+  "lufs": -32.9,
+  "punch_db": -20.7,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - Franchi SPAS-12 Combat Shotgun"
+  ]
+ },
+ "sfx/shot-shotgun-far-2.mp3": {
+  "seconds": 1.495,
+  "lufs": -33.1,
+  "punch_db": -20.8,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - Franchi SPAS-12 Combat Shotgun"
+  ]
+ },
+ "sfx/shot-shotgun-far-3.mp3": {
+  "seconds": 1.495,
+  "lufs": -32.7,
+  "punch_db": -20.3,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Pole Position - Franchi SPAS-12 Combat Shotgun"
+  ]
+ },
+ "sfx/shot-shotgun-near-1.mp3": {
+  "seconds": 1.17,
+  "lufs": -26.2,
+  "punch_db": -14.7,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Dramatic Cat - Saiga-12",
+   "Pole Position - Franchi SPAS-12 Combat Shotgun"
+  ]
+ },
+ "sfx/shot-shotgun-near-2.mp3": {
+  "seconds": 1.19,
+  "lufs": -24.6,
+  "punch_db": -13.2,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Dramatic Cat - Saiga-12",
+   "Pole Position - Franchi SPAS-12 Combat Shotgun"
+  ]
+ },
+ "sfx/shot-shotgun-near-3.mp3": {
+  "seconds": 1.18,
+  "lufs": -25.4,
+  "punch_db": -14.1,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Dramatic Cat - Saiga-12",
+   "Pole Position - Franchi SPAS-12 Combat Shotgun"
+  ]
+ },
+ "sfx/shot-sniper-far-1.mp3": {
+  "seconds": 1.81,
+  "lufs": -25.4,
+  "punch_db": -15.7,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Dramatic Cat - SVD Dragunov"
+  ]
+ },
+ "sfx/shot-sniper-far-2.mp3": {
+  "seconds": 1.815,
+  "lufs": -26.5,
+  "punch_db": -16.8,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Dramatic Cat - SVD Dragunov"
+  ]
+ },
+ "sfx/shot-sniper-far-3.mp3": {
+  "seconds": 1.745,
+  "lufs": -26.6,
+  "punch_db": -16.7,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Dramatic Cat - SVD Dragunov"
+  ]
+ },
+ "sfx/shot-sniper-near-1.mp3": {
+  "seconds": 1.74,
+  "lufs": -21.3,
+  "punch_db": -12.4,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Dramatic Cat - SVD Dragunov",
+   "Pole Position - Lynx 50 Cal Sniper Rifle"
+  ]
+ },
+ "sfx/shot-sniper-near-2.mp3": {
+  "seconds": 1.78,
+  "lufs": -22.0,
+  "punch_db": -11.7,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Dramatic Cat - SVD Dragunov",
+   "Pole Position - Lynx 50 Cal Sniper Rifle"
+  ]
+ },
+ "sfx/shot-sniper-near-3.mp3": {
+  "seconds": 1.73,
+  "lufs": -20.3,
+  "punch_db": -11.6,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Dramatic Cat - SVD Dragunov",
+   "Pole Position - Lynx 50 Cal Sniper Rifle"
+  ]
+ },
+ "sfx/step-1.mp3": {
+  "seconds": 0.18,
+  "lufs": -32.3,
+  "punch_db": -25.0,
+  "peak_db": -12.1,
+  "loop": false,
+  "sources": [
+   "DavidDumais - Robotic Creatures Sound FX",
+   "Justsoundeffects - Water in Motion",
+   "Sonic Bat - Videogame Foley Essentials Vol. II",
+   "TheWorkRoom Audio Post - Neoprene - Dry - Wetsuit"
+  ]
+ },
+ "sfx/step-2.mp3": {
+  "seconds": 0.145,
+  "lufs": -32.4,
+  "punch_db": -25.0,
+  "peak_db": -11.8,
+  "loop": false,
+  "sources": [
+   "DavidDumais - Robotic Creatures Sound FX",
+   "Justsoundeffects - Water in Motion",
+   "Sonic Bat - Videogame Foley Essentials Vol. II",
+   "TheWorkRoom Audio Post - Neoprene - Dry - Wetsuit"
+  ]
+ },
+ "sfx/step-3.mp3": {
+  "seconds": 0.18,
+  "lufs": -32.2,
+  "punch_db": -25.0,
+  "peak_db": -12.2,
+  "loop": false,
+  "sources": [
+   "DavidDumais - Robotic Creatures Sound FX",
+   "Justsoundeffects - Water in Motion",
+   "Sonic Bat - Videogame Foley Essentials Vol. II",
+   "TheWorkRoom Audio Post - Neoprene - Dry - Wetsuit"
+  ]
+ },
+ "sfx/step-4.mp3": {
+  "seconds": 0.135,
+  "lufs": -32.3,
+  "punch_db": -25.0,
+  "peak_db": -12.4,
+  "loop": false,
+  "sources": [
+   "DavidDumais - Robotic Creatures Sound FX",
+   "Justsoundeffects - Water in Motion",
+   "Sonic Bat - Videogame Foley Essentials Vol. II",
+   "TheWorkRoom Audio Post - Neoprene - Dry - Wetsuit"
+  ]
+ },
+ "sfx/sync-lost.mp3": {
+  "seconds": 1.2,
+  "lufs": -21.0,
+  "punch_db": -24.0,
+  "peak_db": -4.9,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Futuristic User Interface",
+   "BluezoneCorp - Retrofuturistic Computer"
+  ]
+ },
+ "sfx/thunder-1.mp3": {
+  "seconds": 6.785,
+  "lufs": -21.2,
+  "punch_db": -15.2,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Bolt - Backyard Rain & Thunder - Suburban Rain Recordings"
+  ]
+ },
+ "sfx/thunder-2.mp3": {
+  "seconds": 5.59,
+  "lufs": -20.0,
+  "punch_db": -14.4,
+  "peak_db": -2.3,
+  "loop": false,
+  "sources": [
+   "Bolt - Backyard Rain & Thunder - Suburban Rain Recordings"
+  ]
+ },
+ "sfx/ui-close.mp3": {
+  "seconds": 0.785,
+  "lufs": -27.0,
+  "punch_db": -23.9,
+  "peak_db": -10.8,
+  "loop": false,
+  "sources": [
+   "Doex Studio - Qantum UI"
+  ]
+ },
+ "sfx/ui-confirm.mp3": {
+  "seconds": 0.745,
+  "lufs": -22.0,
+  "punch_db": -17.6,
+  "peak_db": -6.8,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Industrial Lever Switch",
+   "BluezoneCorp - Retrofuturistic Computer"
+  ]
+ },
+ "sfx/ui-defeat.mp3": {
+  "seconds": 3.785,
+  "lufs": -22.8,
+  "punch_db": -11.8,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "Jake Fielding - Haunted Metal Vol.1 - Cinematic Hits & Impacts"
+  ]
+ },
+ "sfx/ui-error.mp3": {
+  "seconds": 0.43,
+  "lufs": -25.0,
+  "punch_db": -21.4,
+  "peak_db": -5.0,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Retrofuturistic Computer"
+  ]
+ },
+ "sfx/ui-guard.mp3": {
+  "seconds": 0.15,
+  "lufs": -26.0,
+  "punch_db": -20.3,
+  "peak_db": -12.2,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - High Voltage",
+   "Rescopic Sound - Parallax"
+  ]
+ },
+ "sfx/ui-match-found.mp3": {
+  "seconds": 2.0,
+  "lufs": -22.0,
+  "punch_db": -16.3,
+  "peak_db": -2.6,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Futuristic User Interface",
+   "BluezoneCorp - Modern Cinematic Impact"
+  ]
+ },
+ "sfx/ui-open.mp3": {
+  "seconds": 0.75,
+  "lufs": -27.0,
+  "punch_db": -23.9,
+  "peak_db": -7.6,
+  "loop": false,
+  "sources": [
+   "Rescopic Sound - User Interaction"
+  ]
+ },
+ "sfx/ui-step.mp3": {
+  "seconds": 0.056,
+  "lufs": -28.3,
+  "punch_db": -22.3,
+  "peak_db": -1.0,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Tiny Gears - Small Mechanism"
+  ]
+ },
+ "sfx/ui-tap.mp3": {
+  "seconds": 0.2,
+  "lufs": -26.0,
+  "punch_db": -22.9,
+  "peak_db": -5.5,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Tiny Gears - Small Mechanism"
+  ]
+ },
+ "sfx/ui-tick-urgent.mp3": {
+  "seconds": 0.095,
+  "lufs": -27.0,
+  "punch_db": -22.0,
+  "peak_db": -14.3,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Futuristic User Interface"
+  ]
+ },
+ "sfx/ui-tick.mp3": {
+  "seconds": 0.063,
+  "lufs": -29.0,
+  "punch_db": -23.0,
+  "peak_db": -2.2,
+  "loop": false,
+  "sources": [
+   "BluezoneCorp - Tiny Gears - Small Mechanism"
+  ]
+ },
+ "sfx/ui-turn.mp3": {
+  "seconds": 0.885,
+  "lufs": -28.0,
+  "punch_db": -24.9,
+  "peak_db": -13.7,
+  "loop": false,
+  "sources": [
+   "Rescopic Sound - Parallax"
+  ]
+ },
+ "sfx/ui-victory.mp3": {
+  "seconds": 1.355,
+  "lufs": -22.0,
+  "punch_db": -16.9,
+  "peak_db": -5.4,
+  "loop": false,
+  "sources": [
+   "CB Sounddesign - Activation 2",
+   "Rescopic Sound - Parallax"
+  ]
+ }
+}
