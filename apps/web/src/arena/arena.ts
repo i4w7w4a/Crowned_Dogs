@@ -10,7 +10,7 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import type { Frame } from "./frames.ts";
-import { Lens } from "./lens.ts";
+import { Lens, type View } from "./lens.ts";
 import { findBones, pitch, roll, type Bones } from "./rig.ts";
 
 export type Who = "me" | "enemy";
@@ -22,6 +22,8 @@ const HEIGHT = 1.8;
 const STEP_GROWTH = 1.07;
 /** Where the sync connector sits on the nape: share of the head height up, share of it back. */
 const PORT = { up: 0.08, depth: 0.45 };
+/** The render layer of our own figure. */
+const NEAR = 1;
 
 interface Look {
   body: number;
@@ -32,6 +34,8 @@ interface Look {
   lift?: number;
   /** Which way the figure falls: -1 to its right as seen from the camera. */
   fallSide: number;
+  /** Our own figure, right in front of the lens: drawn on its own layer and out of focus. */
+  near?: boolean;
 }
 
 interface Figure {
@@ -104,6 +108,7 @@ export class Arena {
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(45, 1024 / 1536, 0.1, 80);
   private timer = new THREE.Timer();
+  private hemi: THREE.HemisphereLight;
   private rim: THREE.DirectionalLight;
   private fill: THREE.SpotLight;
   private meKey: THREE.SpotLight;
@@ -131,8 +136,8 @@ export class Arena {
     this.lens = new Lens(r);
     this.scene.fog = new THREE.Fog(0x3d342c, 2.5, 30);
 
-    // Low warm sun from behind the enemy (the shafts in the hall), soft sky and ground.
-    const hemi = new THREE.HemisphereLight(0xc9b49a, 0x231e1a, 0.6);
+    // Light from behind the enemy (the opening in the hall), soft sky and ground; each frame sets the colours.
+    const hemi = this.hemi = new THREE.HemisphereLight(0xc9b49a, 0x231e1a, 0.6);
     this.rim = new THREE.DirectionalLight(0xffb06a, 3.4);
     this.rim.castShadow = true;
     this.rim.shadow.mapSize.set(1024, 1024);
@@ -143,11 +148,13 @@ export class Arena {
     // A narrow warm spot on the enemy only, and a soft cool one on our own back from over the camera,
     // so our Persona reads as a body, not a hole.
     this.fill = new THREE.SpotLight(0xd9c3a3, 2.4, 0, THREE.MathUtils.degToRad(17), 0.7, 0);
-    this.meKey = new THREE.SpotLight(0xaab0b4, 0.7, 0, THREE.MathUtils.degToRad(15), 0.8, 0);
-    this.bounce = new THREE.PointLight(0x46d8d8, 0.22, 3, 2); // the teal puddle near the enemy
+    this.meKey = new THREE.SpotLight(0xb4b4b0, 5, 0, THREE.MathUtils.degToRad(15), 0.8, 0);
+    this.bounce = new THREE.PointLight(0x46d8d8, 0.22, 3, 2); // a teal puddle near the enemy, where the frame has one
     const back = new THREE.DirectionalLight(0x8ea3b5, 0.45); // the open hall behind us
     back.position.set(1, 3, 8);
     this.scene.add(hemi, this.rim, this.rim.target, this.fill, this.fill.target, this.meKey, this.meKey.target, this.bounce, back);
+    // our own figure is drawn on its own layer, out of focus (lens.ts); the lights shine there too
+    for (const l of [hemi, this.rim, this.fill, this.meKey, this.bounce, back]) l.layers.enable(NEAR);
 
     // Shadows fall on the painted floor through an invisible catcher.
     const catcher = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ color: 0x0a0705, opacity: 0.58, depthWrite: false }));
@@ -178,7 +185,7 @@ export class Arena {
     }
     const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(bytes, "");
     this.en = this.makeFigure(gltf, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
-    this.me = this.makeFigure(gltf, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1 });
+    this.me = this.makeFigure(gltf, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1, near: true });
     this.mirror = this.makeMirror(gltf, this.en);
     this.ready = true;
     this.reset(distance);
@@ -204,15 +211,17 @@ export class Arena {
     this.lens.setLook(f.look.lens, f.look.exposure);
     this.rim.color.set(f.look.rim);
     this.fill.color.set(f.look.fill);
+    this.hemi.color.set(f.look.sky); this.hemi.groundColor.set(f.look.ground);
+    this.bounce.intensity = f.look.puddle;
     (this.scene.fog as THREE.Fog).color.set(f.look.fog);
   }
 
-  /** Size of the drawing buffer in CSS pixels; the canvas element is sized by the page. */
-  resize(width: number, height: number): void {
+  /** Size of the drawing buffer in CSS pixels (the canvas element is sized by the page), and the part of it on screen. */
+  resize(width: number, height: number, view: View = { x: 0, y: 0, w: 1, h: 1 }): void {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setSize(Math.round(width), Math.round(height), false);
     const px = this.renderer.getDrawingBufferSize(new THREE.Vector2());
-    this.lens.setSize(px.x, px.y);
+    this.lens.setSize(px.x, px.y, view);
   }
 
   /** Both walk to the new distance; who moved decides who walks, the camera rides with us. */
@@ -258,7 +267,7 @@ export class Arena {
   zoneOnScreen(zone: Zone): [number, number] {
     if (!this.ready) return [0.645, { head: 0.26, body: 0.34, groin: 0.42, legs: 0.49 }[zone]];
     zoneWorld(this.en!, zone, tmpA).project(this.camera);
-    return [(tmpA.x + 1) / 2, (1 - tmpA.y) / 2];
+    return this.lens.toScreen((tmpA.x + 1) / 2, (1 - tmpA.y) / 2);
   }
 
   private depthOf(d: number): number {
@@ -299,6 +308,9 @@ export class Arena {
     const port = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), new THREE.MeshBasicMaterial({ color: 0x7ff3ff, fog: false }));
     this.scene.add(port);
 
+    // right in front of the lens the light is a pinpoint, not a lamp
+    if (look.near) { group.traverse((o) => o.layers.set(NEAR)); port.layers.set(NEAR); port.scale.setScalar(0.4); }
+
     return {
       group, tilt, model, blob, mixer, actions, cur: null, port,
       kick: { head: 0, body: 0, groin: 0, legs: 0 }, fallT: -1, fallSide: look.fallSide, bones,
@@ -338,7 +350,7 @@ export class Arena {
     me.group.rotation.y = Math.atan2(ex - mx, ez - mz); // faces the enemy
     this.rim.position.set(ex - 4, 7.5, ez - 14); this.rim.target.position.set(ex, 0.9, ez);
     this.fill.position.set(ex - 2, 3.4, ez + 3.2); this.fill.target.position.set(ex, 1, ez);
-    this.meKey.position.set(mx - 1.4, 2.8, mz + 4.2); this.meKey.target.position.set(mx, 1.2, mz);
+    this.meKey.position.set(mx - 1, 3.4, mz + 3); this.meKey.target.position.set(mx, 1.5, mz);
     this.bounce.position.set(ex - 0.2, 0.12, ez + 0.9);
   }
 
@@ -368,7 +380,7 @@ export class Arena {
       this.spark.scale.setScalar((this.spark.userData.size as number) * (0.6 + 0.8 * u));
       this.spark.visible = this.sparkLife > 0;
     }
-    this.lens.render(this.scene, this.camera);
+    this.lens.render(this.scene, this.camera, NEAR);
     this.onFrame?.();
   }
 }
