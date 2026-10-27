@@ -8,15 +8,15 @@ import * as THREE from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 
-/** The box in CSS px; 62.5 px per metre; tilted ~9° down onto the projector. */
+/** The box in CSS px; 62.5 px per metre; tilted ~9° down. */
 export const HOLO = { W: 58, H: 134, feet: 121, ppm: 62.5, tilt: 0.16 };
 /** Metres: legs | groin | body | head. */
 const ZCUT = [0.8, 1.06, 1.5] as const;
 const ZI: Record<Zone, number> = { head: 0, body: 1, groin: 2, legs: 3 };
 /** Where each leader line touches the body, metres up... */
 export const ZMID: Record<Zone, number> = { head: 1.64, body: 1.3, groin: 0.94, legs: 0.5 };
-/** ...and how far left of the centre line, so the dot sits on the body. */
-const ZDOT: Record<Zone, number> = { head: -0.05, body: -0.09, groin: -0.07, legs: -0.1 };
+/** ...and how far left of the centre line, so the line ends on the body. */
+const ZEND: Record<Zone, number> = { head: -0.05, body: -0.09, groin: -0.07, legs: -0.1 };
 const HEIGHT = 1.8;
 
 /** A height on the body, in px of the box. */
@@ -93,36 +93,8 @@ function bodyMaterial(U: Uniforms, joint: number): THREE.MeshBasicMaterial {
   return m;
 }
 
-/** The projector under the feet: two rings, a turning scale and a pool of light; and the faint beam above it. */
-function projector(U: Uniforms): THREE.Object3D[] {
-  const disc = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.ShaderMaterial({
-    ...ADD, uniforms: U,
-    vertexShader: "varying vec2 vP; void main() { vP = (uv - 0.5) * 1.1; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-    fragmentShader: `uniform float uTime, uDim; varying vec2 vP;
-      void main() {
-        float r = length(vP), fw = fwidth(r);
-        float ring = (1.0 - smoothstep(0.0, 1.6 * fw, abs(r - 0.40))) * 0.7 + (1.0 - smoothstep(0.0, 1.6 * fw, abs(r - 0.31))) * 0.32;
-        float ang = atan(vP.y, vP.x) / 6.28318 + uTime * 0.02;
-        float ticks = step(fract(ang * 60.0), 0.3) * smoothstep(0.445 - fw, 0.445, r) * (1.0 - smoothstep(0.49, 0.49 + fw, r)) * 0.45;
-        float arc = step(fract(ang * 3.0), 0.16) * (1.0 - smoothstep(0.0, 1.6 * fw, abs(r - 0.52))) * 0.6;
-        float pool = exp(-r * r * 14.0) * 0.32;
-        float a = clamp((ring + ticks + arc + pool) * (1.0 - 0.5 * uDim), 0.0, 1.0);
-        gl_FragColor = vec4(vec3(0.45, 0.83, 0.89) * a, a);
-      }`,
-  }));
-  disc.rotation.x = -Math.PI / 2;
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.42, 1.9, 48, 1, true), new THREE.ShaderMaterial({
-    ...ADD, uniforms: U,
-    vertexShader: "varying float vH; varying vec3 vN; void main() { vH = uv.y; vN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-    fragmentShader: `uniform float uDim; varying float vH; varying vec3 vN;
-      void main() {
-        float edge = pow(1.0 - abs(vN.z), 3.0);
-        float a = clamp((0.025 + 0.16 * edge) * pow(1.0 - vH, 1.6) * (1.0 - 0.5 * uDim), 0.0, 1.0);
-        gl_FragColor = vec4(vec3(0.45, 0.83, 0.89) * a, a);
-      }`,
-  }));
-  beam.position.y = 0.95;
-  // a few motes drifting up the beam
+/** Motes drifting up through the figure, the only trace of the projector. */
+function motes(U: Uniforms): THREE.Points {
   const N = 26, pos = new Float32Array(N * 3), seed = new Float32Array(N);
   for (let i = 0; i < N; i++) {
     const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * 0.36;
@@ -132,7 +104,7 @@ function projector(U: Uniforms): THREE.Object3D[] {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   g.setAttribute("seed", new THREE.BufferAttribute(seed, 1));
-  const motes = new THREE.Points(g, new THREE.ShaderMaterial({
+  return new THREE.Points(g, new THREE.ShaderMaterial({
     ...ADD, uniforms: U,
     vertexShader: `uniform float uTime, uDpr; attribute float seed; varying float vA;
       void main() {
@@ -144,7 +116,6 @@ function projector(U: Uniforms): THREE.Object3D[] {
     fragmentShader: `uniform float uDim; varying float vA;
       void main() { float d = length(gl_PointCoord - 0.5); float a = vA * (1.0 - smoothstep(0.2, 0.5, d)) * (1.0 - 0.5 * uDim); gl_FragColor = vec4(vec3(0.6, 0.9, 0.95) * a, a); }`,
   }));
-  return [disc, beam, motes];
 }
 
 export class Hologram {
@@ -211,7 +182,7 @@ export class Hologram {
     r.setPixelRatio(dpr);
     r.setSize(HOLO.W, HOLO.H, false);
 
-    // orthographic and tilted down a little, so the floor rings read as ellipses; the feet land on HOLO.feet
+    // orthographic and tilted down a little; the feet land on HOLO.feet
     const t = HOLO.tilt, c = 0.9, top = HOLO.feet / HOLO.ppm - c * Math.cos(t), half = HOLO.W / 2 / HOLO.ppm;
     const cam = new THREE.OrthographicCamera(-half, half, top, top - HOLO.H / HOLO.ppm, 0.1, 20);
     cam.position.set(0, c + Math.sin(t) * 6, Math.cos(t) * 6);
@@ -236,7 +207,7 @@ export class Hologram {
     const turn = new THREE.Group();
     turn.add(model);
     const scene = new THREE.Scene();
-    scene.add(turn, ...projector(U));
+    scene.add(turn, motes(U));
 
     // the projection repeats our Persona's pose every frame: breathing, steps, flinches
     const a: THREE.Object3D[] = [], b: THREE.Object3D[] = [];
@@ -285,11 +256,10 @@ export function drawLeads(guard: HTMLElement, svg: SVGSVGElement, defend: readon
   for (const b of guard.querySelectorAll<HTMLElement>(".dz")) {
     const z = b.dataset.z as Zone, zl = b.querySelector<HTMLElement>(".zl")!;
     const y0 = b.offsetTop + b.offsetHeight / 2, x0 = zl.offsetLeft + zl.offsetWidth + 6;
-    const x2 = cx + ZDOT[z] * HOLO.ppm, y2 = holoY(ZMID[z]);
+    const x2 = cx + ZEND[z] * HOLO.ppm, y2 = holoY(ZMID[z]);
     const x1 = Math.max(x0 + 4, x2 - Math.abs(y2 - y0));
     const on = defend.includes(z) ? " on" : "";
-    out += `<g class="lead${on}" data-z="${z}"><path d="M${x0.toFixed(1)} ${y0.toFixed(1)}H${x1.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}"/>`
-      + `<circle cx="${x2.toFixed(1)}" cy="${y2.toFixed(1)}" r="1.7"/></g>`;
+    out += `<g class="lead${on}" data-z="${z}"><path d="M${x0.toFixed(1)} ${y0.toFixed(1)}H${x1.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}"/></g>`;
   }
   svg.setAttribute("viewBox", `0 0 ${W} ${HOLO.H}`);
   svg.innerHTML = out;

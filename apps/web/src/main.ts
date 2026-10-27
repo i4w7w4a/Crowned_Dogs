@@ -10,7 +10,7 @@ import {
 } from "@crowned-dogs/core";
 import { Arena, type HitKind } from "./arena/arena.ts";
 import { CALIBRATION_FRAME, FRAMES, type Frame } from "./arena/frames.ts";
-import { ArenaAudio } from "./audio/arena-audio.ts";
+import { ArenaAudio, type VolumeKind } from "./audio/arena-audio.ts";
 import { LocalDuel } from "./game/local-duel.ts";
 import { HOLO, Hologram, ZMID, drawLeads, holoY, zoneAtY } from "./hud/holo.ts";
 import { FightLog, icon } from "./hud/log.ts";
@@ -70,7 +70,7 @@ const ringEls = {} as Record<Zone, HTMLButtonElement>;
 for (const z of ZONES) {
   const b = document.createElement("button");
   b.type = "button"; b.className = "ring hint"; b.setAttribute("aria-label", "Атака: " + zoneName(z));
-  b.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true"><circle class="rc" cx="20" cy="20" r="9.5"/><path class="rt" d="M3 20h7M30 20h7"/><circle class="rd" cx="20" cy="20" r="2.2"/></svg>';
+  b.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true"><circle class="rc" cx="20" cy="20" r="9.5"/></svg>';
   b.addEventListener("click", () => tap(() => duel.press({ type: "zone", zone: z })));
   ringsEl.appendChild(b); ringEls[z] = b;
 }
@@ -200,9 +200,11 @@ function render(): void {
   const on: [HTMLButtonElement, boolean][] = [[sb, d.kind === "shoot"], [kb, d.kind === "knife"], [nb, d.kind === "grenade"], [wb, d.kind === "swap"]];
   for (const [b, v] of on) { b.classList.toggle("on", v); b.setAttribute("aria-pressed", String(v)); }
   $("shotSub").textContent = run ? "—" : pct(draftChance(m, duel.me, { ...d, kind: "shoot" }));
-  $("knifeSub").textContent = knifeOk ? pct(draftChance(m, duel.me, { ...d, kind: "knife", move: knifeMove })) : "≤2";
+  // a range is drawn with the steps icon: ≤2 👣
+  const STEPS = icon("i-steps");
+  $("knifeSub").innerHTML = knifeOk ? pct(draftChance(m, duel.me, { ...d, kind: "knife", move: knifeMove })) : "≤2" + STEPS;
   const g = grenadeSpec(m, duel.me);
-  $("nadeSub").textContent = me.grenades ? (nadeOk ? "×" + me.grenades : `${g.minDistance}–${g.maxDistance} ш`) : "×0";
+  $("nadeSub").innerHTML = me.grenades ? (nadeOk ? "×" + me.grenades : `${g.minDistance}–${g.maxDistance}${STEPS}`) : "×0";
   const spare = duel.spare;
   wb.hidden = !spare;
   if (spare) { $("swapText").textContent = "Взять " + GUN_ACC[spare]; wb.setAttribute("aria-label", "Взять " + GUN_ACC[spare] + ", в этот ход без выстрела"); }
@@ -210,11 +212,11 @@ function render(): void {
   const go = $<HTMLButtonElement>("goBtn");
   const msg = duel.over ? "Бой окончен" : busy ? "Ход идёт…" : duel.missing;
   go.disabled = !!msg;
-  $("goText").textContent = msg ?? (d.kind === "dash" ? "Рывок и завершить ход" : d.kind === "run" ? "Перебежка и завершить ход"
-    : d.kind === "flee" ? "Уйти из боя" : "Завершить ход");
+  $("goText").textContent = msg ?? (d.kind === "dash" ? "Рывок и подтвердить ход" : d.kind === "run" ? "Перебежка и подтвердить ход"
+    : d.kind === "flee" ? "Уйти из боя" : "Подтвердить ход");
 
   drawHP(0); drawHP(1);
-  $("turn").innerHTML = `Ход ${shown.turn}<small> / ${turnLimit(m)}</small>`;
+  $("turn").textContent = `Ход ${shown.turn} / ${turnLimit(m)}`;
   drawTimer();
 }
 
@@ -226,26 +228,21 @@ function drawHP(side: Side): void {
   $("side" + id).classList.toggle("low", hp > 0 && hp <= max * 0.25);
 }
 
-const COND_ICON = { dust: "i-dust", storm: "i-storm", fog: "i-fog" } as const;
 function drawHeader(): void {
-  const c = duel.match.config, weather = c.weather === "clear" ? null : COND_ICON[c.weather];
-  const words = [TIME_WORD[c.time], WEATHER_WORD[c.weather]];
-  const cond = $("cond");
-  cond.innerHTML = icon("i-" + c.time) + (weather ? icon(weather) : "");
-  cond.setAttribute("role", "img"); cond.setAttribute("aria-label", words.join(", "));
-  $("condText").textContent = words.join(" · ");
+  const c = duel.match.config;
+  $("condText").textContent = [TIME_WORD[c.time], WEATHER_WORD[c.weather]].join(" · ");
   $("mapTitle").textContent = frame.name;
   $("nameMe").textContent = duel.fighters[0].name; $("nameEn").textContent = duel.fighters[1].name;
   $("recTag").textContent = duel.fighters[0].tag ?? "";
 }
 
 // ---------- timer ----------
+/** The turn clock at the top: mm:ss, red for the last ten seconds, dimmed while the turn plays out. */
 function drawTimer(): void {
-  const t = Math.max(0, secondsLeft), go = $("goBtn");
-  $("timer").textContent = `${Math.floor(t / 60)}:${t % 60 < 10 ? "0" : ""}${t % 60}`;
-  $("goBar").style.transform = `scaleX(${(busy || duel.over ? 0 : t / turnSeconds(duel.match)).toFixed(3)})`;
-  go.classList.toggle("low", t <= 10 && !busy && !duel.over);
-  go.classList.toggle("over", duel.over);
+  const t = Math.max(0, secondsLeft), clock = $("timer"), two = (n: number) => String(n).padStart(2, "0");
+  clock.textContent = `${two(Math.floor(t / 60))}:${two(t % 60)}`;
+  clock.classList.toggle("low", t <= 10 && !busy && !duel.over);
+  clock.classList.toggle("idle", busy || duel.over);
 }
 function startTimer(): void {
   stopTimer();
@@ -399,6 +396,7 @@ function renderMenu(): void {
   const sb = $("soundBtn");
   sb.classList.toggle("off", !audio.on); sb.setAttribute("aria-pressed", String(audio.on));
   $("soundState").textContent = audio.on ? "Вкл" : "Выкл";
+  for (const k of ["fx", "music"] as const) drawVolume(k);
 
   const tracks = $("trackList"); tracks.innerHTML = "";
   for (const s of RADIO_PLAYLIST) {
@@ -409,6 +407,20 @@ function renderMenu(): void {
   const fs = seg("frameSeg", frames.length);
   $("frameLabel").hidden = frames.length < 2; fs.hidden = frames.length < 2;
   for (const f of frames) option(fs, f.name, f === frame, () => { if (f !== frame) { setFrame(f); restart(); } });
+}
+
+// volume sliders: fight sounds and music, 0..100 on screen, 0..1 in the audio
+const VOL_ID = { fx: "volFx", music: "volMusic" } as const;
+function drawVolume(k: VolumeKind): void {
+  const v = Math.round(audio.volume[k] * 100), input = $<HTMLInputElement>(VOL_ID[k]);
+  input.value = String(v); input.style.setProperty("--v", v + "%");
+  $(VOL_ID[k] + "Out").textContent = String(v);
+}
+for (const k of ["fx", "music"] as const) {
+  const input = $<HTMLInputElement>(VOL_ID[k]);
+  input.addEventListener("input", () => { audio.setVolume(k, Number(input.value) / 100); drawVolume(k); });
+  // letting go of the fight-sounds slider plays a click at the new level
+  if (k === "fx") input.addEventListener("change", () => audio.play("ui.tap"));
 }
 
 function setFrame(f: Frame): void {

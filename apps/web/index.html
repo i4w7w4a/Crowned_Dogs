@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0a0b0b">
 <title>Crowned Dogs Arena</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans+Extra+Condensed:wght@500;600;700&family=Fira+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 </head>
 <body>
 <main class="app" id="app">
@@ -25,6 +25,8 @@
   <symbol id="i-shot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.3"/><path d="M12 3v4.4M12 16.6V21M3 12h4.4M16.6 12H21"/><circle class="fl" cx="12" cy="12" r=".95"/></symbol>
   <symbol id="i-knife" viewBox="0 0 24 24"><g transform="rotate(-45 12 12)"><path d="M10.2 10.7h7.6l3.8 1.5-2.3 1.6c-1 .4-2.3.5-3.6.5h-5.5z"/><path d="M9.5 8.7v6.9"/><path d="M3.5 10.9h6v3.2h-6c-.7 0-1.1-.6-1.1-1.6s.4-1.6 1.1-1.6z"/><path class="fine" d="M11.6 12.1h5.4M5 11.9v.9M7 11.9v.9"/></g></symbol>
   <symbol id="i-grenade" viewBox="0 0 24 24"><ellipse cx="11" cy="14.5" rx="5.4" ry="6.4"/><path class="fine" d="M6 12h10M6 17h10M8.5 8.7v11.6M13.5 8.7v11.6"/><path d="M9.2 6h3.6v2.2H9.2z"/><path d="M12.8 6.4h2.3c.9 0 1.6.6 1.9 1.4l.6 2.1v5.3"/><circle cx="7.1" cy="5.3" r="1.75"/></symbol>
+  <!-- range in steps: two footprints, drawn solid because they are tiny -->
+  <symbol id="i-steps" viewBox="0 0 24 24"><g transform="rotate(-12 7.6 17)"><ellipse cx="7.6" cy="13.6" rx="2.7" ry="3.5"/><ellipse cx="7.6" cy="20.3" rx="2" ry="1.9"/></g><g transform="rotate(12 16.4 9)"><ellipse cx="16.4" cy="5.6" rx="2.7" ry="3.5"/><ellipse cx="16.4" cy="12.3" rx="2" ry="1.9"/></g></symbol>
   <!-- the other gun: main to sidearm and back -->
   <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8.5h14M14.5 5L18 8.5 14.5 12M20 15.5H6M9.5 12L6 15.5 9.5 19"/></symbol>
   <!-- defence: the Zont, a field dome over its emitter -->
@@ -86,16 +88,16 @@
   <header class="hud">
     <div class="duel">
       <div class="side me" id="sideMe">
-        <div class="who"><span id="nameMe">Тень</span><b id="hpMe">100</b></div>
-        <div class="cells"><i class="ghost" id="ghostMe"></i><i id="barMe"></i></div>
+        <span class="who" id="nameMe">Тень</span>
+        <div class="hpl"><b id="hpMe">100</b><span class="bar"><i class="lag" id="ghostMe"></i><i id="barMe"></i></span></div>
       </div>
       <div class="mid">
-        <div class="turn" id="turn">Ход 1<small> / 15</small></div>
-        <div class="cond" id="cond"></div>
+        <div class="clock" id="timer" role="timer" aria-label="Время на ход">01:00</div>
+        <div class="turn" id="turn">Ход 1 / 15</div>
       </div>
       <div class="side en" id="sideEn">
-        <div class="who"><span id="nameEn">Искра</span><b id="hpEn">100</b></div>
-        <div class="cells"><i class="ghost" id="ghostEn"></i><i id="barEn"></i></div>
+        <span class="who" id="nameEn">Искра</span>
+        <div class="hpl"><b id="hpEn">100</b><span class="bar"><i class="lag" id="ghostEn"></i><i id="barEn"></i></span></div>
       </div>
     </div>
   </header>
@@ -117,7 +119,6 @@
     <path class="ct" d="M0 71.6H58M0 55.6H58M0 28.4H58"/>
   </g>
   <g class="ol"><ellipse cx="29.0" cy="17.3" rx="5.1" ry="7.4"/><path d="M25.6 24.7 L25.6 28.4 L17.4 30.8 L19.6 35.9 L19.5 40.8 L21.0 53.1 L18.7 61.1 L18.4 69.2 L19.6 88.9 L19.3 98.8 L20.9 114.8 L19.6 121.0 L25.2 121.0 L24.6 114.8 L25.9 98.8 L25.6 88.9 L27.1 71.6 L29.0 69.8 L30.9 71.6 L32.4 88.9 L32.1 98.8 L33.4 114.8 L32.8 121.0 L38.4 121.0 L37.1 114.8 L38.7 98.8 L38.4 88.9 L39.6 69.2 L39.3 61.1 L37.0 53.1 L38.5 40.8 L38.4 35.9 L40.6 30.8 L32.4 28.4 L32.4 24.7Z"/><path d="M17.4 30.8 L14.3 34.6 L13.1 53.1 L12.4 67.9 L11.8 74.7 L13.2 77.8 L14.8 74.7 L15.6 67.9 L16.8 53.1 L19.6 35.9Z"/><path d="M40.6 30.8 L43.7 34.6 L44.9 53.1 L45.6 67.9 L46.2 74.7 L44.8 77.8 L43.2 74.7 L42.4 67.9 L41.2 53.1 L38.4 35.9Z"/></g>
-  <ellipse class="pad" cx="29.0" cy="121" rx="25.0" ry="4.0"/>
 </svg>
             <canvas id="holo"></canvas>
           </div>
@@ -130,14 +131,14 @@
       </div>
       <div class="controls">
         <div class="group">
-          <div class="label"><span>Движение</span><span class="v" id="distLabel">7 шагов</span></div>
+          <div class="label"><span>Расстояние</span><span class="v" id="distLabel">7 шагов</span></div>
           <div class="moves" id="moves">
-            <button type="button" class="mv cut" data-m="-2" aria-label="Перебежка назад, 2 шага"><svg class="ico flip"><use href="#i-mv-2"/></svg><b>9</b></button>
-            <button type="button" class="mv cut" data-m="-1" aria-label="Шаг назад"><svg class="ico flip"><use href="#i-mv-1"/></svg><b>8</b></button>
-            <button type="button" class="mv cut" data-m="0" aria-label="Остаться на месте"><svg class="ico"><use href="#i-mv-0"/></svg><b>7</b></button>
-            <button type="button" class="mv cut" data-m="1" aria-label="Шаг вперёд"><svg class="ico"><use href="#i-mv-1"/></svg><b>6</b></button>
-            <button type="button" class="mv cut" data-m="2" aria-label="Перебежка вперёд, 2 шага"><svg class="ico"><use href="#i-mv-2"/></svg><b>5</b></button>
-            <button type="button" class="mv cut" data-m="3" aria-label="Рывок вперёд, 3 шага"><svg class="ico"><use href="#i-mv-3"/></svg><b>4</b></button>
+            <button type="button" class="mv cut cl" data-m="-2" aria-label="Перебежка назад, 2 шага"><svg class="ico flip"><use href="#i-mv-2"/></svg><b>9</b></button>
+            <button type="button" class="mv cut cl" data-m="-1" aria-label="Шаг назад"><svg class="ico flip"><use href="#i-mv-1"/></svg><b>8</b></button>
+            <button type="button" class="mv cut cn" data-m="0" aria-label="Остаться на месте"><svg class="ico"><use href="#i-mv-0"/></svg><b>7</b></button>
+            <button type="button" class="mv cut cr" data-m="1" aria-label="Шаг вперёд"><svg class="ico"><use href="#i-mv-1"/></svg><b>6</b></button>
+            <button type="button" class="mv cut cr" data-m="2" aria-label="Перебежка вперёд, 2 шага"><svg class="ico"><use href="#i-mv-2"/></svg><b>5</b></button>
+            <button type="button" class="mv cut cr" data-m="3" aria-label="Рывок вперёд, 3 шага"><svg class="ico"><use href="#i-mv-3"/></svg><b>4</b></button>
           </div>
         </div>
         <div class="acts">
@@ -148,7 +149,7 @@
         </div>
       </div>
     </div>
-    <button type="button" class="go" id="goBtn" disabled><span class="gt" id="goText">Выбери зону на враге</span><span class="gc"><svg class="ico"><use href="#i-timer"/></svg><span id="timer">1:00</span></span><i class="gb" id="goBar"></i></button>
+    <button type="button" class="go" id="goBtn" disabled><span class="gt" id="goText">Выбери зону на враге</span></button>
   </section>
 
   <div class="veil" id="infoVeil" hidden>
@@ -170,13 +171,17 @@
         <svg class="ico" viewBox="0 0 24 24"><path d="M3.5 9.5h4l5-4v13l-5-4h-4z"/><path class="wave" d="M15.8 9.3c.8.7 1.3 1.6 1.3 2.7s-.5 2-1.3 2.7M18.4 6.8c1.5 1.3 2.4 3.1 2.4 5.2s-.9 3.9-2.4 5.2"/><path class="mute" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
         <span class="sl">Звук боя и рации</span><span class="st" id="soundState">Вкл</span>
       </button>
+      <div class="vol">
+        <label class="vrow"><span>Звуки боя</span><input type="range" id="volFx" min="0" max="100" step="1" value="100"><output id="volFxOut" for="volFx">100</output></label>
+        <label class="vrow"><span>Музыка</span><input type="range" id="volMusic" min="0" max="100" step="1" value="100"><output id="volMusicOut" for="volMusic">100</output></label>
+      </div>
       <div class="label"><svg class="ico"><use href="#i-radio"/></svg><span>Рация</span></div>
       <div class="tracks" id="trackList"></div>
       <div class="label" id="frameLabel"><svg class="ico"><use href="#i-frame"/></svg><span>Фон</span></div>
       <div class="seg" id="frameSeg"></div>
       <div class="acts2">
         <button type="button" class="ghost cut" id="restartBtn"><svg class="ico"><use href="#i-restart"/></svg>Новый бой</button>
-        <button type="button" class="go plain" id="closeInfo">Вернуться в бой</button>
+        <button type="button" class="go" id="closeInfo">Вернуться в бой</button>
       </div>
     </div>
   </div>
@@ -187,7 +192,7 @@
       <h2 id="endTitle">Связь потеряна</h2>
       <p id="endText"></p>
       <div class="stats" id="endStats"></div>
-      <button type="button" class="go plain" id="againBtn">Новый бой</button>
+      <button type="button" class="go" id="againBtn">Новый бой</button>
     </div>
   </div>
 </main>
