@@ -30,6 +30,8 @@
   <symbol id="i-grenade" viewBox="0 0 24 24"><ellipse cx="11" cy="14.5" rx="5.4" ry="6.4"/><path class="fine" d="M6 12h10M6 17h10M8.5 8.7v11.6M13.5 8.7v11.6"/><path d="M9.2 6h3.6v2.2H9.2z"/><path d="M12.8 6.4h2.3c.9 0 1.6.6 1.9 1.4l.6 2.1v5.3"/><circle cx="7.1" cy="5.3" r="1.75"/></symbol>
   <!-- range in steps: two footprints, drawn solid because they are tiny -->
   <symbol id="i-steps" viewBox="0 0 24 24"><g transform="rotate(-12 7.6 17)"><ellipse cx="7.6" cy="13.6" rx="2.7" ry="3.5"/><ellipse cx="7.6" cy="20.3" rx="2" ry="1.9"/></g><g transform="rotate(12 16.4 9)"><ellipse cx="16.4" cy="5.6" rx="2.7" ry="3.5"/><ellipse cx="16.4" cy="12.3" rx="2" ry="1.9"/></g></symbol>
+  <!-- a small figure for the defence buttons: each part takes its own colour, so a button can light its zone -->
+  <symbol id="i-fig" viewBox="0 0 14 24"><circle cx="7" cy="3" r="2.7" style="fill:var(--f-head)"/><path d="M3.4 7.6c0-.9.6-1.5 1.5-1.5h4.2c.9 0 1.5.6 1.5 1.5V13H3.4zM1.4 7.4h1.3v5.8H1.4zM11.3 7.4h1.3v5.8h-1.3z" style="fill:var(--f-body)"/><path d="M3.6 14h6.8l-.9 2.6H4.5z" style="fill:var(--f-groin)"/><path d="M4.4 17.6h2.2V24H4.4zM7.4 17.6h2.2V24H7.4z" style="fill:var(--f-legs)"/></symbol>
   <!-- the other gun: main to sidearm and back -->
   <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8.5h14M14.5 5L18 8.5 14.5 12M20 15.5H6M9.5 12L6 15.5 9.5 19"/></symbol>
   <!-- defence: the Zont, a field dome over its emitter -->
@@ -49,8 +51,6 @@
   <symbol id="i-fog" viewBox="0 0 24 24"><path d="M3.5 8.5h17M6 12h12.5M3.5 15.5h17"/><path class="fine" d="M7.5 19h9"/></symbol>
   <!-- menu -->
   <symbol id="i-restart" viewBox="0 0 24 24"><path d="M18.5 14.5A6.8 6.8 0 1 1 16.6 7.6l2.1 2.1"/><path d="M18.9 4.6v5.2h-5.2"/></symbol>
-  <symbol id="i-radio" viewBox="0 0 24 24"><rect x="3.5" y="9" width="17" height="11" rx="1.2"/><path d="M7 9l9-5.5"/><circle cx="9" cy="14.5" r="2.8"/><path d="M15 12.5h2.8M15 14.5h2.8M15 16.5h2.8"/></symbol>
-  <symbol id="i-frame" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="1.2"/><path d="M5.5 16.5l4-4.5 3 3 2-2 4 3.5"/><circle cx="15.5" cy="9" r="1.3"/></symbol>
   <symbol id="i-kit" viewBox="0 0 24 24"><path d="M5 10l7-4.5 7 4.5M5 14.5L12 10l7 4.5"/><path class="fine" d="M5 19l7-4.5 7 4.5"/></symbol>
   <symbol id="i-signal" viewBox="0 0 24 24"><path d="M4.5 19.5v-3M9 19.5v-6M13.5 19.5v-9M18 19.5v-14"/><path class="fine" d="M15 4.5l5 5M20 4.5l-5 5"/></symbol>
   <!-- hatch for a shielded body zone on the fallback figure -->
@@ -110,18 +110,18 @@
     <div class="ctl">
       <div class="guard" id="guardList">
         <div class="glabel">Защита <span id="pips">0/2</span></div>
-        <button type="button" class="dz" data-z="head" aria-label="Защита: голова"><span class="rb" aria-hidden="true"></span><span class="zl">Голова</span></button>
-        <button type="button" class="dz" data-z="body" aria-label="Защита: корпус"><span class="rb" aria-hidden="true"></span><span class="zl">Корпус</span></button>
-        <button type="button" class="dz" data-z="groin" aria-label="Защита: пах"><span class="rb" aria-hidden="true"></span><span class="zl">Пах</span></button>
-        <button type="button" class="dz" data-z="legs" aria-label="Защита: ноги"><span class="rb" aria-hidden="true"></span><span class="zl">Ноги</span></button>
+        <button type="button" class="dz glass" data-z="head" aria-label="Защита: голова"><svg class="fig" aria-hidden="true"><use href="#i-fig"/></svg><span class="zl">Голова</span></button>
+        <button type="button" class="dz glass" data-z="body" aria-label="Защита: корпус"><svg class="fig" aria-hidden="true"><use href="#i-fig"/></svg><span class="zl">Корпус</span></button>
+        <button type="button" class="dz glass" data-z="groin" aria-label="Защита: пах"><svg class="fig" aria-hidden="true"><use href="#i-fig"/></svg><span class="zl">Пах</span></button>
+        <button type="button" class="dz glass" data-z="legs" aria-label="Защита: ноги"><svg class="fig" aria-hidden="true"><use href="#i-fig"/></svg><span class="zl">Ноги</span></button>
       </div>
       <div class="actcol">
-        <button type="button" class="swap" id="swapBtn" hidden><svg class="ico"><use href="#i-swap"/></svg><span class="an" id="swapText">Взять пистолет</span><span class="as">без выстрела</span></button>
+        <button type="button" class="swap glass" id="swapBtn" hidden><svg class="ico"><use href="#i-swap"/></svg><span class="an" id="swapText">Взять пистолет</span><span class="as">без выстрела</span></button>
         <div class="acts">
-          <button type="button" class="act" id="knifeBtn"><svg class="ico"><use href="#i-knife"/></svg><span class="at"><span class="an">Нож</span><span class="as" id="knifeSub">≤2</span></span></button>
-          <button type="button" class="act" id="nadeBtn"><svg class="ico"><use href="#i-grenade"/></svg><span class="at"><span class="an">Граната</span><span class="as" id="nadeSub">×1</span></span></button>
+          <button type="button" class="act glass" id="knifeBtn"><svg class="ico"><use href="#i-knife"/></svg><span class="at"><span class="an">Нож</span><span class="as" id="knifeSub">≤2</span></span></button>
+          <button type="button" class="act glass" id="nadeBtn"><svg class="ico"><use href="#i-grenade"/></svg><span class="at"><span class="an">Граната</span><span class="as" id="nadeSub">×1</span></span></button>
         </div>
-        <button type="button" class="go" id="goBtn" disabled><span class="gt" id="goText">Выбери зону на враге</span></button>
+        <button type="button" class="go glass" id="goBtn" disabled><span class="gt" id="goText">Выбери зону на враге</span></button>
       </div>
     </div>
     <div class="dock">
@@ -135,21 +135,21 @@
   </section>
 
   <div class="veil" id="infoVeil" hidden>
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
-      <div class="sh-head"><h2 id="infoTitle">Пробная арена</h2><button type="button" id="closeX" aria-label="Закрыть меню"><svg class="ico"><use href="#i-close"/></svg></button></div>
+    <div class="sheet glass" role="dialog" aria-modal="true" aria-labelledby="infoTitle"><div class="sh-in">
+      <div class="sh-head"><h2 id="infoTitle">Пробная арена</h2><button type="button" class="glass round" id="closeX" aria-label="Закрыть меню"><svg class="ico"><use href="#i-close"/></svg></button></div>
       <ul>
         <li>Бой идёт по настоящим правилам игры, как в боте Telegram: то же оружие, броня, погода и тот же бот-соперник.</li>
         <li>Фон нарисован заранее, а бойцы живые. Серый манекен стоит на месте наших Персон, пока их собирают в Трипо.</li>
         <li>В бою случайно играет The Limbo, 404 Room или In The Middle of Nowhere. Меню ставит бой на паузу и включает рацию.</li>
       </ul>
-      <div class="label"><svg class="ico"><use href="#i-shot"/></svg><span>Оружие</span></div>
+      <div class="label">Оружие</div>
       <div class="seg" id="weaponSeg"></div>
-      <button type="button" class="srow cut" id="vetBtn" aria-pressed="false">
+      <button type="button" class="srow glass" id="vetBtn" aria-pressed="false">
         <svg class="ico"><use href="#i-kit"/></svg>
         <span class="sl">Набор ветерана<small>Обвесы, броня получше, у снайпера запасной пистолет. Искра тоже будет ветераном.</small></span>
         <span class="st" id="vetState">Выкл</span>
       </button>
-      <button type="button" class="srow cut" id="soundBtn" aria-pressed="true">
+      <button type="button" class="srow glass" id="soundBtn" aria-pressed="true">
         <svg class="ico" viewBox="0 0 24 24"><path d="M3.5 9.5h4l5-4v13l-5-4h-4z"/><path class="wave" d="M15.8 9.3c.8.7 1.3 1.6 1.3 2.7s-.5 2-1.3 2.7M18.4 6.8c1.5 1.3 2.4 3.1 2.4 5.2s-.9 3.9-2.4 5.2"/><path class="mute" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
         <span class="sl">Звук боя и рации</span><span class="st" id="soundState">Вкл</span>
       </button>
@@ -157,15 +157,15 @@
         <label class="vrow"><span>Звуки боя</span><input type="range" id="volFx" min="0" max="100" step="1" value="100"><output id="volFxOut" for="volFx">100</output></label>
         <label class="vrow"><span>Музыка</span><input type="range" id="volMusic" min="0" max="100" step="1" value="100"><output id="volMusicOut" for="volMusic">100</output></label>
       </div>
-      <div class="label"><svg class="ico"><use href="#i-radio"/></svg><span>Рация</span></div>
+      <div class="label">Рация</div>
       <div class="tracks" id="trackList"></div>
-      <div class="label" id="frameLabel"><svg class="ico"><use href="#i-frame"/></svg><span>Фон</span></div>
+      <div class="label" id="frameLabel">Фон</div>
       <div class="seg" id="frameSeg"></div>
       <div class="acts2">
-        <button type="button" class="ghost cut" id="restartBtn"><svg class="ico"><use href="#i-restart"/></svg>Новый бой</button>
-        <button type="button" class="go" id="closeInfo">Вернуться в бой</button>
+        <button type="button" class="ghost glass" id="restartBtn"><svg class="ico"><use href="#i-restart"/></svg>Новый бой</button>
+        <button type="button" class="go glass" id="closeInfo">Вернуться в бой</button>
       </div>
-    </div>
+    </div></div>
   </div>
 
   <div class="end" id="endVeil" hidden>
@@ -174,7 +174,7 @@
       <h2 id="endTitle">Связь потеряна</h2>
       <p id="endText"></p>
       <div class="stats" id="endStats"></div>
-      <button type="button" class="go" id="againBtn">Новый бой</button>
+      <button type="button" class="go glass" id="againBtn">Новый бой</button>
     </div>
   </div>
 </main>

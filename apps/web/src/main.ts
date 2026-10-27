@@ -13,6 +13,7 @@ import { CALIBRATION_FRAME, FRAMES, type Frame } from "./arena/frames.ts";
 import { ArenaAudio, type VolumeKind } from "./audio/arena-audio.ts";
 import { LocalDuel } from "./game/local-duel.ts";
 import { FightLog, icon } from "./hud/log.ts";
+import { liquidGlass } from "./hud/liquid.ts";
 import { GUN_ACC, GUN_WITH, TIME_WORD, WEATHER_WORD, endWords, steps, turnsWord, zoneName } from "./hud/words.ts";
 import { store } from "./store.ts";
 import "./style.css";
@@ -50,6 +51,7 @@ let shown = { hp: [0, 0], turn: 1 };
 
 const audio = new ArenaAudio();
 const log = new FightLog({ list: $("logList"), ticker: $("ticker"), button: $("logBtn"), sheet: $("logSheet") });
+liquidGlass();
 let arena: Arena | null = null;
 
 /** The bot takes a random gun, like in Telegram; a veteran meets a veteran. */
@@ -368,14 +370,14 @@ function restart(keepSheet = false): void {
 /** The menu sheet: it pauses the fight and its music, and the radio comes on. */
 function setSheet(open: boolean): void {
   infoVeil.hidden = !open;
-  if (open) { renderMenu(); $("closeInfo").focus(); }
+  if (open) { renderMenu(); $("closeInfo").focus({ preventScroll: true }); }
   audio.sheet(open);
 }
 
 function renderMenu(): void {
   const seg = (id: string, n: number) => { const el = $(id); el.innerHTML = ""; el.style.setProperty("--n", String(n)); return el; };
   const option = (parent: HTMLElement, html: string, pressed: boolean, onPick: () => void) => {
-    const b = document.createElement("button"); b.type = "button"; b.className = "cut"; b.innerHTML = html;
+    const b = document.createElement("button"); b.type = "button"; b.className = "glass"; b.innerHTML = html;
     b.setAttribute("aria-pressed", String(pressed));
     b.addEventListener("click", onPick);
     parent.appendChild(b);
@@ -407,6 +409,7 @@ function renderMenu(): void {
   const fs = seg("frameSeg", frames.length);
   $("frameLabel").hidden = frames.length < 2; fs.hidden = frames.length < 2;
   for (const f of frames) option(fs, f.name, f === frame, () => { if (f !== frame) { setFrame(f); restart(); } });
+  liquidGlass(infoVeil);
 }
 
 // volume sliders: fight sounds and music, 0..100 on screen, 0..1 in the audio
