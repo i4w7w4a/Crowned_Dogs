@@ -5,14 +5,13 @@
 
 import { RADIO_PLAYLIST, TIMING, TRACKS } from "@crowned-dogs/audio";
 import {
-  VETERAN_KITS, WEAPONS, WEAPON_IDS, ZONES, canThrowGrenade, canUseKnife, distanceLimit, draftChance, grenadeSpec,
+  VETERAN_KITS, WEAPONS, WEAPON_IDS, ZONES, canThrowGrenade, canUseKnife, draftChance, grenadeSpec,
   guardsNeeded, other, turnLimit, turnSeconds, type AttackReport, type Side, type TurnReport, type WeaponId, type Zone,
 } from "@crowned-dogs/core";
 import { Arena, type HitKind } from "./arena/arena.ts";
 import { CALIBRATION_FRAME, FRAMES, type Frame } from "./arena/frames.ts";
 import { ArenaAudio, type VolumeKind } from "./audio/arena-audio.ts";
 import { LocalDuel } from "./game/local-duel.ts";
-import { HOLO, Hologram, ZMID, drawLeads, holoY, zoneAtY } from "./hud/holo.ts";
 import { FightLog, icon } from "./hud/log.ts";
 import { GUN_ACC, GUN_WITH, TIME_WORD, WEATHER_WORD, endWords, steps, turnsWord, zoneName } from "./hud/words.ts";
 import { store } from "./store.ts";
@@ -27,7 +26,7 @@ const FOE = "Искра";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const scene = $("scene"), stage = $("stage"), bg = $<HTMLImageElement>("bg"), ringsEl = $("rings"), canvas = $<HTMLCanvasElement>("gl");
-const guardBody = $("guardBody"), holoBox = $("holoBox"), infoVeil = $("infoVeil"), endVeil = $("endVeil");
+const guardList = $("guardList"), movesEl = $("moves"), infoVeil = $("infoVeil"), endVeil = $("endVeil");
 const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 const frames: Frame[] = /[?&]cal\b/.test(location.search) ? [CALIBRATION_FRAME, ...FRAMES] : FRAMES;
@@ -50,7 +49,6 @@ let geo = { x: 0, y: 0, w: 1, h: 1 };
 let shown = { hp: [0, 0], turn: 1 };
 
 const audio = new ArenaAudio();
-const holo = new Hologram(holoBox, $<HTMLCanvasElement>("holo"), reduceMotion);
 const log = new FightLog({ list: $("logList"), ticker: $("ticker"), button: $("logBtn"), sheet: $("logSheet") });
 let arena: Arena | null = null;
 
@@ -65,6 +63,7 @@ function newDuel(): LocalDuel {
 }
 
 const pct = (p: number | null) => (p === null ? "—" : Math.round(p * 100) + "%");
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
 // ---------- attack reticles on the enemy ----------
@@ -88,13 +87,19 @@ function point(z: Zone): [number, number] {
 
 /** Ring radius in px: the ring is about 4% of the picture's width across, as on Art's fight screen. */
 let ringR = 7.2;
+/** The line from the aimed ring to its label, px; the same as --lead in the CSS. */
+const TAG_LEAD = 16;
 function placeRings(): void {
   for (const z of ZONES) { const [x, y] = point(z); ringEls[z].style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`; }
   const zone = duel.draft.zone;
   if (!tagEl.hidden && zone) {
-    // the label sits right of the ring, or left of it when it would run off the screen
-    const [x, y] = point(zone), w = tagEl.offsetWidth, right = x + ringR + 12 + w <= scene.clientWidth - 8;
-    tagEl.style.transform = `translate(${(right ? x + ringR + 12 : x - ringR - 12 - w).toFixed(1)}px, ${y.toFixed(1)}px) translateY(-50%)`;
+    // the label hangs off the ring to the right, or to the left when the screen edge or the distance column is in the way
+    const [x, y] = point(zone), w = tagEl.offsetWidth, gap = ringR + TAG_LEAD;
+    const sc = scene.getBoundingClientRect(), col = movesEl.getBoundingClientRect();
+    const besideCol = y + 14 > col.top - sc.top && y - 14 < col.bottom - sc.top;
+    const right = x + gap + w <= (besideCol ? col.left - sc.left - 6 : scene.clientWidth - 8);
+    tagEl.classList.toggle("flip", !right);
+    tagEl.style.transform = `translate(${(right ? x + gap : x - gap - w).toFixed(1)}px, ${y.toFixed(1)}px) translateY(-50%)`;
   }
 }
 
@@ -122,20 +127,12 @@ function tap(fn: () => string | null): void {
 }
 
 const guards = [...document.querySelectorAll<HTMLButtonElement>(".dz")];
-const outline = [...document.querySelectorAll<SVGElement>(".fig .zb")];
 for (const b of guards) {
   const z = b.dataset.z as Zone;
   b.addEventListener("click", () => tap(() => duel.press({ type: "guard", zone: z })));
-  b.addEventListener("pointerenter", () => holo.setHover(busy || duel.over ? null : z));
-  b.addEventListener("pointerleave", () => holo.setHover(null));
 }
-// tapping the projection picks the zone under the finger; hovering lights it
-const holoZone = (e: MouseEvent) => zoneAtY(e.clientY - holoBox.getBoundingClientRect().top);
-holoBox.addEventListener("click", (e) => guards.find((b) => b.dataset.z === holoZone(e))?.click());
-holoBox.addEventListener("pointermove", (e) => holo.setHover(busy || duel.over ? null : holoZone(e)));
-holoBox.addEventListener("pointerleave", () => holo.setHover(null));
 
-// one tap picks where to stand: back 2 … forward 3
+// one tap picks where to stand: forward 3 … back 2
 const moves = [...document.querySelectorAll<HTMLButtonElement>(".mv")];
 for (const b of moves) {
   const mv = Number(b.dataset.m);
@@ -172,33 +169,29 @@ function render(): void {
   }
   const chance = duel.chance;
   tagEl.hidden = !aimed || !d.zone || chance === null || lock;
-  if (!tagEl.hidden) tagEl.innerHTML = (d.kind === "knife" ? "Нож" : WEAPONS[me.weapon].name) + " · " + zoneName(d.zone!) + "<b>" + pct(chance) + "</b>";
+  if (!tagEl.hidden) tagEl.textContent = (d.kind === "knife" ? "Нож · " : "") + cap(zoneName(d.zone!)) + " · " + pct(chance);
   placeRings();
 
-  // defence: zone names with their leader lines, the hologram, and how many zones are picked
+  // defence: a list of the four zones, a tick on each guarded one, and how many are picked
   for (const b of guards) {
     const on = d.defend.includes(b.dataset.z as Zone);
     b.classList.toggle("on", on); b.disabled = lock; b.setAttribute("aria-pressed", String(on));
   }
-  for (const g of [...outline, ...document.querySelectorAll<SVGElement>("#leads .lead")]) g.classList.toggle("on", d.defend.includes(g.dataset.z as Zone));
-  holo.set(d.defend, lock, duel.over && me.hp <= 0);
-  holoBox.classList.toggle("lock", lock);
   const pips = $("pips"), need = guardsNeeded(d);
   pips.textContent = `${d.defend.length}/${need}`;
   pips.classList.toggle("done", d.defend.length >= need);
   pips.setAttribute("aria-label", `Выбрано ${d.defend.length} из ${need}`);
 
-  // movement: each cell shows the distance you end up at
+  // distance: the arrows, and in the middle the distance after the move, with a warning when the move costs the attack
   for (const b of moves) {
     const mv = Number(b.dataset.m), on = mv === d.move && d.kind !== "flee";
     b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on));
     b.disabled = lock || m.distance - mv < 1;
-    b.querySelector("b")!.textContent = String(clamp(m.distance - mv, 1, distanceLimit(m)));
   }
-  const dl = $("distLabel"), moving = d.move !== 0 && !busy, noShot = (run || d.kind === "swap") && !lock;
-  const from = `${m.distance}${moving ? " → " + planned : ""}`;
-  dl.textContent = noShot ? `${from} · ${d.kind === "swap" ? "без выстрела" : "без атаки"}` : `${from} ${steps(moving ? planned : m.distance)}`;
-  dl.classList.toggle("warn", noShot);
+  const dist = d.move !== 0 && !busy ? planned : m.distance, noShot = (run || d.kind === "swap") && !lock;
+  $("distLabel").textContent = `${dist} ${steps(dist)}`;
+  const note = $("distNote");
+  note.hidden = !noShot; note.textContent = d.kind === "swap" ? "без выстрела" : "без атаки";
 
   // attack other than a shot: the knife, a grenade, or the other gun; tapping the picked one again goes back to the shot
   const kb = $<HTMLButtonElement>("knifeBtn"), nb = $<HTMLButtonElement>("nadeBtn"), wb = $<HTMLButtonElement>("swapBtn");
@@ -217,8 +210,8 @@ function render(): void {
   const go = $<HTMLButtonElement>("goBtn");
   const msg = duel.over ? "Бой окончен" : busy ? "Ход идёт…" : duel.missing;
   go.disabled = !!msg;
-  $("goText").textContent = msg ?? (d.kind === "dash" ? "Рывок и подтвердить ход" : d.kind === "run" ? "Перебежка и подтвердить ход"
-    : d.kind === "flee" ? "Уйти из боя" : "Подтвердить ход");
+  // a run or a dash is told by the distance column ("без атаки"), so the button keeps its one wording
+  $("goText").textContent = msg ?? (d.kind === "flee" ? "Уйти из боя" : "Подтвердить ход");
 
   drawHP(0); drawHP(1);
   $("turn").textContent = `Ход ${shown.turn} / ${turnLimit(m)}`;
@@ -331,12 +324,14 @@ function showOnEnemy(a: AttackReport): void {
   if (a.blocked) { rippleAt(ringsEl, x, y); return floatAt(ringsEl, x + 36, y - 14, "blocked", "−" + a.damage, "Зонт"); }
   floatAt(ringsEl, x + 36, y - 14, "dmg", "−" + a.damage, label(a));
 }
+/** The enemy's attack on us: the zone's line in the defence list flashes (red hit, cyan block on the Zont), the number floats beside it. */
 function showOnGuard(a: AttackReport): void {
-  const x = guardBody.clientWidth - HOLO.W / 2, y = Math.max(36, holoY(ZMID[a.zone ?? "body"]));
-  holo.flash(a);
-  if (!a.hit) return floatAt(guardBody, x, y, "miss", "мимо");
-  if (a.blocked) { rippleAt(guardBody, x, y); return floatAt(guardBody, x, y - 4, "blocked", "−" + a.damage, "Зонт"); }
-  floatAt(guardBody, x, y - 4, "dmg", "−" + a.damage, label(a));
+  const row = guards.find((b) => b.dataset.z === (a.zone ?? "body"))!, name = row.querySelector<HTMLElement>(".zl")!;
+  const x = row.offsetLeft + name.offsetLeft + name.offsetWidth + 30, y = row.offsetTop + row.offsetHeight / 2;
+  if (!a.hit) return floatAt(guardList, x, y, "miss", "мимо");
+  for (const b of a.weapon === "grenade" ? guards : [row]) { b.classList.remove("hit", "blk"); void b.offsetWidth; b.classList.add(a.blocked ? "blk" : "hit"); }
+  if (a.blocked) return floatAt(guardList, x, y, "blocked", "−" + a.damage, "Зонт");
+  floatAt(guardList, x, y, "dmg", "−" + a.damage, label(a));
 }
 
 // ---------- the end ----------
@@ -462,12 +457,7 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("pointerdown", () => audio.unlock(), { once: true });
 document.addEventListener("keydown", () => audio.unlock(), { once: true });
-const leads = () => drawLeads(guardBody, document.getElementById("leads") as unknown as SVGSVGElement, duel.draft.defend);
-window.addEventListener("resize", () => { layout(); leads(); });
-// the panel lies over the foot of the picture; the log line rides just above it
-const panelEl = document.querySelector<HTMLElement>(".panel")!;
-new ResizeObserver(() => $("app").style.setProperty("--panel-h", panelEl.offsetHeight + "px")).observe(panelEl);
-void document.fonts?.ready.then(leads);
+window.addEventListener("resize", layout);
 
 (function grain() {
   const el = $("grain"), urls: string[] = [], c = document.createElement("canvas"); c.width = c.height = 128;
@@ -490,13 +480,11 @@ try {
   $("status").textContent = "3D не запустилось на этом устройстве";
 }
 setFrame(frame);
-leads();
 restart();
 arena?.load(MY_MODEL, FOE_MODEL, duel.match.distance)
-  .then((gltf) => {
+  .then(() => {
     $("status").hidden = true;
     layout(); render();
-    if (arena?.myModel) holo.start(gltf, arena.myModel);
   })
   .catch(() => { $("status").textContent = "Модель не загрузилась. Обнови страницу."; });
 
