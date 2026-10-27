@@ -186,9 +186,8 @@ export class Arena {
     this.timer.connect(document);
   }
 
-  /** Loads both figures' models (.glb, or .json with the .glb inside as base64) and starts drawing.
-   *  Resolves with our own model's file, which the defence hologram copies. */
-  async load(meUrl: string, enemyUrl: string, distance: number): Promise<GLTF> {
+  /** Loads both figures' models (.glb, or .json with the .glb inside as base64) and starts drawing. */
+  async load(meUrl: string, enemyUrl: string, distance: number): Promise<void> {
     const [mine, theirs] = await Promise.all([loadModel(meUrl), enemyUrl === meUrl ? null : loadModel(enemyUrl)]);
     const foe = theirs ?? mine;
     this.en = this.makeFigure(foe, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
@@ -197,12 +196,6 @@ export class Arena {
     this.ready = true;
     this.reset(distance);
     this.renderer.setAnimationLoop((t) => this.tick(t));
-    return mine;
-  }
-
-  /** Our own figure's model, for anything that mirrors its pose (the defence hologram). */
-  get myModel(): THREE.Object3D | null {
-    return this.me?.model ?? null;
   }
 
   setFrame(f: Frame): void {
