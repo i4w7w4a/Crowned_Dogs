@@ -70,7 +70,7 @@ const ringEls = {} as Record<Zone, HTMLButtonElement>;
 for (const z of ZONES) {
   const b = document.createElement("button");
   b.type = "button"; b.className = "ring hint"; b.setAttribute("aria-label", "Атака: " + zoneName(z));
-  b.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true"><circle class="rc" cx="20" cy="20" r="9.5"/></svg>';
+  b.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true"><circle class="rc" cx="20" cy="20" r="7.2"/></svg>';
   b.addEventListener("click", () => tap(() => duel.press({ type: "zone", zone: z })));
   ringsEl.appendChild(b); ringEls[z] = b;
 }
@@ -84,13 +84,15 @@ function point(z: Zone): [number, number] {
   return [geo.x + u * geo.w, geo.y + v * geo.h];
 }
 
+/** Ring radius in px: the ring is about 4% of the picture's width across, as on Art's fight screen. */
+let ringR = 7.2;
 function placeRings(): void {
   for (const z of ZONES) { const [x, y] = point(z); ringEls[z].style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`; }
   const zone = duel.draft.zone;
   if (!tagEl.hidden && zone) {
     // the label sits right of the ring, or left of it when it would run off the screen
-    const [x, y] = point(zone), w = tagEl.offsetWidth, right = x + 26 + w <= scene.clientWidth - 8;
-    tagEl.style.transform = `translate(${(right ? x + 26 : x - 26 - w).toFixed(1)}px, ${y.toFixed(1)}px) translateY(-50%)`;
+    const [x, y] = point(zone), w = tagEl.offsetWidth, right = x + ringR + 12 + w <= scene.clientWidth - 8;
+    tagEl.style.transform = `translate(${(right ? x + ringR + 12 : x - ringR - 12 - w).toFixed(1)}px, ${y.toFixed(1)}px) translateY(-50%)`;
   }
 }
 
@@ -103,6 +105,8 @@ function layout(): void {
   // the part of the picture on screen, so the bodycam lens centres on what the player sees
   const vx = Math.max(0, -geo.x), vy = Math.max(0, -geo.y);
   arena?.resize(w, h, { x: vx / w, y: vy / h, w: (Math.min(w, cw - geo.x) - vx) / w, h: (Math.min(h, scene.clientHeight - geo.y) - vy) / h });
+  ringR = Math.max(6, w * 0.02 - 0.75);
+  for (const z of ZONES) ringEls[z].querySelector("circle")!.setAttribute("r", ringR.toFixed(2));
   placeRings();
 }
 
@@ -140,10 +144,6 @@ for (const b of moves) {
     return err;
   }));
 }
-$("shotBtn").addEventListener("click", () => tap(() => {
-  const k = duel.draft.kind;
-  return k === "knife" || k === "grenade" || k === "swap" ? duel.press({ type: k }) : null;
-}));
 $("knifeBtn").addEventListener("click", () => tap(() => duel.press({ type: "knife" })));
 $("nadeBtn").addEventListener("click", () => tap(() => duel.press({ type: "grenade" })));
 $("swapBtn").addEventListener("click", () => tap(() => duel.press({ type: "swap" })));
@@ -160,7 +160,9 @@ function render(): void {
   const nadeOk = step && canThrowGrenade(m, duel.me);
   const planned = duel.plannedDistance;
 
-  ringsEl.classList.toggle("off", !aimed || busy);
+  // a shot is a tap on the enemy: the rings stay live while a grenade, a swap or a run is picked, and tapping one turns the order back into a shot
+  ringsEl.classList.toggle("off", busy);
+  ringsEl.classList.toggle("idle", !aimed);
   ringsEl.classList.toggle("gone", duel.over || (arena !== null && !arena.ready)); // without WebGL the rings stay on the picture
   for (const z of ZONES) {
     ringEls[z].classList.toggle("sel", aimed && d.zone === z);
@@ -196,12 +198,11 @@ function render(): void {
   dl.textContent = noShot ? `${from} · ${d.kind === "swap" ? "без выстрела" : "без атаки"}` : `${from} ${steps(moving ? planned : m.distance)}`;
   dl.classList.toggle("warn", noShot);
 
-  // attack: a shot, the knife, a grenade, or the other gun
-  const sb = $<HTMLButtonElement>("shotBtn"), kb = $<HTMLButtonElement>("knifeBtn"), nb = $<HTMLButtonElement>("nadeBtn"), wb = $<HTMLButtonElement>("swapBtn");
-  sb.disabled = run || lock; kb.disabled = !knifeOk || lock; nb.disabled = !nadeOk || lock; wb.disabled = lock;
-  const on: [HTMLButtonElement, boolean][] = [[sb, d.kind === "shoot"], [kb, d.kind === "knife"], [nb, d.kind === "grenade"], [wb, d.kind === "swap"]];
+  // attack other than a shot: the knife, a grenade, or the other gun; tapping the picked one again goes back to the shot
+  const kb = $<HTMLButtonElement>("knifeBtn"), nb = $<HTMLButtonElement>("nadeBtn"), wb = $<HTMLButtonElement>("swapBtn");
+  kb.disabled = !knifeOk || lock; nb.disabled = !nadeOk || lock; wb.disabled = lock;
+  const on: [HTMLButtonElement, boolean][] = [[kb, d.kind === "knife"], [nb, d.kind === "grenade"], [wb, d.kind === "swap"]];
   for (const [b, v] of on) { b.classList.toggle("on", v); b.setAttribute("aria-pressed", String(v)); }
-  $("shotSub").textContent = run ? "—" : pct(draftChance(m, duel.me, { ...d, kind: "shoot" }));
   // a range is drawn with the steps icon: ≤2 👣
   const STEPS = icon("i-steps");
   $("knifeSub").innerHTML = knifeOk ? pct(draftChance(m, duel.me, { ...d, kind: "knife", move: knifeMove })) : "≤2" + STEPS;
@@ -461,6 +462,9 @@ document.addEventListener("pointerdown", () => audio.unlock(), { once: true });
 document.addEventListener("keydown", () => audio.unlock(), { once: true });
 const leads = () => drawLeads(guardBody, document.getElementById("leads") as unknown as SVGSVGElement, duel.draft.defend);
 window.addEventListener("resize", () => { layout(); leads(); });
+// the panel lies over the foot of the picture; the log line rides just above it
+const panelEl = document.querySelector<HTMLElement>(".panel")!;
+new ResizeObserver(() => $("app").style.setProperty("--panel-h", panelEl.offsetHeight + "px")).observe(panelEl);
 void document.fonts?.ready.then(leads);
 
 (function grain() {
