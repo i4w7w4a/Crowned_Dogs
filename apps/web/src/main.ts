@@ -18,7 +18,7 @@ import { store } from "./store.ts";
 import "./style.css";
 
 /** The figure models: the .glb inside JSON as base64, since artifact pages do not serve .glb (see npm run assets).
- *  We play the male Persona; the enemy, Искра, is the female one. VITE_MODEL puts one model on both. */
+ *  We play the male Persona; the enemy, Искра, is the female one (both from Art's Tripo parts). VITE_MODEL puts one model on both. */
 const MY_MODEL = import.meta.env.VITE_MODEL ?? "models/persona-male.json";
 const FOE_MODEL = import.meta.env.VITE_MODEL ?? "models/persona-female.json";
 const PLAYER = { name: "Тень", tag: "K-417-093" };
