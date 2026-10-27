@@ -2,11 +2,11 @@
 // Plain data, so it can be tested without Telegram.
 
 import {
-  MAX_STEPS, STANCE_TURNS, TIME_NAMES, WEAPONS, WEATHER, ZONES, ZONE_NAMES, canFlee, canThrowGrenade,
-  distanceLimit, hitChance, other, turnLimit, type Action, type AttackReport, type Side, type TurnReport,
-  type WeaponId, type Zone,
+  TIME_NAMES, WEAPONS, WEATHER, ZONES, ZONE_NAMES, canFlee, canThrowGrenade,
+  distanceLimit, draftChance, guardsNeeded, missing, other, turnLimit, type Action, type AttackReport, type Command,
+  type Draft, type Side, type TurnReport, type WeaponId, type Zone,
 } from "@crowned-dogs/core";
-import { encodeCommand, guardsNeeded, missing, type Command, type Draft } from "./draft.ts";
+import { encodeCommand } from "./codes.ts";
 import type { Duel } from "./duels.ts";
 
 export interface Button {
@@ -57,20 +57,9 @@ function conditions(duel: Duel): string {
   return `${m.map.name} · ${TIME_NAMES[m.config.time]}, ${WEATHER[m.config.weather].name}`;
 }
 
-/** Distance after this side's own move, if the enemy stands still. */
-function planned(duel: Duel, d: Draft): number {
-  const m = duel.match;
-  return Math.max(1, Math.min(distanceLimit(m), m.distance - d.move));
-}
-
 function chanceLine(duel: Duel, side: Side, d: Draft): string {
-  const m = duel.match;
-  const me = m.fighters[side];
-  if (d.kind !== "shoot" && d.kind !== "knife") return "";
-  const dist = Math.min(planned(duel, d), MAX_STEPS);
-  const still = d.move === 0 ? Math.min(me.still + 1, STANCE_TURNS) : 0;
-  const p = hitChance(m, side, d.kind === "knife" ? "knife" : me.weapon, dist, still, false);
-  return ` · попадание ~${Math.round(p * 100)}%`;
+  const p = draftChance(duel.match, side, d);
+  return p === null ? "" : ` · попадание ~${Math.round(p * 100)}%`;
 }
 
 function moveWords(move: number): string {

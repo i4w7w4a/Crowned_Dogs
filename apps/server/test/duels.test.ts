@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createMatch } from "@crowned-dogs/core";
-import { applyCommand, decodeCommand, encodeCommand, freshDraft, toOrder, type Command, type Draft } from "../src/draft.ts";
+import { applyCommand, createMatch, freshDraft, toOrder, type Command, type Draft } from "@crowned-dogs/core";
+import { decodeCommand, encodeCommand } from "../src/codes.ts";
 import { DuelError, DuelService, type Clock, type DuelEvent } from "../src/duels.ts";
 import { turnReport, turnScreen, weaponPicker, finalScreen } from "../src/view.ts";
 
