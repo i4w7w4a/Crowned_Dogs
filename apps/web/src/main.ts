@@ -18,8 +18,10 @@ import { GUN_ACC, GUN_WITH, TIME_WORD, WEATHER_WORD, endWords, steps, turnsWord,
 import { store } from "./store.ts";
 import "./style.css";
 
-/** The figure model: the .glb inside JSON as base64, since artifact pages do not serve .glb (see npm run assets). */
-const MODEL = import.meta.env.VITE_MODEL ?? "models/persona-male.json";
+/** The figure models: the .glb inside JSON as base64, since artifact pages do not serve .glb (see npm run assets).
+ *  We play the male Persona; the enemy, Искра, is the female one. VITE_MODEL puts one model on both. */
+const MY_MODEL = import.meta.env.VITE_MODEL ?? "models/persona-male.json";
+const FOE_MODEL = import.meta.env.VITE_MODEL ?? "models/persona-female.json";
 const PLAYER = { name: "Тень", tag: "K-417-093" };
 const FOE = "Искра";
 
@@ -490,7 +492,7 @@ try {
 setFrame(frame);
 leads();
 restart();
-arena?.load(MODEL, duel.match.distance)
+arena?.load(MY_MODEL, FOE_MODEL, duel.match.distance)
   .then((gltf) => {
     $("status").hidden = true;
     layout(); render();
