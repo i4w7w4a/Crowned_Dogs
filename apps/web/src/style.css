@@ -18,6 +18,8 @@
   --display: "Inter Tight", "Helvetica Neue", Arial, sans-serif;
   --body: "Inter", "Segoe UI", Roboto, sans-serif;
   --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+  --on-glass: #0b0c0c;                 /* words and icons inside the fight buttons (Art 19:56: black) */
+  --on-glass-dim: rgba(11,12,12,.6);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -73,8 +75,8 @@ button:disabled { cursor: default; }
   --rim: linear-gradient(140deg, rgba(255,255,255,.66), rgba(255,255,255,.16) 26%, rgba(255,255,255,.06) 54%, rgba(255,255,255,.36));
   --rim-w: 1px;
   position: relative; border-radius: 12px; background: rgba(0,0,0,.15);
-  -webkit-backdrop-filter: blur(2px) saturate(1.6) brightness(1.05);
-  backdrop-filter: var(--lens,) blur(2px) saturate(1.6) brightness(1.05);
+  -webkit-backdrop-filter: blur(2px) saturate(1.6) brightness(var(--lift, 1.05));
+  backdrop-filter: var(--lens,) blur(2px) saturate(1.6) brightness(var(--lift, 1.05));
   box-shadow: inset 0 1px 1px rgba(255,255,255,.14), inset 0 0 10px rgba(255,255,255,.06), 0 6px 18px rgba(0,0,0,.2);
   transition: box-shadow .2s, color .18s;
 }
@@ -165,16 +167,16 @@ button:disabled { cursor: default; }
 .ticker { flex: 1 1 auto; min-width: 0; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 13px; text-align: left; }
 .recdot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--red); box-shadow: 0 0 8px rgba(224,88,63,.7); animation: rec 1.6s steps(2, jump-none) infinite; }
 @keyframes rec { 50% { opacity: .25 } }
-.ticker .tx { flex: 1 1 auto; min-width: 0; font: 400 13px/1.2 var(--body); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ticker .tx b { font: 600 11px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
+.ticker .tx { flex: 1 1 auto; min-width: 0; font: 400 13px/1.2 var(--body); color: var(--on-glass); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker .tx b { font: 600 11px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--on-glass-dim); margin-right: 6px; }
 .ticker .tx em { font-style: normal; font-weight: 600; }
 .ticker .tx .ico { width: 12px; height: 12px; vertical-align: -1px; margin-left: 3px; stroke-width: 1.6; }
-.ticker .tx .us { color: var(--amber); } .ticker .tx .them { color: var(--red); } .ticker .tx .blk { color: var(--cyan); } .ticker .tx .nil { color: var(--muted); }
-.ticker > .ico { width: 18px; height: 18px; color: rgba(236,232,223,.85); transition: transform .2s; }
+.ticker .tx .us { color: #7a4c00; } .ticker .tx .them { color: #a3260f; } .ticker .tx .blk { color: #075e6c; } .ticker .tx .nil { color: var(--on-glass-dim); }
+.ticker > .ico { width: 18px; height: 18px; color: var(--on-glass); transition: transform .2s; }
 .ticker[aria-expanded="true"] > .ico { transform: rotate(180deg); }
 .ticker.fresh { animation: fresh .9s ease-out; }
 @keyframes fresh { 0% { background: rgba(255,255,255,.3) } 100% { background: rgba(0,0,0,.15) } }
-.dockbtn { flex: 0 0 auto; width: 40px; display: grid; place-items: center; color: var(--fg); }
+.dockbtn { flex: 0 0 auto; width: 40px; display: grid; place-items: center; color: var(--on-glass); }
 .dockbtn .ico { width: 20px; height: 20px; }
 
 /* the full log slides up from the log line, over the controls: the same glass, darker so the lines read */
@@ -211,6 +213,10 @@ button:disabled { cursor: default; }
 .panel { position: absolute; z-index: 8; left: 0; right: 0; bottom: 0; padding: 0 18px calc(10px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 14px;
   text-shadow: 0 0 2px rgba(0,0,0,.9), 0 1px 3px rgba(0,0,0,.8), 0 0 12px rgba(0,0,0,.65); }
 .panel .ico { filter: drop-shadow(0 0 1.5px rgba(0,0,0,.85)) drop-shadow(0 1px 3px rgba(0,0,0,.55)); }
+/* inside the glass buttons the words and icons are black: the glass lifts the picture behind them a little more
+   and their halo is light, so they still read over a dark spot */
+.panel .glass { --lift: 1.35; text-shadow: 0 0 3px rgba(255,255,255,.6), 0 0 10px rgba(255,255,255,.4); }
+.panel .glass .ico { filter: drop-shadow(0 0 2px rgba(255,255,255,.65)); }
 /* defence on the left; on the right the knife and the grenade over the confirm button; the two bottoms line up */
 .ctl { display: grid; grid-template-columns: minmax(0, 1fr) 60%; gap: 14px; align-items: end; }
 
@@ -233,15 +239,15 @@ button:disabled { cursor: default; }
 .glabel { margin-bottom: 1px; font: 500 14px/1.2 var(--body); color: var(--dim); white-space: nowrap; }
 #pips { margin-left: 3px; font-variant-numeric: tabular-nums; transition: color .18s; }
 #pips.done { color: #fff; }
-.dz { height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 11px; text-align: left; font: 500 15px/1 var(--body); color: rgba(236,232,223,.8); }
-.dz .fig { --off: rgba(236,232,223,.3); flex: 0 0 auto; width: 13px; height: 22px; overflow: visible; filter: drop-shadow(0 0 1px rgba(0,0,0,.7));
+.dz { height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 11px; text-align: left; font: 500 15px/1 var(--body); color: rgba(11,12,12,.8); }
+.dz .fig { --off: rgba(11,12,12,.26); flex: 0 0 auto; width: 13px; height: 22px; overflow: visible; filter: drop-shadow(0 0 1.5px rgba(255,255,255,.55));
   --f-head: var(--off); --f-body: var(--off); --f-groin: var(--off); --f-legs: var(--off); }
 .dz[data-z="head"] .fig { --f-head: currentColor; }
 .dz[data-z="body"] .fig { --f-body: currentColor; }
 .dz[data-z="groin"] .fig { --f-groin: currentColor; }
 .dz[data-z="legs"] .fig { --f-legs: currentColor; }
 .dz .zl { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dz.on { color: #fff; font-weight: 600; }
+.dz.on { color: #000; font-weight: 600; }
 .dz:disabled > * { opacity: .45; }
 .dz.hit { animation: zhit 1.3s ease-out; }
 .dz.blk { animation: zblk 1.3s ease-out; }
@@ -251,21 +257,20 @@ button:disabled { cursor: default; }
 /* attack other than a shot: knife and grenade side by side, edge to edge with the confirm button; the other gun above them when the kit has one */
 .actcol { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.act, .swap { min-width: 0; display: flex; align-items: center; gap: 8px; text-align: left; color: var(--fg); }
+.act, .swap { min-width: 0; display: flex; align-items: center; gap: 8px; text-align: left; color: var(--on-glass); }
 .act { height: 48px; gap: 7px; padding: 0 6px 0 9px; }
-.act .ico { width: 20px; height: 20px; color: rgba(236,232,223,.85); }
+.act .ico { width: 20px; height: 20px; }
 .act .at { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .act .an { font: 500 14px/1 var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.act .as { display: flex; align-items: center; gap: 2px; font: 400 12px/1 var(--body); color: rgba(236,232,223,.62); font-variant-numeric: tabular-nums; }
+.act .as { display: flex; align-items: center; gap: 2px; font: 400 12px/1 var(--body); color: var(--on-glass-dim); font-variant-numeric: tabular-nums; }
 /* the steps after a range: small solid footprints */
 .act .as .ico { width: 13px; height: 13px; color: inherit; fill: currentColor; stroke: none; filter: none; }
 .swap { height: 40px; padding: 0 12px 0 10px; }
-.swap .ico { width: 18px; height: 18px; color: rgba(236,232,223,.85); }
+.swap .ico { width: 18px; height: 18px; }
 .swap .an { font: 500 14px/1 var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.swap .as { margin-left: auto; font: 400 12px/1 var(--body); color: rgba(236,232,223,.62); white-space: nowrap; }
-.act.on, .swap.on { color: #fff; }
+.swap .as { margin-left: auto; font: 400 12px/1 var(--body); color: var(--on-glass-dim); white-space: nowrap; }
+.act.on, .swap.on { color: #000; }
 .act.on .an, .swap.on .an { font-weight: 600; }
-.act.on .ico, .swap.on .ico { color: #fff; }
 .act:disabled > *, .swap:disabled > * { opacity: .38; }
 
 /* confirm the turn: the same glass, its rim turns solid white once the order is complete */
@@ -273,6 +278,8 @@ button:disabled { cursor: default; }
   font: 500 18px/1.1 var(--body); text-align: center; }
 .go .gt { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .go:disabled { color: rgba(236,232,223,.66); font-size: 14.5px; }
+.panel .go { color: var(--on-glass); }
+.panel .go:disabled { color: var(--on-glass-dim); }
 
 @media (max-width: 374px) {
   .panel { padding-left: 14px; padding-right: 14px; }
