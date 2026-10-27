@@ -5,9 +5,11 @@
 
 import type { Zone } from "@crowned-dogs/core";
 import * as THREE from "three";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import type { Frame } from "./frames.ts";
+import { findBones, pitch, roll, type Bones } from "./rig.ts";
 
 export type Who = "me" | "enemy";
 export type HitKind = "hit" | "blocked" | "grenade";
@@ -28,12 +30,6 @@ interface Look {
   lift?: number;
   /** Which way the figure falls: -1 to its right as seen from the camera. */
   fallSide: number;
-}
-
-interface Bones {
-  head: THREE.Object3D; top: THREE.Object3D; neck: THREE.Object3D;
-  spine: THREE.Object3D; spine1: THREE.Object3D; spine2: THREE.Object3D; hips: THREE.Object3D;
-  rUpLeg: THREE.Object3D; rLeg: THREE.Object3D; lUpLeg: THREE.Object3D; lLeg: THREE.Object3D;
 }
 
 interface Figure {
@@ -176,7 +172,7 @@ export class Arena {
     } else {
       bytes = await res.arrayBuffer();
     }
-    const gltf = await new GLTFLoader().parseAsync(bytes, "");
+    const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(bytes, "");
     this.en = this.makeFigure(gltf, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
     this.me = this.makeFigure(gltf, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1 });
     this.mirror = this.makeMirror(gltf, this.en);
@@ -268,10 +264,13 @@ export class Arena {
     model.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
       o.castShadow = true; o.frustumCulled = false;
-      o.material = /joint/i.test((o.material as THREE.Material).name) ? joints : body;
+      const own = o.material as THREE.MeshStandardMaterial;
+      if (own.map) return; // a textured Persona keeps its own suit; the bare mannequin gets painted
+      o.material = /joint/i.test(own.name) ? joints : body;
     });
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model, true);
+    const bones = findBones(model, box);
     const s = HEIGHT / (box.max.y - box.min.y);
     model.scale.multiplyScalar(s);
     model.position.y = -box.min.y * s;
@@ -284,11 +283,6 @@ export class Arena {
     const group = new THREE.Group(); group.add(tilt, blob);
     this.scene.add(group);
 
-    const bone = (n: string) => {
-      const b = model.getObjectByName("mixamorig" + n);
-      if (!b) throw new Error(`the model has no bone ${n}`);
-      return b;
-    };
     const mixer = new THREE.AnimationMixer(model);
     const actions: Record<string, THREE.AnimationAction> = {};
     for (const clip of gltf.animations) actions[clip.name] = mixer.clipAction(clip);
@@ -299,11 +293,7 @@ export class Arena {
 
     return {
       group, tilt, model, blob, mixer, actions, cur: null, port,
-      kick: { head: 0, body: 0, groin: 0, legs: 0 }, fallT: -1, fallSide: look.fallSide,
-      bones: {
-        head: bone("Head"), top: bone("HeadTop_End"), neck: bone("Neck"), spine: bone("Spine"), spine1: bone("Spine1"), spine2: bone("Spine2"),
-        hips: bone("Hips"), rUpLeg: bone("RightUpLeg"), rLeg: bone("RightLeg"), lUpLeg: bone("LeftUpLeg"), lLeg: bone("LeftLeg"),
-      },
+      kick: { head: 0, body: 0, groin: 0, legs: 0 }, fallT: -1, fallSide: look.fallSide, bones,
     };
   }
 
@@ -406,19 +396,19 @@ function syncMirror(m: Mirror): void {
 /** Hit reactions and the fall, layered on top of whatever the animation is doing this frame. */
 function applyReactions(f: Figure, dt: number): void {
   const k = f.kick, b = f.bones, decay = Math.exp(-dt * 6.5);
-  if (k.head) { b.head.rotateX(-0.6 * k.head); b.neck.rotateX(-0.25 * k.head); }
-  if (k.body) { b.spine2.rotateX(-0.32 * k.body); b.spine1.rotateX(-0.22 * k.body); }
-  if (k.groin) { b.spine.rotateX(0.42 * k.groin); b.spine1.rotateX(0.2 * k.groin); }
-  if (k.legs) { b.rUpLeg.rotateX(0.35 * k.legs); b.rLeg.rotateX(-0.75 * k.legs); }
+  if (k.head) { pitch(b.head, -0.6 * k.head); pitch(b.neck, -0.25 * k.head); }
+  if (k.body) { pitch(b.spine2, -0.32 * k.body); pitch(b.spine1, -0.22 * k.body); }
+  if (k.groin) { pitch(b.spine, 0.42 * k.groin); pitch(b.spine1, 0.2 * k.groin); }
+  if (k.legs) { pitch(b.rUpLeg, 0.35 * k.legs); pitch(b.rLeg, -0.75 * k.legs); }
   for (const z of Object.keys(k) as Zone[]) k[z] = k[z] * decay < 0.01 ? 0 : k[z] * decay;
 
   if (f.fallT >= 0) {
     // falls on its side: from this low camera a body lying sideways reads best
     f.fallT = Math.min(f.fallT + dt / 0.9, 1);
     const t = f.fallT, e = smooth(t), g = t * t, side = f.fallSide;
-    b.lUpLeg.rotateX(0.35 * e); b.lLeg.rotateX(-0.5 * e);
-    b.rUpLeg.rotateX(0.2 * e); b.rLeg.rotateX(-0.3 * e);
-    b.spine.rotateX(0.25 * e); b.spine2.rotateX(0.15 * e); b.head.rotateZ(-side * 0.35 * e);
+    pitch(b.lUpLeg, 0.35 * e); pitch(b.lLeg, -0.5 * e);
+    pitch(b.rUpLeg, 0.2 * e); pitch(b.rLeg, -0.3 * e);
+    pitch(b.spine, 0.25 * e); pitch(b.spine2, 0.15 * e); roll(b.head, -side * 0.35 * e);
     f.tilt.rotation.set(-0.25 * g, 0, side * 1.5 * g);
     f.blob.scale.set(1 + 1.9 * g, 1, 1.1); f.blob.position.x = -side * 0.85 * g;
   }

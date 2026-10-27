@@ -1,0 +1,51 @@
+// The few bones the arena moves by hand (hit flinches, the fall, where the rings and
+// the sync connector sit), found by name in either rig we use: the Mixamo placeholder
+// and the UE Mannequin skeleton of our Personas.
+
+import * as THREE from "three";
+
+/** The bones moved by hand: Mixamo names (the placeholder X Bot; three drops the colon) and the UE Mannequin names of our Personas. */
+export const RIG = {
+  hips: ["mixamorigHips", "pelvis"], spine: ["mixamorigSpine", "spine_01"], spine1: ["mixamorigSpine1", "spine_02"],
+  spine2: ["mixamorigSpine2", "spine_03"], neck: ["mixamorigNeck", "neck_01"], head: ["mixamorigHead", "head"],
+  rUpLeg: ["mixamorigRightUpLeg", "thigh_r"], rLeg: ["mixamorigRightLeg", "calf_r"],
+  lUpLeg: ["mixamorigLeftUpLeg", "thigh_l"], lLeg: ["mixamorigLeftLeg", "calf_l"],
+} as const;
+
+export interface Bones {
+  head: THREE.Object3D; top: THREE.Object3D; neck: THREE.Object3D;
+  spine: THREE.Object3D; spine1: THREE.Object3D; spine2: THREE.Object3D; hips: THREE.Object3D;
+  rUpLeg: THREE.Object3D; rLeg: THREE.Object3D; lUpLeg: THREE.Object3D; lLeg: THREE.Object3D;
+}
+
+/** Finds the bones the arena moves by hand, in a Mixamo or a UE Mannequin rig. `box` is the model's bounds at rest. */
+export function findBones(model: THREE.Object3D, box: THREE.Box3): Bones {
+  const q = new THREE.Quaternion();
+  const find = (key: keyof typeof RIG): THREE.Object3D => {
+    const b = RIG[key].map((n) => model.getObjectByName(n)).find((o) => o);
+    if (!b) throw new Error(`the model has no bone ${RIG[key].join(" / ")}`);
+    // the figure's own left-right and front-back lines in this bone's space, whichever way the rig rolls its bones
+    b.getWorldQuaternion(q).invert();
+    AXES.set(b, { pitch: new THREE.Vector3(1, 0, 0).applyQuaternion(q), roll: new THREE.Vector3(0, 0, 1).applyQuaternion(q) });
+    return b;
+  };
+  const head = find("head");
+  let top = model.getObjectByName("mixamorigHeadTop_End");
+  if (!top) {
+    // UE rigs end at the head bone: mark the crown, the highest point of the model, and let the head carry it
+    top = new THREE.Object3D();
+    const p = head.getWorldPosition(new THREE.Vector3());
+    top.position.set(p.x, box.max.y, p.z);
+    head.attach(top);
+  }
+  return {
+    head, top, neck: find("neck"), spine: find("spine"), spine1: find("spine1"), spine2: find("spine2"), hips: find("hips"),
+    rUpLeg: find("rUpLeg"), rLeg: find("rLeg"), lUpLeg: find("lUpLeg"), lLeg: find("lLeg"),
+  };
+}
+
+const AXES = new WeakMap<THREE.Object3D, { pitch: THREE.Vector3; roll: THREE.Vector3 }>();
+/** Bends a bone forward (or back, for a negative angle) about the figure's left-right line. */
+export const pitch = (b: THREE.Object3D, a: number) => b.rotateOnAxis(AXES.get(b)!.pitch, a);
+/** Tilts a bone sideways about the figure's front-back line. */
+export const roll = (b: THREE.Object3D, a: number) => b.rotateOnAxis(AXES.get(b)!.roll, a);
