@@ -5,6 +5,7 @@ import {
   itemsForSlot, loadLocalLoadout, saveLocalLoadout,
 } from "./loadout-state.ts";
 import { PersonaViewer } from "./persona-viewer.ts";
+import { DepthBackdrop } from "./depth-backdrop.ts";
 import { WeaponScreen } from "./weapon-screen.ts";
 import { liquidGlass } from "../hud/liquid.ts";
 import { gameAudio } from "../audio/arena-audio.ts";
@@ -64,6 +65,7 @@ export class BaseScreen {
       </section>
       <section class="cd-fitting" aria-label="Примерочная" hidden>
         <img class="cd-backdrop" src="${asset("fitting-room-v2.png")}" alt="Оборудованная ниша примерочной в соляной шахте" draggable="false">
+        <canvas class="cd-backdrop cd-backdrop-depth" aria-hidden="true" hidden></canvas>
         <div class="cd-fit-shade" aria-hidden="true"></div>
         <header class="cd-fit-header"><button class="glass cd-back" type="button" aria-label="Вернуться на базу">${backArrow}<span>Назад</span></button></header>
         <div class="cd-model-stage">
@@ -94,7 +96,7 @@ export class BaseScreen {
     this.home = root.querySelector(".cd-home")!;
     this.fitting = root.querySelector(".cd-fitting")!;
     this.stage = root.querySelector(".cd-model-stage")!;
-    this.canvas = root.querySelector("canvas")!;
+    this.canvas = root.querySelector(".cd-persona-canvas")!;
     this.dialog = root.querySelector("dialog")!;
     this.catalog = root.querySelector(".cd-catalog-items")!;
     this.status = root.querySelector(".cd-model-status")!;
@@ -102,6 +104,7 @@ export class BaseScreen {
     root.querySelector(".cd-to-fitting")!.addEventListener("click", () => this.navigate("fitting"));
     const home = root.querySelector<HTMLElement>(".cd-home")!;
     driftBackdrop(home, 1882 / 3344);
+    this.depthFitting();
     root.querySelector(".cd-back")!.addEventListener("click", () => this.navigate("base"));
     root.querySelector(".cd-enter")!.addEventListener("click", () => { void this.enterBattle(); });
     root.querySelector(".cd-open-catalog")!.addEventListener("click", () => this.openCatalog(this.selectedSlot));
@@ -183,6 +186,25 @@ export class BaseScreen {
     if (active && this.view === "weapon") this.workshop.show(this.loadout);
     this.viewer?.setActive(active && this.view === "fitting");
     if (active) this.resize();
+  }
+
+  /**
+   * The fitting room with depth: the picture moves like a room (near shelves more than the far wall), and the
+   * Persona's camera slides along as if she stood on the floor at the podium's depth. A flat picture until it loads.
+   */
+  private depthFitting(): void {
+    const img = this.fitting.querySelector<HTMLImageElement>("img.cd-backdrop")!, canvas = this.fitting.querySelector<HTMLCanvasElement>(".cd-backdrop-depth")!;
+    let depth: DepthBackdrop | null = null;
+    try {
+      const backdrop = new DepthBackdrop(canvas, asset("fitting-room-v2.png"), asset("fitting-room-v2-depth.png"), FITTING_RATIO, DEPTH.zoom);
+      void backdrop.ready.then(() => { depth = backdrop; canvas.hidden = false; img.hidden = true; }).catch(() => {});
+    } catch { return; } // no WebGL: the flat picture stays still
+    driftBackdrop(this.fitting, FITTING_RATIO, (tx, ty) => {
+      if (!depth) return;
+      const x = tx * DEPTH.gain, y = ty * DEPTH.gain;
+      depth.draw(x, y);
+      this.viewer?.shift(x * DEPTH.podium, y * DEPTH.podium);
+    }, false);
   }
 
   private resize(): void {
@@ -300,13 +322,16 @@ export class BaseScreen {
 
 /** How far the camera drifts: the zoom that hides the edges, and the sway as a share of the screen. */
 const DRIFT = { zoom: 1.07, sway: 0.022, tilt: 0.018 };
+/** The fitting room's depth drift: how much more the nearest pixel moves than the flat drift, the zoom that hides the edges, and the podium's depth on the map (0 far, 1 near). */
+const DEPTH = { gain: 2, zoom: 1.1, podium: 0.3 };
+const FITTING_RATIO = 941 / 1672;
 
 /**
  * A slow, breathing camera over a screen's picture (pseudo 3D): the picture sways and the
  * phone's tilt or the mouse leans it a little. Rings on the picture (.cd-tunnel with data-u/v,
- * a share of the picture) ride on the same move.
+ * a share of the picture) ride on the same move. `follow` gets the move instead when the screen draws its own (flat false).
  */
-function driftBackdrop(home: HTMLElement, ratio: number): void {
+function driftBackdrop(home: HTMLElement, ratio: number, follow?: (tx: number, ty: number) => void, flat = true): void {
   const img = home.querySelector<HTMLElement>(".cd-backdrop")!, rings = [...home.querySelectorAll<HTMLElement>(".cd-tunnel")];
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let lean: [number, number] = [0, 0], want: [number, number] = [0, 0];
@@ -330,7 +355,7 @@ function driftBackdrop(home: HTMLElement, ratio: number): void {
     const s = still ? 1 : DRIFT.zoom;
     const tx = w * (DRIFT.sway * Math.sin(t / 9) - DRIFT.tilt * lean[0] * (still ? 0 : 1));
     const ty = h * (DRIFT.sway * 0.6 * Math.sin(t / 13 + 1) - DRIFT.tilt * lean[1] * (still ? 0 : 1));
-    img.style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${s})`;
+    if (flat) img.style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${s})`;
     // the picture fills the screen like object-fit: cover, then the move above scales it about the centre
     const fit = Math.max(w / ratio, h), iw = fit * ratio, ih = fit;
     for (const ring of rings) {
@@ -338,6 +363,7 @@ function driftBackdrop(home: HTMLElement, ratio: number): void {
       ring.style.left = (w / 2 + s * (px - w / 2) + tx).toFixed(1) + "px";
       ring.style.top = (h / 2 + s * (py - h / 2) + ty).toFixed(1) + "px";
     }
+    follow?.(tx, ty);
   };
   requestAnimationFrame(frame);
 }

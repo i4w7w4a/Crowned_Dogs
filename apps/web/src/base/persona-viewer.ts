@@ -48,6 +48,9 @@ export class PersonaViewer {
   private width = 1;
   private height = 1;
   private frame = 0;
+  /** Where the fit put the camera, and how far the backdrop's drift has moved her on screen (CSS pixels). */
+  private distance = 3;
+  private moved: [number, number] = [0, 0];
   private drag: { id: number; x: number } | null = null;
   private readonly previousTouchAction: string;
   private readonly canvas: HTMLCanvasElement;
@@ -215,6 +218,7 @@ export class PersonaViewer {
       if (outline.every((point) => { const p = point.clone().project(this.camera); return Math.abs(p.x) < .94 && Math.abs(p.y) < limitY; })) break;
       distance *= 1.015;
     }
+    this.distance = distance; this.aim();
     if (this.renderer) {
       const q = this.quality;
       const ratio = Math.max(.5, Math.min((globalThis.devicePixelRatio || 1) * q.ssaa, q.maxDpr, Math.sqrt(q.maxPixels / (this.width * this.height))));
@@ -232,6 +236,23 @@ export class PersonaViewer {
       if (before !== this.quality.id) { void this.updateTextureQuality(); this.resize(this.width, this.height); }
       this.render();
     } else { cancelAnimationFrame(this.frame); this.frame = 0; this.drag = null; }
+  }
+
+  /**
+   * Moves her on screen with the backdrop's depth drift: the camera slides sideways (it does not turn),
+   * so she shifts and shows a sliver of her side just as the room behind her does.
+   */
+  shift(x: number, y: number): void {
+    if (Math.abs(x - this.moved[0]) + Math.abs(y - this.moved[1]) < .05) return;
+    this.moved = [x, y]; this.aim(); this.render();
+  }
+
+  private aim(): void {
+    this.camera.position.set(0, 1.36, this.distance); this.camera.lookAt(0, .88, 0);
+    // CSS pixels per metre at her distance
+    const k = this.height / 2 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) / Math.hypot(this.distance, .48);
+    this.camera.translateX(-this.moved[0] / k); this.camera.translateY(this.moved[1] / k);
+    this.camera.updateMatrixWorld();
   }
 
   rotate(deltaRadians: number): void {
