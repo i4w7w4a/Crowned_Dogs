@@ -52,7 +52,7 @@ export class BaseScreen {
       <section class="cd-home" aria-label="База Соль">
         <img class="cd-backdrop" src="${asset("salt-base.webp")}" alt="Убежище в соляной шахте: Персоны в ложементах, капсула оператора и узел очистки воды" draggable="false">
         <div class="cd-shade" aria-hidden="true"></div>
-        <button class="cd-tunnel" type="button" aria-label="Примерочная: боец и снаряжение"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label">Примерочная</span></button>
+        <button class="cd-tunnel" type="button" aria-label="Примерочная: боец и снаряжение"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">Примерочная</span></button>
         <header class="cd-home-header"><img class="cd-brand-mark" src="${import.meta.env.BASE_URL}brand/maw.svg" alt="Пасть из двух корон" draggable="false"><img class="cd-wordmark" src="${import.meta.env.BASE_URL}brand/wordmark.svg" alt="Crowned Dogs" draggable="false"></header>
         <div class="cd-home-title"><p class="cd-overline">БАЗА ОПЕРАТОРА</p><h1>СОЛЬ</h1></div>
         <div class="cd-home-bottom">
@@ -101,7 +101,7 @@ export class BaseScreen {
     this.catalogScroll = new GlassScroll(root.querySelector<HTMLElement>(".cd-dialog-content")!);
     root.querySelector(".cd-tunnel")!.addEventListener("click", () => this.navigate("fitting"));
     const home = root.querySelector<HTMLElement>(".cd-home")!;
-    new ResizeObserver(() => placeTunnel(home)).observe(home);
+    driftBase(home);
     root.querySelector(".cd-back")!.addEventListener("click", () => this.navigate("base"));
     root.querySelector(".cd-enter")!.addEventListener("click", () => { void this.enterBattle(); });
     root.querySelector(".cd-open-catalog")!.addEventListener("click", () => this.openCatalog(this.selectedSlot));
@@ -300,11 +300,41 @@ export class BaseScreen {
 }
 
 /** The far end of the tunnel on salt-base.webp (1882×3344), as a share of the picture. */
-const TUNNEL = { u: 0.27, v: 0.335, ratio: 1882 / 3344 };
-/** The picture fills the screen like object-fit: cover, so the ring follows the crop. */
-function placeTunnel(home: HTMLElement): void {
-  const w = home.clientWidth, h = home.clientHeight, ring = home.querySelector<HTMLElement>(".cd-tunnel")!;
-  const s = Math.max(w / TUNNEL.ratio, h) , iw = s * TUNNEL.ratio, ih = s;
-  ring.style.left = ((w - iw) / 2 + TUNNEL.u * iw).toFixed(1) + "px";
-  ring.style.top = ((h - ih) / 2 + TUNNEL.v * ih).toFixed(1) + "px";
+const TUNNEL = { u: 0.333, v: 0.36, ratio: 1882 / 3344 };
+/** How far the camera drifts: the zoom that hides the edges, and the sway as a share of the screen. */
+const DRIFT = { zoom: 1.07, sway: 0.022, tilt: 0.018 };
+
+/**
+ * A slow, breathing camera over the base picture (pseudo 3D): the picture sways and the
+ * phone's tilt or the mouse leans it a little. The tunnel ring rides on the same move.
+ */
+function driftBase(home: HTMLElement): void {
+  const img = home.querySelector<HTMLElement>(".cd-backdrop")!, ring = home.querySelector<HTMLElement>(".cd-tunnel")!;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let lean: [number, number] = [0, 0], want: [number, number] = [0, 0];
+  home.addEventListener("pointermove", (e) => {
+    const r = home.getBoundingClientRect();
+    want = [(e.clientX - r.left) / r.width - 0.5, (e.clientY - r.top) / r.height - 0.5];
+  });
+  addEventListener("deviceorientation", (e) => {
+    if (e.gamma === null || e.beta === null) return;
+    want = [Math.max(-1, Math.min(1, e.gamma / 30)) / 2, Math.max(-1, Math.min(1, (e.beta - 45) / 30)) / 2];
+  });
+  const frame = (now: number) => {
+    requestAnimationFrame(frame);
+    const w = home.clientWidth, h = home.clientHeight;
+    if (!w) return; // the base is hidden
+    const t = still ? 0 : now / 1000;
+    lean = [lean[0] + (want[0] - lean[0]) * 0.04, lean[1] + (want[1] - lean[1]) * 0.04];
+    const s = still ? 1 : DRIFT.zoom;
+    const tx = w * (DRIFT.sway * Math.sin(t / 9) - DRIFT.tilt * lean[0] * (still ? 0 : 1));
+    const ty = h * (DRIFT.sway * 0.6 * Math.sin(t / 13 + 1) - DRIFT.tilt * lean[1] * (still ? 0 : 1));
+    img.style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${s})`;
+    // the picture fills the screen like object-fit: cover, then the move above scales it about the centre
+    const fit = Math.max(w / TUNNEL.ratio, h), iw = fit * TUNNEL.ratio, ih = fit;
+    const px = (w - iw) / 2 + TUNNEL.u * iw, py = (h - ih) / 2 + TUNNEL.v * ih;
+    ring.style.left = (w / 2 + s * (px - w / 2) + tx).toFixed(1) + "px";
+    ring.style.top = (h / 2 + s * (py - h / 2) + ty).toFixed(1) + "px";
+  };
+  requestAnimationFrame(frame);
 }
