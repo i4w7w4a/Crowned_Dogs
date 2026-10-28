@@ -8,6 +8,7 @@ import { QUALITY, startQuality, type Quality } from "../arena/quality.ts";
 import { TextureTiers } from "../arena/textures.ts";
 import { Hand, gripOf } from "../arena/weapons.ts";
 import { fitVaryag, makeFittingStage, makeSling, PLATFORM_TOP, prepareVaryag, relaxArms } from "./fitting-stage.ts";
+import { authoredWeaponFit } from "./user-fitting-layout.ts";
 
 export interface PersonaPreviewCoverage {
   exact: false;
@@ -34,7 +35,7 @@ export class PersonaViewer {
   private figure: THREE.Object3D | null = null;
   private hand: Hand | null = null;
   private varyag: THREE.Object3D | null = null;
-  private sling: THREE.Mesh | null = null;
+  private sling: THREE.Object3D | null = null;
   private tiers: TextureTiers | null = null;
   private texturesPending: Promise<void> = Promise.resolve();
   private readonly originalTextures = new Set<THREE.Texture>();
@@ -271,7 +272,7 @@ export class PersonaViewer {
     mount.position.set(weapon === "pistol" ? .25 : -.035, weapon === "pistol" ? .94 : 1.18, weapon === "pistol" ? .15 : .215);
     mount.rotation.set(0, 0, weapon === "pistol" ? -Math.PI / 2 : -.96);
     if (this.sling) { this.sling.removeFromParent(); disposeObject(this.sling); }
-    this.sling = makeSling(mount, weapon === "pistol");
+    this.sling = realRifle ? authoredWeaponFit(mount) : makeSling(mount, weapon === "pistol");
     this.equipment.add(this.sling); this.tuneObject(this.equipment);
   }
 
