@@ -5,7 +5,7 @@
 
 import * as THREE from "three";
 
-export type Held = "pistol" | "rifle" | "shotgun" | "sniper" | "knife";
+export type Held = "pistol" | "rifle" | "shotgun" | "sniper" | "knife" | "grenade";
 
 type Box = [x0: number, x1: number, y0: number, y1: number, z0: number, z1: number];
 /** Metres in the gun's frame: x forward along the barrel, y up, z to the right; the grip is at the origin. */
@@ -23,6 +23,8 @@ const BOXES: Record<Held, Box[]> = {
     [0.02, 0.30, 0.10, 0.145, -0.02, 0.02], [0.10, 0.16, -0.08, 0.03, -0.015, 0.015], [-0.03, 0.02, -0.07, 0.03, -0.015, 0.015]],
   // the knife's blade comes out of the thumb side of the fist
   knife: [[-0.012, 0.012, 0.035, 0.205, -0.003, 0.003], [-0.016, 0.016, -0.06, 0.035, -0.012, 0.012]],
+  // a hand grenade in the fist, its fuse up at the thumb side
+  grenade: [[-0.03, 0.03, -0.04, 0.025, -0.028, 0.028], [-0.009, 0.009, 0.025, 0.05, -0.009, 0.009]],
 };
 
 /** Where the grip sits in the right hand bone's space, from the model's rest pose; null without such bones. */

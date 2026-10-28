@@ -12,14 +12,17 @@ export type Attack = Stance | "knife" | "grenade";
 const READY: Record<Stance, string> = { pistol: "ready_pistol", rifle: "ready_rifle", shotgun: "ready_shotgun", sniper: "ready_shotgun" };
 
 /** Each attack's clip, its speed, and the moment in it (seconds at normal speed) that must meet the sound:
- *  the shot, the knife reaching the enemy, the grenade leaving the hand. */
-const ATTACKS: Record<Attack, { clip: string; speed: number; mark: number; hold?: Held }> = {
+ *  the shot, the knife reaching the enemy, the grenade leaving the hand. `hold` is what the hand shows
+ *  during it, `release` empties the hand at the mark (the grenade flies), `end` cuts a long clip short
+ *  (seconds at normal speed) and goes back to the stance. */
+const ATTACKS: Record<Attack, { clip: string; speed: number; mark: number; hold?: Held; release?: boolean; end?: number }> = {
   pistol: { clip: "fire_pistol", speed: 1.15, mark: 0.625 },
   rifle: { clip: "fire_rifle", speed: 1, mark: 0.333 },
   shotgun: { clip: "fire_shotgun", speed: 1.25, mark: 0.333 },
   sniper: { clip: "fire_shotgun", speed: 1, mark: 0.333 }, // the bolt works like the pump, slower
   knife: { clip: "attack_knife", speed: 1.25, mark: 0.958, hold: "knife" },
-  grenade: { clip: "grenade_throw", speed: 1.4, mark: 1.25 },
+  // Art's Tripo throw (24 fps): the hand leaves the grenade at its frame 30, back by frame 46, then a second swing we skip
+  grenade: { clip: "grenade_throw", speed: 1.4, mark: 1.208, hold: "grenade", release: true, end: 1.875 },
 };
 
 /** Tracks that move the legs: the pelvis and everything below it (UE Mannequin and Mixamo names). */
@@ -34,8 +37,10 @@ export class Motion {
   private walking = false;
   private pending: { in: number; kind: Attack } | null = null;
   private attacking: THREE.AnimationAction | null = null;
-  /** Called when the hand should show something else (the knife for a stab, then the gun again). */
-  onHold: ((what: Held) => void) | null = null;
+  private kind: Attack | null = null;
+  private released = false;
+  /** Called when the hand should show something else (the knife for a stab, then the gun again; nothing once a grenade is thrown). */
+  onHold: ((what: Held | null) => void) | null = null;
 
   constructor(mixer: THREE.AnimationMixer, clips: THREE.AnimationClip[]) {
     for (const c of clips) {
@@ -89,7 +94,7 @@ export class Motion {
 
   /** Back to the stance at once; `phase` (0..1) staggers figures so they never breathe in step. */
   reset(phase: number): void {
-    this.pending = null; this.attacking = null; this.walking = false;
+    this.pending = null; this.attacking = null; this.kind = null; this.walking = false;
     for (const l of ["body", "legs"] as Layer[]) {
       for (const a of this.layers[l].values()) a.stop();
       this.cur[l] = null;
@@ -101,9 +106,14 @@ export class Motion {
 
   update(dt: number): void {
     const p = this.pending;
-    if (!p) return;
-    p.in -= dt;
-    if (p.in <= 0) { this.pending = null; this.start(p.kind, -p.in * ATTACKS[p.kind].speed); }
+    if (p) {
+      p.in -= dt;
+      if (p.in <= 0) { this.pending = null; this.start(p.kind, -p.in * ATTACKS[p.kind].speed); }
+    }
+    const act = this.attacking, a = this.kind && ATTACKS[this.kind];
+    if (!act || !a) return;
+    if (a.release && !this.released && act.time >= a.mark) { this.released = true; this.onHold?.(null); }
+    if (a.end !== undefined && act.time >= a.end) this.done();
   }
 
   private ready(): string {
@@ -120,13 +130,13 @@ export class Motion {
     const act = this.to("body", a.clip, 0.12, a.speed, true);
     if (!act) return;
     act.time = Math.min(at, act.getClip().duration);
-    this.attacking = act;
+    this.attacking = act; this.kind = kind; this.released = false;
     if (!this.walking) { this.to("legs", a.clip, 0.12, a.speed, true); this.sync("legs", "body"); }
     if (a.hold) this.onHold?.(a.hold);
   }
 
   private done(): void {
-    this.attacking = null;
+    this.attacking = null; this.kind = null;
     this.to("body", this.ready(), 0.35);
     if (!this.walking) { this.to("legs", this.ready(), 0.35); this.sync("legs", "body"); }
     this.onHold?.(this.stance);
