@@ -10,13 +10,16 @@ export type Stance = "pistol" | "rifle" | "shotgun" | "sniper";
 export type Attack = Stance | "knife" | "grenade";
 
 const READY: Record<Stance, string> = { pistol: "ready_pistol", rifle: "ready_rifle", shotgun: "ready_shotgun", sniper: "ready_shotgun" };
+/** Seen from our own eyes the pistol's low ready is under the chin, out of the picture: in first person the
+ *  pistol is held out the way it is at the shot (fire_pistol at its mark), and a shot starts from there. */
+const AIMED: Partial<Record<Stance, { clip: string; at: number; name: string }>> = { pistol: { clip: "fire_pistol", at: 0.625, name: "aim_pistol" } };
 
 /** Each attack's clip, its speed, and the moment in it (seconds at normal speed) that must meet the sound:
  *  the shot, the knife reaching the enemy, the grenade leaving the hand. `hold` is what the hand shows
  *  during it, `release` empties the hand at the mark (the grenade flies), `end` cuts a long clip short
  *  (seconds at normal speed) and goes back to the stance. */
-const ATTACKS: Record<Attack, { clip: string; speed: number; mark: number; hold?: Held; release?: boolean; end?: number }> = {
-  pistol: { clip: "fire_pistol", speed: 1.15, mark: 0.625 },
+const ATTACKS: Record<Attack, { clip: string; speed: number; mark: number; hold?: Held; release?: boolean; end?: number; aimFrom?: number }> = {
+  pistol: { clip: "fire_pistol", speed: 1.15, mark: 0.625, aimFrom: 0.5 },
   rifle: { clip: "fire_rifle", speed: 1, mark: 0.333 },
   shotgun: { clip: "fire_shotgun", speed: 1.25, mark: 0.333 },
   sniper: { clip: "fire_shotgun", speed: 1, mark: 0.333 }, // the bolt works like the pump, slower
@@ -27,6 +30,10 @@ const ATTACKS: Record<Attack, { clip: string; speed: number; mark: number; hold?
 
 /** Tracks that move the legs: the pelvis and everything below it (UE Mannequin and Mixamo names). */
 const LEGS = /^(root|pelvis|thigh_|calf_|foot_|ball_|mixamorigHips|mixamorig(Left|Right)(UpLeg|Leg|Foot|ToeBase|Toe_End))/;
+/** The pelvis turn and the first spine bone, which carries the whole upper body. */
+const PELVIS = /^(pelvis|mixamorigHips)\.quaternion$/;
+const SPINE = ["spine_01", "mixamorigSpine"];
+const qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
 
 type Layer = "body" | "legs";
 
@@ -35,10 +42,16 @@ export class Motion {
   private cur: Record<Layer, THREE.AnimationAction | null> = { body: null, legs: null };
   private stance: Stance = "pistol";
   private walking = false;
-  private pending: { in: number; kind: Attack } | null = null;
+  private pending: { in: number; kind: Attack; from: number } | null = null;
+  /** First person: the stances in AIMED are held out in front. */
+  private aimed = false;
   private attacking: THREE.AnimationAction | null = null;
   private kind: Attack | null = null;
   private released = false;
+  /** Each clip's pelvis turn, to keep the upper body on its own clip while the legs play another. */
+  private pelvisOf = new Map<string, THREE.Interpolant>();
+  private pelvis: THREE.Object3D | null;
+  private spine: THREE.Object3D | null;
   /** Called when the hand should show something else (the knife for a stab, then the gun again; nothing once a grenade is thrown). */
   onHold: ((what: Held | null) => void) | null = null;
 
@@ -47,8 +60,42 @@ export class Motion {
       const legs = c.tracks.filter((t) => LEGS.test(t.name)), body = c.tracks.filter((t) => !LEGS.test(t.name));
       this.layers.legs.set(c.name, mixer.clipAction(new THREE.AnimationClip(`${c.name}.legs`, c.duration, legs)));
       this.layers.body.set(c.name, mixer.clipAction(new THREE.AnimationClip(`${c.name}.body`, c.duration, body)));
+      const turn = c.tracks.find((t) => PELVIS.test(t.name));
+      if (turn) this.pelvisOf.set(c.name, new THREE.QuaternionLinearInterpolant(turn.times, turn.values, 4, new Float32Array(4)));
     }
+    for (const a of Object.values(AIMED)) {
+      const c = clips.find((c) => c.name === a.clip);
+      if (!c) continue;
+      const held = poseAt(c, a.at, a.name);
+      this.layers.legs.set(a.name, mixer.clipAction(new THREE.AnimationClip(`${a.name}.legs`, 1, held.tracks.filter((t) => LEGS.test(t.name)))));
+      this.layers.body.set(a.name, mixer.clipAction(new THREE.AnimationClip(`${a.name}.body`, 1, held.tracks.filter((t) => !LEGS.test(t.name)))));
+      const turn = held.tracks.find((t) => PELVIS.test(t.name));
+      if (turn) this.pelvisOf.set(a.name, new THREE.QuaternionLinearInterpolant(turn.times, turn.values, 4, new Float32Array(4)));
+    }
+    const root = mixer.getRoot() as THREE.Object3D;
+    this.pelvis = root.getObjectByName("pelvis") ?? root.getObjectByName("mixamorigHips") ?? null;
+    this.spine = SPINE.map((n) => root.getObjectByName(n)).find((o) => o) ?? null;
     mixer.addEventListener("finished", (e) => { if (e.action === this.attacking) this.done(); });
+  }
+
+  /** After the mixer: the upper body keeps the turn its own clip gives the pelvis. The legs layer turns the
+   *  pelvis with every stride of a run, and a stance stands half turned (a rifle is held bladed), so without
+   *  this the spine, the arms and the gun swing with the hips. */
+  settle(): void {
+    const pelvis = this.pelvis, spine = this.spine;
+    if (!pelvis || !spine) return;
+    qa.set(0, 0, 0, 0);
+    for (const [name, act] of this.layers.body) {
+      const w = act.isRunning() ? act.getEffectiveWeight() : 0, turn = this.pelvisOf.get(name);
+      if (w <= 0 || !turn) continue;
+      qb.fromArray(turn.evaluate(act.time) as unknown as number[]);
+      if (qa.dot(qb) < 0) qb.set(-qb.x, -qb.y, -qb.z, -qb.w);
+      qa.set(qa.x + qb.x * w, qa.y + qb.y * w, qa.z + qb.z * w, qa.w + qb.w * w);
+    }
+    if (qa.lengthSq() < 1e-8) return;
+    qa.normalize();
+    // spine' = pelvis⁻¹ · (the body clip's pelvis) · spine
+    spine.quaternion.premultiply(qb.copy(pelvis.quaternion).invert().multiply(qa));
   }
 
   /** The weapon in hand: its ready stance, unless the figure is busy attacking. */
@@ -58,6 +105,14 @@ export class Motion {
     if (!this.attacking) this.to("body", this.ready(), 0.3);
     if (!this.walking && !this.attacking) this.to("legs", this.ready(), 0.3);
     this.onHold?.(stance);
+  }
+
+  /** First person: holds the pistol out in front instead of low, where our own eyes could not see it. */
+  aim(on: boolean): void {
+    if (on === this.aimed) return;
+    this.aimed = on;
+    if (!this.attacking) this.to("body", this.ready(), 0.3);
+    if (!this.walking && !this.attacking) this.to("legs", this.ready(), 0.3);
   }
 
   /** Walks (or runs) on the spot while the arena carries the figure; a negative speed walks backwards. */
@@ -78,9 +133,11 @@ export class Motion {
   attack(kind: Attack, inSeconds: number): void {
     const a = ATTACKS[kind];
     if (!this.layers.body.has(a.clip)) return; // this figure has no such clip: it stays in its stance
-    const wait = inSeconds - a.mark / a.speed;
-    if (wait > 0) this.pending = { in: wait, kind };
-    else this.start(kind, -wait * a.speed);
+    // held out already, a shot starts near its mark instead of raising the gun from low
+    const from = this.aimed && a.aimFrom !== undefined ? a.aimFrom : 0;
+    const wait = inSeconds - (a.mark - from) / a.speed;
+    if (wait > 0) this.pending = { in: wait, kind, from };
+    else this.start(kind, from - wait * a.speed);
   }
 
   /** Falls: whatever it was doing slows to a stop while the arena tips it over. */
@@ -108,7 +165,7 @@ export class Motion {
     const p = this.pending;
     if (p) {
       p.in -= dt;
-      if (p.in <= 0) { this.pending = null; this.start(p.kind, -p.in * ATTACKS[p.kind].speed); }
+      if (p.in <= 0) { this.pending = null; this.start(p.kind, p.from - p.in * ATTACKS[p.kind].speed); }
     }
     const act = this.attacking, a = this.kind && ATTACKS[this.kind];
     if (!act || !a) return;
@@ -117,6 +174,8 @@ export class Motion {
   }
 
   private ready(): string {
+    const aim = this.aimed && AIMED[this.stance];
+    if (aim && this.layers.body.has(aim.name)) return aim.name;
     const r = READY[this.stance];
     return this.layers.body.has(r) ? r : "idle";
   }
@@ -163,4 +222,18 @@ export class Motion {
     const a = this.cur[layer], b = this.cur[from];
     if (a && b && a.getClip().name.split(".")[0] === b.getClip().name.split(".")[0]) a.time = b.time;
   }
+}
+
+/** A still clip of one moment of a clip: every track holds its value at `t` (seconds). */
+function poseAt(clip: THREE.AnimationClip, t: number, name: string): THREE.AnimationClip {
+  const tracks = clip.tracks.map((tr) => {
+    const n = tr.getValueSize(), at = new Float32Array(n);
+    const interp = tr instanceof THREE.QuaternionKeyframeTrack
+      ? new THREE.QuaternionLinearInterpolant(tr.times, tr.values, n, at)
+      : new THREE.LinearInterpolant(tr.times, tr.values, n, at);
+    const v = Array.from(interp.evaluate(t) as ArrayLike<number>);
+    const Track = tr.constructor as new (name: string, times: number[], values: number[]) => THREE.KeyframeTrack;
+    return new Track(tr.name, [0, 1], [...v, ...v]);
+  });
+  return new THREE.AnimationClip(name, 1, tracks);
 }

@@ -18,6 +18,9 @@ export interface Calibration {
   /** How far the live camera has stepped back from the painted one, metres: both figures stand that much
    *  further away (ours shrinks the most, the enemy barely), the hall itself is far enough not to change. */
   back: number;
+  /** First person (bodycam): the camera's height, our eyes, and how much closer than the painted 7 steps
+   *  the enemy stands at 7 steps. The painted horizon stays where it is. */
+  fp: { camH: number; near: number };
 }
 
 export interface Look {
@@ -62,7 +65,7 @@ const BACK = Number(new URLSearchParams(location.search).get("back") ?? 0.45);
 /** Art's grey salt hall (style 2): overcast white light through the broken roof, salt haze, wet floor. */
 const GREY_HALL = {
   w: 941, h: 1672, top: 0, mapId: "saltHall", time: "day",
-  cal: { fov: 55, camH: 2.0, feet: [0.572, 0.608], height: 0.212, me: { x: -0.15, y: 0.17, z: -0.66 }, back: BACK },
+  cal: { fov: 55, camH: 2.0, feet: [0.572, 0.608], height: 0.212, me: { x: -0.15, y: 0.17, z: -0.66 }, back: BACK, fp: { camH: 1.65, near: 0.88 } },
   look: {
     exposure: 1.05, rim: 0xe8eef2, fill: 0xc7ccd0, fog: 0x8e9497, sky: 0xc3cacd, ground: 0x2b2d2e, puddle: 0,
     // light shafts from the broken roof, salt haze lit cold white

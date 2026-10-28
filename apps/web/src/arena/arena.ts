@@ -15,7 +15,7 @@ import { Lens, type View } from "./lens.ts";
 import { tune } from "./materials.ts";
 import { Motion, type Attack, type Stance } from "./motion.ts";
 import { QUALITY, type Quality } from "./quality.ts";
-import { findBones, pitch, roll, type Bones } from "./rig.ts";
+import { armsOnly, findBones, pitch, roll, type Bones } from "./rig.ts";
 import { TextureTiers } from "./textures.ts";
 import { Hand, gripOf } from "./weapons.ts";
 
@@ -28,6 +28,22 @@ const HEIGHT = 1.8;
 const STEP_GROWTH = 1.07;
 /** Where the sync connector sits on the nape: share of the head height up, share of it back. */
 const PORT = { up: 0.08, depth: 0.45 };
+/** First person: where the lens sits in our figure's own frame for each stance (metres: x to its left, y up,
+ *  z forward; the head is folded away), and how far our figure is tilted back about the lens, radians, so the
+ *  arms and the gun come up into the picture. The camera itself never turns: the painted hall must match. */
+const VIEW: Record<Stance, { at: [number, number, number]; tilt: number }> = {
+  // the gun at the shoulder; the lens above it and a little to the left, so it lies low on the right
+  rifle: { at: [0.02, 1.55, -0.15], tilt: 0.05 },
+  shotgun: { at: [0.042, 1.61, -0.2], tilt: 0.05 },
+  sniper: { at: [0.042, 1.61, -0.2], tilt: 0.05 },
+  // the pistol held out at chest height (Motion.aim), seen from the face, to the left of the hands
+  pistol: { at: [0.07, 1.52, 0.12], tilt: 0.3 },
+};
+{ // ?fpview=x,y,z,tilt tries another lens spot for every stance (tuning)
+  const t = new URLSearchParams(location.search).get("fpview")?.split(",").map(Number);
+  if (t?.length === 4) { const [x = 0, y = 0, z = 0, tilt = 0] = t; for (const v of Object.values(VIEW)) { v.at = [x, y, z]; v.tilt = tilt; } }
+}
+const FPKEY = Number(new URLSearchParams(location.search).get("fpkey") ?? 2.5);
 /** The render layer of our own figure. */
 const NEAR = 1;
 
@@ -85,14 +101,16 @@ interface Calibrated {
   back: number;
 }
 
-function calibrate(f: Frame): Calibrated {
+/** The live camera for a painted frame. In first person it sits lower, at our eyes, under the same painted
+ *  horizon, and the enemy stands a little closer. */
+function calibrate(f: Frame, fp = false): Calibrated {
   const c = f.cal, aspect = f.w / f.h;
   const fn = 0.5 / Math.tan(THREE.MathUtils.degToRad(c.fov) / 2);
   return {
-    fn, aspect, d7: HEIGHT * fn / c.height, camH: c.camH,
+    fn, aspect, d7: HEIGHT * fn / c.height * (fp ? c.fp.near : 1), camH: fp ? c.fp.camH : c.camH,
     hz: c.feet[1] - c.camH * c.height / HEIGHT,
     kx: (c.feet[0] - 0.5) * aspect / fn,
-    me: c.me, back: c.back,
+    me: c.me, back: fp ? 0 : c.back,
   };
 }
 
@@ -153,11 +171,19 @@ export class Arena {
   private sparkLife = 0;
   private sparkMax = 0.18;
   private k: Calibrated | null = null;
+  private frame: Frame | null = null;
+  /** The distance in steps the figures stand at (or walk to). */
+  private dist = 7;
   private depth = 0;
   private walk: { from: number; to: number; t: number; dur: number } | null = null;
   private en: Figure | null = null;
   private me: Figure | null = null;
   private fp = false;
+  /** Our stance, and where the lens sits on us now (it glides to the stance's VIEW). */
+  private myGun: Stance = "pistol";
+  private view = { at: new THREE.Vector3(), tilt: 0, set: false };
+  /** Shows only our arms (first person) or the whole of us. */
+  private armsOnly: ((on: boolean) => void) | null = null;
   private mirror: Mirror | null = null;
   private lens: Lens;
   private q: Quality = QUALITY.medium;
@@ -223,7 +249,11 @@ export class Arena {
     const foe = theirs ?? mine;
     this.en = this.makeFigure(foe, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
     this.me = this.makeFigure(mine, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1, near: true });
-    this.me.group.visible = !this.fp;
+    this.me.blob.visible = !this.fp;
+    this.me.motion.aim(this.fp);
+    this.armsOnly = armsOnly(this.me.model);
+    this.armsOnly(this.fp);
+    this.meKey.intensity = this.fp ? FPKEY : 5;
     this.mirror = this.makeMirror(foe, this.en);
     this.giveWeapons(mine, foe);
     const foeLooks = [this.en.model, this.mirror.model];
@@ -269,7 +299,8 @@ export class Arena {
   }
 
   setFrame(f: Frame): void {
-    const k = this.k = calibrate(f);
+    this.frame = f;
+    const k = this.k = calibrate(f, this.fp);
     this.camera.position.set(0, k.camH, 0);
     // Off-centre lens: the painted horizon is not in the middle of the picture, verticals stay vertical.
     const n = this.camera.near;
@@ -321,11 +352,13 @@ export class Arena {
   arm(who: Who, gun: Stance): void {
     if (!this.ready) return;
     (who === "enemy" ? this.en! : this.me!).motion.arm(gun);
+    if (who === "me") this.myGun = gun;
   }
 
   /** Both walk to the new distance; who moved decides who walks, the camera rides with us. */
   move(distance: number, meMove: number, enemyMove: number): void {
     if (!this.ready) return;
+    this.dist = distance;
     this.walk = { from: this.depth, to: this.depthOf(distance), t: 0, dur: meMove || enemyMove ? 0.75 : 0.01 };
     if (enemyMove) this.en!.motion.walk(enemyMove >= 3 ? "run" : "walk", enemyMove > 0 ? 1 : -1);
     if (meMove) this.me!.motion.walk(meMove >= 3 ? "run" : "walk", meMove > 0 ? 1 : -1);
@@ -360,21 +393,28 @@ export class Arena {
     f.motion.fall();
   }
 
-  /** First person, on trial (Art's bodycam idea): our own figure is not drawn and the camera, stepped
-   *  back for the view over the shoulder, comes forward to where our eyes are. */
+  /** First person (Art's bodycam): the camera is our eyes, lower than the painted camera, the enemy a little
+   *  closer, and of our own figure only the arms with the weapon show at the bottom of the picture. */
   setFirstPerson(on: boolean): void {
     if (on === this.fp) return;
     this.fp = on;
-    if (!this.k) return;
-    const d = on ? -this.k.back : this.k.back;
-    this.depth += d;
-    if (this.walk) { this.walk.from += d; this.walk.to += d; }
-    if (this.me) this.me.group.visible = !on;
+    if (this.frame) { this.k = calibrate(this.frame, on); this.camera.position.set(0, this.k.camH, 0); this.camera.rotation.set(0, 0, 0); }
+    if (!this.ready) return;
+    this.walk = null;
+    this.depth = this.depthOf(this.dist);
+    const me = this.me!;
+    me.blob.visible = !on;
+    me.motion.aim(on);
+    this.armsOnly?.(on);
+    this.meKey.intensity = on ? FPKEY : 5;
+    this.view.set = false;
+    if (!on) { me.group.visible = true; me.group.rotation.x = 0; }
   }
 
   reset(distance: number): void {
+    if (this.k) { this.camera.position.set(0, this.k.camH, 0); this.camera.rotation.set(0, 0, 0); }
     if (!this.ready) return;
-    this.walk = null;
+    this.walk = null; this.dist = distance;
     this.depth = this.depthOf(distance);
     resetFigure(this.en!, 0.0);
     resetFigure(this.me!, 0.43);
@@ -388,7 +428,7 @@ export class Arena {
   }
 
   private depthOf(d: number): number {
-    return this.k!.d7 * Math.pow(STEP_GROWTH, d - 7) + (this.fp ? 0 : this.k!.back);
+    return this.k!.d7 * Math.pow(STEP_GROWTH, d - 7) + this.k!.back;
   }
 
   private makeFigure(gltf: GLTF, look: Look): Figure {
@@ -489,6 +529,7 @@ export class Arena {
     const ex = k.kx * D, ez = -D;
     en.group.position.set(ex, 0, ez);
     en.group.rotation.y = Math.atan2(-ex, D); // faces the camera
+    if (this.fp) return this.placeView(ex, ez);
     // stepped back, our Persona stays in the same corner of the picture, only smaller
     const mz = k.me.z - k.back, mx = k.me.x * mz / k.me.z;
     me.group.position.set(mx, k.me.y, mz);
@@ -497,6 +538,36 @@ export class Arena {
     this.fill.position.set(ex - 2, 3.4, ez + 3.2); this.fill.target.position.set(ex, 1, ez);
     this.meKey.position.set(mx - 1, 3.4, mz + 3); this.meKey.target.position.set(mx, 1.5, mz);
     this.bounce.position.set(ex - 0.2, 0.12, ez + 0.9);
+  }
+
+  /** First person: our figure faces the enemy from the camera; holdView() then puts its eyes on the lens. */
+  private placeView(ex: number, ez: number): void {
+    const me = this.me!, c = this.camera.position;
+    me.group.rotation.y = Math.atan2(ex - c.x, ez - c.z);
+    me.group.position.set(c.x, 0, c.z);
+    this.rim.position.set(ex - 4, 7.5, ez - 14); this.rim.target.position.set(ex, 0.9, ez);
+    this.fill.position.set(ex - 2, 3.4, ez + 3.2); this.fill.target.position.set(ex, 1, ez);
+    // the arms catch the light of the windows ahead, on their edges
+    this.meKey.position.set(c.x + 1.0, c.y + 1.5, c.z - 2.5); this.meKey.target.position.set(c.x + 0.1, c.y - 0.3, c.z - 0.5);
+    this.bounce.position.set(ex - 0.2, 0.12, ez + 0.9);
+  }
+
+  /** First person: puts our figure around the lens, as VIEW says for our stance (tilted back about it, so the
+   *  arms and the gun show low in the picture); when it falls, the camera falls instead. */
+  private holdView(dt: number): void {
+    const me = this.me!, g = me.group, v = this.view;
+    if (me.fallT >= 0) {
+      g.visible = false;
+      const t = smooth(me.fallT);
+      this.camera.position.y = this.k!.camH - 1.25 * t;
+      this.camera.rotation.set(-0.2 * t, 0, me.fallSide * 1.2 * t);
+      return;
+    }
+    g.visible = true;
+    const want = VIEW[this.myGun], k = v.set ? 1 - Math.exp(-dt * 6) : 1;
+    v.at.lerp(tmpB.fromArray(want.at), k); v.tilt += (want.tilt - v.tilt) * k; v.set = true;
+    g.rotation.set(-v.tilt, g.rotation.y, 0, "YXZ");
+    g.position.copy(this.camera.position).sub(tmpA.copy(v.at).applyEuler(g.rotation));
   }
 
   private tick(time: number): void {
@@ -514,10 +585,12 @@ export class Arena {
       }
     }
     this.place();
-    for (const f of [this.en!, this.me!]) { f.motion.update(dt); f.mixer.update(dt); applyReactions(f, dt); }
+    for (const f of [this.en!, this.me!]) { f.motion.update(dt); f.mixer.update(dt); f.motion.settle(); applyReactions(f, dt); }
+    if (this.fp) this.holdView(dt);
     syncMirror(this.mirror!);
     this.scene.updateMatrixWorld();
     placePort(this.en!); placePort(this.me!);
+    if (this.fp) this.me!.port.visible = false;
     if (this.sparkLife > 0) {
       this.sparkLife = Math.max(0, this.sparkLife - dt);
       const u = 1 - this.sparkLife / this.sparkMax;
