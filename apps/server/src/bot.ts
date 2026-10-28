@@ -3,13 +3,13 @@
 
 import { Bot, GrammyError, InlineKeyboard, type Context } from "grammy";
 import type { InlineKeyboardButton, UserFromGetMe } from "grammy/types";
-import { WEAPON_IDS, other, type Side, type WeaponId } from "@crowned-dogs/core";
+import { VETERAN_KITS, WEAPON_IDS, other, type Side, type WeaponId } from "@crowned-dogs/core";
 import { decodeCommand } from "./codes.ts";
 import { DuelError, DuelService, type Duel, type DuelEvent } from "./duels.ts";
 import { OperatorRegistry, type Operator } from "./operators.ts";
 import {
   CONTRACT, RULES, WELCOME, contractButtons, finalScreen, menuButtons, nameWithTag, signedText, tagText,
-  turnReport, turnScreen, weaponPicker, type AfterContract, type Button, type PickMode,
+  turnReport, turnScreen, VETERAN_NOTE, weaponPicker, type AfterContract, type Button, type PickMode,
 } from "./view.ts";
 
 function keyboard(rows: Button[][]): InlineKeyboard {
@@ -166,16 +166,23 @@ export function createBot(
     await askWeapon(ctx, mode, LEADS[mode]);
   });
 
-  bot.callbackQuery(/^w:(bot|duel|join:[A-Z0-9]+):([a-z]+)$/, async (ctx) => {
+  bot.callbackQuery(/^wk:(bot|duel|join:[A-Z0-9]+):(v|s)$/, async (ctx) => {
+    const mode = ctx.match[1] as PickMode, veteran = ctx.match[2] === "v";
+    await ctx.answerCallbackQuery(veteran ? { text: VETERAN_NOTE, show_alert: true } : undefined);
+    await ctx.editMessageReplyMarkup({ reply_markup: keyboard(weaponPicker(mode, veteran)) }).catch(() => undefined);
+  });
+
+  bot.callbackQuery(/^w:(bot|duel|join:[A-Z0-9]+):([a-z]+)(:v)?$/, async (ctx) => {
     const me = who(ctx);
     const mode = ctx.match[1]!, weapon = ctx.match[2]!;
     if (!me || !isWeapon(weapon)) return ctx.answerCallbackQuery();
+    const kit = ctx.match[3] ? { kit: VETERAN_KITS[weapon] } : {};
     if (await needsContract(ctx, me, mode.startsWith("join:") ? `duel_${mode.slice(5)}` : mode as "bot" | "duel")) return;
     try {
       if (mode === "bot") {
-        duels.startVsBot({ ...me, weapon });
+        duels.startVsBot({ ...me, weapon, ...kit });
       } else if (mode === "duel") {
-        const inv = duels.createInvite({ ...me, weapon });
+        const inv = duels.createInvite({ ...me, weapon, ...kit });
         const link = `https://t.me/${bot.botInfo.username}?start=duel_${inv.code}`;
         const share = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Вызываю тебя на дуэль в Crowned Dogs")}`;
         await ctx.reply(
@@ -183,7 +190,7 @@ export function createBot(
           { reply_markup: keyboard([[{ text: "Отправить другу", data: "", url: share }]]) },
         );
       } else {
-        duels.acceptInvite(mode.slice(5), { ...me, weapon });
+        duels.acceptInvite(mode.slice(5), { ...me, weapon, ...kit });
       }
       await ctx.answerCallbackQuery();
       await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard() }).catch(() => undefined);

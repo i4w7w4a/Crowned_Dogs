@@ -4,4 +4,6 @@ data/
 *.log
 .DS_Store
 apps/web/public/media/
+apps/web/public/models/
 apps/web/dist/
+__pycache__/

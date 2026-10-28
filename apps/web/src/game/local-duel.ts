@@ -4,13 +4,15 @@
 
 import {
   DASH_STEPS, RUN_STEPS, TIMES, WEATHERS, applyCommand, botOrder, createMatch, distanceLimit, draftChance,
-  freshDraft, missing, resolveTurn, toOrder, type Command, type Draft, type Match, type Side, type TimeOfDay,
-  type TurnReport, type Weather, type WeaponId,
+  freshDraft, kitFighter, missing, resolveTurn, swapWeapon, toOrder, type Command, type Draft, type FighterSetup,
+  type Loadout, type Match, type Side, type TimeOfDay, type TurnReport, type Weather, type WeaponId,
 } from "@crowned-dogs/core";
 
 export interface LocalFighter {
   name: string;
   weapon: WeaponId;
+  /** Gear with mods and a possible sidearm; without it the fight uses the plain numbers of rules.ts. */
+  kit?: Loadout;
   /** Dog tag from the contract. */
   tag?: string;
 }
@@ -20,6 +22,7 @@ export interface LocalDuelOptions {
   mapId?: string;
   weather?: Weather;
   time?: TimeOfDay;
+  startDistance?: number;
   player: LocalFighter;
   bot: LocalFighter;
 }
@@ -51,10 +54,8 @@ export class LocalDuel {
       mapId: opts.mapId ?? "saltHall",
       weather: opts.weather ?? pick(WEATHERS, 1),
       time: opts.time ?? pick(TIMES, 2),
-      fighters: [
-        { id: "me", name: opts.player.name, weapon: opts.player.weapon },
-        { id: "bot", name: opts.bot.name, weapon: opts.bot.weapon },
-      ],
+      ...(opts.startDistance ? { startDistance: opts.startDistance } : {}),
+      fighters: [setup("me", opts.player), setup("bot", opts.bot)],
     });
     this.draft = freshDraft(this.match, this.me);
   }
@@ -92,6 +93,11 @@ export class LocalDuel {
     return Math.max(1, Math.min(distanceLimit(this.match), this.match.distance - this.draft.move));
   }
 
+  /** The other gun of our kit, the one a swap would put in hand. Null without a sidearm. */
+  get spare(): WeaponId | null {
+    return swapWeapon(this.match, this.me);
+  }
+
   get over(): boolean {
     return this.match.result !== null;
   }
@@ -119,6 +125,10 @@ export class LocalDuel {
     this.draft = freshDraft(match, this.me);
     return report;
   }
+}
+
+function setup(id: string, f: LocalFighter): FighterSetup {
+  return f.kit ? kitFighter(id, f.name, f.kit) : { id, name: f.name, weapon: f.weapon };
 }
 
 /** A small stable hash, so the same seed gives the same weather and time of day. */

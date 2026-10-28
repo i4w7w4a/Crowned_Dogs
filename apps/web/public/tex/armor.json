@@ -1,0 +1,10 @@
+{
+ "sizes": [
+  2048,
+  4096
+ ],
+ "materials": {
+  "M_Vest": "tex/armor/M_Vest",
+  "M_Helmet": "tex/armor/M_Helmet"
+ }
+}

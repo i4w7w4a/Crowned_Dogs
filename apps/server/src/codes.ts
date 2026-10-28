@@ -13,6 +13,7 @@ export function encodeCommand(c: Command): string {
     case "dash": return "d";
     case "knife": return "k";
     case "grenade": return "n";
+    case "swap": return "w";
     case "flee": return "f";
   }
 }
@@ -33,6 +34,7 @@ export function decodeCommand(s: string): Command | null {
     case "d": return rest ? null : { type: "dash" };
     case "k": return rest ? null : { type: "knife" };
     case "n": return rest ? null : { type: "grenade" };
+    case "w": return rest ? null : { type: "swap" };
     case "f": return rest ? null : { type: "flee" };
     default: return null;
   }

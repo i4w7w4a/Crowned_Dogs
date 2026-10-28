@@ -5,7 +5,8 @@
 
 import {
   canFlee, canThrowGrenade, canUseKnife, defendCount, distanceLimit, expectedHit, grenadeHit, grenadeSpec,
-  guardShare, hitChance, other, plannedDistance, validateOrder, type Action, type Match, type Order, type Side,
+  guardShare, hitChance, other, plannedDistance, swapWeapon, validateOrder, type Action, type FighterState, type Match,
+  type Order, type Side,
 } from "./match.ts";
 import { nextFloat, seedRng, type RngState } from "./rng.ts";
 import {
@@ -113,6 +114,22 @@ function grenadeValue(m: Match, side: Side, pStand: number): number {
   return hurt;
 }
 
+/** The same match with this side holding its other gun: to weigh a swap. */
+function afterSwap(m: Match, side: Side): Match {
+  const weapon = swapWeapon(m, side);
+  if (!weapon) return m;
+  const fighters = [...m.fighters] as [FighterState, FighterState];
+  fighters[side] = { ...fighters[side], weapon, sidearm: !fighters[side].sidearm };
+  return { ...m, fighters };
+}
+
+/** The match as it will be after our dash: out of breath next turn. */
+function winded(m: Match, side: Side): Match {
+  const fighters = [...m.fighters] as [FighterState, FighterState];
+  fighters[side] = { ...fighters[side], winded: true };
+  return { ...m, fighters };
+}
+
 interface Candidate {
   action: Action;
   score: number;
@@ -136,6 +153,7 @@ function candidates(m: Match, side: Side, style: BotStyle): Candidate[] {
     list.push({ type: "shoot", move, zone: "body" });
     if (canUseKnife(m, move)) list.push({ type: "knife", move, zone: "body" });
     if (canThrowGrenade(m, side)) list.push({ type: "grenade", move });
+    if (swapWeapon(m, side)) list.push({ type: "swap", move });
   }
   list.push({ type: "run", move: 2 }, { type: "run", move: -2 }, { type: "dash" });
 
@@ -153,7 +171,10 @@ function candidates(m: Match, side: Side, style: BotStyle): Candidate[] {
     }
     const dashing = action.type === "dash";
     const take = shotThreat(m, enemy, d, foeStill, dashing, defendCount(action));
-    const future = Math.max(advantage(m, side, d - 1), advantage(m, side, d), advantage(m, side, d + 1));
+    // A swap deals nothing now; it pays off in the turns after, with the other gun.
+    // A dash costs the next turn's aim.
+    const next = action.type === "swap" ? afterSwap(m, side) : action.type === "dash" ? winded(m, side) : m;
+    const future = Math.max(advantage(next, side, d - 1), advantage(next, side, d), advantage(next, side, d + 1));
     return { action, score: deal - caution * take + style.foresight * future };
   });
 }

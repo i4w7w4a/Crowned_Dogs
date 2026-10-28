@@ -1,13 +1,26 @@
-// Live 3D figures standing in a painted frame. A transparent three.js canvas lies
-// exactly over the picture, and an off-centre lens matched to the painting puts
-// the figures' feet on the painted floor. The fight code only calls move, hit,
-// fall and reset; everything else here is about looking right.
+// Live 3D figures standing in a painted frame. The three.js canvas lies exactly
+// over the picture, an off-centre lens matched to the painting puts the figures'
+// feet on the painted floor, and the bodycam lens (lens.ts) lays them over the
+// painting and shoots both through the same glass. The fight code only calls arm, move,
+// attack, hit, fall and reset; everything else here is about looking right.
 
 import type { Zone } from "@crowned-dogs/core";
 import * as THREE from "three";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
+import { dress, KIT_A } from "./dress.ts";
+import { Dust } from "./dust.ts";
 import type { Frame } from "./frames.ts";
+import { Lens, type View } from "./lens.ts";
+import { tune } from "./materials.ts";
+import { Motion, type Attack, type Stance } from "./motion.ts";
+import { QUALITY, type Quality } from "./quality.ts";
+import { armsOnly, findBones, pitch, roll, type Bones } from "./rig.ts";
+import { Feet } from "./ik.ts";
+import { Viewmodel } from "./viewmodel.ts";
+import { TextureTiers } from "./textures.ts";
+import { Hand, gripOf } from "./weapons.ts";
 
 export type Who = "me" | "enemy";
 export type HitKind = "hit" | "blocked" | "grenade";
@@ -18,6 +31,30 @@ const HEIGHT = 1.8;
 const STEP_GROWTH = 1.07;
 /** Where the sync connector sits on the nape: share of the head height up, share of it back. */
 const PORT = { up: 0.08, depth: 0.45 };
+/** First person: where the lens sits in our figure's own frame for each stance (metres: x to its left, y up,
+ *  z forward; the head is folded away), and how far our figure is tilted back about the lens, radians, so the
+ *  arms and the gun come up into the picture. The camera itself never turns: the painted hall must match. */
+type Spot = { at: [number, number, number]; tilt: number };
+const VIEW: Record<Stance, Spot> & Partial<Record<Attack, Spot>> = {
+  // with a gun the lens is a bodycam between the shoulders; the arms reach for the gun (viewmodel.ts)
+  rifle: { at: [0, 1.57, 0.04], tilt: 0 },
+  shotgun: { at: [0, 1.57, 0.04], tilt: 0 },
+  sniper: { at: [0, 1.57, 0.04], tilt: 0 },
+  pistol: { at: [0, 1.57, 0.04], tilt: 0 },
+  // during a stab or a throw the lens glides to where the hand goes: the knife thrusts low on the right,
+  // the grenade leaves the hand low on the left
+  knife: { at: [-0.2, 1.36, 0.12], tilt: 0.3 },
+  grenade: { at: [0.17, 1.47, 0.12], tilt: 0.53 },
+};
+{ // ?fpview=x,y,z,tilt tries another lens spot for every stance (tuning)
+  const t = new URLSearchParams(location.search).get("fpview")?.split(",").map(Number);
+  if (t?.length === 4) { const [x = 0, y = 0, z = 0, tilt = 0] = t; for (const v of Object.values(VIEW)) { v.at = [x, y, z]; v.tilt = tilt; } }
+}
+/** How much wider the first-person lens on our own arms is than the hall's (a squeeze of the picture). */
+const WIDE = Number(new URLSearchParams(location.search).get("wide") ?? 0.62);
+const FPKEY = Number(new URLSearchParams(location.search).get("fpkey") ?? 2.5);
+/** The render layer of our own figure. */
+const NEAR = 1;
 
 interface Look {
   body: number;
@@ -28,12 +65,8 @@ interface Look {
   lift?: number;
   /** Which way the figure falls: -1 to its right as seen from the camera. */
   fallSide: number;
-}
-
-interface Bones {
-  head: THREE.Object3D; top: THREE.Object3D; neck: THREE.Object3D;
-  spine: THREE.Object3D; spine1: THREE.Object3D; spine2: THREE.Object3D; hips: THREE.Object3D;
-  rUpLeg: THREE.Object3D; rLeg: THREE.Object3D; lUpLeg: THREE.Object3D; lLeg: THREE.Object3D;
+  /** Our own figure, right in front of the lens: drawn on its own layer and out of focus. */
+  near?: boolean;
 }
 
 interface Figure {
@@ -42,8 +75,11 @@ interface Figure {
   model: THREE.Object3D;
   blob: THREE.Mesh;
   mixer: THREE.AnimationMixer;
-  actions: Record<string, THREE.AnimationAction>;
-  cur: THREE.AnimationAction | null;
+  motion: Motion;
+  /** What it holds in the right hand (stand-in guns for now); null if the rig has no fingers to hold with. */
+  hand: Hand | null;
+  /** Keeps its feet flat on the floor while it stands. */
+  feet: Feet;
   port: THREE.Mesh;
   kick: Record<Zone, number>;
   /** 0..1 while falling, -1 when standing. */
@@ -57,6 +93,8 @@ interface Mirror {
   tilt: THREE.Group;
   pairs: [THREE.Object3D, THREE.Object3D][];
   src: Figure;
+  model: THREE.Object3D;
+  mats: THREE.Material[];
 }
 
 interface Calibrated {
@@ -71,16 +109,19 @@ interface Calibrated {
   /** Sideways offset of the enemy per metre of depth. */
   kx: number;
   me: Frame["cal"]["me"];
+  back: number;
 }
 
-function calibrate(f: Frame): Calibrated {
+/** The live camera for a painted frame. In first person it sits lower, at our eyes, under the same painted
+ *  horizon, and the enemy stands a little closer. */
+function calibrate(f: Frame, fp = false): Calibrated {
   const c = f.cal, aspect = f.w / f.h;
   const fn = 0.5 / Math.tan(THREE.MathUtils.degToRad(c.fov) / 2);
   return {
-    fn, aspect, d7: HEIGHT * fn / c.height, camH: c.camH,
+    fn, aspect, d7: HEIGHT * fn / c.height * (fp ? c.fp.near : 1), camH: fp ? c.fp.camH : c.camH,
     hz: c.feet[1] - c.camH * c.height / HEIGHT,
     kx: (c.feet[0] - 0.5) * aspect / fn,
-    me: c.me,
+    me: c.me, back: fp ? 0 : c.back,
   };
 }
 
@@ -93,8 +134,34 @@ function softTexture(stops: [number, string][]): THREE.CanvasTexture {
   return t;
 }
 
+/** Fetches and parses a figure model: a .glb, or a .json with the .glb inside as base64. */
+async function loadModel(url: string): Promise<GLTF> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`model: ${res.status}`);
+  let bytes: ArrayBuffer;
+  if (url.endsWith(".json")) {
+    const bin = atob(((await res.json()) as { data: string }).data);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    bytes = arr.buffer;
+  } else {
+    bytes = await res.arrayBuffer();
+  }
+  return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(bytes, "");
+}
+
 const smooth = (u: number) => u * u * (3 - 2 * u);
-const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
+const aimAt = new THREE.Vector3(), tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpSize = new THREE.Vector2();
+
+/** The reflection fades away from the feet, like one in a thin layer of water, and is lit as the body above it is. */
+function mirrorShader(sh: THREE.WebGLProgramParametersWithUniforms): void {
+  sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying float vWorldY;")
+    .replace("#include <project_vertex>", "#include <project_vertex>\nvWorldY = (modelMatrix * vec4(transformed, 1.0)).y;");
+  sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vWorldY;")
+    // flipped upside down, its surfaces face the floor; light them as the real body's surfaces are lit
+    .replace("#include <normal_fragment_maps>", "#include <normal_fragment_maps>\n{ vec3 w = transpose(mat3(viewMatrix)) * normal; w.y = -w.y; normal = normalize(mat3(viewMatrix) * w); }")
+    .replace("#include <dithering_fragment>", "#include <dithering_fragment>\ngl_FragColor *= clamp(1.0 + vWorldY / 1.1, 0.0, 1.0);");
+}
 
 export class Arena {
   /** True once the model is loaded and the figures stand. */
@@ -106,6 +173,7 @@ export class Arena {
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(45, 1024 / 1536, 0.1, 80);
   private timer = new THREE.Timer();
+  private hemi: THREE.HemisphereLight;
   private rim: THREE.DirectionalLight;
   private fill: THREE.SpotLight;
   private meKey: THREE.SpotLight;
@@ -114,25 +182,57 @@ export class Arena {
   private sparkLife = 0;
   private sparkMax = 0.18;
   private k: Calibrated | null = null;
+  private frame: Frame | null = null;
+  /** The distance in steps the figures stand at (or walk to). */
+  private dist = 7;
   private depth = 0;
   private walk: { from: number; to: number; t: number; dur: number } | null = null;
   private en: Figure | null = null;
   private me: Figure | null = null;
+  private fp = false;
+  /** Our stance, and where the lens sits on us now (it glides to the stance's VIEW). */
+  private myGun: Stance = "pistol";
+  private view = { at: new THREE.Vector3(), tilt: 0, set: false };
+  /** Shows only our arms (first person) or the whole of us. */
+  private armsOnly: ((on: boolean) => void) | null = null;
+  /** First person: our arms on the gun. */
+  private viewmodel: Viewmodel | null = null;
+  /** First person: our own figure is drawn as through a wider lens than the painted hall's, the way a
+   *  bodycam sees the arms (its picture squeezed `k` times towards the lens axis, at NDC height `y`). */
+  private wideK = { value: 1 };
+  private wideY = { value: 0 };
+  private widen = (shader: THREE.WebGLProgramParametersWithUniforms): void => {
+    shader.uniforms.wideK = this.wideK; shader.uniforms.wideY = this.wideY;
+    shader.vertexShader = "uniform float wideK;\nuniform float wideY;\n" + shader.vertexShader.replace("#include <project_vertex>",
+      "#include <project_vertex>\n\tgl_Position.xy = mix(vec2(0.0, wideY) * gl_Position.w, gl_Position.xy, wideK);");
+  };
   private mirror: Mirror | null = null;
+  private lens: Lens;
+  private q: Quality = QUALITY.medium;
+  private catcher: THREE.Mesh;
+  private dust = new Dust();
+  private tiers: TextureTiers[] = [];
+  /** The hall's light for reflections on the figures, made from the painting. */
+  private env: THREE.Texture | null = null;
+  private envSrc = "";
+  private size = { w: 1, h: 1, view: { x: 0, y: 0, w: 1, h: 1 } as View };
+  private sunDir = new THREE.Vector3(0, 0.5, -1);
 
   /** Throws when the device has no WebGL. */
   constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
+    // the figures are drawn off screen with their own smoothing (lens.ts); the screen itself only gets the finished frame
+    this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false, powerPreference: "high-performance" });
     const r = this.renderer;
     r.setClearColor(0x000000, 0);
     r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFShadowMap;
+    this.lens = new Lens(r);
     this.scene.fog = new THREE.Fog(0x3d342c, 2.5, 30);
 
-    // Low warm sun from behind the enemy (the shafts in the hall), soft sky and ground.
-    const hemi = new THREE.HemisphereLight(0xc9b49a, 0x231e1a, 0.6);
+    // Light from behind the enemy (the opening in the hall), soft sky and ground; each frame sets the colours.
+    const hemi = this.hemi = new THREE.HemisphereLight(0xc9b49a, 0x231e1a, 0.6);
     this.rim = new THREE.DirectionalLight(0xffb06a, 3.4);
     this.rim.castShadow = true;
     this.rim.shadow.mapSize.set(1024, 1024);
@@ -143,16 +243,18 @@ export class Arena {
     // A narrow warm spot on the enemy only, and a soft cool one on our own back from over the camera,
     // so our Persona reads as a body, not a hole.
     this.fill = new THREE.SpotLight(0xd9c3a3, 2.4, 0, THREE.MathUtils.degToRad(17), 0.7, 0);
-    this.meKey = new THREE.SpotLight(0xaab0b4, 0.7, 0, THREE.MathUtils.degToRad(15), 0.8, 0);
-    this.bounce = new THREE.PointLight(0x46d8d8, 0.22, 3, 2); // the teal puddle near the enemy
+    this.meKey = new THREE.SpotLight(0xb4b4b0, 5, 0, THREE.MathUtils.degToRad(15), 0.8, 0);
+    this.bounce = new THREE.PointLight(0x46d8d8, 0.22, 3, 2); // a teal puddle near the enemy, where the frame has one
     const back = new THREE.DirectionalLight(0x8ea3b5, 0.45); // the open hall behind us
     back.position.set(1, 3, 8);
     this.scene.add(hemi, this.rim, this.rim.target, this.fill, this.fill.target, this.meKey, this.meKey.target, this.bounce, back);
+    // our own figure is drawn on its own layer, out of focus (lens.ts); the lights shine there too
+    for (const l of [hemi, this.rim, this.fill, this.meKey, this.bounce, back]) l.layers.enable(NEAR);
 
     // Shadows fall on the painted floor through an invisible catcher.
-    const catcher = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ color: 0x0a0705, opacity: 0.58, depthWrite: false }));
+    const catcher = this.catcher = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ color: 0x0a0705, opacity: 0.58, depthWrite: false }));
     catcher.rotation.x = -Math.PI / 2; catcher.receiveShadow = true;
-    this.scene.add(catcher);
+    this.scene.add(catcher, this.dust.points);
 
     this.spark = new THREE.Sprite(new THREE.SpriteMaterial({
       map: softTexture([[0, "rgba(255,248,230,1)"], [0.25, "rgba(255,190,110,.85)"], [1, "rgba(255,120,40,0)"]]),
@@ -163,30 +265,65 @@ export class Arena {
     this.timer.connect(document);
   }
 
-  /** Loads the figure model (.glb, or .json with the .glb inside as base64) and starts drawing. */
-  async load(url: string, distance: number): Promise<void> {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`model: ${res.status}`);
-    let bytes: ArrayBuffer;
-    if (url.endsWith(".json")) {
-      const bin = atob(((await res.json()) as { data: string }).data);
-      const arr = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      bytes = arr.buffer;
-    } else {
-      bytes = await res.arrayBuffer();
-    }
-    const gltf = await new GLTFLoader().parseAsync(bytes, "");
-    this.en = this.makeFigure(gltf, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
-    this.me = this.makeFigure(gltf, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1 });
-    this.mirror = this.makeMirror(gltf, this.en);
+  /** Loads both figures' models (.glb, or .json with the .glb inside as base64) and starts drawing. */
+  async load(meUrl: string, enemyUrl: string, distance: number): Promise<void> {
+    const [mine, theirs] = await Promise.all([loadModel(meUrl), enemyUrl === meUrl ? null : loadModel(enemyUrl)]);
+    const foe = theirs ?? mine;
+    this.en = this.makeFigure(foe, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
+    this.me = this.makeFigure(mine, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1, near: true });
+    this.me.blob.visible = !this.fp;
+    this.armsOnly = armsOnly(this.me.model);
+    this.armsOnly(this.fp);
+    this.meKey.intensity = this.fp ? FPKEY : 5;
+    this.mirror = this.makeMirror(foe, this.en);
+    this.giveWeapons(mine, foe);
+    const foeLooks = [this.en.model, this.mirror.model];
+    this.tiers = theirs ? [new TextureTiers([this.me.model], meUrl), new TextureTiers(foeLooks, enemyUrl)] : [new TextureTiers([this.me.model, ...foeLooks], meUrl)];
     this.ready = true;
+    this.setQuality(this.q);
     this.reset(distance);
     this.renderer.setAnimationLoop((t) => this.tick(t));
   }
 
+  /** The WebGL context, to tell what the device can carry. */
+  get gl(): WebGL2RenderingContext {
+    return this.renderer.getContext() as WebGL2RenderingContext;
+  }
+
+  /** The graphics level (quality.ts): drawing size, smoothing, shadows, reflections, light in the air, textures. */
+  setQuality(q: Quality): void {
+    this.q = q;
+    const r = this.renderer;
+    this.lens.setQuality(q);
+    r.shadowMap.enabled = q.shadow > 0;
+    this.rim.castShadow = q.shadow > 0;
+    this.catcher.visible = q.shadow > 0;
+    if (this.rim.shadow.mapSize.x !== q.shadow && q.shadow > 0) {
+      this.rim.shadow.mapSize.set(q.shadow, q.shadow);
+      this.rim.shadow.map?.dispose(); this.rim.shadow.map = null;
+    }
+    // softness in centimetres stays the same at every map size
+    this.rim.shadow.radius = q.shadowRadius;
+    this.scene.environment = q.env ? this.env : null;
+    // the hall's light takes over from the flat sky light, so the figures stay as bright as before
+    this.hemi.intensity = q.env ? 0.22 : 0.6;
+    this.dust.setCount(q.dust);
+    const mats = new Set<THREE.Material>([this.catcher.material as THREE.Material]), mine = new Set<THREE.Material>();
+    this.en?.model.traverse((o) => { if (o instanceof THREE.Mesh) mats.add(o.material as THREE.Material); });
+    this.me?.model.traverse((o) => { if (o instanceof THREE.Mesh) mine.add(o.material as THREE.Material); });
+    for (const m of mats) tune(m, q);
+    for (const m of mine) tune(m, q, this.widen, "wide");
+    if (this.mirror) {
+      this.mirror.group.visible = q.mirror;
+      this.mirror.mats.forEach((m) => tune(m, q, mirrorShader));
+    }
+    for (const t of this.tiers) void t.set(q.textures, Math.min(q.anisotropy, r.capabilities.getMaxAnisotropy()));
+    this.resize(this.size.w, this.size.h, this.size.view);
+  }
+
   setFrame(f: Frame): void {
-    const k = this.k = calibrate(f);
+    this.frame = f;
+    const k = this.k = calibrate(f, this.fp);
     this.camera.position.set(0, k.camH, 0);
     // Off-centre lens: the painted horizon is not in the middle of the picture, verticals stay vertical.
     const n = this.camera.near;
@@ -194,23 +331,66 @@ export class Arena {
     this.camera.projectionMatrix.makePerspective(-half, half, top, bottom, n, this.camera.far);
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
     this.renderer.toneMappingExposure = f.look.exposure;
+    this.lens.setHorizon(k.hz);
+    this.lens.setBackdrop(f.src, f.src2x, f.depth);
+    this.lens.setLook(f.look.lens, f.look.exposure);
+    this.makeEnv(f.src);
     this.rim.color.set(f.look.rim);
     this.fill.color.set(f.look.fill);
+    this.hemi.color.set(f.look.sky); this.hemi.groundColor.set(f.look.ground);
+    this.bounce.intensity = f.look.puddle;
     (this.scene.fog as THREE.Fog).color.set(f.look.fog);
   }
 
-  /** Size of the drawing buffer in CSS pixels; the canvas element is sized by the page. */
-  resize(width: number, height: number): void {
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  /** The hall's light for the figures' reflections: the painting blurred all round them. */
+  private makeEnv(src: string): void {
+    if (src === this.envSrc) return;
+    this.envSrc = src;
+    new THREE.TextureLoader().load(src, (tex) => {
+      if (this.envSrc !== src) { tex.dispose(); return; }
+      tex.mapping = THREE.EquirectangularReflectionMapping;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      const env = pmrem.fromEquirectangular(tex).texture;
+      pmrem.dispose(); tex.dispose();
+      this.env?.dispose();
+      this.env = env;
+      if (this.q.env) this.scene.environment = env;
+    });
+  }
+
+  /** Size of the drawing buffer in CSS pixels (the canvas element is sized by the page), and the part of it on screen. */
+  resize(width: number, height: number, view: View = { x: 0, y: 0, w: 1, h: 1 }): void {
+    this.size = { w: width, h: height, view };
+    // as sharp as the screen allows, within the level's pixel budget
+    const q = this.q, area = Math.max(1, width * height);
+    const ratio = Math.max(0.5, Math.min(window.devicePixelRatio || 1, q.maxDpr, Math.sqrt(q.maxPixels / area)));
+    this.renderer.setPixelRatio(ratio);
     this.renderer.setSize(Math.round(width), Math.round(height), false);
+    const px = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    this.lens.setSize(px.x, px.y, width, height, view);
+  }
+
+  /** The gun a figure has in hand: its stance and the gun it holds. */
+  arm(who: Who, gun: Stance): void {
+    if (!this.ready) return;
+    (who === "enemy" ? this.en! : this.me!).motion.arm(gun);
+    if (who === "me") this.myGun = gun;
   }
 
   /** Both walk to the new distance; who moved decides who walks, the camera rides with us. */
   move(distance: number, meMove: number, enemyMove: number): void {
     if (!this.ready) return;
+    this.dist = distance;
     this.walk = { from: this.depth, to: this.depthOf(distance), t: 0, dur: meMove || enemyMove ? 0.75 : 0.01 };
-    if (enemyMove) play(this.en!, enemyMove >= 3 ? "run" : "walk", 0.15, enemyMove > 0 ? 1 : -1);
-    if (meMove) play(this.me!, meMove >= 3 ? "run" : "walk", 0.15, meMove > 0 ? 1 : -1);
+    if (enemyMove) this.en!.motion.walk(enemyMove >= 3 ? "run" : "walk", enemyMove > 0 ? 1 : -1);
+    if (meMove) this.me!.motion.walk(meMove >= 3 ? "run" : "walk", meMove > 0 ? 1 : -1);
+  }
+
+  /** A figure attacks so that its shot (the stab, the throw) comes `inSeconds` from now, with the sound. */
+  attack(who: Who, kind: Attack, inSeconds: number): void {
+    if (!this.ready) return;
+    (who === "enemy" ? this.en! : this.me!).motion.attack(kind, inSeconds);
   }
 
   /** A hit lands on a figure: it flinches, and a spark flies off the enemy. */
@@ -233,12 +413,30 @@ export class Arena {
     if (!this.ready) return;
     const f = who === "enemy" ? this.en! : this.me!;
     f.fallT = 0;
-    play(f, "idle", 0.2, 0.2);
+    f.motion.fall();
+  }
+
+  /** First person (Art's bodycam): the camera is our eyes, lower than the painted camera, the enemy a little
+   *  closer, and of our own figure only the arms with the weapon show at the bottom of the picture. */
+  setFirstPerson(on: boolean): void {
+    if (on === this.fp) return;
+    this.fp = on;
+    if (this.frame) { this.k = calibrate(this.frame, on); this.camera.position.set(0, this.k.camH, 0); this.camera.rotation.set(0, 0, 0); }
+    if (!this.ready) return;
+    this.walk = null;
+    this.depth = this.depthOf(this.dist);
+    const me = this.me!;
+    me.blob.visible = !on;
+    this.armsOnly?.(on);
+    this.meKey.intensity = on ? FPKEY : 5;
+    this.view.set = false;
+    if (!on) { me.group.visible = true; me.group.rotation.x = 0; }
   }
 
   reset(distance: number): void {
+    if (this.k) { this.camera.position.set(0, this.k.camH, 0); this.camera.rotation.set(0, 0, 0); }
     if (!this.ready) return;
-    this.walk = null;
+    this.walk = null; this.dist = distance;
     this.depth = this.depthOf(distance);
     resetFigure(this.en!, 0.0);
     resetFigure(this.me!, 0.43);
@@ -248,25 +446,33 @@ export class Arena {
   zoneOnScreen(zone: Zone): [number, number] {
     if (!this.ready) return [0.645, { head: 0.26, body: 0.34, groin: 0.42, legs: 0.49 }[zone]];
     zoneWorld(this.en!, zone, tmpA).project(this.camera);
-    return [(tmpA.x + 1) / 2, (1 - tmpA.y) / 2];
+    return this.lens.toScreen((tmpA.x + 1) / 2, (1 - tmpA.y) / 2);
   }
 
   private depthOf(d: number): number {
-    return this.k!.d7 * Math.pow(STEP_GROWTH, d - 7);
+    return this.k!.d7 * Math.pow(STEP_GROWTH, d - 7) + this.k!.back;
   }
 
   private makeFigure(gltf: GLTF, look: Look): Figure {
     const model = SkeletonUtils.clone(gltf.scene);
+    dress(model, KIT_A); // for now both fighters wear the one kit there is
     const body = new THREE.MeshStandardMaterial({ color: look.body, roughness: 0.82, metalness: 0.04, emissive: look.lift ?? 0x000000 });
     const joints = new THREE.MeshStandardMaterial({ color: look.joints, roughness: look.jointsRough ?? 0.42, metalness: look.jointsMetal ?? 0.4 });
     model.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
       o.castShadow = true; o.frustumCulled = false;
-      o.material = /joint/i.test((o.material as THREE.Material).name) ? joints : body;
+      const own = o.material as THREE.MeshStandardMaterial;
+      // hair strips are cut out by their texture: the antialiasing smooths the cut edges
+      if (own.alphaTest > 0) own.alphaToCoverage = true;
+      if (own.map) return; // a textured Persona keeps its own suit; the bare mannequin gets painted
+      o.material = /joint/i.test(own.name) ? joints : body;
     });
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model, true);
-    const s = HEIGHT / (box.max.y - box.min.y);
+    const bones = findBones(model, box);
+    // a model made in metres keeps its own height (the female Persona is 1.70 m, 1.75 with her hair);
+    // anything else (the stand-in mannequin) is brought to a grown man's height
+    const tall = box.max.y - box.min.y, s = tall > 1.4 && tall < 2.2 ? 1 : HEIGHT / tall;
     model.scale.multiplyScalar(s);
     model.position.y = -box.min.y * s;
 
@@ -278,41 +484,43 @@ export class Arena {
     const group = new THREE.Group(); group.add(tilt, blob);
     this.scene.add(group);
 
-    const bone = (n: string) => {
-      const b = model.getObjectByName("mixamorig" + n);
-      if (!b) throw new Error(`the model has no bone ${n}`);
-      return b;
-    };
     const mixer = new THREE.AnimationMixer(model);
-    const actions: Record<string, THREE.AnimationAction> = {};
-    for (const clip of gltf.animations) actions[clip.name] = mixer.clipAction(clip);
+    const motion = new Motion(mixer, gltf.animations);
+    const feet = new Feet(model, gltf.animations, motion.stances);
 
     // a small cyan light on the sync connector, as in the concept frames
     const port = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), new THREE.MeshBasicMaterial({ color: 0x7ff3ff, fog: false }));
     this.scene.add(port);
 
+    // right in front of the lens the light is a pinpoint, not a lamp
+    if (look.near) { group.traverse((o) => o.layers.set(NEAR)); port.layers.set(NEAR); port.scale.setScalar(0.4); }
+
     return {
-      group, tilt, model, blob, mixer, actions, cur: null, port,
-      kick: { head: 0, body: 0, groin: 0, legs: 0 }, fallT: -1, fallSide: look.fallSide,
-      bones: {
-        head: bone("Head"), top: bone("HeadTop_End"), neck: bone("Neck"), spine: bone("Spine"), spine1: bone("Spine1"), spine2: bone("Spine2"),
-        hips: bone("Hips"), rUpLeg: bone("RightUpLeg"), rLeg: bone("RightLeg"), lUpLeg: bone("LeftUpLeg"), lLeg: bone("LeftLeg"),
-      },
+      group, tilt, model, blob, mixer, motion, hand: null, feet, port,
+      kick: { head: 0, body: 0, groin: 0, legs: 0 }, fallT: -1, fallSide: look.fallSide, bones,
     };
   }
 
-  /** The wet floor reflects the enemy: a faint upside-down copy that repeats its pose every frame. */
+  /** The wet floor reflects the enemy: a faint upside-down copy in its own lit materials that repeats its pose every frame. */
   private makeMirror(gltf: GLTF, src: Figure): Mirror {
     const model = SkeletonUtils.clone(gltf.scene);
-    const mat = new THREE.MeshBasicMaterial({ color: 0xa89278, transparent: true, opacity: 0.42, depthWrite: false });
-    // fades out away from the feet, like a reflection in a thin layer of water
-    mat.onBeforeCompile = (sh) => {
-      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying float vWorldY;")
-        .replace("#include <project_vertex>", "#include <project_vertex>\nvWorldY = (modelMatrix * vec4(transformed, 1.0)).y;");
-      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vWorldY;")
-        .replace("#include <dithering_fragment>", "#include <dithering_fragment>\ngl_FragColor.a *= clamp(1.0 + vWorldY / 1.1, 0.0, 1.0);");
-    };
-    model.traverse((o) => { if (o instanceof THREE.Mesh) { o.material = mat; o.frustumCulled = false; } });
+    dress(model, KIT_A);
+    // the same materials as the body it mirrors (two copies of one model list their meshes in the same order)
+    const own: THREE.Mesh[] = [];
+    src.model.traverse((o) => { if (o instanceof THREE.Mesh) own.push(o); });
+    const copies = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+    let i = 0;
+    model.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      const from = (own[i++]?.material ?? o.material) as THREE.MeshStandardMaterial;
+      let m = copies.get(from);
+      if (!m) {
+        // the water darkens it a little
+        m = from.clone(); m.color.multiplyScalar(0.62); m.transparent = true; m.opacity = 0.5; m.depthWrite = false;
+        copies.set(from, m);
+      }
+      o.material = m; o.frustumCulled = false; o.castShadow = false;
+    });
     model.scale.copy(src.model.scale); model.position.copy(src.model.position);
     const flip = new THREE.Group(); flip.add(model); flip.scale.y = -1;
     const tilt = new THREE.Group(); tilt.add(flip);
@@ -321,7 +529,29 @@ export class Arena {
     const a: THREE.Object3D[] = [], b: THREE.Object3D[] = [];
     src.model.traverse((o) => { if ((o as THREE.Bone).isBone) a.push(o); });
     model.traverse((o) => { if ((o as THREE.Bone).isBone) b.push(o); });
-    return { group, tilt, pairs: a.map((bone, i) => [bone, b[i]!]), src };
+    return { group, tilt, model, pairs: a.map((bone, i) => [bone, b[i]!]), src, mats: [...copies.values()] };
+  }
+
+  /** Stand-in guns in both right hands (and in the enemy's reflection), shown as each figure arms itself. */
+  private giveWeapons(mine: GLTF, foe: GLTF): void {
+    const steel = new THREE.MeshStandardMaterial({ color: 0x1b1c1d, roughness: 0.45, metalness: 0.55 });
+    const myGrip = gripOf(mine.scene), foeGrip = gripOf(foe.scene);
+    const me = this.me!, en = this.en!, mirror = this.mirror!;
+    // our gun has its own copy: it is drawn through the first-person wide lens
+    if (myGrip) me.hand = new Hand(me.model, myGrip, steel.clone(), NEAR);
+    if (foeGrip) {
+      en.hand = new Hand(en.model, foeGrip, steel);
+      // the reflection's copy, darkened by the water like the rest of it
+      const wet = steel.clone(); wet.color.multiplyScalar(0.62); wet.transparent = true; wet.opacity = 0.5; wet.depthWrite = false;
+      mirror.mats.push(wet);
+      const inWater = new Hand(mirror.model, foeGrip, wet);
+      en.motion.onHold = (w) => { en.hand!.hold(w); inWater.hold(w); };
+    }
+    me.motion.onHold = (w) => me.hand?.hold(w);
+    if (me.hand) {
+      const vm = this.viewmodel = new Viewmodel(me.model, me.hand);
+      me.motion.onMark = (kind) => { if (kind !== "knife" && kind !== "grenade") vm.shot(); };
+    }
   }
 
   private place(): void {
@@ -329,13 +559,45 @@ export class Arena {
     const ex = k.kx * D, ez = -D;
     en.group.position.set(ex, 0, ez);
     en.group.rotation.y = Math.atan2(-ex, D); // faces the camera
-    const mx = k.me.x, mz = k.me.z;
+    if (this.fp) return this.placeView(ex, ez);
+    // stepped back, our Persona stays in the same corner of the picture, only smaller
+    const mz = k.me.z - k.back, mx = k.me.x * mz / k.me.z;
     me.group.position.set(mx, k.me.y, mz);
     me.group.rotation.y = Math.atan2(ex - mx, ez - mz); // faces the enemy
     this.rim.position.set(ex - 4, 7.5, ez - 14); this.rim.target.position.set(ex, 0.9, ez);
     this.fill.position.set(ex - 2, 3.4, ez + 3.2); this.fill.target.position.set(ex, 1, ez);
-    this.meKey.position.set(mx - 1.4, 2.8, mz + 4.2); this.meKey.target.position.set(mx, 1.2, mz);
+    this.meKey.position.set(mx - 1, 3.4, mz + 3); this.meKey.target.position.set(mx, 1.5, mz);
     this.bounce.position.set(ex - 0.2, 0.12, ez + 0.9);
+  }
+
+  /** First person: our figure faces the enemy from the camera; holdView() then puts its eyes on the lens. */
+  private placeView(ex: number, ez: number): void {
+    const me = this.me!, c = this.camera.position;
+    me.group.rotation.y = Math.atan2(ex - c.x, ez - c.z);
+    me.group.position.set(c.x, 0, c.z);
+    this.rim.position.set(ex - 4, 7.5, ez - 14); this.rim.target.position.set(ex, 0.9, ez);
+    this.fill.position.set(ex - 2, 3.4, ez + 3.2); this.fill.target.position.set(ex, 1, ez);
+    // the arms catch the light of the windows ahead, on their edges
+    this.meKey.position.set(c.x + 1.0, c.y + 1.5, c.z - 2.5); this.meKey.target.position.set(c.x + 0.1, c.y - 0.3, c.z - 0.5);
+    this.bounce.position.set(ex - 0.2, 0.12, ez + 0.9);
+  }
+
+  /** First person: puts our figure around the lens, as VIEW says for our stance (tilted back about it, so the
+   *  arms and the gun show low in the picture); when it falls, the camera falls instead. */
+  private holdView(dt: number): void {
+    const me = this.me!, g = me.group, v = this.view;
+    if (me.fallT >= 0) {
+      g.visible = false;
+      const t = smooth(me.fallT);
+      this.camera.position.y = this.k!.camH - 1.25 * t;
+      this.camera.rotation.set(-0.2 * t, 0, me.fallSide * 1.2 * t);
+      return;
+    }
+    g.visible = true;
+    const act = me.motion.attackKind, want = (act && VIEW[act]) || VIEW[this.myGun], k = v.set ? 1 - Math.exp(-dt * 6) : 1;
+    v.at.lerp(tmpB.fromArray(want.at), k); v.tilt += (want.tilt - v.tilt) * k; v.set = true;
+    g.rotation.set(-v.tilt, g.rotation.y, 0, "YXZ");
+    g.position.copy(this.camera.position).sub(tmpA.copy(v.at).applyEuler(g.rotation));
   }
 
   private tick(time: number): void {
@@ -349,14 +611,25 @@ export class Arena {
       this.depth = w.from + (w.to - w.from) * smooth(u);
       if (u >= 1) {
         this.walk = null;
-        for (const f of [this.en!, this.me!]) if (f.fallT < 0) play(f, "idle", 0.35);
+        for (const f of [this.en!, this.me!]) if (f.fallT < 0) f.motion.stand(0.35);
       }
     }
     this.place();
-    for (const f of [this.en!, this.me!]) { f.mixer.update(dt); applyReactions(f, dt); }
+    for (const f of [this.en!, this.me!]) {
+      f.motion.update(dt); f.mixer.update(dt); f.motion.settle();
+      if (!(this.fp && f === this.me)) f.feet.update(dt, f.motion.planted);
+      applyReactions(f, dt);
+    }
+    this.wideK.value = this.fp ? WIDE : 1; this.wideY.value = 1 - 2 * this.k!.hz;
+    if (this.fp) {
+      this.holdView(dt);
+      const me = this.me!, act = me.motion.attackKind;
+      this.viewmodel?.update(dt, me.fallT < 0 && act !== "knife" && act !== "grenade", this.myGun, this.camera, zoneWorld(this.en!, "body", aimAt));
+    }
     syncMirror(this.mirror!);
     this.scene.updateMatrixWorld();
     placePort(this.en!); placePort(this.me!);
+    if (this.fp) this.me!.port.visible = false;
     if (this.sparkLife > 0) {
       this.sparkLife = Math.max(0, this.sparkLife - dt);
       const u = 1 - this.sparkLife / this.sparkMax;
@@ -364,30 +637,21 @@ export class Arena {
       this.spark.scale.setScalar((this.spark.userData.size as number) * (0.6 + 0.8 * u));
       this.spark.visible = this.sparkLife > 0;
     }
-    this.renderer.render(this.scene, this.camera);
+    if (this.q.dust) {
+      this.lens.sunDirection(this.camera, this.sunDir);
+      const height = this.renderer.getDrawingBufferSize(tmpSize).y;
+      this.dust.update(this.timer.getElapsed(), height * this.k!.fn, this.sunDir, this.lens.raysTexture, 1 / Math.max(0.5, this.depth), height * this.lens.dof);
+    }
+    this.lens.render(this.scene, this.camera, NEAR, { enemyDepth: this.depth, light: this.rim });
     this.onFrame?.();
   }
-}
-
-function play(f: Figure, name: string, fade = 0.3, speed = 1): void {
-  const a = f.actions[name];
-  if (!a) return;
-  a.timeScale = speed;
-  if (f.cur === a) return;
-  a.reset().setEffectiveWeight(1).fadeIn(fade).play();
-  f.cur?.fadeOut(fade);
-  f.cur = a;
 }
 
 function resetFigure(f: Figure, offset: number): void {
   f.fallT = -1; f.tilt.rotation.set(0, 0, 0);
   f.blob.scale.set(1, 1, 1); f.blob.position.x = 0;
   for (const z of Object.keys(f.kick) as Zone[]) f.kick[z] = 0;
-  f.cur = null;
-  for (const a of Object.values(f.actions)) a.stop();
-  play(f, "idle", 0);
-  const idle = f.actions.idle;
-  if (idle) idle.time = offset * idle.getClip().duration;
+  f.motion.reset(offset);
 }
 
 function syncMirror(m: Mirror): void {
@@ -400,19 +664,19 @@ function syncMirror(m: Mirror): void {
 /** Hit reactions and the fall, layered on top of whatever the animation is doing this frame. */
 function applyReactions(f: Figure, dt: number): void {
   const k = f.kick, b = f.bones, decay = Math.exp(-dt * 6.5);
-  if (k.head) { b.head.rotateX(-0.6 * k.head); b.neck.rotateX(-0.25 * k.head); }
-  if (k.body) { b.spine2.rotateX(-0.32 * k.body); b.spine1.rotateX(-0.22 * k.body); }
-  if (k.groin) { b.spine.rotateX(0.42 * k.groin); b.spine1.rotateX(0.2 * k.groin); }
-  if (k.legs) { b.rUpLeg.rotateX(0.35 * k.legs); b.rLeg.rotateX(-0.75 * k.legs); }
+  if (k.head) { pitch(b.head, -0.6 * k.head); pitch(b.neck, -0.25 * k.head); }
+  if (k.body) { pitch(b.spine2, -0.32 * k.body); pitch(b.spine1, -0.22 * k.body); }
+  if (k.groin) { pitch(b.spine, 0.42 * k.groin); pitch(b.spine1, 0.2 * k.groin); }
+  if (k.legs) { pitch(b.rUpLeg, 0.35 * k.legs); pitch(b.rLeg, -0.75 * k.legs); }
   for (const z of Object.keys(k) as Zone[]) k[z] = k[z] * decay < 0.01 ? 0 : k[z] * decay;
 
   if (f.fallT >= 0) {
     // falls on its side: from this low camera a body lying sideways reads best
     f.fallT = Math.min(f.fallT + dt / 0.9, 1);
     const t = f.fallT, e = smooth(t), g = t * t, side = f.fallSide;
-    b.lUpLeg.rotateX(0.35 * e); b.lLeg.rotateX(-0.5 * e);
-    b.rUpLeg.rotateX(0.2 * e); b.rLeg.rotateX(-0.3 * e);
-    b.spine.rotateX(0.25 * e); b.spine2.rotateX(0.15 * e); b.head.rotateZ(-side * 0.35 * e);
+    pitch(b.lUpLeg, 0.35 * e); pitch(b.lLeg, -0.5 * e);
+    pitch(b.rUpLeg, 0.2 * e); pitch(b.rLeg, -0.3 * e);
+    pitch(b.spine, 0.25 * e); pitch(b.spine2, 0.15 * e); roll(b.head, -side * 0.35 * e);
     f.tilt.rotation.set(-0.25 * g, 0, side * 1.5 * g);
     f.blob.scale.set(1 + 1.9 * g, 1, 1.1); f.blob.position.x = -side * 0.85 * g;
   }
@@ -424,7 +688,7 @@ function placePort(f: Figure): void {
   const r = tmpA.distanceTo(tmpB) * PORT.depth, yaw = f.group.rotation.y;
   tmpA.lerp(tmpB, PORT.up);
   f.port.position.set(tmpA.x - Math.sin(yaw) * r, tmpA.y, tmpA.z - Math.cos(yaw) * r);
-  f.port.visible = f.fallT < 0;
+  f.port.visible = f.fallT < 0 && f.group.visible;
 }
 
 /** A point on the body for each attack zone. */

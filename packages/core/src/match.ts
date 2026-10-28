@@ -6,7 +6,7 @@ import { SMOKE_PENALTY, type GrenadeSpec } from "./items.ts";
 import type { CombatKit, KitWeapon } from "./loadout.ts";
 import { nextInt, roll, seedRng, type RngState } from "./rng.ts";
 import {
-  AFK_LIMIT, BASE_STATS, DASH_EVADE, DASH_STEPS, DAY_FAR_ACCURACY, DAY_GUARD_BONUS, DEFAULT_ARMOR,
+  AFK_LIMIT, BASE_STATS, DASH_EVADE, DASH_STEPS, DASH_WINDED, DAY_FAR_ACCURACY, DAY_GUARD_BONUS, DEFAULT_ARMOR,
   GRENADE, GUARD, KNIFE_GUARD, KNIFE_REACH, MAPS, MAX_STEPS, MIN_DISTANCE_LIMIT, MUZZLE_FLASH_BONUS,
   NIGHT_ACCURACY, NO_STANCE_PENALTY, RUN_STEPS, SHRINK_AFTER_TURN, STANCE_TURNS, START_DISTANCE,
   SUN_ACCURACY, WEAPONS, WEATHER, ZONES, ZONE_MULT, armorFactor, band, baseDamage, grenadeDamage,
@@ -60,6 +60,10 @@ export interface FighterState {
   shieldOff: number;
   /** Turns left hidden in own smoke, this one included: harder to hit. */
   smoke: number;
+  /** Holds the kit's sidearm instead of the main weapon. */
+  sidearm: boolean;
+  /** Dashed last turn: this turn's attack is less accurate. */
+  winded: boolean;
 }
 
 export type StepMove = -1 | 0 | 1;
@@ -68,6 +72,8 @@ export type Action =
   | { type: "shoot"; move: StepMove; zone: Zone }
   | { type: "knife"; move: StepMove; zone: Zone }
   | { type: "grenade"; move: StepMove }
+  /** Takes the other gun (main or sidearm) instead of attacking. */
+  | { type: "swap"; move: StepMove }
   | { type: "run"; move: -2 | 2 }
   | { type: "dash" }
   | { type: "flee" }
@@ -163,9 +169,11 @@ export function createMatch(config: MatchConfig): Match {
       lastDefend: [],
       afkStreak: 0,
       flash: false,
+      winded: false,
       facesSun: sunSide === i,
       shieldOff: 0,
       smoke: 0,
+      sidearm: false,
     };
   }) as [FighterState, FighterState];
   return {
@@ -195,10 +203,19 @@ export function weaponSpec(m: Match, side: Side, weapon: AttackWeapon): KitWeapo
   const kit = m.config.fighters[side].kit;
   if (kit) {
     if (weapon === "knife") return kit.knife;
+    // Two guns of one class: the one in hand wins.
+    if (m.fighters[side].sidearm && kit.sidearm?.id === weapon) return kit.sidearm;
     if (weapon === kit.weapon.id) return kit.weapon;
     if (kit.sidearm?.id === weapon) return kit.sidearm;
   }
   return PLAIN[weapon];
+}
+
+/** The gun this Persona would hold after a swap, or null without a sidearm. */
+export function swapWeapon(m: Match, side: Side): WeaponId | null {
+  const kit = m.config.fighters[side].kit;
+  if (!kit?.sidearm) return null;
+  return (m.fighters[side].sidearm ? kit.weapon.id : kit.sidearm.id) as WeaponId;
 }
 
 /** The grenade this Persona carries. */
@@ -239,6 +256,7 @@ export function moveOf(action: Action): number {
     case "shoot":
     case "knife":
     case "grenade":
+    case "swap":
     case "run":
       return action.move;
     case "dash":
@@ -271,12 +289,18 @@ export function canUseKnife(m: Match, move: number): boolean {
   return plannedDistance(m, move) <= KNIFE_REACH;
 }
 
+/** Only a kit with a second gun can swap. */
+export function canSwap(m: Match, side: Side): boolean {
+  return swapWeapon(m, side) !== null;
+}
+
 export type OrderError =
   | "finished"
   | "bad_move"
   | "bad_defence"
   | "knife_out_of_reach"
   | "grenade_unavailable"
+  | "swap_unavailable"
   | "flee_unavailable"
   | "bad_action";
 
@@ -287,10 +311,12 @@ export function validateOrder(m: Match, side: Side, order: Order): OrderError | 
     case "shoot":
     case "knife":
     case "grenade":
+    case "swap":
       if (![-1, 0, 1].includes(a.move)) return "bad_move";
       if ("zone" in a && !ZONES.includes(a.zone)) return "bad_action";
       if (a.type === "knife" && !canUseKnife(m, a.move)) return "knife_out_of_reach";
       if (a.type === "grenade" && !canThrowGrenade(m, side)) return "grenade_unavailable";
+      if (a.type === "swap" && !canSwap(m, side)) return "swap_unavailable";
       break;
     case "run":
       if (Math.abs(a.move) !== RUN_STEPS) return "bad_move";
@@ -349,6 +375,7 @@ export function hitChance(
   if (target) p -= target.dodge + (weapon === "knife" ? 0 : target.camo[band(distance)]);
   if (targetDashing) p -= Math.max(0, DASH_EVADE + (target?.dashEvade ?? 0) - w.tracking);
   if (m.fighters[other(side)].flash) p += MUZZLE_FLASH_BONUS;
+  if (m.fighters[side].winded) p -= DASH_WINDED;
   if (m.fighters[other(side)].smoke > 0 && weapon !== "knife") p -= m.fighters[side].gear.thermal ? SMOKE_PENALTY / 2 : SMOKE_PENALTY;
   return clamp(p, 0.05, 0.95);
 }
@@ -479,10 +506,15 @@ export function resolveTurn(match: Match, orders: [Order | null, Order | null]):
     f.smoke = f.smoke > 0 ? f.smoke - 1 : 0;
     f.still = stillAfter[s]!;
     if (final[s]!.action.type === "grenade") f.grenades -= 1;
+    if (final[s]!.action.type === "swap") {
+      f.weapon = swapWeapon(m, s)!;
+      f.sidearm = !f.sidearm;
+    }
     f.lastDefend = [...final[s]!.defend];
     f.afkStreak = afk[s] ? f.afkStreak + 1 : 0;
     const silenced = f.gear.suppressor || weaponSpec(m, s, f.weapon).suppressor;
     f.flash = m.config.time === "night" && final[s]!.action.type === "shoot" && !silenced;
+    f.winded = final[s]!.action.type === "dash";
   }
 
   const report: TurnReport = {

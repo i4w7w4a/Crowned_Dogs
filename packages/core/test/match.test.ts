@@ -4,7 +4,7 @@ import {
   createMatch, distanceLimit, hitChance, resolveTurn, validateOrder,
   type Match, type MatchConfig, type Order,
 } from "../src/match.ts";
-import type { WeaponId } from "../src/rules.ts";
+import { DASH_WINDED, type WeaponId } from "../src/rules.ts";
 
 function duel(over: Partial<MatchConfig> = {}, weapons: [WeaponId, WeaponId] = ["rifle", "rifle"]): Match {
   return createMatch({
@@ -100,6 +100,19 @@ test("a dash makes you harder to hit", () => {
   const normal = hitChance(m, 0, "rifle", 6, 1, false);
   const dashing = hitChance(m, 0, "rifle", 6, 1, true);
   assert.ok(Math.abs(normal - dashing - 0.1) < 1e-9);
+});
+
+test("after a dash the next turn's attack is 10 points less accurate, for that one turn", () => {
+  const dash: Order = { action: { type: "dash" }, defend: ["body"] };
+  let m = duel();
+  const fresh = hitChance(m, 0, "rifle", 4, 0, false);
+  m = resolveTurn(m, [dash, runBack]).match;
+  assert.equal(m.fighters[0].winded, true);
+  assert.equal(m.fighters[1].winded, false);
+  assert.ok(Math.abs(hitChance(m, 0, "rifle", 4, 0, false) - (fresh - DASH_WINDED)) < 1e-9);
+  assert.ok(Math.abs(hitChance(m, 1, "rifle", 4, 0, false) - fresh) < 1e-9, "the other side is not winded");
+  m = resolveTurn(m, [shoot(), shoot()]).match;
+  assert.equal(m.fighters[0].winded, false, "it lasts one turn");
 });
 
 test("weather and time of day change accuracy", () => {

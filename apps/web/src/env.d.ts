@@ -1,8 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** Folder with music/, sfx/ and models/, ending in a slash. Default: media/ next to the page. */
-  readonly VITE_ASSETS?: string;
-  /** The figure model (.glb, or .json with the .glb inside as base64). */
+  /** One figure model for both fighters (.glb, or .json with the .glb inside as base64). Default: the male Persona
+   *  for us and the female one for the enemy, built from models/persona-male.glb and models/persona-female.glb. */
   readonly VITE_MODEL?: string;
 }
