@@ -15,7 +15,7 @@ export function setWorldQuat(o: THREE.Object3D, q: THREE.Quaternion): void {
 }
 
 /** Turns a bone so that the world direction `from` (unit) it carries points along `to` (unit). */
-function turn(o: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3): void {
+export function turn(o: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3): void {
   qa.setFromUnitVectors(from, to).multiply(o.getWorldQuaternion(qb));
   setWorldQuat(o, qa);
 }
@@ -81,6 +81,43 @@ export class Grip {
       j.bone.quaternion.slerp(qb, w);
     }
   }
+}
+
+/** How an in-place walk (or run) loop covers the ground: `speed` is the pace of its planted foot sliding back
+ *  under the body, metres per second at normal speed (in the model's own units); `passing` is the moment the
+ *  free foot swings past the planted one, a good one to stop on (the free foot then lands in the stance). */
+export type Gait = { speed: number; passing: number };
+
+/** Measures a walk loop: plays it on a scratch mixer and follows whichever foot is lower. Call at rest. */
+export function gaitOf(model: THREE.Object3D, clip: THREE.AnimationClip): Gait | null {
+  const l = model.getObjectByName("foot_l") ?? model.getObjectByName("mixamorigLeftFoot");
+  const r = model.getObjectByName("foot_r") ?? model.getObjectByName("mixamorigRightFoot");
+  if (!l || !r) return null;
+  const bones: [THREE.Object3D, THREE.Vector3, THREE.Quaternion, THREE.Vector3][] = [];
+  model.traverse((o) => { if ((o as THREE.Bone).isBone) bones.push([o, o.position.clone(), o.quaternion.clone(), o.scale.clone()]); });
+  const mixer = new THREE.AnimationMixer(model), act = mixer.clipAction(clip).play();
+  const N = 96, dt = clip.duration / N, at = (o: THREE.Object3D) => model.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
+  const pts: { l: THREE.Vector3; r: THREE.Vector3 }[] = [];
+  for (let i = 0; i < N; i++) {
+    mixer.setTime(i * dt);
+    model.updateMatrixWorld(true);
+    pts.push({ l: at(l), r: at(r) });
+  }
+  act.stop(); mixer.stopAllAction(); mixer.uncacheRoot(model);
+  for (const [o, p, q, s] of bones) { o.position.copy(p); o.quaternion.copy(q); o.scale.copy(s); }
+  model.updateMatrixWorld(true);
+  // the planted foot is the lower one; how fast it slides back (the figure faces +z) is how fast the body walks
+  const low = Math.min(...pts.map((p) => Math.min(p.l.y, p.r.y))), v: number[] = [];
+  let passing = 0, gap = Infinity;
+  for (let i = 0; i < N; i++) {
+    const a = pts[i]!, b = pts[(i + 1) % N]!, s = a.l.y < a.r.y ? "l" : "r";
+    if (a[s].y < low + 0.03) v.push((a[s].z - b[s].z) / dt);
+    const g = Math.abs(a.l.z - a.r.z);
+    if (g < gap) { gap = g; passing = i * dt; }
+  }
+  v.sort((x, y) => x - y);
+  const speed = v[v.length >> 1] ?? 0;
+  return speed > 0.1 ? { speed, passing } : null;
 }
 
 type Footprint = { at: THREE.Vector3; turn: THREE.Quaternion; toe: THREE.Vector3 };

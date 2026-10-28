@@ -343,7 +343,9 @@ function playTurn(r: TurnReport): void {
 
 /** Both Personas take up the guns they carry now. */
 function armBoth(): void {
-  for (const s of [0, 1] as Side[]) arena?.arm(s === duel.me ? "me" : "enemy", duel.match.fighters[s].weapon);
+  for (const s of [0, 1] as Side[]) {
+    arena?.arm(s === duel.me ? "me" : "enemy", duel.match.fighters[s].weapon, duel.fighters[s].kit?.weapon1.mods);
+  }
 }
 
 /** One side's attack lands: the flash, the number, the flinch, and the fall if it was the last. */
@@ -355,7 +357,11 @@ function strike(r: TurnReport, side: Side): void {
     else { if (a.hit && !a.blocked) { fire($("flashHurt")); if (cameraView === "fp") shake(); } showOnMe(a); }
     if (a.hit) arena?.hit(ours ? "enemy" : "me", a.zone ?? "body", hitKind(a));
   }
-  if (r.hp[target] <= 0) arena?.fall(ours ? "enemy" : "me");
+  if (r.hp[target] <= 0) {
+    arena?.fall(ours ? "enemy" : "me");
+    // first person, we go down: the bodycam falls with us, so the whole picture tips over (style.css .stage.down)
+    if (!ours && cameraView === "fp" && !reduceMotion) stage.classList.add("down");
+  }
   render();
 }
 
@@ -407,7 +413,7 @@ function finish(): void {
 /** A new fight. From the menu the sheet stays open, so weapon and kit can be changed in one go. */
 function restart(keepSheet = false): void {
   fightNo += 1;
-  endVeil.hidden = true;
+  endVeil.hidden = true; stage.classList.remove("down");
   duel = newDuel(); busy = false;
   shown = { hp: duel.match.fighters.map((f) => f.hp), turn: duel.match.turn };
   armBoth(); arena?.reset(duel.match.distance);
