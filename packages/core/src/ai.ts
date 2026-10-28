@@ -4,12 +4,12 @@
 // is not fully predictable. It never sees the other side's secret order.
 
 import {
-  canFlee, canThrowGrenade, canUseKnife, defendCount, distanceLimit, expectedHit, hitChance, other,
-  plannedDistance, validateOrder, type Action, type Match, type Order, type Side,
+  canFlee, canThrowGrenade, canUseKnife, defendCount, distanceLimit, expectedHit, grenadeHit, grenadeSpec,
+  guardShare, hitChance, other, plannedDistance, validateOrder, type Action, type Match, type Order, type Side,
 } from "./match.ts";
 import { nextFloat, seedRng, type RngState } from "./rng.ts";
 import {
-  GUARD, KNIFE_GUARD, MAX_STEPS, STANCE_TURNS, ZONES, grenadeDamage, type AttackWeapon, type Zone,
+  GUARD, MAX_STEPS, STANCE_TURNS, ZONES, type AttackWeapon, type Zone,
 } from "./rules.ts";
 
 /** How the bot plays. Lower temperature = more predictable, closer to its best guess. */
@@ -68,7 +68,7 @@ function guessMove(m: Match, enemy: Side): number {
 
 /** Value of one attack into a zone, given how likely that zone is guarded. */
 function zoneValue(m: Match, side: Side, weapon: AttackWeapon, zone: Zone, d: number, pDef: number): number {
-  const guard = weapon === "knife" ? KNIFE_GUARD : GUARD;
+  const guard = guardShare(m, side, weapon);
   return expectedHit(m, side, weapon, zone, d) * (1 - pDef * (1 - guard));
 }
 
@@ -86,10 +86,10 @@ function shotThreat(m: Match, side: Side, d: number, stillAfter: number, targetD
     total += AIM_PRIOR[z] * expectedHit(m, side, weapon, z, d);
     weight += AIM_PRIOR[z];
   }
-  let threat = p * (total / weight) * guardFactor(targetGuards);
+  let threat = p * (total / weight) * guardFactor(targetGuards, guardShare(m, side, weapon));
   if (d <= 2) {
     const knife = hitChance(m, side, "knife", d, stillAfter, targetDashing) *
-      expectedHit(m, side, "knife", "body", d) * guardFactor(targetGuards, KNIFE_GUARD);
+      expectedHit(m, side, "knife", "body", d) * guardFactor(targetGuards, guardShare(m, side, "knife"));
     threat = Math.max(threat, knife);
   }
   return threat;
@@ -101,6 +101,16 @@ function advantage(m: Match, side: Side, d: number): number {
   const dd = Math.max(1, Math.min(d, MAX_STEPS));
   return shotThreat(m, side, dd, Math.min(me.still + 1, STANCE_TURNS), false, 2) -
     shotThreat(m, other(side), dd, Math.min(foe.still + 1, STANCE_TURNS), false, 2);
+}
+
+/** What throwing our grenade is worth now. EMP and smoke are rough guesses. */
+function grenadeValue(m: Match, side: Side, pStand: number): number {
+  const g = grenadeSpec(m, side);
+  const hurt = grenadeHit(m, side, 0) * pStand;
+  if (g.type === "emp") return hurt + 8 * pStand;
+  // Smoke hides us this turn and the next: worth a share of what the enemy would deal.
+  if (g.type === "smoke") return 0.5 * shotThreat(m, other(side), m.distance, 2, false, 2);
+  return hurt;
 }
 
 interface Candidate {
@@ -139,7 +149,7 @@ function candidates(m: Match, side: Side, style: BotStyle): Candidate[] {
     } else if (action.type === "knife") {
       deal = hitChance(m, side, "knife", d, stillAfter, false) * bestZoneValue(m, side, "knife", d, defence);
     } else if (action.type === "grenade") {
-      deal = grenadeDamage(foe.armor.body, 0) * pStand;
+      deal = grenadeValue(m, side, pStand);
     }
     const dashing = action.type === "dash";
     const take = shotThreat(m, enemy, d, foeStill, dashing, defendCount(action));

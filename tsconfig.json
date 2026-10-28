@@ -16,5 +16,7 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["packages/*/src", "packages/*/test", "packages/*/scripts", "apps/*/src", "apps/*/test"]
+  "include": ["packages/*/src", "packages/*/test", "packages/*/scripts", "apps/*/src", "apps/*/test"],
+  // The web client needs the DOM types, so it is checked with its own config.
+  "exclude": ["apps/web"]
 }

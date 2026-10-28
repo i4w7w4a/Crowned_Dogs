@@ -11,10 +11,14 @@
   },
   "scripts": {
     "test": "node --test \"packages/*/test/*.test.ts\" \"apps/*/test/*.test.ts\"",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p apps/web/tsconfig.json",
     "check": "npm run typecheck && npm test",
     "bot": "node --env-file-if-exists=.env apps/server/src/main.ts",
-    "balance": "node packages/core/scripts/balance.ts"
+    "balance": "node packages/core/scripts/balance.ts",
+    "web": "npm run dev -w @crowned-dogs/web",
+    "web:build": "npm run build -w @crowned-dogs/web",
+    "kits": "node packages/core/scripts/kits.ts",
+    "icons": "node packages/icons/scripts/build.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
