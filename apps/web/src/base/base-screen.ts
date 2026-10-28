@@ -5,8 +5,10 @@ import {
   itemsForSlot, loadLocalLoadout, saveLocalLoadout,
 } from "./loadout-state.ts";
 import { PersonaViewer } from "./persona-viewer.ts";
+import { WeaponScreen } from "./weapon-screen.ts";
+import { liquidGlass } from "../hud/liquid.ts";
 
-export type BaseView = "base" | "fitting";
+export type BaseView = "base" | "fitting" | "weapon";
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const artParts = Object.fromEntries((["pistol", "shotgun", "rifle", "sniper"] as const).map((w) => [w, weaponItem(w).stock])) as Record<WeaponArtId, Record<Slot, string>>;
 let artIndex = 0;
@@ -27,6 +29,7 @@ export class BaseScreen {
   private active = true;
   private selectedSlot: GearSlot = "body";
   private viewer: PersonaViewer | null = null;
+  private workshop: WeaponScreen;
   private loadAttempted = false;
   private modelReady = false;
   private origin: HTMLElement | null = null;
@@ -54,32 +57,34 @@ export class BaseScreen {
         <div class="cd-home-bottom">
           <div class="cd-operator"><span class="cd-overline">ОПЕРАТОР</span><span class="cd-tag">K-417-093</span></div>
           <div class="cd-current-kit"><span>Основное оружие</span><strong data-kit-name></strong></div>
-          <button class="cd-primary cd-enter" type="button"><span>В бой<small>Дуэль с ботом</small></span>${arrow}</button>
-          <button class="cd-glass cd-open-fitting" type="button"><span class="cd-menu-icon">${itemIcon("body-plita2")}</span><span>Примерочная<small>Боец и снаряжение</small></span>${arrow}</button>
+          <button class="go glass cd-primary cd-enter" type="button"><span>В бой<small>Дуэль с ботом</small></span>${arrow}</button>
+          <button class="glass cd-open-fitting" type="button"><span class="cd-menu-icon">${itemIcon("body-plita2")}</span><span>Примерочная<small>Боец и снаряжение</small></span>${arrow}</button>
           <p class="cd-home-message" aria-live="polite"></p>
         </div>
       </section>
       <section class="cd-fitting" aria-label="Примерочная" hidden>
         <img class="cd-backdrop" src="${asset("fitting-room.webp")}" alt="Оборудованная ниша примерочной в соляной шахте" draggable="false">
         <div class="cd-fit-shade" aria-hidden="true"></div>
-        <header class="cd-fit-header"><button class="cd-back" type="button" aria-label="Вернуться на базу">${chevron}</button><h1>Примерочная</h1><span class="cd-glass cd-3d-badge">3D</span></header>
+        <header class="cd-fit-header"><button class="glass cd-back" type="button" aria-label="Вернуться на базу">${chevron}</button><h1>Примерочная</h1><span class="glass cd-3d-badge">3D</span></header>
         <div class="cd-model-stage">
           <canvas class="cd-persona-canvas" tabindex="0" role="img" aria-label="Трёхмерная Персона в снаряжении. Перетаскивайте или используйте стрелки влево и вправо, чтобы повернуть."></canvas>
-          <div class="cd-model-status" role="status">Загрузка Персоны…</div>
-          ${columns.map((slots, i) => `<div class="cd-slot-column cd-slot-column-${i}" aria-label="${i ? "Костюм и снаряжение" : "Защита и оружие"}">${slots.map((s) => `<button class="cd-glass cd-slot" type="button" data-slot="${s}"><span class="cd-slot-art"></span><span class="cd-slot-label">${GEAR_SLOT_NAMES[s]}</span></button>`).join("")}</div>`).join("")}
+          <div class="glass cd-model-status" role="status">Загрузка Персоны…</div>
+          ${columns.map((slots, i) => `<div class="cd-slot-column cd-slot-column-${i}" aria-label="${i ? "Костюм и снаряжение" : "Защита и оружие"}">${slots.map((s) => `<button class="glass cd-slot" type="button" data-slot="${s}"><span class="cd-slot-art"></span><span class="cd-slot-label">${GEAR_SLOT_NAMES[s]}</span></button>`).join("")}</div>`).join("")}
         </div>
         <footer class="cd-fit-footer">
-          <div class="cd-rotation"><button class="cd-rotate-left" type="button" aria-label="Повернуть бойца влево">${chevron}</button><span>${rotateIcon} Повернуть</span><button class="cd-rotate-right" type="button" aria-label="Повернуть бойца вправо">${chevron}</button></div>
+          <div class="cd-rotation"><button class="glass cd-rotate-left" type="button" aria-label="Повернуть бойца влево">${chevron}</button><span>${rotateIcon} Повернуть</span><button class="glass cd-rotate-right" type="button" aria-label="Повернуть бойца вправо">${chevron}</button></div>
           <div class="cd-stats" aria-label="Защита выбранного комплекта"></div>
-          <button class="cd-primary cd-open-catalog" type="button">Каталог снаряжения ${arrow}</button>
+          <button class="go glass cd-primary cd-open-catalog" type="button">Каталог снаряжения ${arrow}</button>
           <p class="cd-save-status" aria-live="polite" hidden></p>
         </footer>
       </section>
-      <dialog class="cd-dialog" aria-labelledby="cd-catalog-title">
-        <header class="cd-dialog-header"><div><p class="cd-overline">КАТАЛОГ СНАРЯЖЕНИЯ</p><h2 id="cd-catalog-title"></h2></div><button class="cd-dialog-close" type="button" aria-label="Закрыть каталог">×</button></header>
-        <label class="cd-slot-picker">Слот<select>${GEAR_SLOTS.map((s) => `<option value="${s}">${GEAR_SLOT_NAMES[s]}</option>`).join("")}</select></label>
-        <p class="cd-catalog-note">Предметы для локальной примерки. Это каталог, а не серверный инвентарь.</p>
-        <div class="cd-catalog-items"></div>
+      <dialog class="sheet glass cd-dialog" aria-labelledby="cd-catalog-title">
+        <header class="cd-dialog-header"><div><p class="cd-overline">КАТАЛОГ СНАРЯЖЕНИЯ</p><h2 id="cd-catalog-title"></h2></div><button class="glass cd-dialog-close" type="button" aria-label="Закрыть каталог">×</button></header>
+        <div class="cd-dialog-content">
+          <label class="cd-slot-picker">Слот<select class="glass">${GEAR_SLOTS.map((s) => `<option value="${s}">${GEAR_SLOT_NAMES[s]}</option>`).join("")}</select></label>
+          <p class="cd-catalog-note">Предметы для локальной примерки. Это каталог, а не серверный инвентарь.</p>
+          <div class="cd-catalog-items"></div>
+        </div>
       </dialog>`;
     this.home = root.querySelector(".cd-home")!;
     this.fitting = root.querySelector(".cd-fitting")!;
@@ -96,7 +101,11 @@ export class BaseScreen {
     root.querySelector(".cd-dialog-close")!.addEventListener("click", () => this.dialog.close());
     this.dialog.addEventListener("click", (e) => { if (e.target === this.dialog) { const r = this.dialog.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) this.dialog.close(); } });
     this.dialog.addEventListener("close", () => { this.origin?.focus(); });
-    root.querySelector("select")!.addEventListener("change", (e) => { this.selectedSlot = (e.target as HTMLSelectElement).value as GearSlot; this.renderCatalog(); });
+    root.querySelector("select")!.addEventListener("change", (e) => {
+      this.selectedSlot = (e.target as HTMLSelectElement).value as GearSlot;
+      if (this.selectedSlot === "weapon1") { this.dialog.close(); this.navigate("weapon"); }
+      else this.renderCatalog();
+    });
     this.catalog.addEventListener("click", (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-item]");
       if (!b) return;
@@ -119,13 +128,26 @@ export class BaseScreen {
     });
     this.canvas.addEventListener("webglcontextrestored", () => { if (this.modelReady) this.status.hidden = true; });
     this.observer = new ResizeObserver(() => this.resize()); this.observer.observe(this.stage);
+    this.workshop = new WeaponScreen(root, () => {
+      this.navigate("fitting");
+      this.root.querySelector<HTMLButtonElement>('[data-slot="weapon1"]')!.focus({ preventScroll: true });
+    }, loadout => {
+      this.loadout = loadout;
+      const saved = saveLocalLoadout(loadout);
+      this.refresh();
+      return saved;
+    });
     this.refresh();
+    liquidGlass(root);
   }
 
   private navigate(view: BaseView): void { history.replaceState(null, "", `#${view}`); this.show(view); }
 
   show(view: BaseView): void {
+    if (this.dialog.open) this.dialog.close();
     this.view = view; this.home.hidden = view !== "base"; this.fitting.hidden = view !== "fitting";
+    if (view === "weapon") this.workshop.show(this.loadout);
+    else this.workshop.hide();
     if (view === "fitting") { this.ensureViewer(); this.resize(); }
     this.viewer?.setActive(this.active && view === "fitting");
   }
@@ -133,6 +155,8 @@ export class BaseScreen {
   setActive(active: boolean): void {
     this.active = active; this.root.hidden = !active;
     if (!active && this.dialog.open) this.dialog.close();
+    if (!active && this.view === "weapon") this.workshop.hide();
+    if (active && this.view === "weapon") this.workshop.show(this.loadout);
     this.viewer?.setActive(active && this.view === "fitting");
     if (active) this.resize();
   }
@@ -175,9 +199,10 @@ export class BaseScreen {
   }
 
   private openCatalog(slot: GearSlot): void {
+    if (slot === "weapon1") { this.navigate("weapon"); return; }
     this.selectedSlot = slot; this.origin = document.activeElement as HTMLElement;
     this.renderCatalog(); this.dialog.showModal();
-    this.dialog.scrollTop = 0;
+    this.catalog.parentElement!.scrollTop = 0;
     this.root.querySelector<HTMLButtonElement>(".cd-dialog-close")!.focus({ preventScroll: true });
   }
 
@@ -185,12 +210,13 @@ export class BaseScreen {
     this.root.querySelector("#cd-catalog-title")!.textContent = GEAR_SLOT_NAMES[this.selectedSlot];
     this.root.querySelector("select")!.value = this.selectedSlot;
     const selected = equippedItemId(this.loadout, this.selectedSlot);
-    const empty = this.selectedSlot === "weapon2" ? `<button class="cd-item-card" type="button" data-item="" aria-pressed="${selected === null}"><span class="cd-item-art" aria-hidden="true">—</span><span class="cd-item-copy"><strong>Без второго оружия</strong><small>Оставить слот пустым</small></span><span class="cd-item-state">${selected === null ? "Выбрано" : "Снять"}</span></button>` : "";
+    const empty = this.selectedSlot === "weapon2" ? `<button class="glass cd-item-card" type="button" data-item="" aria-pressed="${selected === null}"><span class="cd-item-art" aria-hidden="true">—</span><span class="cd-item-copy"><strong>Без второго оружия</strong><small>Оставить слот пустым</small></span><span class="cd-item-state">${selected === null ? "Выбрано" : "Снять"}</span></button>` : "";
     this.catalog.innerHTML = empty + itemsForSlot(this.selectedSlot).map((item) => {
       const effects = describeItem(item);
-      return `<button class="cd-item-card" type="button" data-item="${item.id}" aria-pressed="${selected === item.id}"><span class="cd-item-art">${itemIcon(item.id)}</span><span class="cd-item-copy"><strong>${escape(item.name)}</strong><small>${escape(item.note)}</small>${effects.length ? `<span class="cd-effects">${effects.map(escape).join(" · ")}</span>` : ""}</span><span class="cd-item-state">${selected === item.id ? "Выбрано" : "Надеть"}</span></button>`;
+      return `<button class="glass cd-item-card" type="button" data-item="${item.id}" aria-pressed="${selected === item.id}"><span class="cd-item-art">${itemIcon(item.id)}</span><span class="cd-item-copy"><strong>${escape(item.name)}</strong><small>${escape(item.note)}</small>${effects.length ? `<span class="cd-effects">${effects.map(escape).join(" · ")}</span>` : ""}</span><span class="cd-item-state">${selected === item.id ? "Выбрано" : "Надеть"}</span></button>`;
     }).join("");
-    this.dialog.scrollTop = 0;
+    this.catalog.parentElement!.scrollTop = 0;
+    liquidGlass(this.catalog);
   }
 
   private async enterBattle(): Promise<void> {
@@ -201,5 +227,5 @@ export class BaseScreen {
     finally { button.disabled = false; }
   }
 
-  dispose(): void { this.observer.disconnect(); this.viewer?.dispose(); this.root.remove(); }
+  dispose(): void { this.observer.disconnect(); this.viewer?.dispose(); this.workshop.dispose(); this.root.remove(); }
 }

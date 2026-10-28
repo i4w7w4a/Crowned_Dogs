@@ -1,11 +1,11 @@
 /** Local fitting-room selections. Catalogue access is not server-owned inventory. */
 import {
-  GEAR_SLOTS, ITEMS, KIND_FOR_SLOT, MOD_SLOTS, WEAPONS, starterLoadout, validateLoadout,
-  type EquippedWeapon, type GearSlot, type Item, type Loadout,
+  GEAR_SLOTS, ITEMS, KIND_FOR_SLOT, MOD_SLOTS, WEAPONS, getItem, modsFor, starterLoadout, validateLoadout,
+  type EquippedWeapon, type GearSlot, type Item, type Loadout, type ModItem, type ModSlot, type WeaponItem,
 } from "@crowned-dogs/core";
 
-export { GEAR_SLOTS, GEAR_SLOT_NAMES, describeItem, compileKit } from "@crowned-dogs/core";
-export type { GearSlot, Item, Loadout } from "@crowned-dogs/core";
+export { GEAR_SLOTS, GEAR_SLOT_NAMES, MOD_SLOTS, MOD_SLOT_NAMES, describeItem, compileKit } from "@crowned-dogs/core";
+export type { GearSlot, Item, Loadout, ModItem, ModSlot } from "@crowned-dogs/core";
 
 export const LOADOUT_STORAGE_KEY = "crowned-dogs:loadout:v1";
 
@@ -114,5 +114,40 @@ export function equipItem(loadout: Loadout, slot: GearSlot, itemId: string | nul
     if (equippedItemId(next, slot) !== itemId) next[slot] = { item: itemId! };
   } else next[slot] = itemId!;
   if (validateLoadout(next)) throw new Error("Предмет несовместим с комплектом");
+  return next;
+}
+
+function mainWeaponForMod(loadout: Loadout, slot: ModSlot): WeaponItem {
+  if (!isValidLoadout(loadout)) throw new Error("Некорректный комплект снаряжения");
+  if (!MOD_SLOTS.includes(slot)) throw new Error("Неизвестное гнездо оружия");
+  const weapon = getItem(loadout.weapon1.item);
+  if (weapon.kind !== "weapon") throw new Error("В первом слоте нет оружия");
+  return weapon;
+}
+
+/** The compatible list comes from the core catalogue, with the factory part first. */
+export function weaponModsForSlot(loadout: Loadout, slot: ModSlot): ModItem[] {
+  return modsFor(mainWeaponForMod(loadout, slot).weapon, slot);
+}
+
+/** An omitted override means the real factory part, never an empty socket. */
+export function effectiveWeaponModId(loadout: Loadout, slot: ModSlot): string {
+  const weapon = mainWeaponForMod(loadout, slot);
+  return loadout.weapon1.mods?.[slot] ?? weapon.stock[slot];
+}
+
+/** Changes one socket on weapon1. Null and its factory ID both restore the factory part. */
+export function equipWeaponMod(loadout: Loadout, slot: ModSlot, itemId: string | null): Loadout {
+  const weapon = mainWeaponForMod(loadout, slot);
+  if (itemId !== null && !modsFor(weapon.weapon, slot).some((item) => item.id === itemId)) {
+    throw new Error("Модификация не подходит к этому гнезду оружия");
+  }
+  const next = cloneLoadout(loadout);
+  const mods = next.weapon1.mods ?? {};
+  if (itemId === null || itemId === weapon.stock[slot]) delete mods[slot];
+  else mods[slot] = itemId;
+  if (Object.keys(mods).length) next.weapon1.mods = mods;
+  else delete next.weapon1.mods;
+  if (validateLoadout(next)) throw new Error("Модификация несовместима с комплектом");
   return next;
 }
