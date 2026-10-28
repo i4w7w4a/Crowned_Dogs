@@ -79,6 +79,7 @@ interface Calibrated {
   /** Sideways offset of the enemy per metre of depth. */
   kx: number;
   me: Frame["cal"]["me"];
+  back: number;
 }
 
 function calibrate(f: Frame): Calibrated {
@@ -88,7 +89,7 @@ function calibrate(f: Frame): Calibrated {
     fn, aspect, d7: HEIGHT * fn / c.height, camH: c.camH,
     hz: c.feet[1] - c.camH * c.height / HEIGHT,
     kx: (c.feet[0] - 0.5) * aspect / fn,
-    me: c.me,
+    me: c.me, back: c.back,
   };
 }
 
@@ -357,7 +358,7 @@ export class Arena {
   }
 
   private depthOf(d: number): number {
-    return this.k!.d7 * Math.pow(STEP_GROWTH, d - 7);
+    return this.k!.d7 * Math.pow(STEP_GROWTH, d - 7) + this.k!.back;
   }
 
   private makeFigure(gltf: GLTF, look: Look): Figure {
@@ -442,7 +443,8 @@ export class Arena {
     const ex = k.kx * D, ez = -D;
     en.group.position.set(ex, 0, ez);
     en.group.rotation.y = Math.atan2(-ex, D); // faces the camera
-    const mx = k.me.x, mz = k.me.z;
+    // stepped back, our Persona stays in the same corner of the picture, only smaller
+    const mz = k.me.z - k.back, mx = k.me.x * mz / k.me.z;
     me.group.position.set(mx, k.me.y, mz);
     me.group.rotation.y = Math.atan2(ex - mx, ez - mz); // faces the enemy
     this.rim.position.set(ex - 4, 7.5, ez - 14); this.rim.target.position.set(ex, 0.9, ez);
