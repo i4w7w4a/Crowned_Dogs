@@ -28,7 +28,7 @@ const FOE = "Искра";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const scene = $("scene"), stage = $("stage"), bg = $<HTMLImageElement>("bg"), ringsEl = $("rings"), canvas = $<HTMLCanvasElement>("gl");
-const guardList = $("guardList"), movesEl = $("moves"), infoVeil = $("infoVeil"), endVeil = $("endVeil");
+const panel = document.querySelector<HTMLElement>(".panel")!, movesEl = $("moves"), infoVeil = $("infoVeil"), endVeil = $("endVeil");
 const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 const frames: Frame[] = /[?&]cal\b/.test(location.search) ? [CALIBRATION_FRAME, ...FRAMES] : FRAMES;
@@ -167,6 +167,7 @@ function render(): void {
 
   // a shot is a tap on the enemy: the rings stay live while a grenade, a swap or a run is picked, and tapping one turns the order back into a shot
   ringsEl.classList.toggle("off", busy);
+  panel.classList.toggle("playing", busy); // the controls step aside while the turn plays out
   ringsEl.classList.toggle("idle", !aimed);
   ringsEl.classList.toggle("gone", duel.over || (arena !== null && !arena.ready)); // without WebGL the rings stay on the picture
   for (const z of ZONES) {
@@ -303,7 +304,7 @@ function strike(r: TurnReport, side: Side): void {
   shown.hp[target] = r.hp[target];
   if (a) {
     if (ours) { fire($("flashOurs")); shake(); showOnEnemy(a); }
-    else { if (a.hit && !a.blocked) fire($("flashHurt")); showOnGuard(a); }
+    else { if (a.hit && !a.blocked) fire($("flashHurt")); showOnMe(a); }
     if (a.hit) arena?.hit(ours ? "enemy" : "me", a.zone ?? "body", hitKind(a));
   }
   if (r.hp[target] <= 0) arena?.fall(ours ? "enemy" : "me");
@@ -330,14 +331,12 @@ function showOnEnemy(a: AttackReport): void {
   if (a.blocked) { rippleAt(ringsEl, x, y); return floatAt(ringsEl, x + 36, y - 14, "blocked", "−" + a.damage, "Зонт"); }
   floatAt(ringsEl, x + 36, y - 14, "dmg", "−" + a.damage, label(a));
 }
-/** The enemy's attack on us: the zone's line in the defence list flashes (red hit, cyan block on the Zont), the number floats beside it. */
-function showOnGuard(a: AttackReport): void {
-  const row = guards.find((b) => b.dataset.z === (a.zone ?? "body"))!, name = row.querySelector<HTMLElement>(".zl")!;
-  const x = row.offsetLeft + name.offsetLeft + name.offsetWidth + 30, y = row.offsetTop + row.offsetHeight / 2;
-  if (!a.hit) return floatAt(guardList, x, y, "miss", "мимо");
-  for (const b of a.weapon === "grenade" ? guards : [row]) { b.classList.remove("hit", "blk"); void b.offsetWidth; b.classList.add(a.blocked ? "blk" : "hit"); }
-  if (a.blocked) return floatAt(guardList, x, y, "blocked", "−" + a.damage, "Зонт");
-  floatAt(guardList, x, y, "dmg", "−" + a.damage, label(a));
+/** The enemy's attack on us: the controls are away while the turn plays, so the number floats over our fighter's shoulder. */
+function showOnMe(a: AttackReport): void {
+  const x = stage.clientWidth * 0.3, y = stage.clientHeight * 0.6;
+  if (!a.hit) return floatAt(ringsEl, x, y, "miss", "мимо");
+  if (a.blocked) return floatAt(ringsEl, x, y, "blocked", "−" + a.damage, "Зонт");
+  floatAt(ringsEl, x, y, "dmg", "−" + a.damage, label(a));
 }
 
 // ---------- the end ----------
