@@ -27,11 +27,12 @@ const BOXES: Record<Held, Box[]> = {
   grenade: [[-0.03, 0.03, -0.04, 0.025, -0.028, 0.028], [-0.009, 0.009, 0.025, 0.05, -0.009, 0.009]],
 };
 
-/** Where the grip sits in the right hand bone's space, from the model's rest pose; null without such bones. */
-export function gripOf(scene: THREE.Object3D): THREE.Matrix4 | null {
+/** Where the grip sits in a hand bone's space (the right hand by default), from the model's rest pose; null
+ *  without such bones. The frame: x along the hand, y to the index finger's side, z = x × y. */
+export function gripOf(scene: THREE.Object3D, side: "l" | "r" = "r"): THREE.Matrix4 | null {
   scene.updateMatrixWorld(true);
-  const bone = (n: string) => scene.getObjectByName(n);
-  const hand = bone("hand_r"), mid = bone("middle_01_r"), index = bone("index_01_r"), pinky = bone("pinky_01_r");
+  const bone = (n: string) => scene.getObjectByName(`${n}_${side}`);
+  const hand = bone("hand"), mid = bone("middle_01"), index = bone("index_01"), pinky = bone("pinky_01");
   if (!hand || !mid || !index || !pinky) return null;
   const p = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3());
   const h = p(hand), along = p(mid).sub(h);
@@ -45,10 +46,12 @@ export function gripOf(scene: THREE.Object3D): THREE.Matrix4 | null {
 /** The weapons in one figure's right hand, all made at once; one shows at a time. */
 export class Hand {
   private items = new Map<Held, THREE.Object3D>();
+  /** The gun's frame, carried by the hand at the grip. */
+  readonly mount: THREE.Object3D;
 
   constructor(model: THREE.Object3D, grip: THREE.Matrix4, material: THREE.Material, layer = 0) {
     const hand = model.getObjectByName("hand_r")!;
-    const at = new THREE.Group();
+    const at = this.mount = new THREE.Group();
     grip.decompose(at.position, at.quaternion, at.scale);
     hand.add(at);
     for (const [held, boxes] of Object.entries(BOXES) as [Held, Box[]][]) {

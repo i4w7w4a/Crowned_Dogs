@@ -10,16 +10,13 @@ export type Stance = "pistol" | "rifle" | "shotgun" | "sniper";
 export type Attack = Stance | "knife" | "grenade";
 
 const READY: Record<Stance, string> = { pistol: "ready_pistol", rifle: "ready_rifle", shotgun: "ready_shotgun", sniper: "ready_shotgun" };
-/** Seen from our own eyes the pistol's low ready is under the chin, out of the picture: in first person the
- *  pistol is held out the way it is at the shot (fire_pistol at its mark), and a shot starts from there. */
-const AIMED: Partial<Record<Stance, { clip: string; at: number; name: string }>> = { pistol: { clip: "fire_pistol", at: 0.625, name: "aim_pistol" } };
 
 /** Each attack's clip, its speed, and the moment in it (seconds at normal speed) that must meet the sound:
  *  the shot, the knife reaching the enemy, the grenade leaving the hand. `hold` is what the hand shows
  *  during it, `release` empties the hand at the mark (the grenade flies), `end` cuts a long clip short
  *  (seconds at normal speed) and goes back to the stance. */
-const ATTACKS: Record<Attack, { clip: string; speed: number; mark: number; hold?: Held; release?: boolean; end?: number; aimFrom?: number }> = {
-  pistol: { clip: "fire_pistol", speed: 1.15, mark: 0.625, aimFrom: 0.5 },
+const ATTACKS: Record<Attack, { clip: string; speed: number; mark: number; hold?: Held; release?: boolean; end?: number }> = {
+  pistol: { clip: "fire_pistol", speed: 1.15, mark: 0.625 },
   rifle: { clip: "fire_rifle", speed: 1, mark: 0.333 },
   shotgun: { clip: "fire_shotgun", speed: 1.25, mark: 0.333 },
   sniper: { clip: "fire_shotgun", speed: 1, mark: 0.333 }, // the bolt works like the pump, slower
@@ -42,9 +39,11 @@ export class Motion {
   private cur: Record<Layer, THREE.AnimationAction | null> = { body: null, legs: null };
   private stance: Stance = "pistol";
   private walking = false;
-  private pending: { in: number; kind: Attack; from: number } | null = null;
-  /** First person: the stances in AIMED are held out in front. */
-  private aimed = false;
+  private pending: { in: number; kind: Attack } | null = null;
+  private fallen = false;
+  private marked = false;
+  /** Called at an attack's moment: the shot, the stab, the throw. */
+  onMark: ((kind: Attack) => void) | null = null;
   private attacking: THREE.AnimationAction | null = null;
   private kind: Attack | null = null;
   private released = false;
@@ -56,21 +55,13 @@ export class Motion {
   onHold: ((what: Held | null) => void) | null = null;
 
   constructor(mixer: THREE.AnimationMixer, clips: THREE.AnimationClip[]) {
+    for (const c of clips) if (/^ready_/.test(c.name)) soften(c);
     for (const c of clips) {
       const legs = c.tracks.filter((t) => LEGS.test(t.name)), body = c.tracks.filter((t) => !LEGS.test(t.name));
       this.layers.legs.set(c.name, mixer.clipAction(new THREE.AnimationClip(`${c.name}.legs`, c.duration, legs)));
       this.layers.body.set(c.name, mixer.clipAction(new THREE.AnimationClip(`${c.name}.body`, c.duration, body)));
       const turn = c.tracks.find((t) => PELVIS.test(t.name));
       if (turn) this.pelvisOf.set(c.name, new THREE.QuaternionLinearInterpolant(turn.times, turn.values, 4, new Float32Array(4)));
-    }
-    for (const a of Object.values(AIMED)) {
-      const c = clips.find((c) => c.name === a.clip);
-      if (!c) continue;
-      const held = poseAt(c, a.at, a.name);
-      this.layers.legs.set(a.name, mixer.clipAction(new THREE.AnimationClip(`${a.name}.legs`, 1, held.tracks.filter((t) => LEGS.test(t.name)))));
-      this.layers.body.set(a.name, mixer.clipAction(new THREE.AnimationClip(`${a.name}.body`, 1, held.tracks.filter((t) => !LEGS.test(t.name)))));
-      const turn = held.tracks.find((t) => PELVIS.test(t.name));
-      if (turn) this.pelvisOf.set(a.name, new THREE.QuaternionLinearInterpolant(turn.times, turn.values, 4, new Float32Array(4)));
     }
     const root = mixer.getRoot() as THREE.Object3D;
     this.pelvis = root.getObjectByName("pelvis") ?? root.getObjectByName("mixamorigHips") ?? null;
@@ -107,15 +98,17 @@ export class Motion {
     this.onHold?.(stance);
   }
 
+  /** The stance clips, whose footprints the feet keep (ik.ts Feet). */
+  readonly stances = [...new Set(Object.values(READY))];
+
   /** The attack under way, if any. */
   get attackKind(): Attack | null { return this.kind; }
 
-  /** First person: holds the pistol out in front instead of low, where our own eyes could not see it. */
-  aim(on: boolean): void {
-    if (on === this.aimed) return;
-    this.aimed = on;
-    if (!this.attacking) this.to("body", this.ready(), 0.3);
-    if (!this.walking && !this.attacking) this.to("legs", this.ready(), 0.3);
+  /** The stance whose footprint the feet keep, while the figure stands on them (not walking, not stabbing
+   *  or throwing, not falling); null lets the animation move the feet. */
+  get planted(): string | null {
+    if (this.walking || this.fallen || (this.kind && !(this.kind in READY))) return null;
+    return READY[this.stance];
   }
 
   /** Walks (or runs) on the spot while the arena carries the figure; a negative speed walks backwards. */
@@ -136,16 +129,14 @@ export class Motion {
   attack(kind: Attack, inSeconds: number): void {
     const a = ATTACKS[kind];
     if (!this.layers.body.has(a.clip)) return; // this figure has no such clip: it stays in its stance
-    // held out already, a shot starts near its mark instead of raising the gun from low
-    const from = this.aimed && a.aimFrom !== undefined ? a.aimFrom : 0;
-    const wait = inSeconds - (a.mark - from) / a.speed;
-    if (wait > 0) this.pending = { in: wait, kind, from };
-    else this.start(kind, from - wait * a.speed);
+    const wait = inSeconds - a.mark / a.speed;
+    if (wait > 0) this.pending = { in: wait, kind };
+    else this.start(kind, -wait * a.speed);
   }
 
   /** Falls: whatever it was doing slows to a stop while the arena tips it over. */
   fall(): void {
-    this.pending = null;
+    this.pending = null; this.fallen = true;
     for (const l of ["body", "legs"] as Layer[]) {
       const c = this.cur[l];
       if (c) c.timeScale = 0.2;
@@ -154,7 +145,7 @@ export class Motion {
 
   /** Back to the stance at once; `phase` (0..1) staggers figures so they never breathe in step. */
   reset(phase: number): void {
-    this.pending = null; this.attacking = null; this.kind = null; this.walking = false;
+    this.pending = null; this.attacking = null; this.kind = null; this.walking = false; this.fallen = false;
     for (const l of ["body", "legs"] as Layer[]) {
       for (const a of this.layers[l].values()) a.stop();
       this.cur[l] = null;
@@ -168,17 +159,16 @@ export class Motion {
     const p = this.pending;
     if (p) {
       p.in -= dt;
-      if (p.in <= 0) { this.pending = null; this.start(p.kind, p.from - p.in * ATTACKS[p.kind].speed); }
+      if (p.in <= 0) { this.pending = null; this.start(p.kind, -p.in * ATTACKS[p.kind].speed); }
     }
     const act = this.attacking, a = this.kind && ATTACKS[this.kind];
     if (!act || !a) return;
+    if (!this.marked && act.time >= a.mark) { this.marked = true; this.onMark?.(this.kind!); }
     if (a.release && !this.released && act.time >= a.mark) { this.released = true; this.onHold?.(null); }
     if (a.end !== undefined && act.time >= a.end) this.done();
   }
 
   private ready(): string {
-    const aim = this.aimed && AIMED[this.stance];
-    if (aim && this.layers.body.has(aim.name)) return aim.name;
     const r = READY[this.stance];
     return this.layers.body.has(r) ? r : "idle";
   }
@@ -192,7 +182,7 @@ export class Motion {
     const act = this.to("body", a.clip, 0.12, a.speed, true);
     if (!act) return;
     act.time = Math.min(at, act.getClip().duration);
-    this.attacking = act; this.kind = kind; this.released = false;
+    this.attacking = act; this.kind = kind; this.released = false; this.marked = false;
     if (!this.walking) { this.to("legs", a.clip, 0.12, a.speed, true); this.sync("legs", "body"); }
     if (a.hold) this.onHold?.(a.hold);
   }
@@ -227,16 +217,35 @@ export class Motion {
   }
 }
 
-/** A still clip of one moment of a clip: every track holds its value at `t` (seconds). */
-function poseAt(clip: THREE.AnimationClip, t: number, name: string): THREE.AnimationClip {
-  const tracks = clip.tracks.map((tr) => {
-    const n = tr.getValueSize(), at = new Float32Array(n);
-    const interp = tr instanceof THREE.QuaternionKeyframeTrack
-      ? new THREE.QuaternionLinearInterpolant(tr.times, tr.values, n, at)
-      : new THREE.LinearInterpolant(tr.times, tr.values, n, at);
-    const v = Array.from(interp.evaluate(t) as ArrayLike<number>);
-    const Track = tr.constructor as new (name: string, times: number[], values: number[]) => THREE.KeyframeTrack;
-    return new Track(tr.name, [0, 1], [...v, ...v]);
-  });
-  return new THREE.AnimationClip(name, 1, tracks);
+/** Calms a looping stance from the video mocap: every track keeps 55% of its sway about its average and is
+ *  smoothed over about a fifth of a second, around the loop so its seam stops twitching too. */
+function soften(clip: THREE.AnimationClip, keep = 0.55, sigma = 2.5): void {
+  const R = Math.ceil(sigma * 3), wts = Array.from({ length: 2 * R + 1 }, (_, i) => Math.exp(-((i - R) ** 2) / (2 * sigma * sigma)));
+  for (const tr of clip.tracks) {
+    const k = tr.getValueSize(), v = tr.values, n = v.length / k;
+    if (n < 4) continue;
+    const quat = tr instanceof THREE.QuaternionKeyframeTrack;
+    if (quat) for (let i = 1; i < n; i++) {
+      // one hemisphere, so averages do not cancel out
+      let dot = 0; for (let j = 0; j < 4; j++) dot += v[i * 4 + j]! * v[j]!;
+      if (dot < 0) for (let j = 0; j < 4; j++) v[i * 4 + j] = -v[i * 4 + j]!;
+    }
+    const mean = new Float64Array(k);
+    for (let i = 0; i < n; i++) for (let j = 0; j < k; j++) mean[j]! += v[i * k + j]! / n;
+    const out = new Float64Array(v.length);
+    for (let i = 0; i < n; i++) {
+      let wsum = 0;
+      for (let o = -R; o <= R; o++) {
+        const at = ((i + o) % n + n) % n, w = wts[o + R]!;
+        wsum += w;
+        for (let j = 0; j < k; j++) out[i * k + j]! += w * v[at * k + j]!;
+      }
+      for (let j = 0; j < k; j++) out[i * k + j] = mean[j]! + keep * (out[i * k + j]! / wsum - mean[j]!);
+    }
+    for (let i = 0; i < n; i++) {
+      let len = 1;
+      if (quat) { len = 0; for (let j = 0; j < 4; j++) len += out[i * 4 + j]! ** 2; len = Math.sqrt(len) || 1; }
+      for (let j = 0; j < k; j++) v[i * k + j] = out[i * k + j]! / len;
+    }
+  }
 }
