@@ -83,3 +83,12 @@ body { margin: 0; }
 @media (max-height: 720px) { .cd-home-title { margin-top: 20px; } .cd-home-title > p:last-child { font-size: 10px; max-width: none; } .cd-current-kit { padding: 9px 0 12px; } .cd-enter { min-height: 57px; } .cd-slot { width: 60px; height: 60px; flex-basis: 60px; padding: 7px; gap: 3px; } .cd-slot-column { width: 60px; top: 4%; bottom: 17%; } .cd-slot-art { width: 30px; height: 30px; } .cd-slot-label { font-size: 8px; } .cd-primary { min-height: 48px; font-size: 15px; } .cd-dialog-header { padding-top: 16px; } }
 @media (prefers-reduced-motion: reduce) { .cd-shell *, .cd-shell *::before, .cd-shell *::after { transition: none !important; } }
 @media (max-height: 480px) { .cd-select-options.sheet.glass { grid-template-columns: repeat(4, 1fr); } .cd-select-options [role="option"] { padding: 8px; font-size: 10px; } }
+
+/* sound settings: a round glass button in the top right corner of the base */
+.cd-settings { position: fixed; z-index: 30; top: calc(env(safe-area-inset-top, 0px) + 16px); right: 16px; width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+.cd-settings[hidden] { display: none; }
+.cd-set-ico { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+.cd-dialog.sheet.glass.cd-sound { min-height: 0; height: fit-content; }
+.cd-sound-body { display: flex; flex-direction: column; gap: 12px; padding: 4px 16px 20px; }
+.cd-sound-toggle { display: flex; justify-content: space-between; align-items: center; min-height: 48px; padding: 0 16px; font: 400 14px/1.2 var(--body); }
+.cd-sound-toggle b { font-weight: 500; }

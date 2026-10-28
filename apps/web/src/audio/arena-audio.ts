@@ -4,7 +4,7 @@
 // audio graph is built on the first one; until then calls only remember the state.
 
 import {
-  GameAudio, RADIO_PLAYLIST, cuesForTurn, fightSounds, type PlayOptions, type SoundId, type Station,
+  BASE_PLAYLIST, FITTING_PLAYLIST, GameAudio, RADIO_PLAYLIST, cuesForTurn, fightSounds, type PlayOptions, type SoundId, type Station,
 } from "@crowned-dogs/audio";
 import type { Match, TurnReport, WeaponId } from "@crowned-dogs/core";
 import { store } from "../store.ts";
@@ -37,8 +37,10 @@ export class ArenaAudio {
   private audio: GameAudio | null = null;
   private ambience: SoundId[] = [];
   private preloads: SoundId[] = [...UI];
-  /** fight: the fight track; menu: the radio (end screen); paused: the menu sheet over a fight. */
-  private mode: "fight" | "menu" | "paused" = "fight";
+  /** fight: the fight track; menu: the radio (base, fitting room, end screen); paused: the menu sheet over a fight. */
+  private mode: "fight" | "menu" | "paused" = "menu";
+  /** The stations the radio picks from on this screen. */
+  private list: readonly Station[] = BASE_PLAYLIST;
   private levels: Record<VolumeKind, number> = { fx: savedVolume("fx"), music: savedVolume("music") };
 
   /** Call from the first tap. */
@@ -54,6 +56,7 @@ export class ArenaAudio {
     a.setVolume("master", this.on ? 1 : 0);
     this.applyLevels();
     a.music.tune(this.picked);
+    a.music.playlist(this.list);
     a.setAmbience(this.ambience);
     void a.preload(this.preloads).catch(() => {});
     if (this.mode === "menu") a.music.enterMenu();
@@ -68,6 +71,17 @@ export class ArenaAudio {
     const bed = BED[m.config.mapId] ?? "amb.hall", layer = WEATHER_LAYER[m.config.weather];
     this.ambience = layer ? [bed, layer] : [bed];
     this.audio?.setAmbience(this.ambience);
+  }
+
+  /** The base or the fitting room (the weapon screen too): no fight, the radio plays that screen's songs. */
+  screen(view: "base" | "fitting" | "weapon"): void {
+    this.mode = "menu";
+    this.list = view === "base" ? BASE_PLAYLIST : FITTING_PLAYLIST;
+    this.ambience = [];
+    if (!this.audio) return;
+    this.audio.setAmbience([]);
+    this.audio.music.enterMenu();
+    this.audio.music.playlist(this.list);
   }
 
   /** A new fight: a fresh fight track, and the sounds of both fighters' guns. */
@@ -85,6 +99,7 @@ export class ArenaAudio {
   sheet(open: boolean): void {
     if (this.mode === "menu") return;
     this.mode = open ? "paused" : "fight";
+    this.radioList(RADIO_PLAYLIST);
     if (open) this.audio?.music.openMenu();
     else this.audio?.music.closeMenu();
     this.ambLevel();
@@ -94,6 +109,7 @@ export class ArenaAudio {
   finish(won: boolean | null): void {
     if (won !== null) this.play(won ? "ui.victory" : "ui.defeat", { delay: 0.9 });
     this.mode = "menu";
+    this.radioList(RADIO_PLAYLIST);
     this.audio?.music.enterMenu();
     this.ambLevel();
   }
@@ -142,6 +158,11 @@ export class ArenaAudio {
     this.audio?.music.tune(s);
   }
 
+  private radioList(list: readonly Station[]): void {
+    this.list = list;
+    this.audio?.music.playlist(list);
+  }
+
   private applyLevels(): void {
     const a = this.audio;
     if (!a) return;
@@ -156,3 +177,6 @@ export class ArenaAudio {
     this.audio?.setVolume("amb", this.levels.fx * (this.mode === "fight" ? 1 : AMB_IN_MENU));
   }
 }
+
+/** One sound for the whole page: the base, the fitting room and the fight. */
+export const gameAudio = new ArenaAudio();

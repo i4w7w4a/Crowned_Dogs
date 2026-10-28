@@ -4,6 +4,8 @@ import { BaseScreen, type BaseView } from "./base/base-screen.ts";
 import { loadLocalLoadout, type Loadout } from "./base/loadout-state.ts";
 import { MawLoader } from "./loading/maw-loader.ts";
 import { runBattleLoading } from "./loading/battle-loading.ts";
+import { gameAudio } from "./audio/arena-audio.ts";
+import { mountSoundSettings, showSoundSettings } from "./base/sound-settings.ts";
 
 const root = document.createElement("main");
 root.id = "base-app";
@@ -12,11 +14,21 @@ const loader = new MawLoader();
 let inBattle = false;
 let loading = false;
 const base = new BaseScreen(root, enterBattle);
+mountSoundSettings();
+// browsers start sound only after a tap
+document.addEventListener("pointerdown", () => gameAudio.unlock(), { once: true });
+document.addEventListener("keydown", () => gameAudio.unlock(), { once: true });
+
+/** A base screen with its own radio songs and the settings button. */
+function showBase(view: BaseView): void {
+  base.show(view);
+  showSoundSettings(true);
+}
 
 function returnToBase(): void {
   inBattle = false;
   history.replaceState(null, "", "#base");
-  base.show("base"); base.setActive(true);
+  showBase("base"); base.setActive(true);
   root.querySelector<HTMLButtonElement>(".cd-enter")?.focus();
 }
 
@@ -24,6 +36,7 @@ async function enterBattle(loadout: Loadout): Promise<void> {
   if (loading || inBattle) return;
   loading = true;
   base.setActive(false);
+  showSoundSettings(false);
   try {
     const entered = await runBattleLoading(async (beforeEnter, signal) => {
       const battle = await import("./main.ts");
@@ -38,9 +51,9 @@ async function enterBattle(loadout: Loadout): Promise<void> {
 }
 
 const viewFromHash = (): BaseView => location.hash === "#weapon" ? "weapon" : location.hash === "#fitting" ? "fitting" : "base";
-base.show(viewFromHash());
+showBase(viewFromHash());
 window.addEventListener("hashchange", () => {
-  if (!inBattle && !loading) base.show(viewFromHash());
+  if (!inBattle && !loading) showBase(viewFromHash());
 });
 document.addEventListener("visibilitychange", () => {
   if (!inBattle && !loading) base.setActive(!document.hidden);

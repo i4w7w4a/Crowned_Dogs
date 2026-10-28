@@ -32,9 +32,11 @@ export class MusicDirector {
   /** The station was changed while the radio was off: start it fresh next time. */
   private retuned = false;
   private fightPaused = false;
+  private random: Random;
 
   constructor(deck: MusicDeck, random: Random = Math.random) {
     this.deck = deck;
+    this.random = random;
     this.fightList = new Shuffle(FIGHT_PLAYLIST, random);
     this.radioList = new Shuffle(RADIO_PLAYLIST, random);
   }
@@ -100,6 +102,18 @@ export class MusicDirector {
       this.deck.cue("radio.tune");
       this.deck.play("radio", this.radioList.next());
     }
+  }
+
+  /** The stations the radio picks from: each screen has its own (Art: the base and the fitting room play different songs). */
+  playlist(list: readonly Station[]) {
+    if (this.radioList.items === list) return;
+    const now = this.radioList.now;
+    this.radioList = new Shuffle(list, this.random);
+    if (now !== undefined && list.includes(now)) { this.radioList.set(now); return; }
+    if (this.radioOn) {
+      this.deck.cue("radio.tune");
+      this.deck.play("radio", this.radioList.next());
+    } else this.retuned = false;
   }
 
   /** The next station, as if someone turned the knob. */

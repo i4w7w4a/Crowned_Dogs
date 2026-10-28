@@ -12,7 +12,7 @@ import {
 import { Arena, type HitKind } from "./arena/arena.ts";
 import { CALIBRATION_FRAME, FRAMES, type Frame } from "./arena/frames.ts";
 import { QUALITY, QUALITY_IDS, keepQuality, startQuality, type QualityId } from "./arena/quality.ts";
-import { ArenaAudio, type VolumeKind } from "./audio/arena-audio.ts";
+import { gameAudio, type VolumeKind } from "./audio/arena-audio.ts";
 import { LocalDuel } from "./game/local-duel.ts";
 import { FightLog, icon } from "./hud/log.ts";
 import { liquidGlass } from "./hud/liquid.ts";
@@ -60,7 +60,7 @@ let shown = { hp: [0, 0], turn: 1 };
 /** The graphics level; `byHand` once the player picked it in the menu (then the game never lowers it on its own). */
 let quality: QualityId = "low", byHand = false;
 
-const audio = new ArenaAudio();
+const audio = gameAudio;
 const log = new FightLog({ list: $("logList"), ticker: $("ticker"), button: $("logBtn"), sheet: $("logSheet") });
 liquidGlass();
 let arena: Arena | null = null;

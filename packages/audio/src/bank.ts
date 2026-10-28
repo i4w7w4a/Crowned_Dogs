@@ -139,6 +139,9 @@ export const RADIO_PLAYLIST = ["crazy-2", "fxck-wag-6", "fog-3", "try-to-fake"] 
 
 /** A track the radio can be tuned to. */
 export type Station = (typeof RADIO_PLAYLIST)[number];
+/** The radio on the base screen and in the fitting room: different songs in each. */
+export const BASE_PLAYLIST: readonly Station[] = ["crazy-2", "fog-3"];
+export const FITTING_PLAYLIST: readonly Station[] = ["fxck-wag-6", "try-to-fake"];
 
 /**
  * Bus levels in dB. Effects files are mastered around −10…−25 dBFS of punch and

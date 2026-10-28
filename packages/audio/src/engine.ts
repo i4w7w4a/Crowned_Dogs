@@ -57,7 +57,7 @@ export class GameAudio {
       amb: this.gainNode(MIX.amb, master),
       music: this.gainNode(MIX.music, this.duckGain),
     };
-    this.music = new MusicDirector(new ElementDeck(this), this.random);
+    this.music = new MusicDirector(new BufferDeck(this), this.random);
   }
 
   /** Browsers start audio muted: call this from the first tap. */
@@ -140,6 +140,13 @@ export class GameAudio {
     return g;
   }
 
+  /** Download and decode a long file without keeping it, for the music. */
+  async decode(file: string): Promise<AudioBuffer> {
+    const r = await fetch(this.url(file));
+    if (!r.ok) throw new Error(`${file}: HTTP ${r.status}`);
+    return this.ctx.decodeAudioData(await r.arrayBuffer());
+  }
+
   private buffer(file: string): Promise<AudioBuffer> {
     let p = this.buffers.get(file);
     if (!p) {
@@ -211,11 +218,19 @@ class AmbienceLoop {
   }
 }
 
-/** Streams the long music files through <audio> elements into the Web Audio graph. */
-class ElementDeck implements MusicDeck {
+/**
+ * Plays the long music files as decoded buffers in the Web Audio graph. Not <audio> elements:
+ * iOS (Safari and the Telegram browser) ignores the music volume when an element feeds the
+ * graph. Only the track on each channel stays decoded; a stopped one is let go.
+ */
+class BufferDeck implements MusicDeck {
   private audio: GameAudio;
   private radio: RadioChain;
-  private ch: Record<Channel, { el: HTMLAudioElement; fade: GainNode; pending?: ReturnType<typeof setTimeout> }>;
+  private ch: Record<Channel, {
+    out: GainNode; fade: GainNode; src?: AudioBufferSourceNode; buf?: AudioBuffer; track?: TrackId;
+    /** Where the track is: playing since `at` from `offset`, or held at `offset`. */
+    at: number; offset: number; playing: boolean; serial: number; pending?: ReturnType<typeof setTimeout>;
+  }>;
 
   constructor(audio: GameAudio) {
     this.audio = audio;
@@ -223,45 +238,49 @@ class ElementDeck implements MusicDeck {
     const radio = createRadio(ctx);
     radio.output.connect(audio.musicBus());
     this.radio = radio;
-    const make = (channel: Channel, level: number, to: AudioNode) => {
-      const el = new Audio();
-      el.preload = "auto";
-      el.crossOrigin = "anonymous";
+    const make = (level: number, to: AudioNode) => {
       const fade = ctx.createGain();
       fade.gain.value = 0;
-      ctx.createMediaElementSource(el).connect(fade).connect(audio.gainNode(level, to));
-      el.addEventListener("ended", () => audio.music.ended(channel));
-      return { el, fade };
+      fade.connect(audio.gainNode(level, to));
+      return { out: fade, fade, at: 0, offset: 0, playing: false, serial: 0 };
     };
-    this.ch = {
-      fight: make("fight", MIX.fightMusic, audio.musicBus()),
-      radio: make("radio", MIX.radioMusic, radio.input),
-    };
+    this.ch = { fight: make(MIX.fightMusic, audio.musicBus()), radio: make(MIX.radioMusic, radio.input) };
   }
 
   play(channel: Channel, track: TrackId) {
     const c = this.ch[channel];
     clearTimeout(c.pending);
-    c.el.src = this.audio.url(TRACKS[track].file);
-    c.el.currentTime = 0;
+    this.halt(channel);
+    const serial = ++c.serial;
+    c.track = track; c.offset = 0; c.playing = true; c.buf = undefined;
     this.fadeTo(channel, 1);
-    void c.el.play().catch(() => {});
     if (channel === "radio") this.radio.setHiss(true);
+    void this.audio.decode(TRACKS[track].file).then((buf) => {
+      if (c.serial !== serial || !c.playing) { if (c.serial === serial) c.buf = buf; return; }
+      c.buf = buf;
+      this.start(channel);
+    }).catch(() => {});
   }
 
   pause(channel: Channel) {
     const c = this.ch[channel];
     this.fadeTo(channel, 0);
     clearTimeout(c.pending);
-    c.pending = setTimeout(() => c.el.pause(), MUSIC_FADE * 1000 + 50);
+    if (c.playing) { c.offset = this.position(channel); c.playing = false; }
+    c.pending = setTimeout(() => this.halt(channel), MUSIC_FADE * 1000 + 50);
     if (channel === "radio") this.radio.setHiss(false);
   }
 
   resume(channel: Channel) {
     const c = this.ch[channel];
     clearTimeout(c.pending);
-    if (!c.el.src) return;
-    void c.el.play().catch(() => {});
+    if (!c.track) return;
+    if (!c.playing) {
+      c.playing = true;
+      this.halt(channel);
+      if (c.buf) this.start(channel);
+      else this.play(channel, c.track);
+    }
     this.fadeTo(channel, 1);
     if (channel === "radio") this.radio.setHiss(true);
   }
@@ -270,16 +289,38 @@ class ElementDeck implements MusicDeck {
     const c = this.ch[channel];
     this.fadeTo(channel, 0);
     clearTimeout(c.pending);
-    c.pending = setTimeout(() => {
-      c.el.pause();
-      c.el.removeAttribute("src");
-      c.el.load();
-    }, MUSIC_FADE * 1000 + 50);
+    c.playing = false; c.serial++;
+    c.pending = setTimeout(() => { this.halt(channel); c.buf = undefined; c.track = undefined; c.offset = 0; }, MUSIC_FADE * 1000 + 50);
     if (channel === "radio") this.radio.setHiss(false);
   }
 
   cue(sound: SoundId) {
     this.audio.play(sound);
+  }
+
+  private start(channel: Channel) {
+    const c = this.ch[channel], ctx = this.audio.ctx;
+    if (!c.buf) return;
+    const src = ctx.createBufferSource();
+    src.buffer = c.buf;
+    src.connect(c.out);
+    const offset = c.offset < c.buf.duration ? c.offset : 0;
+    src.start(0, offset);
+    c.at = ctx.currentTime - offset;
+    c.src = src;
+    src.onended = () => { if (c.src === src && c.playing) { c.src = undefined; this.audio.music.ended(channel); } };
+  }
+
+  private halt(channel: Channel) {
+    const c = this.ch[channel];
+    const src = c.src;
+    c.src = undefined;
+    if (src) { src.onended = null; try { src.stop(); } catch { /* not started */ } src.disconnect(); }
+  }
+
+  private position(channel: Channel): number {
+    const c = this.ch[channel];
+    return c.src ? this.audio.ctx.currentTime - c.at : c.offset;
   }
 
   private fadeTo(channel: Channel, v: number) {

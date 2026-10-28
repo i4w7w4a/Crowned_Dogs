@@ -30,7 +30,7 @@ export class VariantPicker {
 /** A playlist that picks at random and never plays the same track twice in a row. */
 export class Shuffle<T> {
   private current: T | undefined;
-  private items: readonly T[];
+  readonly items: readonly T[];
   private random: Random;
 
   constructor(items: readonly T[], random: Random = Math.random) {

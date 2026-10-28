@@ -7,6 +7,7 @@ import {
 import { PersonaViewer } from "./persona-viewer.ts";
 import { WeaponScreen } from "./weapon-screen.ts";
 import { liquidGlass } from "../hud/liquid.ts";
+import { gameAudio } from "../audio/arena-audio.ts";
 import { GlassScroll } from "./glass-scroll.ts";
 import { backArrow } from "./navigation-icons.ts";
 import { ItemViewer, ITEM_MODELS } from "./item-viewer.ts";
@@ -164,6 +165,7 @@ export class BaseScreen {
   private navigate(view: BaseView): void { history.replaceState(null, "", `#${view}`); this.show(view); }
 
   show(view: BaseView): void {
+    gameAudio.screen(view);
     if (this.dialog.open) this.dialog.close();
     this.view = view; this.home.hidden = view !== "base"; this.fitting.hidden = view !== "fitting";
     if (view === "weapon") this.workshop.show(this.loadout);
