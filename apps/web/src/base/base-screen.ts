@@ -52,12 +52,12 @@ export class BaseScreen {
       <section class="cd-home" aria-label="База Соль">
         <img class="cd-backdrop" src="${asset("salt-base.webp")}" alt="Убежище в соляной шахте: Персоны в ложементах, капсула оператора и узел очистки воды" draggable="false">
         <div class="cd-shade" aria-hidden="true"></div>
+        <button class="cd-tunnel" type="button" aria-label="Примерочная: боец и снаряжение"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label">Примерочная</span></button>
         <header class="cd-home-header"><img class="cd-brand-mark" src="${import.meta.env.BASE_URL}brand/maw.svg" alt="Пасть из двух корон" draggable="false"><img class="cd-wordmark" src="${import.meta.env.BASE_URL}brand/wordmark.svg" alt="Crowned Dogs" draggable="false"></header>
         <div class="cd-home-title"><p class="cd-overline">БАЗА ОПЕРАТОРА</p><h1>СОЛЬ</h1></div>
         <div class="cd-home-bottom">
           <div class="cd-operator"><span class="cd-overline">ОПЕРАТОР</span><span class="cd-tag">K-417-093</span></div>
           <div class="cd-current-kit"><span>Основное оружие</span><strong data-kit-name></strong></div>
-          <button class="glass cd-open-fitting" type="button"><span class="cd-menu-icon">${fittingRoomIcon()}</span><span>Примерочная<small>Боец и снаряжение</small></span></button>
           <button class="glass cd-open-fitting cd-enter" type="button"><span class="cd-menu-icon cd-enter-gun" aria-hidden="true"></span><span>В бой<small>Дуэль с ботом</small></span></button>
           <p class="cd-home-message" aria-live="polite"></p>
         </div>
@@ -99,7 +99,9 @@ export class BaseScreen {
     this.catalog = root.querySelector(".cd-catalog-items")!;
     this.status = root.querySelector(".cd-model-status")!;
     this.catalogScroll = new GlassScroll(root.querySelector<HTMLElement>(".cd-dialog-content")!);
-    root.querySelector(".cd-open-fitting")!.addEventListener("click", () => this.navigate("fitting"));
+    root.querySelector(".cd-tunnel")!.addEventListener("click", () => this.navigate("fitting"));
+    const home = root.querySelector<HTMLElement>(".cd-home")!;
+    new ResizeObserver(() => placeTunnel(home)).observe(home);
     root.querySelector(".cd-back")!.addEventListener("click", () => this.navigate("base"));
     root.querySelector(".cd-enter")!.addEventListener("click", () => { void this.enterBattle(); });
     root.querySelector(".cd-open-catalog")!.addEventListener("click", () => this.openCatalog(this.selectedSlot));
@@ -295,4 +297,14 @@ export class BaseScreen {
   }
 
   dispose(): void { this.observer.disconnect(); this.catalogScroll.dispose(); this.viewer?.dispose(); this.itemViewer?.dispose(); this.workshop.dispose(); this.root.remove(); }
+}
+
+/** The far end of the tunnel on salt-base.webp (1882×3344), as a share of the picture. */
+const TUNNEL = { u: 0.27, v: 0.335, ratio: 1882 / 3344 };
+/** The picture fills the screen like object-fit: cover, so the ring follows the crop. */
+function placeTunnel(home: HTMLElement): void {
+  const w = home.clientWidth, h = home.clientHeight, ring = home.querySelector<HTMLElement>(".cd-tunnel")!;
+  const s = Math.max(w / TUNNEL.ratio, h) , iw = s * TUNNEL.ratio, ih = s;
+  ring.style.left = ((w - iw) / 2 + TUNNEL.u * iw).toFixed(1) + "px";
+  ring.style.top = ((h - ih) / 2 + TUNNEL.v * ih).toFixed(1) + "px";
 }
