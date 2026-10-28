@@ -68,7 +68,8 @@ button:disabled { cursor: default; }
 
 /* Liquid glass (Apple style), on every button of the fight and the menu: the same 40% black tint whatever the state,
    a light blur, and a rim lit from the top left and the bottom right. In Chromium the picture also bends at the
-   rounded edge (hud/liquid.ts puts the lens filter into --lens). A picked button gets a solid white rim instead. */
+   rounded edge (hud/liquid.ts puts the lens filter into --lens). No outline (Art 20:07): a picked button shows only
+   a brighter edge and a glow from inside. */
 .glass {
   --rim: linear-gradient(140deg, rgba(255,255,255,.66), rgba(255,255,255,.16) 26%, rgba(255,255,255,.06) 54%, rgba(255,255,255,.36));
   --rim-w: 1px;
@@ -84,11 +85,11 @@ button:disabled { cursor: default; }
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
 }
 @media (hover: hover) {
-  .glass:hover:not(:disabled) { --rim: linear-gradient(140deg, rgba(255,255,255,.9), rgba(255,255,255,.28) 26%, rgba(255,255,255,.14) 54%, rgba(255,255,255,.55)); }
+  .glass:hover:not(:disabled) { --rim: linear-gradient(140deg, rgba(255,255,255,.82), rgba(255,255,255,.24) 26%, rgba(255,255,255,.1) 54%, rgba(255,255,255,.48)); }
 }
 .glass.on, .glass[aria-pressed="true"]:not(.srow), .glass[aria-expanded="true"], .go.glass:not(:disabled) {
-  --rim: rgba(255,255,255,.95); --rim-w: 1.5px;
-  box-shadow: inset 0 1px 1px rgba(255,255,255,.14), inset 0 0 12px rgba(255,255,255,.1), 0 0 14px rgba(255,255,255,.14), 0 6px 18px rgba(0,0,0,.2);
+  --rim: linear-gradient(140deg, rgba(255,255,255,.98), rgba(255,255,255,.42) 26%, rgba(255,255,255,.22) 54%, rgba(255,255,255,.78));
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.3), inset 0 0 16px rgba(255,255,255,.2), 0 6px 18px rgba(0,0,0,.2);
 }
 .glass:disabled::before { opacity: .5; }
 .glass.round { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; }
