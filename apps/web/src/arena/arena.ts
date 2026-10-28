@@ -9,6 +9,7 @@ import * as THREE from "three";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
+import { dress, KIT_A } from "./dress.ts";
 import { Dust } from "./dust.ts";
 import type { Frame } from "./frames.ts";
 import { Lens, type View } from "./lens.ts";
@@ -454,6 +455,7 @@ export class Arena {
 
   private makeFigure(gltf: GLTF, look: Look): Figure {
     const model = SkeletonUtils.clone(gltf.scene);
+    dress(model, KIT_A); // for now both fighters wear the one kit there is
     const body = new THREE.MeshStandardMaterial({ color: look.body, roughness: 0.82, metalness: 0.04, emissive: look.lift ?? 0x000000 });
     const joints = new THREE.MeshStandardMaterial({ color: look.joints, roughness: look.jointsRough ?? 0.42, metalness: look.jointsMetal ?? 0.4 });
     model.traverse((o) => {
@@ -502,6 +504,7 @@ export class Arena {
   /** The wet floor reflects the enemy: a faint upside-down copy in its own lit materials that repeats its pose every frame. */
   private makeMirror(gltf: GLTF, src: Figure): Mirror {
     const model = SkeletonUtils.clone(gltf.scene);
+    dress(model, KIT_A);
     // the same materials as the body it mirrors (two copies of one model list their meshes in the same order)
     const own: THREE.Mesh[] = [];
     src.model.traverse((o) => { if (o instanceof THREE.Mesh) own.push(o); });
