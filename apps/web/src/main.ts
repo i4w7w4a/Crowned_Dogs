@@ -39,7 +39,7 @@ let frame = frames[0]!;
 /** What the player picked in the menu; kept between visits. */
 const choice = {
   weapon: (WEAPON_IDS as readonly string[]).includes(store.get("cd-weapon") ?? "") ? store.get("cd-weapon") as WeaponId : "rifle",
-  veteran: store.get("cd-veteran") === "on",
+  veteran: false, // the veteran kit is off (Art): the switch is gone from the menu
 };
 
 /** The kit from the fitting room; picking a gun or the veteran kit in the fight menu puts it aside. */
@@ -68,13 +68,13 @@ let arenaLoading: Promise<void> | null = null;
 let speedFrame = 0;
 let speedDelay: ReturnType<typeof setTimeout> | null = null;
 
-/** The bot takes a random gun, like in Telegram; a veteran meets a veteran. */
+/** The bot takes a random gun, like in Telegram. */
 function newDuel(): LocalDuel {
   const foeWeapon = WEAPON_IDS[Math.floor(Math.random() * WEAPON_IDS.length)]!;
   return new LocalDuel({
     mapId: frame.mapId, weather: frame.weather, time: frame.time,
     player: { ...PLAYER, weapon: choice.weapon, kit: fitted ?? (choice.veteran ? VETERAN_KITS[choice.weapon] : undefined) },
-    bot: { name: FOE, weapon: foeWeapon, kit: choice.veteran ? VETERAN_KITS[foeWeapon] : undefined },
+    bot: { name: FOE, weapon: foeWeapon }, // Art: the bot fights with the plain gun, no veteran kit
   });
 }
 
