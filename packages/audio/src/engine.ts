@@ -331,7 +331,7 @@ class BufferDeck implements MusicDeck {
   /** The fight track's own slider, 0..1, on top of the music bus. */
   fightLevel(v: number) {
     const c = this.ch.fight;
-    c.lvl.gain.setTargetAtTime(c.base * v, this.audio.ctx.currentTime, 0.05);
+    c.lvl.gain.setTargetAtTime(dbToGain(c.base) * v * v, this.audio.ctx.currentTime, 0.05);
   }
 
   cue(sound: SoundId) {
