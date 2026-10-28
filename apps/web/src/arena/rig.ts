@@ -55,9 +55,10 @@ const ARM = /^(upperarm|lowerarm|hand|thumb|index|middle|ring|pinky)_|^mixamorig
 
 /** First person: a switch that shows only a figure's arms and hands. Seen from inside its own head the rest
  *  of the body (the neck, the collar, the shoulders) would fill the lens. A triangle stays when all its
- *  corners follow arm bones the most; a mesh with no such triangles (the head) is hidden. */
+ *  corners follow arm bones the most; a mesh with no such triangles (the head) is hidden. Call it once the figure
+ *  is dressed: what is hidden then stays hidden. */
 export function armsOnly(model: THREE.Object3D): (on: boolean) => void {
-  const swaps: [THREE.SkinnedMesh, THREE.BufferAttribute | null, THREE.BufferAttribute | null][] = [];
+  const swaps: [THREE.SkinnedMesh, THREE.BufferAttribute | null, THREE.BufferAttribute | null, boolean][] = [];
   model.traverse((o) => {
     if (!(o instanceof THREE.SkinnedMesh)) return;
     const g = o.geometry, si = g.getAttribute("skinIndex"), sw = g.getAttribute("skinWeight");
@@ -72,9 +73,9 @@ export function armsOnly(model: THREE.Object3D): (on: boolean) => void {
       const [a, b, c] = all ? [all.getX(i), all.getX(i + 1), all.getX(i + 2)] : [i, i + 1, i + 2];
       if (onArm(a) && onArm(b) && onArm(c)) kept.push(a, b, c);
     }
-    swaps.push([o, all, kept.length ? new THREE.BufferAttribute(new Uint32Array(kept), 1) : null]);
+    swaps.push([o, all, kept.length ? new THREE.BufferAttribute(new Uint32Array(kept), 1) : null, o.visible]);
   });
   return (on) => {
-    for (const [m, all, arms] of swaps) { m.visible = !on || arms !== null; m.geometry.setIndex(on && arms ? arms : all); }
+    for (const [m, all, arms, shown] of swaps) { m.visible = shown && (!on || arms !== null); m.geometry.setIndex(on && arms ? arms : all); }
   };
 }

@@ -5,6 +5,9 @@
  ],
  "materials": {
   "M_Male_Body": "tex/persona-male/M_Male_Body",
-  "M_Male_Head": "tex/persona-male/M_Male_Head"
+  "M_Male_Head": "tex/persona-male/M_Male_Head",
+  "M_Suit": "tex/persona-male/M_Suit",
+  "M_Vest": "tex/armor/M_Vest",
+  "M_Helmet": "tex/armor/M_Helmet"
  }
 }

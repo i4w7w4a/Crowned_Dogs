@@ -9,8 +9,12 @@ which material takes which files.
         M_Male_Body=<dir with color.jpg normal.jpg rough.jpg metal.jpg> M_Male_Head=<dir> ...
 
 Each <dir> holds the material's Tripo maps, as in the .fbm folder of its zip, renamed to
-color / normal / rough / metal. Rough and metal go into one picture the glTF way (green
+color / normal / rough / metal, or with rm.png in place of rough and metal (a Tripo PBR
+map already laid out the glTF way). Rough and metal go into one picture the glTF way (green
 roughness, blue metalness), the same as the 1K copy inside the model.
+
+NAME=@tex/<other>/NAME points a material at copies made for another model (the armour
+pieces both Personas wear). Materials already in the model's manifest are kept.
 """
 
 import json
@@ -34,20 +38,28 @@ def main() -> None:
     web = Path(__file__).resolve().parent.parent
     out_dir = web / "public" / "tex" / model
     out_dir.mkdir(parents=True, exist_ok=True)
-    manifest = {"sizes": list(SIZES), "materials": {}}
+    path = web / "public" / "tex" / f"{model}.json"
+    manifest = json.loads(path.read_text()) if path.exists() else {"sizes": list(SIZES), "materials": {}}
     for pair in pairs:
         name, src = pair.split("=", 1)
+        if src.startswith("@"):
+            manifest["materials"][name] = src[1:]
+            continue
         src = Path(src)
         print(name)
         base = out_dir / name
         save(Image.open(src / "color.jpg").convert("RGB"), base, "color")
         save(Image.open(src / "normal.jpg").convert("RGB"), base, "normal")
-        rough = Image.open(src / "rough.jpg").convert("L")
-        metal = Image.open(src / "metal.jpg").convert("L").resize(rough.size, Image.LANCZOS)
+        if (src / "rm.png").exists():
+            rm = Image.open(src / "rm.png").convert("RGB")
+            rough, metal = rm.getchannel("G"), rm.getchannel("B")
+        else:
+            rough = Image.open(src / "rough.jpg").convert("L")
+            metal = Image.open(src / "metal.jpg").convert("L").resize(rough.size, Image.LANCZOS)
         white = Image.new("L", rough.size, 255)
         save(Image.merge("RGB", (white, rough, metal)), base, "orm")
         manifest["materials"][name] = f"tex/{model}/{name}"
-    (web / "public" / "tex" / f"{model}.json").write_text(json.dumps(manifest, indent=1) + "\n")
+    path.write_text(json.dumps(manifest, indent=1) + "\n")
 
 if __name__ == "__main__":
     main()
