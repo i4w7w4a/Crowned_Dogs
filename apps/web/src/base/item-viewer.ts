@@ -43,6 +43,7 @@ export class ItemViewer {
     this.host = host;
     host.classList.add("ci-viewer");
     host.innerHTML = `<canvas tabindex="0" role="img"></canvas><div class="ci-message" role="status"><span></span><button class="glass" type="button" hidden>Повторить</button></div><p class="ci-hint">Потяни, чтобы повернуть</p>`;
+    if (options.workbench) host.querySelector(".ci-hint")!.textContent = "Влево-вправо — поворот · вверх-вниз — наклон";
     this.canvas = host.querySelector("canvas")!; this.status = host.querySelector(".ci-message span")!; this.retry = host.querySelector("button")!;
     this.retry.addEventListener("click", () => { if (this.request) void this.show(this.request.id, this.request.name, this.request.loadout); });
     this.canvas.addEventListener("pointerdown", this.down); this.canvas.addEventListener("pointermove", this.move);
@@ -96,7 +97,7 @@ export class ItemViewer {
     const keepAngle = this.request?.id === id;
     this.request = { id, name, loadout }; const serial = ++this.serial;
     this.active = true; this.host.hidden = false; this.canvas.hidden = true; this.retry.hidden = true;
-    this.status.textContent = "Загрузка…"; this.canvas.setAttribute("aria-label", `${name}. Объёмная модель, вращение перетаскиванием или стрелками.`);
+    this.status.textContent = "Загрузка…"; this.canvas.setAttribute("aria-label", `${name}. Объёмная модель, вращение перетаскиванием или стрелками.${this.options.workbench ? " Влево-вправо — поворот, вверх-вниз — наклон." : ""}`);
     this.host.dataset.item = id;
     try {
       this.init();
@@ -159,16 +160,25 @@ export class ItemViewer {
   private down = (e: PointerEvent): void => { if (e.button || !e.isPrimary) return; this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; this.canvas.setPointerCapture(e.pointerId); };
   private move = (e: PointerEvent): void => {
     if (!this.drag || e.pointerId !== this.drag.id) return;
-    this.pivot.rotation.y += (e.clientX - this.drag.x) * .012;
-    this.pivot.rotation.x = THREE.MathUtils.clamp(this.pivot.rotation.x + (e.clientY - this.drag.y) * .008, -1.1, 1.1);
+    this.turn((e.clientX - this.drag.x) * .012, (e.clientY - this.drag.y) * .008);
     this.drag.x = e.clientX; this.drag.y = e.clientY; this.render();
   };
+  private turn(horizontal: number, vertical: number): void {
+    if (this.options.workbench) {
+      // Camera-facing roll remains usable at every viewing angle, including a side view.
+      this.pivot.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), horizontal);
+      this.pivot.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), -vertical);
+    } else {
+      this.pivot.rotation.y += horizontal;
+      this.pivot.rotation.x = THREE.MathUtils.clamp(this.pivot.rotation.x + vertical, -1.1, 1.1);
+    }
+  }
   private up = (e: PointerEvent): void => { if (this.drag?.id === e.pointerId) { this.drag = null; if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId); } };
   private key = (e: KeyboardEvent): void => {
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
     e.preventDefault();
-    if (e.key === "ArrowLeft" || e.key === "ArrowRight") this.pivot.rotation.y += e.key === "ArrowLeft" ? -.2 : .2;
-    else this.pivot.rotation.x = THREE.MathUtils.clamp(this.pivot.rotation.x + (e.key === "ArrowUp" ? -.15 : .15), -1.1, 1.1);
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") this.turn(e.key === "ArrowLeft" ? -.2 : .2, 0);
+    else this.turn(0, e.key === "ArrowUp" ? -.15 : .15);
     this.render();
   };
   private lost = (e: Event): void => { e.preventDefault(); this.status.textContent = "Восстановление изображения…"; };
