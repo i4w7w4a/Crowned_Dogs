@@ -66,14 +66,14 @@ button:disabled { cursor: default; }
 .ico .fine { stroke-width: .9; stroke-opacity: .6; }
 .ico.flip { transform: scaleX(-1); }
 
-/* Liquid glass (Apple style), on every button of the fight and the menu: the same 40% black tint whatever the state,
+/* Liquid glass (Apple style), on every button of the fight and the menu: the same 60% black tint whatever the state,
    a light blur, and a rim lit from the top left and the bottom right. In Chromium the picture also bends at the
    rounded edge (hud/liquid.ts puts the lens filter into --lens). No outline (Art 20:07): a picked button shows only
    a brighter edge and a glow from inside. */
 .glass {
   --rim: linear-gradient(140deg, rgba(255,255,255,.66), rgba(255,255,255,.16) 26%, rgba(255,255,255,.06) 54%, rgba(255,255,255,.36));
   --rim-w: 1px;
-  position: relative; border-radius: 12px; background: rgba(0,0,0,.4);
+  position: relative; border-radius: 12px; background: rgba(0,0,0,.6);
   -webkit-backdrop-filter: blur(2px) saturate(1.6) brightness(1.05);
   backdrop-filter: var(--lens,) blur(2px) saturate(1.6) brightness(1.05);
   box-shadow: inset 0 1px 1px rgba(255,255,255,.14), inset 0 0 10px rgba(255,255,255,.06), 0 6px 18px rgba(0,0,0,.2);
@@ -176,7 +176,7 @@ button:disabled { cursor: default; }
 .ticker > .ico { width: 18px; height: 18px; color: rgba(236,232,223,.85); transition: transform .2s; }
 .ticker[aria-expanded="true"] > .ico { transform: rotate(180deg); }
 .ticker.fresh { animation: fresh .9s ease-out; }
-@keyframes fresh { 0% { background: rgba(255,255,255,.3) } 100% { background: rgba(0,0,0,.4) } }
+@keyframes fresh { 0% { background: rgba(255,255,255,.3) } 100% { background: rgba(0,0,0,.6) } }
 .dockbtn { flex: 0 0 auto; width: 40px; display: grid; place-items: center; color: var(--fg); }
 .dockbtn .ico { width: 20px; height: 20px; }
 
