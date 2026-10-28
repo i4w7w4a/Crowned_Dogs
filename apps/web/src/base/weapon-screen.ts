@@ -1,6 +1,8 @@
 import { BASE_STATS, ITEM_BY_ID, WEAPONS, type Loadout, type ModSlot, type WeaponItem } from "@crowned-dogs/core";
-import { bbox, composeWeapon, itemArt, markup, svg, WEAPON_ART, type Slot, type WeaponArtId } from "../../../../packages/icons/src/index.ts";
+import { bbox, composeWeapon, itemArt, markup, svg, WEAPON_ART, type Slot } from "../../../../packages/icons/src/index.ts";
+import { equipmentItemIcon } from "./equipment-icons.ts";
 import { liquidGlass } from "../hud/liquid.ts";
+import { GlassScroll } from "./glass-scroll.ts";
 import {
   MOD_SLOTS, MOD_SLOT_NAMES, compileKit, describeItem, effectiveWeaponModId,
   equipItem, equipWeaponMod, itemsForSlot, weaponModsForSlot,
@@ -8,7 +10,7 @@ import {
 import "./weapon-screen.css";
 
 const escape = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
-const back = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg>';
+const equippedCheck = '<span class="cd-equipped-check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>';
 const socketNames: Record<ModSlot, string> = { ...MOD_SLOT_NAMES, muzzle: "Дуло", rail: "Планка", stock: "Приклад" };
 // Labels stay far enough apart for a finger; the leaders end at the real art sockets.
 const labelPoints: Record<ModSlot, [number, number]> = {
@@ -27,6 +29,7 @@ export class WeaponScreen {
   private selectedSlot: ModSlot | null = null;
   private sheet: HTMLDialogElement;
   private sheetBody: HTMLElement;
+  private sheetScroll: GlassScroll;
   private origin: HTMLElement | null = null;
   private onChange: (loadout: Loadout) => boolean;
 
@@ -39,7 +42,7 @@ export class WeaponScreen {
     this.element.innerHTML = `
       <img class="cw-room" src="${import.meta.env.BASE_URL}img/base/fitting-room.webp" alt="" draggable="false">
       <header class="cw-header">
-        <button class="cw-back cw-icon glass" type="button" aria-label="Вернуться в примерочную">${back}</button>
+        <button class="cw-back glass" type="button" aria-label="Назад к снаряжению">Назад</button>
         <span>Оружие</span>
         <button class="cw-info cw-icon glass" type="button" aria-label="Характеристики оружия"><span aria-hidden="true">i</span></button>
       </header>
@@ -48,7 +51,7 @@ export class WeaponScreen {
         <svg class="cw-gun" viewBox="0 0 360 360" role="img" aria-label="Оружие с установленными модификациями"></svg>
         <div class="cw-sockets">${MOD_SLOTS.map(slot => `<button class="cw-socket glass" type="button" data-socket="${slot}" style="left:${labelPoints[slot][0] / 3.6}%;top:${labelPoints[slot][1] / 3.6}%"><span class="cw-socket-dot" aria-hidden="true"></span><span class="cw-socket-name">${socketNames[slot]}</span></button>`).join("")}</div>
       </div>
-      <footer class="cw-footer"><button class="cw-change glass" type="button">Сменить оружие <span aria-hidden="true">↔</span></button><p class="cw-error" role="status" hidden></p></footer>
+      <footer class="cw-footer"><button class="cw-change glass" type="button">Сменить оружие</button><p class="cw-error" role="status" hidden></p></footer>
       <dialog class="cw-sheet sheet glass" aria-labelledby="cw-sheet-title">
         <header class="cw-sheet-header"><h2 id="cw-sheet-title"></h2><button class="cw-close cw-icon glass" type="button" aria-label="Закрыть панель">×</button></header>
         <div class="cw-sheet-body"></div>
@@ -57,6 +60,7 @@ export class WeaponScreen {
     liquidGlass(this.element);
     this.sheet = this.element.querySelector("dialog")!;
     this.sheetBody = this.element.querySelector(".cw-sheet-body")!;
+    this.sheetScroll = new GlassScroll(this.sheetBody);
     this.element.querySelector(".cw-back")!.addEventListener("click", onBack);
     this.element.querySelector(".cw-info")!.addEventListener("click", () => this.showStats());
     this.element.querySelector(".cw-change")!.addEventListener("click", () => this.showWeapons());
@@ -114,7 +118,7 @@ export class WeaponScreen {
   }
 
   hide(): void { this.element.hidden = true; if (this.sheet.open) this.sheet.close(); }
-  dispose(): void { this.hide(); this.element.remove(); }
+  dispose(): void { this.hide(); this.sheetScroll.dispose(); this.element.remove(); }
 
   private weapon(): WeaponItem {
     const item = ITEM_BY_ID.get(this.loadout!.weapon1.item);
@@ -162,6 +166,7 @@ export class WeaponScreen {
     this.sheet.showModal();
     liquidGlass(this.sheet);
     this.sheetBody.scrollTop = 0;
+    this.sheetScroll.refresh();
     this.element.querySelector<HTMLButtonElement>(".cw-close")!.focus({ preventScroll: true });
   }
 
@@ -169,7 +174,7 @@ export class WeaponScreen {
     if (!this.loadout) return;
     this.selectedSlot = slot;
     const selected = effectiveWeaponModId(this.loadout, slot);
-    this.sheetBody.innerHTML = `<div class="cw-options">${weaponModsForSlot(this.loadout, slot).map(item => `<button class="cw-option glass" type="button" data-mod="${item.id}" aria-pressed="${item.id === selected}"><span class="cw-part-icon">${partIcon(item.id)}</span><span><strong>${escape(item.name)}</strong>${item.id === selected ? '<small>Установлено</small>' : item.isStock ? '<small>Штатная деталь</small>' : ""}</span><span class="cw-option-check" aria-hidden="true">${item.id === selected ? "✓" : "+"}</span></button>`).join("")}</div>`;
+    this.sheetBody.innerHTML = `<div class="cw-options">${weaponModsForSlot(this.loadout, slot).map(item => `<button class="cw-option glass" type="button" data-mod="${item.id}" aria-pressed="${item.id === selected}"><span class="cw-part-icon">${partIcon(item.id)}</span><strong>${escape(item.name)}</strong>${item.id === selected ? equippedCheck : ""}</button>`).join("")}</div>`;
     this.openSheet(this.slotName(slot));
     this.element.querySelector(`[data-socket="${slot}"]`)!.setAttribute("aria-expanded", "true");
   }
@@ -177,7 +182,7 @@ export class WeaponScreen {
   private showWeapons(): void {
     if (!this.loadout) return;
     const weapons = itemsForSlot("weapon1").filter((item): item is WeaponItem => item.kind === "weapon");
-    this.sheetBody.innerHTML = `<div class="cw-options">${weapons.map(item => `<button class="cw-option glass" type="button" data-weapon="${item.id}" aria-pressed="${item.id === this.loadout!.weapon1.item}"><span class="cw-part-icon">${svg(composeWeapon(item.weapon as WeaponArtId, item.stock), `cw-choice-${iconSerial++}`, 6)}</span><span><strong>${escape(item.name)}</strong>${item.id === this.loadout!.weapon1.item ? '<small>Выбрано</small>' : ""}</span></button>`).join("")}</div>`;
+    this.sheetBody.innerHTML = `<div class="cw-options">${weapons.map(item => `<button class="cw-option glass" type="button" data-weapon="${item.id}" aria-pressed="${item.id === this.loadout!.weapon1.item}"><span class="cw-part-icon">${equipmentItemIcon(item.id)}</span><strong>${escape(item.name)}</strong>${item.id === this.loadout!.weapon1.item ? equippedCheck : ""}</button>`).join("")}</div>`;
     this.openSheet("Сменить оружие");
   }
 
