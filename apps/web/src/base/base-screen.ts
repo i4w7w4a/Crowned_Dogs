@@ -10,6 +10,7 @@ import { liquidGlass } from "../hud/liquid.ts";
 import { GlassScroll } from "./glass-scroll.ts";
 import { backArrow } from "./navigation-icons.ts";
 import { ItemViewer, ITEM_MODELS } from "./item-viewer.ts";
+import { availableInFitting } from "./model-catalog.ts";
 
 export type BaseView = "base" | "fitting" | "weapon";
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
@@ -237,13 +238,13 @@ export class BaseScreen {
     this.root.querySelector<HTMLElement>(".cd-catalog-error")!.hidden = true;
     const selected = equippedItemId(this.loadout, this.selectedSlot);
     const empty = this.selectedSlot === "weapon2" ? `<button class="glass cd-item-card" type="button" data-item="" aria-pressed="${selected === null}"><span class="cd-item-art" aria-hidden="true">—</span><span class="cd-item-copy"><strong>Без второго оружия</strong></span>${selected === null ? equippedCheck : ""}</button>` : "";
-    this.catalog.innerHTML = empty + itemsForSlot(this.selectedSlot).map((item) => {
+    this.catalog.innerHTML = empty + itemsForSlot(this.selectedSlot).filter(availableInFitting).map((item) => {
       const effects = describeItem(item);
       return `<button class="glass cd-item-card" type="button" data-item="${item.id}" aria-pressed="${selected === item.id}"><span class="cd-item-art">${equipmentItemIcon(item.id)}</span><span class="cd-item-copy"><strong>${escape(item.name)}</strong><small>${escape(item.note)}</small>${effects.length ? `<span class="cd-effects">${effects.map(escape).join(" · ")}</span>` : ""}</span>${selected === item.id ? equippedCheck : ""}</button>`;
     }).join("");
     this.catalog.parentElement!.scrollTop = 0;
     liquidGlass(this.catalog);
-    const available = itemsForSlot(this.selectedSlot);
+    const available = itemsForSlot(this.selectedSlot).filter(availableInFitting);
     const id = previewId === undefined ? (selected && ITEM_MODELS[selected] ? selected : available.find(item => ITEM_MODELS[item.id])?.id) : previewId;
     const preview = this.root.querySelector<HTMLElement>(".cd-item-preview")!;
     const item = id ? ITEM_BY_ID.get(id) : null;

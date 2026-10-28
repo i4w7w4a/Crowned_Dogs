@@ -5,6 +5,7 @@ import { liquidGlass } from "../hud/liquid.ts";
 import { GlassScroll } from "./glass-scroll.ts";
 import { backArrow } from "./navigation-icons.ts";
 import { ItemViewer } from "./item-viewer.ts";
+import { availableInFitting } from "./model-catalog.ts";
 import {
   MOD_SLOTS, MOD_SLOT_NAMES, compileKit, describeItem, effectiveWeaponModId,
   equipItem, equipWeaponMod, itemsForSlot, weaponModsForSlot,
@@ -201,14 +202,14 @@ export class WeaponScreen {
     if (!this.loadout) return;
     this.selectedSlot = slot;
     const selected = effectiveWeaponModId(this.loadout, slot);
-    this.sheetBody.innerHTML = `<div class="cw-options">${weaponModsForSlot(this.loadout, slot).map(item => `<button class="cw-option glass" type="button" data-mod="${item.id}" aria-pressed="${item.id === selected}"><span class="cw-part-icon">${partIcon(item.id)}</span><strong>${escape(item.name)}</strong>${item.id === selected ? equippedCheck : ""}</button>`).join("")}</div>`;
+    this.sheetBody.innerHTML = `<div class="cw-options">${weaponModsForSlot(this.loadout, slot).filter(availableInFitting).map(item => `<button class="cw-option glass" type="button" data-mod="${item.id}" aria-pressed="${item.id === selected}"><span class="cw-part-icon">${partIcon(item.id)}</span><strong>${escape(item.name)}</strong>${item.id === selected ? equippedCheck : ""}</button>`).join("")}</div>`;
     this.openSheet(this.slotName(slot));
     this.element.querySelector(`[data-socket="${slot}"]`)!.setAttribute("aria-expanded", "true");
   }
 
   private showWeapons(): void {
     if (!this.loadout) return;
-    const weapons = itemsForSlot("weapon1").filter((item): item is WeaponItem => item.kind === "weapon");
+    const weapons = itemsForSlot("weapon1").filter(availableInFitting).filter((item): item is WeaponItem => item.kind === "weapon");
     this.sheetBody.innerHTML = `<div class="cw-options">${weapons.map(item => `<button class="cw-option glass" type="button" data-weapon="${item.id}" aria-pressed="${item.id === this.loadout!.weapon1.item}"><span class="cw-part-icon">${equipmentItemIcon(item.id)}</span><strong>${escape(item.name)}</strong>${item.id === this.loadout!.weapon1.item ? equippedCheck : ""}</button>`).join("")}</div>`;
     this.openSheet("Сменить оружие");
   }

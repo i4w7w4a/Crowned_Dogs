@@ -7,10 +7,9 @@ import { TextureTiers } from "../arena/textures.ts";
 import { tune } from "../arena/materials.ts";
 import { fitVaryag, prepareVaryag } from "./fitting-stage.ts";
 import "./item-viewer.css";
+import { ITEM_MODELS } from "./model-catalog.ts";
+export { ITEM_MODELS } from "./model-catalog.ts";
 
-export const ITEM_MODELS: Readonly<Record<string, string>> = {
-  "head-k6": "tripo-helmet", "body-plita2": "tripo-vest", "suit-field": "tripo-suit-male", "rifle-varyag": "varyag",
-};
 const RIFLE = `${import.meta.env.BASE_URL}preview/varyag.json`;
 type Model = { root: THREE.Group; textures: Set<THREE.Texture> };
 type ViewerOptions = { workbench?: boolean; onSockets?: (points: Partial<Record<ModSlot, [number, number]>>) => void };
