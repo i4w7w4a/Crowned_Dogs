@@ -98,8 +98,10 @@ ringsEl.appendChild(tagEl);
 /** Where a zone of the enemy is on screen right now, in stage pixels. */
 function point(z: Zone): [number, number] {
   const [u, v] = arena ? arena.zoneOnScreen(z) : [0.645, { head: 0.26, body: 0.34, groin: 0.42, legs: 0.49 }[z]];
-  return [geo.x + u * geo.w, geo.y + v * geo.h];
+  return [geo.x + u * geo.w, geo.y + v * geo.h + RING_NUDGE[z] * ringR];
 }
+/** Art: the rings a little further apart than the body points: the head a hair up, the chest up, the legs down (in ring radii). */
+const RING_NUDGE: Record<Zone, number> = { head: -0.5, body: -1.4, groin: 0, legs: 1.4 };
 
 /** Ring radius in px: the ring is about 4% of the picture's width across, as on Art's fight screen. */
 let ringR = 7.2;

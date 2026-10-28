@@ -154,7 +154,7 @@ export const MIX = {
   ui: -3,
   amb: -2,
   music: 0,
-  fightMusic: -12,
+  fightMusic: -15.5, // Art: 1.5× quieter than the old -12
   radioMusic: -17,
   /** Effects of the enemy fade by this much per step of distance... */
   distanceDbPerStep: 0.6,

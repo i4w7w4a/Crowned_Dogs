@@ -57,8 +57,8 @@ export class BaseScreen {
         <div class="cd-home-bottom">
           <div class="cd-operator"><span class="cd-overline">ОПЕРАТОР</span><span class="cd-tag">K-417-093</span></div>
           <div class="cd-current-kit"><span>Основное оружие</span><strong data-kit-name></strong></div>
-          <button class="go glass cd-primary cd-enter" type="button"><span>В бой<small>Дуэль с ботом</small></span><span class="cd-enter-gun" aria-hidden="true"></span></button>
           <button class="glass cd-open-fitting" type="button"><span class="cd-menu-icon">${fittingRoomIcon()}</span><span>Примерочная<small>Боец и снаряжение</small></span></button>
+          <button class="glass cd-open-fitting cd-enter" type="button"><span class="cd-menu-icon cd-enter-gun" aria-hidden="true"></span><span>В бой<small>Дуэль с ботом</small></span></button>
           <p class="cd-home-message" aria-live="polite"></p>
         </div>
       </section>

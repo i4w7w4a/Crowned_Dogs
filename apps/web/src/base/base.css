@@ -19,10 +19,6 @@ body { margin: 0; }
 .cd-current-kit { display: flex; justify-content: space-between; gap: 20px; padding: 13px 0 18px; font-size: 11px; color: var(--cd-secondary); }
 .cd-current-kit strong { font-weight: 500; color: #e0e4dd; text-align: right; }
 .cd-primary { width: 100%; min-height: 52px; padding: 14px 16px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-weight: 500; font-size: 16px; }
-.cd-enter { min-height: 64px; font-size: 23px; justify-content: flex-start; text-align: left; }
-.cd-enter-gun { width: 92px; height: 46px; margin-left: auto; flex: none; opacity: .9; }
-.cd-enter-gun svg { width: 100%; height: 100%; }
-.cd-enter small { display: block; font-weight: 400; font-size: 10px; margin-top: 2px; color: var(--cd-secondary); }
 .cd-open-fitting { border-radius: 12px; margin-top: 10px; padding: 14px 16px; width: 100%; display: flex; gap: 14px; text-align: left; align-items: center; font-size: 17px; }
 .cd-open-fitting small { display: block; font-size: 11px; margin-top: 3px; color: var(--cd-secondary); }
 .cd-menu-icon { display: grid; place-items: center; width: 34px; height: 36px; }
@@ -82,7 +78,7 @@ body { margin: 0; }
 .cd-equipped-check svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .cd-dialog .cd-catalog-error { font-size: 11px; color: #e5bd9d; margin: 0 0 12px; }
 @media (min-width: 700px) { .cd-shell { height: min(calc(100dvh - 32px), 960px); margin-top: 16px; border-radius: 22px; } }
-@media (max-height: 720px) { .cd-home-title { margin-top: 20px; } .cd-home-title > p:last-child { font-size: 10px; max-width: none; } .cd-current-kit { padding: 9px 0 12px; } .cd-enter { min-height: 57px; } .cd-slot { width: 60px; height: 60px; flex-basis: 60px; padding: 7px; gap: 3px; } .cd-slot-column { width: 60px; top: 4%; bottom: 17%; } .cd-slot-art { width: 30px; height: 30px; } .cd-slot-label { font-size: 8px; } .cd-primary { min-height: 48px; font-size: 15px; } .cd-dialog-header { padding-top: 16px; } }
+@media (max-height: 720px) { .cd-home-title { margin-top: 20px; } .cd-home-title > p:last-child { font-size: 10px; max-width: none; } .cd-current-kit { padding: 9px 0 12px; } .cd-slot { width: 60px; height: 60px; flex-basis: 60px; padding: 7px; gap: 3px; } .cd-slot-column { width: 60px; top: 4%; bottom: 17%; } .cd-slot-art { width: 30px; height: 30px; } .cd-slot-label { font-size: 8px; } .cd-primary { min-height: 48px; font-size: 15px; } .cd-dialog-header { padding-top: 16px; } }
 @media (prefers-reduced-motion: reduce) { .cd-shell *, .cd-shell *::before, .cd-shell *::after { transition: none !important; } }
 @media (max-height: 480px) { .cd-select-options.sheet.glass { grid-template-columns: repeat(4, 1fr); } .cd-select-options [role="option"] { padding: 8px; font-size: 10px; } }
 
