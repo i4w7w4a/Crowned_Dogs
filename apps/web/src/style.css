@@ -292,8 +292,7 @@ button:disabled { cursor: default; }
 .sh-in > * { flex-shrink: 0; }
 .sheet .sh-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .sheet h2 { margin: 0 0 0 2px; font: 600 22px/1.1 var(--display); }
-.sheet p, .sheet li { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.5; }
-.sheet ul { margin: 0 0 4px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.sheet p { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.5; }
 .sheet .label { margin: 6px 0 -2px 2px; font: 500 14px/1.2 var(--body); color: rgba(236,232,223,.62); }
 .srow { min-height: 52px; display: flex; align-items: center; gap: 12px; padding: 11px 12px 11px 14px; text-align: left; font: 500 15px/1.2 var(--body); }
 .srow .ico { width: 20px; height: 20px; }
