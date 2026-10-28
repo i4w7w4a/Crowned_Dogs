@@ -317,7 +317,7 @@ function strike(r: TurnReport, side: Side): void {
   shown.hp[target] = r.hp[target];
   if (a) {
     if (ours) { fire($("flashOurs")); shake(); showOnEnemy(a); }
-    else { if (a.hit && !a.blocked) fire($("flashHurt")); showOnMe(a); }
+    else { if (a.hit && !a.blocked) { fire($("flashHurt")); if (firstPerson()) shake(); } showOnMe(a); }
     if (a.hit) arena?.hit(ours ? "enemy" : "me", a.zone ?? "body", hitKind(a));
   }
   if (r.hp[target] <= 0) arena?.fall(ours ? "enemy" : "me");
@@ -510,11 +510,15 @@ document.addEventListener("click", (e) => {
 document.addEventListener("pointerdown", () => audio.unlock(), { once: true });
 document.addEventListener("keydown", () => audio.unlock(), { once: true });
 window.addEventListener("resize", layout);
+// First person on trial: the arena's link with #fp at the end
+const firstPerson = () => location.hash === "#fp";
+window.addEventListener("hashchange", () => arena?.setFirstPerson(firstPerson()));
 
 // ---------- go ----------
 try {
   arena = new Arena(canvas);
   arena.onFrame = placeRings;
+  arena.setFirstPerson(firstPerson());
   const start = startQuality(arena.gl);
   quality = start.id; byHand = start.picked;
   arena.setQuality(QUALITY[quality]);

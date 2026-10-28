@@ -157,6 +157,7 @@ export class Arena {
   private walk: { from: number; to: number; t: number; dur: number } | null = null;
   private en: Figure | null = null;
   private me: Figure | null = null;
+  private fp = false;
   private mirror: Mirror | null = null;
   private lens: Lens;
   private q: Quality = QUALITY.medium;
@@ -222,6 +223,7 @@ export class Arena {
     const foe = theirs ?? mine;
     this.en = this.makeFigure(foe, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
     this.me = this.makeFigure(mine, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1, near: true });
+    this.me.group.visible = !this.fp;
     this.mirror = this.makeMirror(foe, this.en);
     this.giveWeapons(mine, foe);
     const foeLooks = [this.en.model, this.mirror.model];
@@ -358,6 +360,18 @@ export class Arena {
     f.motion.fall();
   }
 
+  /** First person, on trial (Art's bodycam idea): our own figure is not drawn and the camera, stepped
+   *  back for the view over the shoulder, comes forward to where our eyes are. */
+  setFirstPerson(on: boolean): void {
+    if (on === this.fp) return;
+    this.fp = on;
+    if (!this.k) return;
+    const d = on ? -this.k.back : this.k.back;
+    this.depth += d;
+    if (this.walk) { this.walk.from += d; this.walk.to += d; }
+    if (this.me) this.me.group.visible = !on;
+  }
+
   reset(distance: number): void {
     if (!this.ready) return;
     this.walk = null;
@@ -374,7 +388,7 @@ export class Arena {
   }
 
   private depthOf(d: number): number {
-    return this.k!.d7 * Math.pow(STEP_GROWTH, d - 7) + this.k!.back;
+    return this.k!.d7 * Math.pow(STEP_GROWTH, d - 7) + (this.fp ? 0 : this.k!.back);
   }
 
   private makeFigure(gltf: GLTF, look: Look): Figure {
@@ -562,7 +576,7 @@ function placePort(f: Figure): void {
   const r = tmpA.distanceTo(tmpB) * PORT.depth, yaw = f.group.rotation.y;
   tmpA.lerp(tmpB, PORT.up);
   f.port.position.set(tmpA.x - Math.sin(yaw) * r, tmpA.y, tmpA.z - Math.cos(yaw) * r);
-  f.port.visible = f.fallT < 0;
+  f.port.visible = f.fallT < 0 && f.group.visible;
 }
 
 /** A point on the body for each attack zone. */
