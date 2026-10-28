@@ -316,6 +316,9 @@ function driftBase(home: HTMLElement): void {
     const r = home.getBoundingClientRect();
     want = [(e.clientX - r.left) / r.width - 0.5, (e.clientY - r.top) / r.height - 0.5];
   });
+  // iOS hands out the phone's tilt only after asking, and only from a tap
+  const ask = (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission;
+  if (ask) home.addEventListener("click", () => { void ask().catch(() => {}); }, { once: true });
   addEventListener("deviceorientation", (e) => {
     if (e.gamma === null || e.beta === null) return;
     want = [Math.max(-1, Math.min(1, e.gamma / 30)) / 2, Math.max(-1, Math.min(1, (e.beta - 45) / 30)) / 2];
