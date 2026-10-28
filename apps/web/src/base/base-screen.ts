@@ -52,13 +52,13 @@ export class BaseScreen {
       <section class="cd-home" aria-label="База Соль">
         <img class="cd-backdrop" src="${asset("salt-base.webp")}" alt="Убежище в соляной шахте: Персоны в ложементах, капсула оператора и узел очистки воды" draggable="false">
         <div class="cd-shade" aria-hidden="true"></div>
-        <button class="cd-tunnel" type="button" aria-label="Примерочная: боец и снаряжение"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">Примерочная</span></button>
+        <button class="cd-tunnel cd-to-fitting" type="button" data-u="0.333" data-v="0.36" aria-label="Примерочная: боец и снаряжение"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">Примерочная</span></button>
+        <button class="cd-tunnel cd-enter" type="button" data-u="0.213" data-v="0.529" aria-label="В бой: дуэль с ботом"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">В бой</span></button>
         <header class="cd-home-header"><img class="cd-brand-mark" src="${import.meta.env.BASE_URL}brand/maw.svg" alt="Пасть из двух корон" draggable="false"><img class="cd-wordmark" src="${import.meta.env.BASE_URL}brand/wordmark.svg" alt="Crowned Dogs" draggable="false"></header>
         <div class="cd-home-title"><p class="cd-overline">БАЗА ОПЕРАТОРА</p><h1>СОЛЬ</h1></div>
         <div class="cd-home-bottom">
           <div class="cd-operator"><span class="cd-overline">ОПЕРАТОР</span><span class="cd-tag">K-417-093</span></div>
           <div class="cd-current-kit"><span>Основное оружие</span><strong data-kit-name></strong></div>
-          <button class="glass cd-open-fitting cd-enter" type="button"><span class="cd-menu-icon cd-enter-gun" aria-hidden="true"></span><span>В бой<small>Дуэль с ботом</small></span></button>
           <p class="cd-home-message" aria-live="polite"></p>
         </div>
       </section>
@@ -99,9 +99,10 @@ export class BaseScreen {
     this.catalog = root.querySelector(".cd-catalog-items")!;
     this.status = root.querySelector(".cd-model-status")!;
     this.catalogScroll = new GlassScroll(root.querySelector<HTMLElement>(".cd-dialog-content")!);
-    root.querySelector(".cd-tunnel")!.addEventListener("click", () => this.navigate("fitting"));
+    root.querySelector(".cd-to-fitting")!.addEventListener("click", () => this.navigate("fitting"));
     const home = root.querySelector<HTMLElement>(".cd-home")!;
-    driftBase(home);
+    driftBackdrop(home, 1882 / 3344);
+    driftBackdrop(root.querySelector<HTMLElement>(".cd-fitting")!, 941 / 1672);
     root.querySelector(".cd-back")!.addEventListener("click", () => this.navigate("base"));
     root.querySelector(".cd-enter")!.addEventListener("click", () => { void this.enterBattle(); });
     root.querySelector(".cd-open-catalog")!.addEventListener("click", () => this.openCatalog(this.selectedSlot));
@@ -209,7 +210,6 @@ export class BaseScreen {
   private refresh(): void {
     const mainName = ITEM_BY_ID.get(this.loadout.weapon1.item)?.name ?? "Оружие";
     this.root.querySelector("[data-kit-name]")!.textContent = mainName;
-    this.root.querySelector(".cd-enter-gun")!.innerHTML = equipmentItemIcon(this.loadout.weapon1.item);
     for (const button of this.root.querySelectorAll<HTMLButtonElement>("[data-slot]")) {
       const slot = button.dataset.slot as GearSlot, id = equippedItemId(this.loadout, slot), item = id ? ITEM_BY_ID.get(id) : null;
       button.querySelector(".cd-slot-art")!.innerHTML = equipmentIcon(slot, id);
@@ -299,17 +299,16 @@ export class BaseScreen {
   dispose(): void { this.observer.disconnect(); this.catalogScroll.dispose(); this.viewer?.dispose(); this.itemViewer?.dispose(); this.workshop.dispose(); this.root.remove(); }
 }
 
-/** The far end of the tunnel on salt-base.webp (1882×3344), as a share of the picture. */
-const TUNNEL = { u: 0.333, v: 0.36, ratio: 1882 / 3344 };
 /** How far the camera drifts: the zoom that hides the edges, and the sway as a share of the screen. */
 const DRIFT = { zoom: 1.07, sway: 0.022, tilt: 0.018 };
 
 /**
- * A slow, breathing camera over the base picture (pseudo 3D): the picture sways and the
- * phone's tilt or the mouse leans it a little. The tunnel ring rides on the same move.
+ * A slow, breathing camera over a screen's picture (pseudo 3D): the picture sways and the
+ * phone's tilt or the mouse leans it a little. Rings on the picture (.cd-tunnel with data-u/v,
+ * a share of the picture) ride on the same move.
  */
-function driftBase(home: HTMLElement): void {
-  const img = home.querySelector<HTMLElement>(".cd-backdrop")!, ring = home.querySelector<HTMLElement>(".cd-tunnel")!;
+function driftBackdrop(home: HTMLElement, ratio: number): void {
+  const img = home.querySelector<HTMLElement>(".cd-backdrop")!, rings = [...home.querySelectorAll<HTMLElement>(".cd-tunnel")];
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let lean: [number, number] = [0, 0], want: [number, number] = [0, 0];
   home.addEventListener("pointermove", (e) => {
@@ -334,10 +333,12 @@ function driftBase(home: HTMLElement): void {
     const ty = h * (DRIFT.sway * 0.6 * Math.sin(t / 13 + 1) - DRIFT.tilt * lean[1] * (still ? 0 : 1));
     img.style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${s})`;
     // the picture fills the screen like object-fit: cover, then the move above scales it about the centre
-    const fit = Math.max(w / TUNNEL.ratio, h), iw = fit * TUNNEL.ratio, ih = fit;
-    const px = (w - iw) / 2 + TUNNEL.u * iw, py = (h - ih) / 2 + TUNNEL.v * ih;
-    ring.style.left = (w / 2 + s * (px - w / 2) + tx).toFixed(1) + "px";
-    ring.style.top = (h / 2 + s * (py - h / 2) + ty).toFixed(1) + "px";
+    const fit = Math.max(w / ratio, h), iw = fit * ratio, ih = fit;
+    for (const ring of rings) {
+      const px = (w - iw) / 2 + Number(ring.dataset.u) * iw, py = (h - ih) / 2 + Number(ring.dataset.v) * ih;
+      ring.style.left = (w / 2 + s * (px - w / 2) + tx).toFixed(1) + "px";
+      ring.style.top = (h / 2 + s * (py - h / 2) + ty).toFixed(1) + "px";
+    }
   };
   requestAnimationFrame(frame);
 }
