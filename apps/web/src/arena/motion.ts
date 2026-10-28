@@ -111,10 +111,25 @@ export class Motion {
     return READY[this.stance];
   }
 
-  /** Walks (or runs) on the spot while the arena carries the figure; a negative speed walks backwards. */
-  walk(clip: "walk" | "run", speed: number): void {
+  /** Walks (or runs) on the spot while the arena carries the figure, from moment `at` of the loop; pace()
+   *  then keeps the feet in step with the ground. */
+  walk(clip: "walk" | "run", at: number): void {
+    const was = this.walking && this.cur.legs?.getClip().name === `${clip}.legs`;
     this.walking = true;
-    this.to("legs", clip, 0.15, speed);
+    const a = this.to("legs", clip, 0.15, 0);
+    if (a && !was) a.time = ((at % a.getClip().duration) + a.getClip().duration) % a.getClip().duration;
+  }
+
+  /** The walk loop under way, if the figure walks. */
+  get gait(): "walk" | "run" | null {
+    const n = this.walking ? this.cur.legs?.getClip().name : null;
+    return n === "walk.legs" ? "walk" : n === "run.legs" ? "run" : null;
+  }
+
+  /** The walk's speed, set every frame from the ground the arena carries the figure over this frame:
+   *  1 is the loop's own pace, a negative speed walks backwards. */
+  pace(speed: number): void {
+    if (this.walking && this.cur.legs) this.cur.legs.timeScale = speed;
   }
 
   /** Stops walking: the legs go back to the stance, in step with the body. */
@@ -215,6 +230,23 @@ export class Motion {
     const a = this.cur[layer], b = this.cur[from];
     if (a && b && a.getClip().name.split(".")[0] === b.getClip().name.split(".")[0]) a.time = b.time;
   }
+}
+
+/** The pose the mixer gave the bones, put back before the mixer runs again. three.js only writes a bone whose
+ *  value changed (a clip held on its last frame, a frame with no time), so whatever was turned on top of the
+ *  animation last frame (settle(), the feet, a hit, the fall) would otherwise be turned once more. */
+export class Pose {
+  private bones: { o: THREE.Object3D; p: THREE.Vector3; q: THREE.Quaternion }[] = [];
+
+  constructor(model: THREE.Object3D) {
+    model.traverse((o) => { if ((o as THREE.Bone).isBone) this.bones.push({ o, p: o.position.clone(), q: o.quaternion.clone() }); });
+  }
+
+  /** Right after the mixer. */
+  save(): void { for (const b of this.bones) { b.p.copy(b.o.position); b.q.copy(b.o.quaternion); } }
+
+  /** Right before the mixer. */
+  restore(): void { for (const b of this.bones) { b.o.position.copy(b.p); b.o.quaternion.copy(b.q); } }
 }
 
 /** Calms a looping stance from the video mocap: every track keeps 55% of its sway about its average and is

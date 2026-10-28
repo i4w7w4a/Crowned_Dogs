@@ -13,10 +13,11 @@ import { Dust } from "./dust.ts";
 import type { Frame } from "./frames.ts";
 import { Lens, type View } from "./lens.ts";
 import { tune } from "./materials.ts";
-import { Motion, type Attack, type Stance } from "./motion.ts";
+import { Motion, Pose, type Attack, type Stance } from "./motion.ts";
 import { QUALITY, type Quality } from "./quality.ts";
-import { armsOnly, findBones, pitch, roll, type Bones } from "./rig.ts";
-import { Feet } from "./ik.ts";
+import { armsOnly, findBones, pitch, type Bones } from "./rig.ts";
+import { Collapse, FALL_TIME } from "./fall.ts";
+import { Feet, gaitOf, type Gait } from "./ik.ts";
 import { Viewmodel } from "./viewmodel.ts";
 import { TextureTiers } from "./textures.ts";
 import { loadModel } from "./load-model.ts";
@@ -63,7 +64,7 @@ interface Look {
   jointsMetal?: number;
   /** Faint glow that keeps a backlit figure from turning into a hole. */
   lift?: number;
-  /** Which way the figure falls: -1 to its right as seen from the camera. */
+  /** Which way the figure falls: 1 towards its own left (+x of its group), -1 towards its right. */
   fallSide: number;
   /** Our own figure, right in front of the lens: drawn on its own layer and out of focus. */
   near?: boolean;
@@ -75,11 +76,17 @@ interface Figure {
   model: THREE.Object3D;
   blob: THREE.Mesh;
   mixer: THREE.AnimationMixer;
+  /** The mixer's own pose of the bones, before anything is turned on top of it. */
+  pose: Pose;
   motion: Motion;
   /** What it holds in the right hand (stand-in guns for now); null if the rig has no fingers to hold with. */
   hand: Hand | null;
   /** Keeps its feet flat on the floor while it stands. */
   feet: Feet;
+  /** How its walk and run loops cover the ground, to keep its feet in step with it. */
+  gait: Record<"walk" | "run", Gait | null>;
+  /** The fall: folds the body down onto the floor where it stood. */
+  collapse: Collapse;
   port: THREE.Mesh;
   kick: Record<Zone, number>;
   /** 0..1 while falling, -1 when standing. */
@@ -171,13 +178,17 @@ export class Arena {
   /** The distance in steps the figures stand at (or walk to). */
   private dist = 7;
   private depth = 0;
-  private walk: { from: number; to: number; t: number; dur: number } | null = null;
+  /** The walk under way: the enemy's depth from and to, the time and length (s), and how far we go ourselves (m, + ahead). */
+  private walk: { from: number; to: number; t: number; dur: number; mine: number } | null = null;
   private en: Figure | null = null;
   private me: Figure | null = null;
   private fp = false;
   /** Our stance, and where the lens sits on us now (it glides to the stance's VIEW). */
   private myGun: Stance = "pistol";
   private view = { at: new THREE.Vector3(), tilt: 0, set: false };
+  /** Our own steps, shown as the body rising and swaying (a walk loop played on the spot this close to the lens
+   *  swings the head about): how many steps along (x pi), how strong (0..1) and how deep a dip (m). */
+  private bob = { phase: 0, k: 0, depth: 0.02 };
   /** Shows only our arms (first person) or the whole of us. */
   private armsOnly: ((on: boolean) => void) | null = null;
   /** First person: our arms on the gun. */
@@ -257,7 +268,7 @@ export class Arena {
     const [mine, theirs, guns] = await Promise.all([loadModel(meUrl), enemyUrl === meUrl ? null : loadModel(enemyUrl), loadGuns()]);
     const foe = theirs ?? mine;
     this.en = this.makeFigure(foe, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
-    this.me = this.makeFigure(mine, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1, near: true });
+    this.me = this.makeFigure(mine, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: 1, near: true });
     this.me.blob.visible = !this.fp;
     this.armsOnly = armsOnly(this.me.model);
     this.armsOnly(this.fp);
@@ -381,13 +392,31 @@ export class Arena {
     if (who === "me") this.myGun = gun;
   }
 
-  /** Both walk to the new distance; who moved decides who walks, the camera rides with us. */
+  /** Both walk to the new distance. The camera rides with us and the painted floor cannot move, so the enemy
+   *  covers on foot all the floor between its old spot and its new one, whoever stepped: its feet keep pace
+   *  with the ground and never slide. Our own steps show as the body bobbing (our feet are out of the picture). */
   move(distance: number, meMove: number, enemyMove: number): void {
     if (!this.ready) return;
+    const from = this.depth, to = this.depthOf(distance), ground = Math.abs(to - from);
+    const mine = meMove ? this.depthOf(this.dist) - this.depthOf(this.dist - meMove) : 0;
     this.dist = distance;
-    this.walk = { from: this.depth, to: this.depthOf(distance), t: 0, dur: meMove || enemyMove ? 0.75 : 0.01 };
-    if (enemyMove) this.en!.motion.walk(enemyMove >= 3 ? "run" : "walk", enemyMove > 0 ? 1 : -1);
-    if (meMove) this.me!.motion.walk(meMove >= 3 ? "run" : "walk", meMove > 0 ? 1 : -1);
+    if (ground < 0.01 && !meMove) { this.walk = null; this.depth = to; return; }
+    // a step is a walk at an easy pace, two steps ahead a run, a dash a sprint; backing off is a walk, never quick
+    const ahead = to < from, far = Math.max(ground, Math.abs(mine));
+    const cruise = !ahead ? Math.min(1.5, far / 0.45) : far < 0.8 ? far / 0.47 : far < 1.4 ? 2.5 : 3;
+    const dur = 0.2 + far / Math.max(cruise, 0.1);
+    this.walk = { from, to, t: 0, dur, mine };
+    if (ground >= 0.01) this.stride(this.en!, ahead ? ground : -ground, dur);
+    if (meMove) this.bob.depth = Math.abs(mine) / (dur - ramp(dur)) > 2 ? 0.035 : 0.02;
+  }
+
+  /** Starts a figure's walk (or run) over `ground` metres (negative: backwards) in `dur` seconds, from the
+   *  moment of the loop that brings it to a stop just as the free foot passes the planted one. */
+  private stride(f: Figure, ground: number, dur: number): void {
+    const cruise = Math.abs(ground) / (dur - ramp(dur)), w = f.gait.walk, r = f.gait.run, s = f.model.scale.x;
+    const run = !!r && ground > 0 && (!w || cruise > Math.sqrt(w.speed * r.speed) * s);
+    const g = run ? r : w;
+    if (g) f.motion.walk(run ? "run" : "walk", g.passing - ground / (g.speed * s));
   }
 
   /** A figure attacks so that its shot (the stab, the throw) comes `inSeconds` from now, with the sound. */
@@ -412,9 +441,11 @@ export class Arena {
     this.spark.visible = true;
   }
 
+  /** A figure dies: its knees give and it folds down on its side where it stands. */
   fall(who: Who): void {
     if (!this.ready) return;
     const f = who === "enemy" ? this.en! : this.me!;
+    if (f.fallT >= 0) return;
     f.fallT = 0;
     f.motion.fall();
   }
@@ -492,6 +523,7 @@ export class Arena {
     const mixer = new THREE.AnimationMixer(model);
     const motion = new Motion(mixer, gltf.animations);
     const feet = new Feet(model, gltf.animations, motion.stances);
+    const gait = { walk: gaitIn(model, gltf, "walk"), run: gaitIn(model, gltf, "run") };
 
     // a small cyan light on the sync connector, as in the concept frames
     const port = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), new THREE.MeshBasicMaterial({ color: 0x7ff3ff, fog: false }));
@@ -501,7 +533,7 @@ export class Arena {
     if (look.near) { group.traverse((o) => o.layers.set(NEAR)); port.layers.set(NEAR); port.scale.setScalar(0.4); }
 
     return {
-      group, tilt, model, blob, mixer, motion, hand: null, feet, port,
+      group, tilt, model, blob, mixer, pose: new Pose(model), motion, hand: null, feet, gait, collapse: new Collapse(model), port,
       kick: { head: 0, body: 0, groin: 0, legs: 0 }, fallT: -1, fallSide: look.fallSide, bones,
     };
   }
@@ -544,9 +576,10 @@ export class Arena {
     const myGrip = gripOf(mine.scene), foeGrip = gripOf(foe.scene);
     const me = this.me!, en = this.en!, mirror = this.mirror!;
     // our gun has its own copy: it is drawn through the first-person wide lens
-    if (myGrip) me.hand = new Hand(me.model, myGrip, steel.clone(), { layer: NEAR, guns, look: (m) => m.clone() });
+    if (myGrip) { me.hand = new Hand(me.model, myGrip, steel.clone(), { layer: NEAR, guns, look: (m) => m.clone() }); me.collapse.gun = me.hand.mount; }
     if (foeGrip) {
       en.hand = new Hand(en.model, foeGrip, steel, { guns });
+      en.collapse.gun = en.hand.mount;
       // the reflection's copy, darkened by the water like the rest of it
       const wetten = (m: THREE.Material) => {
         const w = m.clone() as THREE.MeshStandardMaterial;
@@ -593,21 +626,28 @@ export class Arena {
   }
 
   /** First person: puts our figure around the lens, as VIEW says for our stance (tilted back about it, so the
-   *  arms and the gun show low in the picture); when it falls, the camera falls instead. */
+   *  arms and the gun show low in the picture). When we fall the camera stays where it is: it is matched to
+   *  the painting, and turning it alone would swing the enemy off the painted floor. The page tips the whole
+   *  picture instead (main.ts, .stage.down). */
   private holdView(dt: number): void {
     const me = this.me!, g = me.group, v = this.view;
-    if (me.fallT >= 0) {
-      g.visible = false;
-      const t = smooth(me.fallT);
-      this.camera.position.y = this.k!.camH - 1.25 * t;
-      this.camera.rotation.set(-0.2 * t, 0, me.fallSide * 1.2 * t);
-      return;
-    }
+    if (me.fallT >= 0) { g.visible = false; return; }
     g.visible = true;
     const act = me.motion.attackKind, want = (act && VIEW[act]) || VIEW[this.myGun], k = v.set ? 1 - Math.exp(-dt * 6) : 1;
     v.at.lerp(tmpB.fromArray(want.at), k); v.tilt += (want.tilt - v.tilt) * k; v.set = true;
     g.rotation.set(-v.tilt, g.rotation.y, 0, "YXZ");
     g.position.copy(this.camera.position).sub(tmpA.copy(v.at).applyEuler(g.rotation));
+  }
+
+  /** Our body dips once a step (lowest as the foot lands) and sways a little from foot to foot, as fast as
+   *  we cover the ground, `speed` m/s; it settles back when we stop. */
+  private step(dt: number, speed: number): void {
+    const b = this.bob, me = this.me!;
+    b.phase += (speed * dt * Math.PI) / 0.7;
+    b.k += ((speed > 0.05 && me.fallT < 0 ? 1 : 0) - b.k) * (1 - Math.exp(-dt * 8));
+    if (b.k < 1e-3) { b.k = 0; b.phase = 0; }
+    const s = Math.sin(b.phase);
+    me.tilt.position.set(0.012 * b.k * s, -b.depth * b.k * s * s, 0);
   }
 
   private tick(time: number): void {
@@ -616,17 +656,20 @@ export class Arena {
     const dt = Math.min(this.timer.getDelta(), 0.05);
     const w = this.walk;
     if (w) {
-      w.t += dt;
-      const u = Math.min(1, w.t / w.dur);
-      this.depth = w.from + (w.to - w.from) * smooth(u);
-      if (u >= 1) {
+      w.t = Math.min(w.t + dt, w.dur);
+      const [s, v] = travel(w.t, w.dur);
+      this.depth = w.from + (w.to - w.from) * s;
+      // each walk loop plays exactly as fast as its figure covers the ground (the enemy faces us: nearer is ahead)
+      pace(this.en!, (w.from - w.to) * v);
+      if (w.t >= w.dur) {
         this.walk = null;
         for (const f of [this.en!, this.me!]) if (f.fallT < 0) f.motion.stand(0.35);
       }
     }
     this.place();
+    this.step(dt, w ? Math.abs(w.mine * travel(w.t, w.dur)[1]) : 0);
     for (const f of [this.en!, this.me!]) {
-      f.motion.update(dt); f.mixer.update(dt); f.motion.settle();
+      f.pose.restore(); f.motion.update(dt); f.mixer.update(dt); f.pose.save(); f.motion.settle();
       if (!(this.fp && f === this.me)) f.feet.update(dt, f.motion.planted);
       applyReactions(f, dt);
     }
@@ -657,8 +700,32 @@ export class Arena {
   }
 }
 
+/** How long a walk takes to get up to pace, and to stop, seconds. */
+const ramp = (dur: number) => Math.min(0.2, dur / 3);
+
+/** A walk of `dur` seconds, `t` seconds in: the share of the way covered and the speed (shares per second).
+ *  It gets up to pace and stops in a fifth of a second, as feet do, and keeps an even pace in between. */
+function travel(t: number, dur: number): [number, number] {
+  const r = ramp(dur), v = 1 / (dur - r);
+  if (t < r) return [(v * t * t) / (2 * r), (v * t) / r];
+  if (t > dur - r) { const e = dur - t; return [1 - (v * e * e) / (2 * r), (v * e) / r]; }
+  return [v * (t - r / 2), v];
+}
+
+/** Keeps a figure's walk loop in step with the ground it covers, `speed` metres per second (+ ahead). */
+function pace(f: Figure, speed: number): void {
+  const name = f.motion.gait, g = name && f.gait[name];
+  if (g) f.motion.pace(speed / (g.speed * f.model.scale.x));
+}
+
+/** How a figure's walk (or run) loop covers the ground, if the model has one. */
+function gaitIn(model: THREE.Object3D, gltf: GLTF, name: "walk" | "run"): Gait | null {
+  const clip = gltf.animations.find((c) => c.name === name);
+  return clip ? gaitOf(model, clip) : null;
+}
+
 function resetFigure(f: Figure, offset: number): void {
-  f.fallT = -1; f.tilt.rotation.set(0, 0, 0);
+  f.fallT = -1; f.tilt.rotation.set(0, 0, 0); f.tilt.position.set(0, 0, 0);
   f.blob.scale.set(1, 1, 1); f.blob.position.x = 0;
   for (const z of Object.keys(f.kick) as Zone[]) f.kick[z] = 0;
   f.motion.reset(offset);
@@ -681,14 +748,13 @@ function applyReactions(f: Figure, dt: number): void {
   for (const z of Object.keys(k) as Zone[]) k[z] = k[z] * decay < 0.01 ? 0 : k[z] * decay;
 
   if (f.fallT >= 0) {
-    // falls on its side: from this low camera a body lying sideways reads best
-    f.fallT = Math.min(f.fallT + dt / 0.9, 1);
-    const t = f.fallT, e = smooth(t), g = t * t, side = f.fallSide;
-    pitch(b.lUpLeg, 0.35 * e); pitch(b.lLeg, -0.5 * e);
-    pitch(b.rUpLeg, 0.2 * e); pitch(b.rLeg, -0.3 * e);
-    pitch(b.spine, 0.25 * e); pitch(b.spine2, 0.15 * e); roll(b.head, -side * 0.35 * e);
-    f.tilt.rotation.set(-0.25 * g, 0, side * 1.5 * g);
-    f.blob.scale.set(1 + 1.9 * g, 1, 1.1); f.blob.position.x = -side * 0.85 * g;
+    // falls on its side where it stands: from this low camera a body lying sideways reads best
+    if (f.fallT === 0) f.collapse.begin(f.group, f.fallSide);
+    f.fallT = Math.min(f.fallT + dt / FALL_TIME, 1);
+    f.collapse.apply(f.fallT * FALL_TIME);
+    // the shadow spreads under the body as it comes down beside the feet
+    const e = smooth(Math.min(1, f.fallT * 1.4));
+    f.blob.scale.set(1 + 0.8 * e, 1, 1.15); f.blob.position.x = f.fallSide * 0.3 * e;
   }
 }
 
