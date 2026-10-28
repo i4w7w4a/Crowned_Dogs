@@ -31,13 +31,18 @@ const PORT = { up: 0.08, depth: 0.45 };
 /** First person: where the lens sits in our figure's own frame for each stance (metres: x to its left, y up,
  *  z forward; the head is folded away), and how far our figure is tilted back about the lens, radians, so the
  *  arms and the gun come up into the picture. The camera itself never turns: the painted hall must match. */
-const VIEW: Record<Stance, { at: [number, number, number]; tilt: number }> = {
+type Spot = { at: [number, number, number]; tilt: number };
+const VIEW: Record<Stance, Spot> & Partial<Record<Attack, Spot>> = {
   // the gun at the shoulder; the lens above it and a little to the left, so it lies low on the right
   rifle: { at: [0.02, 1.55, -0.15], tilt: 0.05 },
   shotgun: { at: [0.042, 1.61, -0.2], tilt: 0.05 },
   sniper: { at: [0.042, 1.61, -0.2], tilt: 0.05 },
   // the pistol held out at chest height (Motion.aim), seen from the face, to the left of the hands
   pistol: { at: [0.07, 1.52, 0.12], tilt: 0.3 },
+  // during a stab or a throw the lens glides to where the hand goes: the knife thrusts low on the right,
+  // the grenade leaves the hand low on the left
+  knife: { at: [-0.2, 1.36, 0.12], tilt: 0.3 },
+  grenade: { at: [0.17, 1.47, 0.12], tilt: 0.53 },
 };
 { // ?fpview=x,y,z,tilt tries another lens spot for every stance (tuning)
   const t = new URLSearchParams(location.search).get("fpview")?.split(",").map(Number);
@@ -564,7 +569,7 @@ export class Arena {
       return;
     }
     g.visible = true;
-    const want = VIEW[this.myGun], k = v.set ? 1 - Math.exp(-dt * 6) : 1;
+    const act = me.motion.attackKind, want = (act && VIEW[act]) || VIEW[this.myGun], k = v.set ? 1 - Math.exp(-dt * 6) : 1;
     v.at.lerp(tmpB.fromArray(want.at), k); v.tilt += (want.tilt - v.tilt) * k; v.set = true;
     g.rotation.set(-v.tilt, g.rotation.y, 0, "YXZ");
     g.position.copy(this.camera.position).sub(tmpA.copy(v.at).applyEuler(g.rotation));
