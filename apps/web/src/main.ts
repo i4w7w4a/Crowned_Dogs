@@ -457,7 +457,7 @@ function renderMenu(): void {
   const sb = $("soundBtn");
   sb.classList.toggle("off", !audio.on); sb.setAttribute("aria-pressed", String(audio.on));
   $("soundState").textContent = audio.on ? "Вкл" : "Выкл";
-  for (const k of ["fx", "music"] as const) drawVolume(k);
+  for (const k of ["fx", "music", "fight"] as const) drawVolume(k);
 
   const tracks = $("trackList"); tracks.innerHTML = "";
   for (const s of RADIO_PLAYLIST) {
@@ -479,13 +479,13 @@ function renderMenu(): void {
 }
 
 // volume sliders: fight sounds and music, 0..100 on screen, 0..1 in the audio
-const VOL_ID = { fx: "volFx", music: "volMusic" } as const;
+const VOL_ID = { fx: "volFx", music: "volMusic", fight: "volFight" } as const;
 function drawVolume(k: VolumeKind): void {
   const v = Math.round(audio.volume[k] * 100), input = $<HTMLInputElement>(VOL_ID[k]);
   input.value = String(v); input.style.setProperty("--v", v + "%");
   $(VOL_ID[k] + "Out").textContent = String(v);
 }
-for (const k of ["fx", "music"] as const) {
+for (const k of ["fx", "music", "fight"] as const) {
   const input = $<HTMLInputElement>(VOL_ID[k]);
   input.addEventListener("input", () => { audio.setVolume(k, Number(input.value) / 100); drawVolume(k); });
   // letting go of the fight-sounds slider plays a click at the new level

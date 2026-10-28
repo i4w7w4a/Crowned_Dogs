@@ -57,7 +57,7 @@ export class BaseScreen {
         <div class="cd-home-bottom">
           <div class="cd-operator"><span class="cd-overline">ОПЕРАТОР</span><span class="cd-tag">K-417-093</span></div>
           <div class="cd-current-kit"><span>Основное оружие</span><strong data-kit-name></strong></div>
-          <button class="go glass cd-primary cd-enter" type="button"><span>В бой<small>Дуэль с ботом</small></span></button>
+          <button class="go glass cd-primary cd-enter" type="button"><span>В бой<small>Дуэль с ботом</small></span><span class="cd-enter-gun" aria-hidden="true"></span></button>
           <button class="glass cd-open-fitting" type="button"><span class="cd-menu-icon">${fittingRoomIcon()}</span><span>Примерочная<small>Боец и снаряжение</small></span></button>
           <p class="cd-home-message" aria-live="polite"></p>
         </div>
@@ -207,6 +207,7 @@ export class BaseScreen {
   private refresh(): void {
     const mainName = ITEM_BY_ID.get(this.loadout.weapon1.item)?.name ?? "Оружие";
     this.root.querySelector("[data-kit-name]")!.textContent = mainName;
+    this.root.querySelector(".cd-enter-gun")!.innerHTML = equipmentItemIcon(this.loadout.weapon1.item);
     for (const button of this.root.querySelectorAll<HTMLButtonElement>("[data-slot]")) {
       const slot = button.dataset.slot as GearSlot, id = equippedItemId(this.loadout, slot), item = id ? ITEM_BY_ID.get(id) : null;
       button.querySelector(".cd-slot-art")!.innerHTML = equipmentIcon(slot, id);

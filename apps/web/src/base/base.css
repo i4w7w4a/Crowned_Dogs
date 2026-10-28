@@ -20,6 +20,8 @@ body { margin: 0; }
 .cd-current-kit strong { font-weight: 500; color: #e0e4dd; text-align: right; }
 .cd-primary { width: 100%; min-height: 52px; padding: 14px 16px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-weight: 500; font-size: 16px; }
 .cd-enter { min-height: 64px; font-size: 23px; justify-content: flex-start; text-align: left; }
+.cd-enter-gun { width: 92px; height: 46px; margin-left: auto; flex: none; opacity: .9; }
+.cd-enter-gun svg { width: 100%; height: 100%; }
 .cd-enter small { display: block; font-weight: 400; font-size: 10px; margin-top: 2px; color: var(--cd-secondary); }
 .cd-open-fitting { border-radius: 12px; margin-top: 10px; padding: 14px 16px; width: 100%; display: flex; gap: 14px; text-align: left; align-items: center; font-size: 17px; }
 .cd-open-fitting small { display: block; font-size: 11px; margin-top: 3px; color: var(--cd-secondary); }
@@ -50,7 +52,7 @@ body { margin: 0; }
 .cd-save-status { margin: 8px 0 0; font-size: 10px; text-align: center; color: #c9b7a8; }
 .cd-dialog.sheet.glass { position: fixed; inset: 0; display: none; flex-direction: column; margin: auto; padding: 0; border: 0; width: min(448px, calc(100vw - 32px)); min-height: min(400px, calc(100dvh - 32px)); max-height: min(calc(100dvh - 32px), 740px); border-radius: 24px; }
 .cd-dialog.sheet.glass[open] { display: flex; }
-.cd-dialog::backdrop { background: #0006; }
+.cd-dialog::backdrop { background: #000b; }
 .cd-dialog-header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 16px 12px; }
 .cd-dialog-header h2 { font: 500 25px/1.2 var(--body); margin: 7px 0 0; }
 .cd-dialog-header .cd-overline { font-size: 9px; margin: 0; }

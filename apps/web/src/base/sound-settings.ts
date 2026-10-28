@@ -24,6 +24,7 @@ export function mountSoundSettings(): void {
       <button type="button" class="glass cd-sound-toggle"><span>Звук и музыка</span><b></b></button>
       <label class="vrow"><span>Звуки боя</span><input type="range" min="0" max="100" step="1" data-k="fx"><output></output></label>
       <label class="vrow"><span>Музыка</span><input type="range" min="0" max="100" step="1" data-k="music"><output></output></label>
+      <label class="vrow"><span>Музыка боя</span><input type="range" min="0" max="100" step="1" data-k="fight"><output></output></label>
       <p class="cd-set-label">Камера</p><div class="cd-set-seg" data-g="cam"></div>
       <p class="cd-set-label">Графика</p><div class="cd-set-seg" data-g="gfx"></div>
     </div>`;

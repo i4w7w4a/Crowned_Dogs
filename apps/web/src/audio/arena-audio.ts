@@ -21,8 +21,8 @@ const SPOT_BASE: Spot = [-0.55, 0], SPOT_FITTING: Spot = [0.6, 1], SPOT_FIGHT: S
 const SCREEN_AMB: Record<"base" | "fitting" | "weapon", SoundId[]> = { base: ["amb.base"], fitting: ["amb.hall"], weapon: ["amb.hall"] };
 
 /** The two volume sliders in the menu: the fight's sounds (effects, interface, ambience) and the music. */
-export type VolumeKind = "fx" | "music";
-const VOLUME_KEY: Record<VolumeKind, string> = { fx: "cd-vol-fx", music: "cd-vol-music" };
+export type VolumeKind = "fx" | "music" | "fight";
+const VOLUME_KEY: Record<VolumeKind, string> = { fx: "cd-vol-fx", music: "cd-vol-music", fight: "cd-vol-fight" };
 const savedVolume = (k: VolumeKind): number => {
   const v = Number(store.get(VOLUME_KEY[k]) ?? 1);
   return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
@@ -46,7 +46,7 @@ export class ArenaAudio {
   private list: readonly Station[] = BASE_PLAYLIST;
   private spot: Spot = SPOT_BASE;
   private ambience: SoundId[] = SCREEN_AMB.base;
-  private levels: Record<VolumeKind, number> = { fx: savedVolume("fx"), music: savedVolume("music") };
+  private levels: Record<VolumeKind, number> = { fx: savedVolume("fx"), music: savedVolume("music"), fight: savedVolume("fight") };
 
   /** Call from the first tap. */
   unlock(): void {
@@ -181,6 +181,7 @@ export class ArenaAudio {
     a.setVolume("sfx", fx);
     a.setVolume("ui", fx);
     a.setVolume("music", this.levels.music);
+    a.setFightMusic(this.levels.fight);
     this.ambLevel();
   }
 

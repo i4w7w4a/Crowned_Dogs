@@ -153,6 +153,10 @@ export class GameAudio {
 
   private deck: BufferDeck;
   /** Where the radio stands in the room: see RadioChain.place. */
+  setFightMusic(v: number): void {
+    this.deck.fightLevel(v);
+  }
+
   placeRadio(pan: number, far: number): void {
     this.deck.radio.place(pan, far);
   }
@@ -256,7 +260,7 @@ class BufferDeck implements MusicDeck {
   private audio: GameAudio;
   readonly radio: RadioChain;
   private ch: Record<Channel, {
-    out: GainNode; fade: GainNode; src?: AudioBufferSourceNode; buf?: AudioBuffer; track?: TrackId;
+    out: GainNode; fade: GainNode; lvl: GainNode; base: number; src?: AudioBufferSourceNode; buf?: AudioBuffer; track?: TrackId;
     /** Where the track is: playing since `at` from `offset`, or held at `offset`. */
     at: number; offset: number; playing: boolean; serial: number; pending?: ReturnType<typeof setTimeout>;
   }>;
@@ -270,8 +274,9 @@ class BufferDeck implements MusicDeck {
     const make = (level: number, to: AudioNode) => {
       const fade = ctx.createGain();
       fade.gain.value = 0;
-      fade.connect(audio.gainNode(level, to));
-      return { out: fade, fade, at: 0, offset: 0, playing: false, serial: 0 };
+      const lvl = audio.gainNode(level, to);
+      fade.connect(lvl);
+      return { out: fade, fade, lvl, base: level, at: 0, offset: 0, playing: false, serial: 0 };
     };
     this.ch = { fight: make(MIX.fightMusic, audio.musicBus()), radio: make(MIX.radioMusic, radio.input) };
   }
@@ -321,6 +326,12 @@ class BufferDeck implements MusicDeck {
     c.playing = false; c.serial++;
     c.pending = setTimeout(() => { this.halt(channel); c.buf = undefined; c.track = undefined; c.offset = 0; }, MUSIC_FADE * 1000 + 50);
     if (channel === "radio") this.radio.setHiss(false);
+  }
+
+  /** The fight track's own slider, 0..1, on top of the music bus. */
+  fightLevel(v: number) {
+    const c = this.ch.fight;
+    c.lvl.gain.setTargetAtTime(c.base * v, this.audio.ctx.currentTime, 0.05);
   }
 
   cue(sound: SoundId) {
