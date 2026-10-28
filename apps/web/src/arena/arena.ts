@@ -479,8 +479,8 @@ export class Arena {
     }
     if (this.q.dust) {
       this.lens.sunDirection(this.camera, this.sunDir);
-      const pxPerMetre = this.renderer.getDrawingBufferSize(tmpSize).y * this.k!.fn;
-      this.dust.update(this.timer.getElapsed(), pxPerMetre, this.sunDir, this.lens.raysTexture);
+      const height = this.renderer.getDrawingBufferSize(tmpSize).y;
+      this.dust.update(this.timer.getElapsed(), height * this.k!.fn, this.sunDir, this.lens.raysTexture, 1 / Math.max(0.5, this.depth), height * this.lens.dof);
     }
     this.lens.render(this.scene, this.camera, NEAR, { enemyDepth: this.depth, light: this.rim });
     this.onFrame?.();

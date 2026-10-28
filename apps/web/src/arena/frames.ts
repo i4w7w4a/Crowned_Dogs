@@ -61,7 +61,7 @@ const GREY_HALL = {
   look: {
     exposure: 1.05, rim: 0xe8eef2, fill: 0xc7ccd0, fog: 0x8e9497, sky: 0xc3cacd, ground: 0x2b2d2e, puddle: 0,
     // light shafts from the broken roof, salt haze lit cold white
-    lens: { ...BODYCAM, saturation: 0.55, tint: 0xf1f4f6, dof: 0.055, dofNear: 0.3, rays: 0.9, haze: 0.03, hazeColor: 0xdfe6ea },
+    lens: { ...BODYCAM, saturation: 0.55, tint: 0xf1f4f6, dof: 0.035, dofNear: 0.3, rays: 0.9, haze: 0.03, hazeColor: 0xdfe6ea },
   },
 } satisfies Omit<Frame, "id" | "name" | "src" | "weather">;
 

@@ -16,6 +16,8 @@ uniform vec3 boxSize;
 uniform vec3 sunDir;
 uniform sampler2D tRays;
 uniform float hasRays;
+uniform float focusInv;
+uniform float dofPx;
 attribute vec4 seed;
 varying float vAlpha;
 varying float vLight;
@@ -33,6 +35,8 @@ void main() {
   float size = (0.003 + 0.004 * seed.w) * pxPerMetre / depth;
   // out of focus in front of the lens: a bigger, fainter disc
   float blur = 3.0 * max(0.0, 1.6 / depth - 0.35);
+  // behind the enemy: soft like the painting there
+  blur += 2.0 * dofPx * clamp(focusInv - 1.0 / depth, 0.0, 0.13);
   float drawn = max(2.5, size + blur);
   gl_PointSize = drawn;
   // a speck smaller than its disc is fainter: the same light spread over more pixels, no sparkle
@@ -66,6 +70,7 @@ export class Dust {
       uniforms: {
         time: { value: 0 }, pxPerMetre: { value: 800 }, boxMin: { value: BOX.min }, boxSize: { value: BOX.size },
         sunDir: { value: new THREE.Vector3(0, 0.5, -1).normalize() }, tRays: { value: null }, hasRays: { value: 0 },
+        focusInv: { value: 0 }, dofPx: { value: 0 },
         color: { value: new THREE.Color(0xe9eef2).multiplyScalar(0.55) },
       },
       transparent: true, depthWrite: false, fog: false,
@@ -97,13 +102,18 @@ export class Dust {
     this.points.geometry.setDrawRange(0, n);
   }
 
-  /** Each frame: the time, how many pixels a metre is at one metre away, where the light comes from, and the shafts it lies in. */
-  update(time: number, pxPerMetre: number, sunDir: THREE.Vector3, rays: THREE.Texture | null): void {
+  /**
+   * Each frame: the time, how many pixels a metre is at one metre away, where the light comes from, the shafts it
+   * lies in, and the focus: 1 / the enemy's distance and the blur of the painting in pixels per 1/m behind him.
+   */
+  update(time: number, pxPerMetre: number, sunDir: THREE.Vector3, rays: THREE.Texture | null, focusInv: number, dofPx: number): void {
     const u = this.material.uniforms;
     u.time!.value = time;
     u.pxPerMetre!.value = pxPerMetre;
     (u.sunDir!.value as THREE.Vector3).copy(sunDir);
     u.tRays!.value = rays;
     u.hasRays!.value = rays ? 1 : 0;
+    u.focusInv!.value = focusInv;
+    u.dofPx!.value = dofPx;
   }
 }

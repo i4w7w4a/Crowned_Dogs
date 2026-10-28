@@ -172,6 +172,12 @@ export class Lens {
     h.density!.value = look.haze;
   }
 
+  /** How strongly the painting is blurred away from the focus, share of its height per 1/m (0 without a depth map). */
+  get dof(): number {
+    const c = this.composeMat.uniforms;
+    return c.hasDepth!.value ? (c.dof!.value as number) : 0;
+  }
+
   /** The graphics level: how clean the frame is drawn and which light it gets. */
   setQuality(q: Quality): void {
     const was = this.q;

@@ -82,7 +82,8 @@ vec3 painting(vec2 uv) {
 // distance, and the blur grows with how far it lies behind him (much less in front of him).
 float coc(vec2 uv) {
   float d = focusInv - texture(tDepth, uv).r * 1.25; // the map holds 1/z, 1.0 = 1/0.8 m
-  return dof * (d > 0.0 ? d : -d * dofNear) * bgSize.y; // radius in texels of the painting
+  // radius in texels of the painting; held at 0.13 so a close enemy doesn't wash the hall out
+  return dof * min(d > 0.0 ? d : -d * dofNear, 0.13) * bgSize.y;
 }
 
 vec3 focused(vec2 uv) {
