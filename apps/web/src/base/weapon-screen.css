@@ -9,6 +9,10 @@
 .cw-class { color: var(--cd-secondary); text-transform: uppercase; font-size: 10px; letter-spacing: .2em; margin: 0 0 5px; }
 .cw-name { font: 500 clamp(30px, 8vw, 42px)/1 var(--display); text-transform: uppercase; letter-spacing: .08em; margin: 0; }
 .cw-stage { position: relative; width: min(100%, calc(100dvh - 250px)); aspect-ratio: 1; margin: auto; flex: 0 0 auto; }
+.cw-stage-3d { width: 100%; aspect-ratio: auto; flex: 1 1 0; min-height: 200px; margin: 6px 0 0; }
+.cw-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cw-links[hidden] { display: none; }
+.cw-links .cw-anchor-hit { pointer-events: all; }
 .cw-gun, .cw-sockets { position: absolute; width: 100%; height: 100%; inset: 0; }
 .cw-gun-body { color: #aeb6b8; filter: drop-shadow(0 7px 4px #0009); }
 .cw-anchor path { stroke: #dbe3e257; stroke-width: .8; fill: none; pointer-events: none; }
@@ -26,6 +30,8 @@
 .cw-sheet.sheet.glass { position: fixed; inset: auto 0 0; margin: 0 auto; width: min(480px, 100%); max-width: 100%; max-height: min(66dvh, 560px); padding: 0; color: #fff; border: 0; border-radius: 22px 22px 0 0; overflow: hidden; }
 .cw-sheet.sheet.glass:not([open]) { display: none; }
 .cw-sheet[open] { display: flex; flex-direction: column; }
+.cw-sheet[open] { animation: cw-sheet-rise .18s ease-out; }
+@keyframes cw-sheet-rise { from { transform: translateY(35px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .cw-sheet::backdrop { background: #0005; }
 .cw-sheet-header { display: flex; align-items: center; justify-content: space-between; padding: 16px; flex-shrink: 0; }
 .cw-sheet-header h2 { font-weight: 500; font-size: 20px; margin: 0; }

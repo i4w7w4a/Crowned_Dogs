@@ -53,6 +53,7 @@ export class WeaponScreen {
       <div class="cw-stage">
         <div class="cw-model" hidden></div>
         <svg class="cw-gun" viewBox="0 0 360 360" role="img" aria-label="Оружие с установленными модификациями"></svg>
+        <svg class="cw-links" hidden aria-hidden="true"></svg>
         <div class="cw-sockets">${MOD_SLOTS.map(slot => `<button class="cw-socket glass" type="button" data-socket="${slot}" style="left:${labelPoints[slot][0] / 3.6}%;top:${labelPoints[slot][1] / 3.6}%"><span class="cw-socket-dot" aria-hidden="true"></span><span class="cw-socket-name">${socketNames[slot]}</span></button>`).join("")}</div>
       </div>
       <footer class="cw-footer"><button class="cw-change glass" type="button">Сменить оружие</button><p class="cw-error" role="status" hidden></p></footer>
@@ -73,7 +74,7 @@ export class WeaponScreen {
       const button = (e.target as Element).closest<HTMLElement>("[data-socket]");
       if (button) this.showMods(button.dataset.socket as ModSlot);
     });
-    this.element.querySelector(".cw-gun")!.addEventListener("click", e => {
+    this.element.querySelector(".cw-stage")!.addEventListener("click", e => {
       const socket = (e.target as Element).closest<SVGElement>("[data-anchor]");
       if (socket) {
         const slot = socket.dataset.anchor as ModSlot;
@@ -154,10 +155,12 @@ export class WeaponScreen {
     this.element.querySelector(".cw-gun")!.innerHTML = `<g class="cw-gun-body" transform="translate(180 180) rotate(-30) scale(${scale}) translate(${-cx} ${-cy})">${markup(shape, `cw-weapon-${iconSerial++}`)}</g>${lines}`;
     const model = this.element.querySelector<HTMLElement>(".cw-model")!;
     const real = weapon.id === "rifle-varyag";
+    this.element.querySelector(".cw-stage")!.classList.toggle("cw-stage-3d", real);
     this.element.querySelector(".cw-gun")!.toggleAttribute("hidden", real);
+    this.element.querySelector(".cw-links")!.toggleAttribute("hidden", !real);
     model.hidden = !real;
     if (real) {
-      this.viewer ??= new ItemViewer(model);
+      this.viewer ??= new ItemViewer(model, { workbench: true, onSockets: points => this.drawSocketLinks(points) });
       void this.viewer.show(weapon.id, weapon.name, this.loadout);
     } else this.viewer?.hide();
     for (const slot of MOD_SLOTS) {
@@ -170,6 +173,18 @@ export class WeaponScreen {
       button.classList.toggle("cw-modified", parts[slot] !== weapon.stock[slot]);
       button.title = item?.name ?? "";
     }
+  }
+
+  private drawSocketLinks(points: Partial<Record<ModSlot, [number, number]>>): void {
+    const stage = this.element.querySelector<HTMLElement>(".cw-stage")!;
+    const links = this.element.querySelector<SVGSVGElement>(".cw-links")!;
+    const w = stage.clientWidth, h = stage.clientHeight;
+    links.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    links.innerHTML = MOD_SLOTS.map(slot => {
+      const p = points[slot]; if (!p) return "";
+      const [lx, ly] = labelPoints[slot];
+      return `<g class="cw-anchor" data-anchor="${slot}"><path d="M${lx / 360 * w} ${ly / 360 * h} L${p[0]} ${p[1]}"/><circle class="cw-anchor-hit" cx="${p[0]}" cy="${p[1]}" r="18"/><circle class="cw-anchor-pin" cx="${p[0]}" cy="${p[1]}" r="4"/></g>`;
+    }).join("");
   }
 
   private openSheet(title: string): void {

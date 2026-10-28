@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import type { Loadout } from "@crowned-dogs/core";
-import { loadModel, PERSONA_MODEL } from "../arena/load-model.ts";
+import { MOD_SLOTS, type Loadout, type ModSlot } from "@crowned-dogs/core";
+import { loadModel } from "../arena/load-model.ts";
 import { QUALITY, startQuality, type Quality } from "../arena/quality.ts";
 import { TextureTiers } from "../arena/textures.ts";
 import { tune } from "../arena/materials.ts";
@@ -9,10 +9,11 @@ import { fitVaryag, prepareVaryag } from "./fitting-stage.ts";
 import "./item-viewer.css";
 
 export const ITEM_MODELS: Readonly<Record<string, string>> = {
-  "head-k6": "Helmet", "body-plita2": "Vest", "suit-field": "Suit", "rifle-varyag": "Varyag",
+  "head-k6": "tripo-helmet", "body-plita2": "tripo-vest", "suit-field": "tripo-suit-male", "rifle-varyag": "varyag",
 };
 const RIFLE = `${import.meta.env.BASE_URL}preview/varyag.json`;
 type Model = { root: THREE.Group; textures: Set<THREE.Texture> };
+type ViewerOptions = { workbench?: boolean; onSockets?: (points: Partial<Record<ModSlot, [number, number]>>) => void };
 
 /** One on-demand canvas per open item view. Models and their GPU resources belong to this view. */
 export class ItemViewer {
@@ -35,8 +36,11 @@ export class ItemViewer {
   private radius = 1;
   private host: HTMLElement;
   private drag: { id: number; x: number; y: number } | null = null;
+  private displayed: THREE.Group | null = null;
+  private options: ViewerOptions;
 
-  constructor(host: HTMLElement) {
+  constructor(host: HTMLElement, options: ViewerOptions = {}) {
+    this.options = options;
     this.host = host;
     host.classList.add("ci-viewer");
     host.innerHTML = `<canvas tabindex="0" role="img"></canvas><div class="ci-message" role="status"><span></span><button class="glass" type="button" hidden>Повторить</button></div><p class="ci-hint">Потяни, чтобы повернуть</p>`;
@@ -90,26 +94,26 @@ export class ItemViewer {
 
   async show(id: string, name: string, loadout?: Loadout): Promise<void> {
     if (this.disposed || !ITEM_MODELS[id]) return;
+    const keepAngle = this.request?.id === id;
     this.request = { id, name, loadout }; const serial = ++this.serial;
     this.active = true; this.host.hidden = false; this.canvas.hidden = true; this.retry.hidden = true;
     this.status.textContent = "Загрузка…"; this.canvas.setAttribute("aria-label", `${name}. Объёмная модель, вращение перетаскиванием или стрелками.`);
     this.host.dataset.item = id;
     try {
       this.init();
-      const rifle = id === "rifle-varyag", { root } = await this.model(rifle ? RIFLE : PERSONA_MODEL);
+      const rifle = id === "rifle-varyag", { root } = await this.model(`${import.meta.env.BASE_URL}preview/${ITEM_MODELS[id]}.json`);
       if (this.disposed || serial !== this.serial) return;
-      this.offset.clear(); this.offset.position.set(0, 0, 0); this.offset.scale.setScalar(1); this.pivot.rotation.set(0, 0, 0);
-      this.offset.add(root);
+      this.offset.clear(); this.offset.position.set(0, 0, 0); this.offset.scale.setScalar(1);
+      const angle = this.pivot.rotation.clone(); this.pivot.rotation.set(0, 0, 0);
+      this.offset.add(root); this.displayed = root;
       if (rifle) fitVaryag(root, loadout ?? null);
-      else root.traverse(node => { if (node instanceof THREE.Mesh) node.visible = node.name === ITEM_MODELS[id]; });
       this.scene.updateMatrixWorld(true);
-      const part = rifle ? root : root.getObjectByName(ITEM_MODELS[id]);
-      if (!part) throw new Error("missing item mesh");
-      const bounds = new THREE.Box3().setFromObject(part, true), centre = bounds.getCenter(new THREE.Vector3()), size = bounds.getSize(new THREE.Vector3());
+      const bounds = visibleBounds(root), centre = bounds.getCenter(new THREE.Vector3()), size = bounds.getSize(new THREE.Vector3());
       const scale = 1.8 / Math.max(size.x, size.y, size.z, .001);
       this.offset.scale.setScalar(scale); this.offset.position.copy(centre).multiplyScalar(-scale);
       this.radius = size.length() * scale / 2;
-      this.pivot.rotation.set(.06, rifle ? -.22 : .35, rifle ? -.3 : 0);
+      if (keepAngle) this.pivot.rotation.copy(angle);
+      else this.pivot.rotation.set(.06, rifle ? -.22 : .35, rifle ? (this.options.workbench ? .68 : -.3) : 0);
       this.status.textContent = ""; this.canvas.hidden = false;
       this.host.dataset.state = "ready"; this.resize();
     } catch {
@@ -127,10 +131,32 @@ export class ItemViewer {
     this.renderer.setPixelRatio(dpr); this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
     const half = THREE.MathUtils.degToRad(this.camera.fov / 2);
-    this.camera.position.set(0, 0, this.radius / Math.sin(Math.min(half, Math.atan(Math.tan(half) * w / h))) * 1.10);
+    let distance = this.radius / Math.sin(Math.min(half, Math.atan(Math.tan(half) * w / h))) * 1.10;
+    if (this.displayed) {
+      this.scene.updateMatrixWorld(true);
+      const b = visibleBounds(this.displayed), tanY = Math.tan(half), tanX = tanY * w / h;
+      distance = 0;
+      for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
+        distance = Math.max(distance, z + Math.max(Math.abs(x) / tanX, Math.abs(y) / tanY) * (this.options.workbench ? 1.28 : 1.16));
+      }
+    }
+    this.camera.position.set(0, 0, distance);
     this.camera.lookAt(0, 0, 0); this.render();
   }
-  private render(): void { if (this.active && !this.disposed) this.renderer?.render(this.scene, this.camera); }
+  private render(): void {
+    if (!this.active || this.disposed) return;
+    this.renderer?.render(this.scene, this.camera);
+    if (this.options.onSockets && this.displayed) {
+      const points: Partial<Record<ModSlot, [number, number]>> = {};
+      for (const slot of MOD_SLOTS) {
+        const socket = this.displayed.getObjectByName(`socket_${slot}`);
+        if (!socket) continue;
+        const p = socket.getWorldPosition(new THREE.Vector3()).project(this.camera);
+        if (p.z < 1) points[slot] = [(p.x + 1) * this.host.clientWidth / 2, (1 - p.y) * this.host.clientHeight / 2];
+      }
+      this.options.onSockets(points);
+    }
+  }
   private down = (e: PointerEvent): void => { if (e.button || !e.isPrimary) return; this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; this.canvas.setPointerCapture(e.pointerId); };
   private move = (e: PointerEvent): void => {
     if (!this.drag || e.pointerId !== this.drag.id) return;
@@ -156,6 +182,16 @@ export class ItemViewer {
     for (const pending of this.models.values()) void pending.then(release, () => {});
     this.models.clear(); this.environment?.dispose(); this.renderer?.dispose(); this.host.replaceChildren();
   }
+}
+
+function visibleBounds(root: THREE.Object3D): THREE.Box3 {
+  const bounds = new THREE.Box3();
+  root.traverseVisible(node => {
+    if (!(node instanceof THREE.Mesh)) return;
+    node.geometry.computeBoundingBox();
+    if (node.geometry.boundingBox) bounds.union(node.geometry.boundingBox.clone().applyMatrix4(node.matrixWorld));
+  });
+  return bounds;
 }
 
 function texturesOf(root: THREE.Object3D): Set<THREE.Texture> {

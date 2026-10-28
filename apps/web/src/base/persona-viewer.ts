@@ -1,13 +1,12 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { getItem, type Loadout, type WeaponId } from "@crowned-dogs/core";
-import { dress, KIT_A } from "../arena/dress.ts";
-import { loadModel, PERSONA_MODEL } from "../arena/load-model.ts";
+import { loadModel } from "../arena/load-model.ts";
 import { tune } from "../arena/materials.ts";
 import { QUALITY, startQuality, type Quality } from "../arena/quality.ts";
 import { TextureTiers } from "../arena/textures.ts";
-import { Hand, gripOf } from "../arena/weapons.ts";
-import { fitVaryag, makeFittingStage, makeSling, PLATFORM_TOP, prepareVaryag, relaxArms } from "./fitting-stage.ts";
+import { Hand } from "../arena/weapons.ts";
+import { fitVaryag, makeFittingStage, makeSling, PLATFORM_TOP, prepareVaryag } from "./fitting-stage.ts";
 import { authoredWeaponFit } from "./user-fitting-layout.ts";
 
 export interface PersonaPreviewCoverage {
@@ -18,8 +17,9 @@ export interface PersonaPreviewCoverage {
 
 const ROOM = `${import.meta.env.BASE_URL}img/base/fitting-room-v2.png`;
 const VARYAG = `${import.meta.env.BASE_URL}preview/varyag.json`;
+const AUTHORED_PERSONA = `${import.meta.env.BASE_URL}preview/persona-authored.json`;
 
-/** The arena's real Persona and Kit A, on a lit, rotating service platform. */
+/** The user's edited Persona and Kit A, on a lit, rotating service platform. */
 export class PersonaViewer {
   readonly previewDescription = "3D: комплект A и Варяг · остальные предметы пока показаны условно";
 
@@ -112,29 +112,20 @@ export class PersonaViewer {
         this.equipment.add(this.varyag); this.tuneObject(this.varyag);
       }).catch(() => { /* Existing arena stand-in remains available. */ });
       const environmentPromise = this.loadRoomEnvironment();
-      const gltf = await loadModel(PERSONA_MODEL);
+      const gltf = await loadModel(AUTHORED_PERSONA);
       if (this.disposed) { disposeObject(gltf.scene); return; }
       const figure = this.figure = gltf.scene;
-      dress(figure, KIT_A);
-      // Read the rest-pose grip before changing bones; detach the weapon from the hand.
-      const grip = gripOf(figure);
-      if (grip) {
-        this.hand = new Hand(figure, grip, new THREE.MeshStandardMaterial({ color: 0x1b1c1d, roughness: .5, metalness: .55 }));
-        this.equipment.add(this.hand.mount); this.hand.mount.scale.setScalar(1);
-      }
-      relaxArms(figure);
-      figure.updateMatrixWorld(true);
-      let box = new THREE.Box3().setFromObject(figure, true);
-      figure.scale.multiplyScalar(1.8 / Math.max(.1, box.max.y - box.min.y));
-      figure.updateMatrixWorld(true);
-      box = new THREE.Box3().setFromObject(figure, true);
-      const centre = box.getCenter(new THREE.Vector3());
-      figure.position.set(-centre.x, PLATFORM_TOP - box.min.y, -centre.z);
-      figure.name = "Persona_Kit_A_Relaxed_A_Pose";
+      // This static fitting export already contains the user's pose, mesh edits and platform height.
+      // Do not dress, re-pose, resize or recenter it. Stand-in guns use a detached anchor only.
+      const standIns = new THREE.Group(), anchor = new THREE.Group();
+      anchor.name = "hand_r"; standIns.add(anchor);
+      this.hand = new Hand(standIns, new THREE.Matrix4(), new THREE.MeshStandardMaterial({ color: 0x1b1c1d, roughness: .5, metalness: .55 }));
+      this.equipment.add(this.hand.mount);
+      figure.name = "Persona_Authored_In_Blender";
       figure.traverse((node) => { if (node instanceof THREE.Mesh) { node.frustumCulled = false; node.castShadow = true; node.receiveShadow = true; } });
       this.stage.rotating.add(figure);
       collectTextures(figure, this.originalTextures);
-      this.tiers = new TextureTiers([figure], PERSONA_MODEL);
+      this.tiers = new TextureTiers([figure], AUTHORED_PERSONA);
       await this.updateTextureQuality();
       if (this.disposed) return;
       await Promise.all([gunPromise, environmentPromise]);
