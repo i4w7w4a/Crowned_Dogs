@@ -16,6 +16,11 @@ uniform sampler2D tFig;
 uniform sampler2D tNear;
 uniform sampler2D tBg;
 uniform sampler2D tHaze;
+uniform sampler2D tDepth;
+uniform float hasDepth;
+uniform float focusInv;
+uniform float dof;
+uniform float dofNear;
 uniform vec2 bgSize;
 uniform vec2 nearSize;
 uniform vec2 hazeSize;
@@ -73,6 +78,37 @@ vec3 painting(vec2 uv) {
   return texture(tBg, uv).rgb;
 }
 
+// Depth of field: the camera is focused on the enemy. The painting's depth map gives each pixel its
+// distance, and the blur grows with how far it lies behind him (much less in front of him).
+float coc(vec2 uv) {
+  float d = focusInv - texture(tDepth, uv).r * 1.25; // the map holds 1/z, 1.0 = 1/0.8 m
+  // radius in texels of the painting; held at 0.13 so a close enemy doesn't wash the hall out
+  return dof * min(d > 0.0 ? d : -d * dofNear, 0.13) * bgSize.y;
+}
+
+vec3 focused(vec2 uv) {
+  if (hasDepth < 0.5) return painting(uv);
+  float r = coc(uv);
+#if DOF_TAPS < 2
+  return r < 0.6 ? painting(uv) : textureLod(tBg, uv, log2(r * 1.6)).rgb;
+#else
+  if (r < 0.6) return painting(uv);
+  // a disc of reads, each from a copy blurred just enough to close the gaps between them
+  float lod = log2(max(1.0, 2.2 * r / sqrt(float(DOF_TAPS))));
+  vec3 sum = textureLod(tBg, uv, lod).rgb;
+  float wsum = 1.0;
+  for (int i = 0; i < DOF_TAPS; i++) {
+    float rr = sqrt((float(i) + 0.5) / float(DOF_TAPS)) * r, a = float(i) * 2.39996;
+    vec2 t = uv + vec2(cos(a), sin(a)) * rr / bgSize;
+    // something sharper than this pixel (nearer the focus) does not spread over it
+    float w = clamp(coc(t) - rr + 1.0, 0.0, 1.0);
+    sum += textureLod(tBg, t, lod).rgb * w;
+    wsum += w;
+  }
+  return sum / wsum;
+#endif
+}
+
 // a smooth B-spline read of a small picture: stretched over the frame it comes back soft, with no steps or blocks
 vec4 smoothRead(sampler2D t, vec2 uv, vec2 size) {
   vec2 st = uv * size - 0.5, i = floor(st), f = st - i;
@@ -89,7 +125,7 @@ vec4 smoothRead(sampler2D t, vec2 uv, vec2 size) {
 
 void main() {
   vec4 f = texture(tFig, vUv);
-  vec3 bg = hasBg > 0.5 ? painting(vUv) : vec3(0.0);
+  vec3 bg = hasBg > 0.5 ? focused(vUv) : vec3(0.0);
   vec3 c = tone(f) + bg * (1.0 - f.a);
   float a = hasBg > 0.5 ? 1.0 : f.a;
 #ifdef HAZE
@@ -112,6 +148,8 @@ uniform mat4 camWorld;
 uniform vec3 camPos;
 uniform sampler2D tFig;
 uniform float enemyDist;
+uniform sampler2D tDepth;
+uniform float hasDepth;
 uniform sampler2DShadow tShadow;
 uniform mat4 shadowMatrix;
 uniform float hasShadow;
@@ -143,6 +181,7 @@ void main() {
   vec3 dir = normalize((camWorld * vec4(v.xyz / v.w, 0.0)).xyz);
   float tMax = 24.0;
   if (dir.y < -0.001) tMax = min(tMax, camPos.y / -dir.y); // the painted floor
+  if (hasDepth > 0.5) tMax = min(tMax, 1.0 / max(texture(tDepth, vUv).r * 1.25, 0.01) / max(-dir.z, 0.05)); // the painted walls and machines
   if (texture(tFig, vUv).a > 0.5) tMax = min(tMax, enemyDist / max(-dir.z, 0.2)); // the enemy's body
   float cosT = dot(dir, sunDir);
   float lobe = phase(cosT, 0.6) * 3.0 + phase(cosT, -0.2) * 1.5;

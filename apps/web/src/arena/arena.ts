@@ -272,7 +272,7 @@ export class Arena {
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
     this.renderer.toneMappingExposure = f.look.exposure;
     this.lens.setHorizon(k.hz);
-    this.lens.setBackdrop(f.src, f.src2x);
+    this.lens.setBackdrop(f.src, f.src2x, f.depth);
     this.lens.setLook(f.look.lens, f.look.exposure);
     this.makeEnv(f.src);
     this.rim.color.set(f.look.rim);
@@ -481,8 +481,8 @@ export class Arena {
     }
     if (this.q.dust) {
       this.lens.sunDirection(this.camera, this.sunDir);
-      const pxPerMetre = this.renderer.getDrawingBufferSize(tmpSize).y * this.k!.fn;
-      this.dust.update(this.timer.getElapsed(), pxPerMetre, this.sunDir, this.lens.raysTexture);
+      const height = this.renderer.getDrawingBufferSize(tmpSize).y;
+      this.dust.update(this.timer.getElapsed(), height * this.k!.fn, this.sunDir, this.lens.raysTexture, 1 / Math.max(0.5, this.depth), height * this.lens.dof);
     }
     this.lens.render(this.scene, this.camera, NEAR, { enemyDepth: this.depth, light: this.rim });
     this.onFrame?.();
