@@ -102,7 +102,6 @@ export class BaseScreen {
     root.querySelector(".cd-to-fitting")!.addEventListener("click", () => this.navigate("fitting"));
     const home = root.querySelector<HTMLElement>(".cd-home")!;
     driftBackdrop(home, 1882 / 3344);
-    driftBackdrop(root.querySelector<HTMLElement>(".cd-fitting")!, 941 / 1672);
     root.querySelector(".cd-back")!.addEventListener("click", () => this.navigate("base"));
     root.querySelector(".cd-enter")!.addEventListener("click", () => { void this.enterBattle(); });
     root.querySelector(".cd-open-catalog")!.addEventListener("click", () => this.openCatalog(this.selectedSlot));
