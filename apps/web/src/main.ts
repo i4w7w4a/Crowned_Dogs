@@ -340,7 +340,7 @@ function strike(r: TurnReport, side: Side): void {
   shown.hp[target] = r.hp[target];
   if (a) {
     if (ours) { fire($("flashOurs")); shake(); showOnEnemy(a); }
-    else { if (a.hit && !a.blocked) { fire($("flashHurt")); if (firstPerson()) shake(); } showOnMe(a); }
+    else { if (a.hit && !a.blocked) { fire($("flashHurt")); if (cameraView === "fp") shake(); } showOnMe(a); }
     if (a.hit) arena?.hit(ours ? "enemy" : "me", a.zone ?? "body", hitKind(a));
   }
   if (r.hp[target] <= 0) arena?.fall(ours ? "enemy" : "me");
@@ -445,6 +445,9 @@ function renderMenu(): void {
     option(tracks, TRACKS[s].title + `<small>${now ? "в эфире" : "&nbsp;"}</small>`, now, () => { audio.tune(s); renderMenu(); });
   }
 
+  const cs = seg("camSeg", CAMERAS.length);
+  for (const [v, name] of CAMERAS) option(cs, name, v === cameraView, () => { if (v !== cameraView) { setCamera(v); renderMenu(); } });
+
   const gs = seg("gfxSeg", QUALITY_IDS.length);
   for (const id of QUALITY_IDS) option(gs, QUALITY[id].name, id === quality, () => { if (id !== quality) { setQuality(id, true); renderMenu(); } });
   $("gfxNote").textContent = GFX_NOTE[quality] + (byHand ? "" : " Подобрано под это устройство.");
@@ -533,15 +536,22 @@ document.addEventListener("click", (e) => {
 document.addEventListener("pointerdown", () => audio.unlock(), { once: true });
 document.addEventListener("keydown", () => audio.unlock(), { once: true });
 window.addEventListener("resize", layout);
-// First person on trial: the arena's link with #fp at the end
-const firstPerson = () => location.hash === "#fp";
-window.addEventListener("hashchange", () => arena?.setFirstPerson(firstPerson()));
+// The camera, picked in the menu and remembered: over our shoulder, or first person (our eyes, as a
+// bodycam). An old link with #fp at the end still opens first person.
+type CameraView = "back" | "fp";
+const CAMERAS: [CameraView, string][] = [["back", "Из-за плеча"], ["fp", "От первого лица"]];
+let cameraView: CameraView = store.get("cd-camera") === "fp" || location.hash === "#fp" ? "fp" : "back";
+function setCamera(v: CameraView): void {
+  cameraView = v; store.set("cd-camera", v);
+  arena?.setFirstPerson(v === "fp");
+}
+window.addEventListener("hashchange", () => { if (location.hash === "#fp") setCamera("fp"); });
 
 // ---------- go ----------
 try {
   arena = new Arena(canvas);
   arena.onFrame = placeRings;
-  arena.setFirstPerson(firstPerson());
+  arena.setFirstPerson(cameraView === "fp");
   const start = startQuality(arena.gl);
   quality = start.id; byHand = start.picked;
   arena.setQuality(QUALITY[quality]);
