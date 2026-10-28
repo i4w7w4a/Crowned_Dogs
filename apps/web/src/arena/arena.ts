@@ -1,8 +1,8 @@
 // Live 3D figures standing in a painted frame. The three.js canvas lies exactly
 // over the picture, an off-centre lens matched to the painting puts the figures'
 // feet on the painted floor, and the bodycam lens (lens.ts) lays them over the
-// painting and shoots both through the same glass. The fight code only calls move, hit,
-// fall and reset; everything else here is about looking right.
+// painting and shoots both through the same glass. The fight code only calls arm, move,
+// attack, hit, fall and reset; everything else here is about looking right.
 
 import type { Zone } from "@crowned-dogs/core";
 import * as THREE from "three";
@@ -13,9 +13,11 @@ import { Dust } from "./dust.ts";
 import type { Frame } from "./frames.ts";
 import { Lens, type View } from "./lens.ts";
 import { tune } from "./materials.ts";
+import { Motion, type Attack, type Stance } from "./motion.ts";
 import { QUALITY, type Quality } from "./quality.ts";
 import { findBones, pitch, roll, type Bones } from "./rig.ts";
 import { TextureTiers } from "./textures.ts";
+import { Hand, gripOf } from "./weapons.ts";
 
 export type Who = "me" | "enemy";
 export type HitKind = "hit" | "blocked" | "grenade";
@@ -48,8 +50,9 @@ interface Figure {
   model: THREE.Object3D;
   blob: THREE.Mesh;
   mixer: THREE.AnimationMixer;
-  actions: Record<string, THREE.AnimationAction>;
-  cur: THREE.AnimationAction | null;
+  motion: Motion;
+  /** What it holds in the right hand (stand-in guns for now); null if the rig has no fingers to hold with. */
+  hand: Hand | null;
   port: THREE.Mesh;
   kick: Record<Zone, number>;
   /** 0..1 while falling, -1 when standing. */
@@ -220,6 +223,7 @@ export class Arena {
     this.en = this.makeFigure(foe, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
     this.me = this.makeFigure(mine, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1, near: true });
     this.mirror = this.makeMirror(foe, this.en);
+    this.giveWeapons(mine, foe);
     const foeLooks = [this.en.model, this.mirror.model];
     this.tiers = theirs ? [new TextureTiers([this.me.model], meUrl), new TextureTiers(foeLooks, enemyUrl)] : [new TextureTiers([this.me.model, ...foeLooks], meUrl)];
     this.ready = true;
@@ -311,12 +315,24 @@ export class Arena {
     this.lens.setSize(px.x, px.y, width, height, view);
   }
 
+  /** The gun a figure has in hand: its stance and the gun it holds. */
+  arm(who: Who, gun: Stance): void {
+    if (!this.ready) return;
+    (who === "enemy" ? this.en! : this.me!).motion.arm(gun);
+  }
+
   /** Both walk to the new distance; who moved decides who walks, the camera rides with us. */
   move(distance: number, meMove: number, enemyMove: number): void {
     if (!this.ready) return;
     this.walk = { from: this.depth, to: this.depthOf(distance), t: 0, dur: meMove || enemyMove ? 0.75 : 0.01 };
-    if (enemyMove) play(this.en!, enemyMove >= 3 ? "run" : "walk", 0.15, enemyMove > 0 ? 1 : -1);
-    if (meMove) play(this.me!, meMove >= 3 ? "run" : "walk", 0.15, meMove > 0 ? 1 : -1);
+    if (enemyMove) this.en!.motion.walk(enemyMove >= 3 ? "run" : "walk", enemyMove > 0 ? 1 : -1);
+    if (meMove) this.me!.motion.walk(meMove >= 3 ? "run" : "walk", meMove > 0 ? 1 : -1);
+  }
+
+  /** A figure attacks so that its shot (the stab, the throw) comes `inSeconds` from now, with the sound. */
+  attack(who: Who, kind: Attack, inSeconds: number): void {
+    if (!this.ready) return;
+    (who === "enemy" ? this.en! : this.me!).motion.attack(kind, inSeconds);
   }
 
   /** A hit lands on a figure: it flinches, and a spark flies off the enemy. */
@@ -339,7 +355,7 @@ export class Arena {
     if (!this.ready) return;
     const f = who === "enemy" ? this.en! : this.me!;
     f.fallT = 0;
-    play(f, "idle", 0.2, 0.2);
+    f.motion.fall();
   }
 
   reset(distance: number): void {
@@ -392,8 +408,7 @@ export class Arena {
     this.scene.add(group);
 
     const mixer = new THREE.AnimationMixer(model);
-    const actions: Record<string, THREE.AnimationAction> = {};
-    for (const clip of gltf.animations) actions[clip.name] = mixer.clipAction(clip);
+    const motion = new Motion(mixer, gltf.animations);
 
     // a small cyan light on the sync connector, as in the concept frames
     const port = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), new THREE.MeshBasicMaterial({ color: 0x7ff3ff, fog: false }));
@@ -403,7 +418,7 @@ export class Arena {
     if (look.near) { group.traverse((o) => o.layers.set(NEAR)); port.layers.set(NEAR); port.scale.setScalar(0.4); }
 
     return {
-      group, tilt, model, blob, mixer, actions, cur: null, port,
+      group, tilt, model, blob, mixer, motion, hand: null, port,
       kick: { head: 0, body: 0, groin: 0, legs: 0 }, fallT: -1, fallSide: look.fallSide, bones,
     };
   }
@@ -438,6 +453,23 @@ export class Arena {
     return { group, tilt, model, pairs: a.map((bone, i) => [bone, b[i]!]), src, mats: [...copies.values()] };
   }
 
+  /** Stand-in guns in both right hands (and in the enemy's reflection), shown as each figure arms itself. */
+  private giveWeapons(mine: GLTF, foe: GLTF): void {
+    const steel = new THREE.MeshStandardMaterial({ color: 0x1b1c1d, roughness: 0.45, metalness: 0.55 });
+    const myGrip = gripOf(mine.scene), foeGrip = gripOf(foe.scene);
+    const me = this.me!, en = this.en!, mirror = this.mirror!;
+    if (myGrip) me.hand = new Hand(me.model, myGrip, steel, NEAR);
+    if (foeGrip) {
+      en.hand = new Hand(en.model, foeGrip, steel);
+      // the reflection's copy, darkened by the water like the rest of it
+      const wet = steel.clone(); wet.color.multiplyScalar(0.62); wet.transparent = true; wet.opacity = 0.5; wet.depthWrite = false;
+      mirror.mats.push(wet);
+      const inWater = new Hand(mirror.model, foeGrip, wet);
+      en.motion.onHold = (w) => { en.hand!.hold(w); inWater.hold(w); };
+    }
+    me.motion.onHold = (w) => me.hand?.hold(w);
+  }
+
   private place(): void {
     const k = this.k!, D = this.depth, en = this.en!, me = this.me!;
     const ex = k.kx * D, ez = -D;
@@ -464,11 +496,11 @@ export class Arena {
       this.depth = w.from + (w.to - w.from) * smooth(u);
       if (u >= 1) {
         this.walk = null;
-        for (const f of [this.en!, this.me!]) if (f.fallT < 0) play(f, "idle", 0.35);
+        for (const f of [this.en!, this.me!]) if (f.fallT < 0) f.motion.stand(0.35);
       }
     }
     this.place();
-    for (const f of [this.en!, this.me!]) { f.mixer.update(dt); applyReactions(f, dt); }
+    for (const f of [this.en!, this.me!]) { f.motion.update(dt); f.mixer.update(dt); applyReactions(f, dt); }
     syncMirror(this.mirror!);
     this.scene.updateMatrixWorld();
     placePort(this.en!); placePort(this.me!);
@@ -489,25 +521,11 @@ export class Arena {
   }
 }
 
-function play(f: Figure, name: string, fade = 0.3, speed = 1): void {
-  const a = f.actions[name];
-  if (!a) return;
-  a.timeScale = speed;
-  if (f.cur === a) return;
-  a.reset().setEffectiveWeight(1).fadeIn(fade).play();
-  f.cur?.fadeOut(fade);
-  f.cur = a;
-}
-
 function resetFigure(f: Figure, offset: number): void {
   f.fallT = -1; f.tilt.rotation.set(0, 0, 0);
   f.blob.scale.set(1, 1, 1); f.blob.position.x = 0;
   for (const z of Object.keys(f.kick) as Zone[]) f.kick[z] = 0;
-  f.cur = null;
-  for (const a of Object.values(f.actions)) a.stop();
-  play(f, "idle", 0);
-  const idle = f.actions.idle;
-  if (idle) idle.time = offset * idle.getClip().duration;
+  f.motion.reset(offset);
 }
 
 function syncMirror(m: Mirror): void {
