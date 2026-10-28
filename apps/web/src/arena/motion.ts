@@ -107,6 +107,9 @@ export class Motion {
     this.onHold?.(stance);
   }
 
+  /** The attack under way, if any. */
+  get attackKind(): Attack | null { return this.kind; }
+
   /** First person: holds the pistol out in front instead of low, where our own eyes could not see it. */
   aim(on: boolean): void {
     if (on === this.aimed) return;
