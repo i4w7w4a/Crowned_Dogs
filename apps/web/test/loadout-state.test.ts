@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { GEAR_SLOTS, WEAPONS, compileKit, starterLoadout } from "@crowned-dogs/core";
+import { GEAR_SLOTS, MOD_SLOTS, WEAPONS, compileKit, starterLoadout, weaponItem, type ModSlot } from "@crowned-dogs/core";
 import {
-  LOADOUT_STORAGE_KEY, equipItem, equippedItemId, isValidLoadout, itemsForSlot,
-  loadLocalLoadout, saveLocalLoadout, type LoadoutStorage,
+  LOADOUT_STORAGE_KEY, effectiveWeaponModId, equipItem, equipWeaponMod, equippedItemId, isValidLoadout, itemsForSlot,
+  loadLocalLoadout, saveLocalLoadout, weaponModsForSlot, type LoadoutStorage,
 } from "../src/base/loadout-state.ts";
 
 function storage(initial: string | null = null): LoadoutStorage {
@@ -96,4 +96,81 @@ test("blocked or quota-exhausted storage does not break selection", () => {
   assert.deepEqual(loadLocalLoadout(null), starterLoadout("rifle"));
   assert.equal(saveLocalLoadout(starterLoadout("rifle"), blocked), false);
   assert.equal(saveLocalLoadout(starterLoadout("rifle"), null), false);
+});
+
+test("all five sockets expose the weapon's factory part and compatible choices", () => {
+  for (const weapon of ["pistol", "shotgun", "rifle", "sniper"] as const) {
+    const kit = starterLoadout(weapon);
+    for (const slot of MOD_SLOTS) {
+      const choices = weaponModsForSlot(kit, slot);
+      assert.equal(choices[0]?.id, weaponItem(weapon).stock[slot]);
+      assert.equal(effectiveWeaponModId(kit, slot), choices[0]?.id);
+      assert.ok(choices.every((item) => item.slot === slot && item.fits.includes(weapon)));
+    }
+  }
+});
+
+test("weapon mods survive saving and change actual compiled combat properties", () => {
+  const base = starterLoadout("rifle");
+  const scoped = equipWeaponMod(base, "optic", "optic-sokol");
+  const suppressed = equipWeaponMod(scoped, "muzzle", "muzzle-tishina");
+  assert.equal(effectiveWeaponModId(suppressed, "optic"), "optic-sokol");
+  assert.equal(effectiveWeaponModId(suppressed, "muzzle"), "muzzle-tishina");
+  assert.equal(compileKit(base).weapon.suppressor, false);
+  assert.equal(compileKit(suppressed).weapon.suppressor, true);
+  assert.ok(compileKit(scoped).weapon.accuracy[10]! > compileKit(base).weapon.accuracy[10]!);
+  assert.ok(compileKit(scoped).weapon.accuracy[2]! < compileKit(base).weapon.accuracy[2]!);
+  const store = storage();
+  assert.equal(saveLocalLoadout(suppressed, store), true);
+  assert.deepEqual(loadLocalLoadout(store), suppressed);
+  assert.deepEqual(compileKit(loadLocalLoadout(store)), compileKit(suppressed));
+});
+
+test("mod changes preserve other gear and independently copy both weapon configurations", () => {
+  const base = equipItem(starterLoadout("rifle"), "weapon2", "pistol-pustelga");
+  base.weapon1.mods = { optic: "optic-sokol" };
+  base.weapon1.skin = "skin-factory";
+  base.weapon2!.mods = { muzzle: "muzzle-pb9" };
+  const before = structuredClone(base);
+  const changed = equipWeaponMod(base, "muzzle", "muzzle-tishina");
+  assert.deepEqual(base, before);
+  assert.deepEqual(changed.weapon2, before.weapon2);
+  assert.notEqual(changed.weapon2, base.weapon2);
+  assert.notEqual(changed.weapon2!.mods, base.weapon2!.mods);
+  assert.equal(changed.weapon1.skin, base.weapon1.skin);
+  assert.equal(changed.weapon1.mods!.optic, "optic-sokol");
+  for (const slot of GEAR_SLOTS) {
+    if (slot !== "weapon1" && slot !== "weapon2") assert.equal(changed[slot], base[slot]);
+  }
+  changed.weapon1.mods!.optic = "optic-gran";
+  changed.weapon2!.mods!.muzzle = "pistol-muzzle-stock";
+  assert.deepEqual(base, before);
+});
+
+test("restoring factory parts clears only the chosen override and restores baseline effects", () => {
+  const base = starterLoadout("rifle");
+  const modified = equipWeaponMod(equipWeaponMod(base, "optic", "optic-sokol"), "muzzle", "muzzle-tishina");
+  const factoryId = weaponItem("rifle").stock.muzzle;
+  const reset = equipWeaponMod(modified, "muzzle", null);
+  assert.deepEqual(reset, equipWeaponMod(modified, "muzzle", factoryId));
+  assert.equal(effectiveWeaponModId(reset, "muzzle"), factoryId);
+  assert.equal(compileKit(reset).weapon.suppressor, false);
+  assert.equal(reset.weapon1.mods!.optic, "optic-sokol");
+  const stock = equipWeaponMod(reset, "optic", null);
+  assert.equal(stock.weapon1.mods, undefined);
+  assert.deepEqual(compileKit(stock), compileKit(base));
+  assert.equal(modified.weapon1.mods!.muzzle, "muzzle-tishina");
+});
+
+test("wrong sockets, incompatible parts and malformed mod saves are rejected", () => {
+  const rifle = starterLoadout("rifle");
+  assert.throws(() => equipWeaponMod(rifle, "muzzle", "optic-sokol"));
+  assert.throws(() => equipWeaponMod(rifle, "muzzle", "muzzle-pb9"));
+  assert.throws(() => equipWeaponMod(rifle, "muzzle", "pistol-muzzle-stock"));
+  assert.throws(() => equipWeaponMod(rifle, "optic", "missing-mod"));
+  assert.throws(() => equipWeaponMod(rifle, "unknown" as ModSlot, null));
+  const invalid = { ...rifle, weapon1: { ...rifle.weapon1, mods: { muzzle: "optic-sokol" } } };
+  assert.equal(isValidLoadout(invalid), false);
+  assert.throws(() => equipWeaponMod(invalid, "optic", null));
+  assert.deepEqual(loadLocalLoadout(storage(JSON.stringify({ version: 1, loadout: invalid }))), rifle);
 });

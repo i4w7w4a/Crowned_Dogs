@@ -7,7 +7,7 @@
 import { RADIO_PLAYLIST, TIMING, TRACKS } from "@crowned-dogs/audio";
 import {
   VETERAN_KITS, WEAPONS, WEAPON_IDS, ZONES, canThrowGrenade, canUseKnife, draftChance, grenadeSpec,
-  guardsNeeded, other, turnLimit, turnSeconds, type AttackReport, type Loadout, type Side, type TurnReport, type WeaponId, type Zone,
+  guardsNeeded, other, turnLimit, turnSeconds, validateLoadout, type AttackReport, type Loadout, type Side, type TurnReport, type WeaponId, type Zone,
 } from "@crowned-dogs/core";
 import { Arena, type HitKind } from "./arena/arena.ts";
 import { CALIBRATION_FRAME, FRAMES, type Frame } from "./arena/frames.ts";
@@ -18,6 +18,7 @@ import { FightLog, icon } from "./hud/log.ts";
 import { liquidGlass } from "./hud/liquid.ts";
 import { GUN_ACC, GUN_WITH, TIME_WORD, WEATHER_WORD, endWords, steps, turnsWord, zoneName } from "./hud/words.ts";
 import { store } from "./store.ts";
+import { activateAfterReady } from "./loading/battle-loading.ts";
 import "./style.css";
 
 /** The figure models: the .glb inside JSON as base64, since artifact pages do not serve .glb (see npm run assets).
@@ -63,6 +64,9 @@ const audio = new ArenaAudio();
 const log = new FightLog({ list: $("logList"), ticker: $("ticker"), button: $("logBtn"), sheet: $("logSheet") });
 liquidGlass();
 let arena: Arena | null = null;
+let arenaLoading: Promise<void> | null = null;
+let speedFrame = 0;
+let speedDelay: ReturnType<typeof setTimeout> | null = null;
 
 /** The bot takes a random gun, like in Telegram; a veteran meets a veteran. */
 function newDuel(): LocalDuel {
@@ -506,15 +510,16 @@ function setQuality(id: QualityId, picked: boolean): void {
 function watchSpeed(): void {
   let frames = 0, t0 = 0;
   const step = (t: number) => {
-    if (byHand) return;
-    if (document.hidden || !active) { t0 = 0; frames = 0; requestAnimationFrame(step); return; }
+    if (byHand || !active) return;
+    if (document.hidden) { t0 = 0; frames = 0; speedFrame = requestAnimationFrame(step); return; }
     if (!t0) t0 = t;
     frames += 1;
-    if (t - t0 < 4000) { requestAnimationFrame(step); return; }
+    if (t - t0 < 4000) { speedFrame = requestAnimationFrame(step); return; }
     const i = QUALITY_IDS.indexOf(quality);
-    if (frames * 1000 / (t - t0) < 24 && i > 0) { setQuality(QUALITY_IDS[i - 1]!, false); setTimeout(watchSpeed, 1500); }
+    if (frames * 1000 / (t - t0) < 24 && i > 0) { setQuality(QUALITY_IDS[i - 1]!, false); speedDelay = setTimeout(watchSpeed, 1500); }
   };
-  requestAnimationFrame(step);
+  cancelAnimationFrame(speedFrame);
+  speedFrame = requestAnimationFrame(step);
 }
 
 function setFrame(f: Frame): void {
@@ -578,31 +583,49 @@ try {
   $("status").textContent = "3D не запустилось на этом устройстве";
 }
 setFrame(frame);
-arena?.load(MY_MODEL, FOE_MODEL, duel.match.distance)
-  .then(() => {
-    armBoth(); arena?.reset(duel.match.distance);
-    $("status").hidden = true;
-    layout(); render();
-    setTimeout(watchSpeed, 1500);
-  })
-  .catch(() => { $("status").textContent = "Модель не загрузилась. Обнови страницу."; });
+function prepareArena(): Promise<void> {
+  if (!arena) return Promise.reject(new Error("3D не запустилось на этом устройстве"));
+  if (arena.ready) return Promise.resolve();
+  if (!arenaLoading) {
+    arenaLoading = arena.load(MY_MODEL, FOE_MODEL, duel.match.distance).then(() => {
+      if (!arena?.ready) throw new Error("Арена ещё не готова");
+      armBoth(); arena.reset(duel.match.distance);
+      $("status").hidden = true;
+      layout(); render();
+    }).catch((error: unknown) => {
+      arenaLoading = null;
+      throw error;
+    });
+  }
+  return arenaLoading;
+}
 
 /** Called by the base screen: the fight takes the stage with the fitting room's kit. */
-export function startBattle(kit: Loadout, onExit: () => void): void {
-  fitted = structuredClone(kit);
-  exitBattle = onExit;
-  active = true;
-  $("app").hidden = false;
-  restart();
-  layout();
-  arena?.resume();
-  audio.unlock();
+export async function startBattle(
+  kit: Loadout, onExit: () => void, beforeEnter: () => Promise<void> = async () => {}, signal?: AbortSignal,
+): Promise<void> {
+  const selected = structuredClone(kit);
+  if (validateLoadout(selected)) throw new Error("Некорректный комплект");
+  await activateAfterReady(prepareArena, beforeEnter, () => {
+    fitted = selected;
+    exitBattle = onExit;
+    active = true;
+    $("app").hidden = false;
+    restart();
+    layout();
+    arena?.resume();
+    audio.unlock();
+    speedDelay = setTimeout(watchSpeed, 1500);
+  }, signal);
 }
 
 /** Back to the base: the fight stops where it is (it is not saved) and the radio plays on. */
 function leaveBattle(): void {
   active = false;
   fightNo += 1; stopTimer(); busy = false;
+  cancelAnimationFrame(speedFrame);
+  if (speedDelay) clearTimeout(speedDelay);
+  speedDelay = null;
   arena?.pause();
   infoVeil.hidden = true; endVeil.hidden = true; log.setOpen(false);
   audio.finish(null);

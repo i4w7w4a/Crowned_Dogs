@@ -1,0 +1,15 @@
+.ci-viewer { position: relative; width: 100%; height: 100%; min-height: 0; }
+.ci-viewer[hidden] { display: none; }
+.ci-viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.ci-viewer canvas[hidden] { display: none; }
+.ci-viewer canvas:active { cursor: grabbing; }
+.ci-message { position: absolute; inset: 0; display: flex; gap: 12px; align-items: center; justify-content: center; flex-direction: column; pointer-events: none; color: var(--cd-secondary); font-size: 12px; }
+.ci-message button { pointer-events: auto; padding: 12px 18px; min-height: 44px; }
+.ci-hint { position: absolute; bottom: 5px; left: 0; right: 0; margin: 0; text-align: center; pointer-events: none; color: var(--cd-secondary); font-size: 10px; text-shadow: 0 1px 4px #000; }
+.cd-item-preview { flex: 0 0 auto; padding: 0 16px 12px; }
+.cd-item-preview[hidden] { display: none; }
+.cd-item-preview .ci-viewer { height: clamp(160px, 25dvh, 225px); }
+.cd-preview-name { margin: 4px 0 0; text-align: center; font-size: 12px; color: var(--cd-primary); }
+.cw-model { position: absolute; inset: 0; }
+.cw-model .ci-hint { bottom: 0; }
+.cw-gun[hidden] { display: none; }
