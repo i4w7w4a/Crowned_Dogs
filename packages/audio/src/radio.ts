@@ -8,6 +8,8 @@ export interface RadioChain {
   output: AudioNode;
   /** Hiss under the music while the radio is on. */
   setHiss(on: boolean): void;
+  /** Where the radio stands: pan -1 left … 1 right; far 0 close … 1 across the room (less speaker, more echo). */
+  place(pan: number, far: number): void;
 }
 
 export const RADIO = {
@@ -16,7 +18,7 @@ export const RADIO = {
   presenceDb: 5,
   highCutHz: 3400,
   drive: 2.2,
-  hissDb: -40,
+  hissDb: -50,
   /** The room around the speaker: how long its echo rings, and how loud it is. */
   roomSeconds: 0.6,
   roomDb: -9,
@@ -50,7 +52,10 @@ export function createRadio(ctx: BaseAudioContext): RadioChain {
   lowCut.connect(presence).connect(highCut).connect(clip).connect(trim).connect(speaker);
 
   const out = ctx.createGain();
-  speaker.connect(out);
+  const panner = ctx.createStereoPanner();
+  out.connect(panner);
+  const direct = ctx.createGain();
+  speaker.connect(direct).connect(out);
   const room = ctx.createConvolver();
   room.buffer = roomImpulse(ctx, RADIO.roomSeconds);
   const roomLevel = ctx.createGain();
@@ -71,7 +76,13 @@ export function createRadio(ctx: BaseAudioContext): RadioChain {
 
   return {
     input: lowCut,
-    output: out,
+    output: panner,
+    place(pan, far) {
+      const t = ctx.currentTime;
+      panner.pan.setTargetAtTime(pan, t, 0.3);
+      direct.gain.setTargetAtTime(10 ** (-9 * far / 20), t, 0.3);
+      roomLevel.gain.setTargetAtTime(10 ** ((RADIO.roomDb + 6 * far - 3 * (1 - far)) / 20), t, 0.3);
+    },
     setHiss(on) {
       const target = on ? 10 ** (RADIO.hissDb / 20) : 0;
       hissGain.gain.setTargetAtTime(target, ctx.currentTime, 0.08);

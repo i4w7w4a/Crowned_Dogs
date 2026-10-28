@@ -67,7 +67,8 @@ export class GameAudio {
       amb: this.gainNode(MIX.amb, master),
       music: this.gainNode(MIX.music, this.duckGain),
     };
-    this.music = new MusicDirector(new BufferDeck(this), this.random);
+    this.deck = new BufferDeck(this);
+    this.music = new MusicDirector(this.deck, this.random);
   }
 
   /** Browsers start audio muted: call this from the first tap. */
@@ -148,6 +149,12 @@ export class GameAudio {
       this.loops.set(id, loop);
       void this.buffer(file).then((buf) => loop.start(buf, fade));
     }
+  }
+
+  private deck: BufferDeck;
+  /** Where the radio stands in the room: see RadioChain.place. */
+  placeRadio(pan: number, far: number): void {
+    this.deck.radio.place(pan, far);
   }
 
   /** The music bus, for the radio and fight decks. */
@@ -247,7 +254,7 @@ class AmbienceLoop {
  */
 class BufferDeck implements MusicDeck {
   private audio: GameAudio;
-  private radio: RadioChain;
+  readonly radio: RadioChain;
   private ch: Record<Channel, {
     out: GainNode; fade: GainNode; src?: AudioBufferSourceNode; buf?: AudioBuffer; track?: TrackId;
     /** Where the track is: playing since `at` from `offset`, or held at `offset`. */

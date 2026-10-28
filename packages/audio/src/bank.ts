@@ -93,7 +93,7 @@ const DEFS = {
 
   "radio.on": { files: one("sfx/radio-on"), bus: "ui", gainDb: -2 },
   "radio.off": { files: one("sfx/radio-off"), bus: "ui", gainDb: -2 },
-  "radio.tune": { files: one("sfx/radio-tune"), bus: "ui", gainDb: -2 },
+  "radio.tune": { files: one("sfx/radio-tune"), bus: "ui", gainDb: -11 },
 
   // world events: lightning strike, a helicopter passing, shelling far away
   "thunder": { files: variants("sfx/thunder", 2), bus: "amb", pitchJitter: 1 },
