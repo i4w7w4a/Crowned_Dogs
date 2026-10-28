@@ -1,0 +1,23 @@
+- [art-preferences](art-preferences.md): write to Art in plain Russian, no deep tech; xhigh effort; achievable style
+- [crowned-dogs-concept](crowned-dogs-concept.md): core game brief from Art (setting, Persona, combat, slots, regions, Telegram)
+- [art-pc-tools](art-pc-tools.md): Art's PC paths (local-ai-dispatcher, research folder), repo/site only reachable via Remote Control
+- [crowned-dogs-balance](crowned-dogs-balance.md): combat balance numbers from the duel sim (HP, dash 3/2, shrinking zone, weapon stats, per-weapon averages 41–57%)
+- [crowned-dogs-visual](crowned-dogs-visual.md): NEW style 2 (16:40): grey cold salt-factory photoreal + bodycam lens, top HUD from ref 03; refs art/style-2/; old dark realism superseded
+- [tripo-3d](tripo-3d.md): Tripo3D API key location (thread root, never copy it), cloud blocks api.tripo3d.ai, run via Remote Control on Blade
+- [crowned-dogs-3d-pipeline](crowned-dogs-3d-pipeline.md): Tripo body+head separately, join in Blender, rig/UV in Tripo, male+female skeletons with shared bones
+- [tripo-skeleton](tripo-skeleton.md): Tripo rig facts: 61 UE-Mannequin bones, models normalised to 1.0 m, arms-down A rest pose; old model paths
+- [crowned-dogs-arena](crowned-dogs-arena.md): trial arena link, backdrop/3D calibration numbers, artifact gotchas (.glb not served)
+- [crowned-dogs-audio](crowned-dogs-audio.md): fight playlist Limbo/404 Room/Middle of Nowhere random, 4-track menu radio quieter, menu pauses fight; Sonniss path + license; audio thread owns it
+- [crowned-dogs-logo](crowned-dogs-logo.md): logo = dog maw from two crowns; round 2 = premium angled «Пасть», no pearls, Black Ops One; «Оскал» plan B; files logo/round2/
+- [crowned-dogs-gear](crowned-dogs-gear.md): weapon/gear catalogue (4 guns × 5 sockets, 8 slots), kit balance, gear screen, 3D socket spec, PR #3
+- [crowned-dogs-combat-ui](crowned-dogs-combat-ui.md): combat HUD: Art's 18:21 mock-up layout, Apple-style liquid glass buttons (black 15%, light blur), glass defence buttons and menu, ship via integration
+- [crowned-dogs-repo](crowned-dogs-repo.md): GitHub repo facts; stacked PRs landed in an old branch (no branch auto-delete), so target main
+- [persona-male-base](persona-male-base.md): finished male Persona model: files, 61-bone UE5 skeleton, rest pose 65.6°, preview page, open questions
+- [persona-female-base](persona-female-base.md): Art sent female Persona parts 18:10 (Tripo body+head+hair, 5 anims); join, put in game as is, then adapt anims to his video pack
+- [crowned-dogs-weapons-3d](crowned-dogs-weapons-3d.md): 3D guns: ref images first (Art approves), Tripo web via Blade, modular body + parts, Blender assembly; folder 3d/03-weapons
+- [persona-male-art](persona-male-art.md): male Persona from Art's Tripo parts (18:45), our fighter in arena v14, files persona-male-art/, rest pose 50°, armour thread fits on it
+- [crowned-dogs-armor](crowned-dogs-armor.md): kit A fitted on both Personas (fitted/*-armor.blend: Suit/Vest/Helmet, hide groups, hair under helmet), run_all.sh, fitting lessons, handed to arena
+- [crowned-dogs-graphics](crowned-dogs-graphics.md): graphics levels low/medium/high/ultra, shimmer causes fixed, lens passes, 2K/4K texture tiers, Art's upscaled hall, PR #11
+- [persona-mocap-anim](persona-mocap-anim.md): combat animations from Art's reference videos: paused 20:12 on branch claude/mocap-anim, files in 3d/anim-mocap/, next steps
+- [crowned-dogs-first-person](crowned-dogs-first-person.md): first-person bodycam trial (#fp): IK viewmodel (gun in camera space, arms reach), wide lens for arms, planted feet + softened stances (v29)
+- [crowned-dogs-handoff](crowned-dogs-handoff.md): 2026-10-28 move to local Claude Code: HANDOFF.md/CLAUDE.md, Art OKd merging all into main, project files copied to Blade
