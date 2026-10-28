@@ -7,7 +7,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { getItem, type Loadout, type WeaponId } from "@crowned-dogs/core";
 import { dress, KIT_A } from "../arena/dress.ts";
 import { loadModel, PERSONA_MODEL } from "../arena/load-model.ts";
-import { Hand, gripOf } from "../arena/weapons.ts";
+import { Hand, MODELLED_GUNS, MOD_MESHES, gripOf, loadGuns } from "../arena/weapons.ts";
 
 export interface PersonaPreviewCoverage {
   /** Kit A is an art preview, not a complete catalogue of fitted equipment. */
@@ -18,12 +18,12 @@ export interface PersonaPreviewCoverage {
 
 /**
  * A transparent, full-body preview of the Persona the arena fights with, in Kit A, standing ready with
- * the first weapon of the kit (the arena's stand-in block until the real guns are in the game).
- * Catalogue armour, mods and skins are not modelled yet and do NOT reskin it; the caller shows
+ * the first weapon of the kit (the real gun where it is modelled, with the mods that have meshes; else the
+ * arena's stand-in block). Catalogue armour and skins are not modelled yet and do NOT reskin it; the caller shows
  * previewDescription next to the live loadout controls.
  */
 export class PersonaViewer {
-  readonly previewDescription = "3D: Персона в комплекте A · броня, моды и раскраска пока не меняют вид";
+  readonly previewDescription = "3D: Персона в комплекте A · броня, раскраска и большинство модов пока не меняют вид";
 
   private readonly canvas: HTMLCanvasElement;
   private readonly scene = new Scene();
@@ -103,14 +103,14 @@ export class PersonaViewer {
       room.dispose();
       pmrem.dispose();
 
-      const gltf = await loadModel(PERSONA_MODEL);
+      const [gltf, guns] = await Promise.all([loadModel(PERSONA_MODEL), loadGuns()]);
       if (this.disposed) { disposeObject(gltf.scene); return; }
       const figure = gltf.scene;
       dress(figure, KIT_A);
       figure.traverse((o) => { if (o instanceof Mesh) o.frustumCulled = false; });
       // the grip comes from the rest pose, before any clip moves the hand
       const grip = gripOf(figure);
-      if (grip) this.hand = new Hand(figure, grip, new MeshStandardMaterial({ color: 0x1b1c1d, roughness: 0.45, metalness: 0.55 }));
+      if (grip) this.hand = new Hand(figure, grip, new MeshStandardMaterial({ color: 0x1b1c1d, roughness: 0.45, metalness: 0.55 }), { guns });
       figure.name = "Persona_Kit_A";
       this.figure = figure;
       this.clips = gltf.animations;
@@ -171,10 +171,11 @@ export class PersonaViewer {
     this.loadout = loadout;
     this.applyWeapon();
     this.render();
-    // Kit A and a stand-in gun: nothing the player picks is drawn as itself yet.
-    const missing = [loadout.head, loadout.body, loadout.suit, loadout.boots, loadout.knife, loadout.grenade, loadout.weapon1.item];
+    // Kit A, and only the modelled guns and mods are drawn as themselves.
+    const missing = [loadout.head, loadout.body, loadout.suit, loadout.boots, loadout.knife, loadout.grenade];
+    if (!MODELLED_GUNS.includes(loadout.weapon1.item)) missing.push(loadout.weapon1.item);
     if (loadout.weapon2) missing.push(loadout.weapon2.item);
-    missing.push(...Object.values(loadout.weapon1.mods ?? {}));
+    missing.push(...Object.values(loadout.weapon1.mods ?? {}).filter((id) => !(id in MOD_MESHES)));
     if (loadout.weapon1.skin) missing.push(loadout.weapon1.skin);
     return { exact: false, description: this.previewDescription, missingItemIds: [...new Set(missing)] };
   }
@@ -187,6 +188,7 @@ export class PersonaViewer {
     const clip = this.clips.find((c) => c.name === `ready_${weapon === "sniper" ? "shotgun" : weapon}`);
     if (clip) { this.mixer.clipAction(clip).play(); this.mixer.update(0.5); }
     this.hand?.hold(weapon);
+    this.hand?.fit(this.loadout?.weapon1.mods);
     // stand on the floor at the centre, whatever the pose
     this.figure.position.set(0, 0, 0);
     this.figure.updateMatrixWorld(true);

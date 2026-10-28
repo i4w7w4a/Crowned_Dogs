@@ -20,7 +20,7 @@ import { Feet } from "./ik.ts";
 import { Viewmodel } from "./viewmodel.ts";
 import { TextureTiers } from "./textures.ts";
 import { loadModel } from "./load-model.ts";
-import { Hand, gripOf } from "./weapons.ts";
+import { Hand, gripOf, loadGuns, type Guns } from "./weapons.ts";
 
 export type Who = "me" | "enemy";
 export type HitKind = "hit" | "blocked" | "grenade";
@@ -182,6 +182,8 @@ export class Arena {
   private armsOnly: ((on: boolean) => void) | null = null;
   /** First person: our arms on the gun. */
   private viewmodel: Viewmodel | null = null;
+  /** The enemy's gun in its reflection. */
+  private inWater: Hand | null = null;
   /** First person: our own figure is drawn as through a wider lens than the painted hall's, the way a
    *  bodycam sees the arms (its picture squeezed `k` times towards the lens axis, at NDC height `y`). */
   private wideK = { value: 1 };
@@ -252,7 +254,7 @@ export class Arena {
 
   /** Loads both figures' models (.glb, or .json with the .glb inside as base64) and starts drawing. */
   async load(meUrl: string, enemyUrl: string, distance: number): Promise<void> {
-    const [mine, theirs] = await Promise.all([loadModel(meUrl), enemyUrl === meUrl ? null : loadModel(enemyUrl)]);
+    const [mine, theirs, guns] = await Promise.all([loadModel(meUrl), enemyUrl === meUrl ? null : loadModel(enemyUrl), loadGuns()]);
     const foe = theirs ?? mine;
     this.en = this.makeFigure(foe, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
     this.me = this.makeFigure(mine, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1, near: true });
@@ -261,7 +263,7 @@ export class Arena {
     this.armsOnly(this.fp);
     this.meKey.intensity = this.fp ? FPKEY : 5;
     this.mirror = this.makeMirror(foe, this.en);
-    this.giveWeapons(mine, foe);
+    this.giveWeapons(mine, foe, guns);
     const foeLooks = [this.en.model, this.mirror.model];
     this.tiers = theirs ? [new TextureTiers([this.me.model], meUrl), new TextureTiers(foeLooks, enemyUrl)] : [new TextureTiers([this.me.model, ...foeLooks], meUrl)];
     this.ready = true;
@@ -369,10 +371,13 @@ export class Arena {
     this.lens.setSize(px.x, px.y, width, height, view);
   }
 
-  /** The gun a figure has in hand: its stance and the gun it holds. */
-  arm(who: Who, gun: Stance): void {
+  /** The gun a figure has in hand: its stance and the gun it holds, with the kit's mods (slot → item id). */
+  arm(who: Who, gun: Stance, mods: Partial<Record<string, string>> = {}): void {
     if (!this.ready) return;
-    (who === "enemy" ? this.en! : this.me!).motion.arm(gun);
+    const f = who === "enemy" ? this.en! : this.me!;
+    f.motion.arm(gun);
+    f.hand?.fit(mods);
+    if (who === "enemy") this.inWater?.fit(mods);
     if (who === "me") this.myGun = gun;
   }
 
@@ -532,19 +537,24 @@ export class Arena {
     return { group, tilt, model, pairs: a.map((bone, i) => [bone, b[i]!]), src, mats: [...copies.values()] };
   }
 
-  /** Stand-in guns in both right hands (and in the enemy's reflection), shown as each figure arms itself. */
-  private giveWeapons(mine: GLTF, foe: GLTF): void {
+  /** Guns in both right hands (and in the enemy's reflection), shown as each figure arms itself: the real ones in
+   *  `guns`, stand-ins for the rest. */
+  private giveWeapons(mine: GLTF, foe: GLTF, guns: Guns): void {
     const steel = new THREE.MeshStandardMaterial({ color: 0x1b1c1d, roughness: 0.45, metalness: 0.55 });
     const myGrip = gripOf(mine.scene), foeGrip = gripOf(foe.scene);
     const me = this.me!, en = this.en!, mirror = this.mirror!;
     // our gun has its own copy: it is drawn through the first-person wide lens
-    if (myGrip) me.hand = new Hand(me.model, myGrip, steel.clone(), NEAR);
+    if (myGrip) me.hand = new Hand(me.model, myGrip, steel.clone(), { layer: NEAR, guns, look: (m) => m.clone() });
     if (foeGrip) {
-      en.hand = new Hand(en.model, foeGrip, steel);
+      en.hand = new Hand(en.model, foeGrip, steel, { guns });
       // the reflection's copy, darkened by the water like the rest of it
-      const wet = steel.clone(); wet.color.multiplyScalar(0.62); wet.transparent = true; wet.opacity = 0.5; wet.depthWrite = false;
-      mirror.mats.push(wet);
-      const inWater = new Hand(mirror.model, foeGrip, wet);
+      const wetten = (m: THREE.Material) => {
+        const w = m.clone() as THREE.MeshStandardMaterial;
+        w.color.multiplyScalar(0.62); w.transparent = true; w.opacity = 0.5; w.depthWrite = false;
+        mirror.mats.push(w);
+        return w;
+      };
+      const inWater = this.inWater = new Hand(mirror.model, foeGrip, wetten(steel), { guns, look: wetten });
       en.motion.onHold = (w) => { en.hand!.hold(w); inWater.hold(w); };
     }
     me.motion.onHold = (w) => me.hand?.hold(w);

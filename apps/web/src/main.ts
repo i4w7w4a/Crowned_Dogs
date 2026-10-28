@@ -339,7 +339,9 @@ function playTurn(r: TurnReport): void {
 
 /** Both Personas take up the guns they carry now. */
 function armBoth(): void {
-  for (const s of [0, 1] as Side[]) arena?.arm(s === duel.me ? "me" : "enemy", duel.match.fighters[s].weapon);
+  for (const s of [0, 1] as Side[]) {
+    arena?.arm(s === duel.me ? "me" : "enemy", duel.match.fighters[s].weapon, duel.fighters[s].kit?.weapon1.mods);
+  }
 }
 
 /** One side's attack lands: the flash, the number, the flinch, and the fall if it was the last. */
