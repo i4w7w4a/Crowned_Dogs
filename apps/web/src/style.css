@@ -98,7 +98,7 @@ button:disabled { cursor: default; }
 /* ---------- attack reticles on the enemy ---------- */
 .ring {
   position: absolute; left: 0; top: 0; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%;
-  z-index: 4; display: grid; place-items: center; will-change: transform; color: #fff;
+  z-index: 4; display: grid; place-items: center; will-change: transform; color: #fff; transition: opacity .25s;
 }
 .ring svg { width: 40px; height: 40px; overflow: visible; filter: drop-shadow(0 0 2px rgba(0,0,0,.8)); transition: filter .18s; }
 .ring .rc { fill: rgba(0,0,0,.1); stroke: currentColor; stroke-opacity: .95; stroke-width: 1.5; transition: fill .18s, stroke .18s, stroke-width .18s; }
@@ -109,7 +109,7 @@ button:disabled { cursor: default; }
 .ring.hint .rc { animation: hint 2.4s ease-in-out infinite; }
 @keyframes hint { 0%,100% { stroke-width: 1.5 } 50% { stroke-width: 2.4 } }
 .rings.idle .ring { opacity: .55; } /* no shot picked: a tap on a ring still makes one */
-.rings.off .ring { opacity: .18; pointer-events: none; }
+.rings.off .ring { opacity: 0; pointer-events: none; } /* the turn is playing out */
 .rings.gone .ring { opacity: 0; pointer-events: none; }
 /* the aimed zone's label, hung off its ring on a short amber line (flip: the label is on the left) */
 .tag {
@@ -161,8 +161,10 @@ button:disabled { cursor: default; }
 /* ---------- the fight log line and the menu: the last row of the panel ---------- */
 /* both are the same glass as the buttons above; while the log is open it stands in for the controls */
 .dock { display: flex; gap: 8px; align-items: stretch; }
-.ctl, .moves { transition: opacity .2s, visibility .2s; }
+.ctl, .moves { transition: opacity .25s, visibility .25s, translate .25s; }
 .app:has(#logBtn[aria-expanded="true"]) :is(.ctl, .moves) { opacity: 0; visibility: hidden; }
+/* while the turn plays out the controls step aside and leave the picture to the fight; the log line stays */
+.panel.playing :is(.ctl, .moves) { opacity: 0; visibility: hidden; translate: 0 12px; }
 .ticker { flex: 1 1 auto; min-width: 0; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 13px; text-align: left; }
 .recdot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--red); box-shadow: 0 0 8px rgba(224,88,63,.7); animation: rec 1.6s steps(2, jump-none) infinite; }
 @keyframes rec { 50% { opacity: .25 } }
@@ -228,8 +230,8 @@ button:disabled { cursor: default; }
 .mv.stay.on { color: #fff; font-weight: 600; }
 .mv.stay small { font: 500 11px/1 var(--body); color: var(--amber); }
 
-/* defence: four glass buttons, each with a small figure that lights its zone; a guarded zone gets the white rim.
-   A hit on a zone flashes its button red, a block on the Zont cyan */
+/* defence: four glass buttons, each with a small figure that lights its zone; a guarded zone gets the brighter edge.
+   The enemy's hit on us floats over our fighter, the controls are away then */
 .guard { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .glabel { margin-bottom: 1px; font: 500 14px/1.2 var(--body); color: var(--dim); white-space: nowrap; }
 #pips { margin-left: 3px; font-variant-numeric: tabular-nums; transition: color .18s; }
@@ -244,10 +246,6 @@ button:disabled { cursor: default; }
 .dz .zl { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dz.on { color: #fff; font-weight: 600; }
 .dz:disabled > * { opacity: .45; }
-.dz.hit { animation: zhit 1.3s ease-out; }
-.dz.blk { animation: zblk 1.3s ease-out; }
-@keyframes zhit { 0%, 35% { color: var(--red) } }
-@keyframes zblk { 0%, 35% { color: var(--cyan) } }
 
 /* attack other than a shot: knife and grenade side by side, edge to edge with the confirm button; the other gun above them when the kit has one */
 .actcol { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
