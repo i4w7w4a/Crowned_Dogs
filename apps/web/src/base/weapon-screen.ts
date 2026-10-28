@@ -3,6 +3,8 @@ import { bbox, composeWeapon, itemArt, markup, svg, WEAPON_ART, type Slot } from
 import { equipmentItemIcon } from "./equipment-icons.ts";
 import { liquidGlass } from "../hud/liquid.ts";
 import { GlassScroll } from "./glass-scroll.ts";
+import { backArrow } from "./navigation-icons.ts";
+import { ItemViewer } from "./item-viewer.ts";
 import {
   MOD_SLOTS, MOD_SLOT_NAMES, compileKit, describeItem, effectiveWeaponModId,
   equipItem, equipWeaponMod, itemsForSlot, weaponModsForSlot,
@@ -32,6 +34,7 @@ export class WeaponScreen {
   private sheetScroll: GlassScroll;
   private origin: HTMLElement | null = null;
   private onChange: (loadout: Loadout) => boolean;
+  private viewer: ItemViewer | null = null;
 
   constructor(parent: HTMLElement, onBack: () => void, onChange: (loadout: Loadout) => boolean) {
     this.onChange = onChange;
@@ -42,12 +45,13 @@ export class WeaponScreen {
     this.element.innerHTML = `
       <img class="cw-room" src="${import.meta.env.BASE_URL}img/base/fitting-room.webp" alt="" draggable="false">
       <header class="cw-header">
-        <button class="cw-back glass" type="button" aria-label="Назад к снаряжению">Назад</button>
+        <button class="cw-back glass" type="button" aria-label="Назад к снаряжению">${backArrow}<span>Назад</span></button>
         <span>Оружие</span>
         <button class="cw-info cw-icon glass" type="button" aria-label="Характеристики оружия"><span aria-hidden="true">i</span></button>
       </header>
       <div class="cw-title"><p class="cw-class"></p><h1 class="cw-name"></h1></div>
       <div class="cw-stage">
+        <div class="cw-model" hidden></div>
         <svg class="cw-gun" viewBox="0 0 360 360" role="img" aria-label="Оружие с установленными модификациями"></svg>
         <div class="cw-sockets">${MOD_SLOTS.map(slot => `<button class="cw-socket glass" type="button" data-socket="${slot}" style="left:${labelPoints[slot][0] / 3.6}%;top:${labelPoints[slot][1] / 3.6}%"><span class="cw-socket-dot" aria-hidden="true"></span><span class="cw-socket-name">${socketNames[slot]}</span></button>`).join("")}</div>
       </div>
@@ -117,8 +121,8 @@ export class WeaponScreen {
     this.element.querySelector<HTMLButtonElement>(".cw-back")!.focus({ preventScroll: true });
   }
 
-  hide(): void { this.element.hidden = true; if (this.sheet.open) this.sheet.close(); }
-  dispose(): void { this.hide(); this.sheetScroll.dispose(); this.element.remove(); }
+  hide(): void { this.element.hidden = true; this.viewer?.setActive(false); if (this.sheet.open) this.sheet.close(); }
+  dispose(): void { this.hide(); this.viewer?.dispose(); this.sheetScroll.dispose(); this.element.remove(); }
 
   private weapon(): WeaponItem {
     const item = ITEM_BY_ID.get(this.loadout!.weapon1.item);
@@ -148,6 +152,14 @@ export class WeaponScreen {
       return `<g class="cw-anchor" data-anchor="${slot}" aria-hidden="true"><path d="M${lx} ${ly} L${ax} ${ay}"/><circle class="cw-anchor-hit" cx="${ax}" cy="${ay}" r="15"/><circle class="cw-anchor-pin" cx="${ax}" cy="${ay}" r="4"/></g>`;
     }).join("");
     this.element.querySelector(".cw-gun")!.innerHTML = `<g class="cw-gun-body" transform="translate(180 180) rotate(-30) scale(${scale}) translate(${-cx} ${-cy})">${markup(shape, `cw-weapon-${iconSerial++}`)}</g>${lines}`;
+    const model = this.element.querySelector<HTMLElement>(".cw-model")!;
+    const real = weapon.id === "rifle-varyag";
+    this.element.querySelector(".cw-gun")!.toggleAttribute("hidden", real);
+    model.hidden = !real;
+    if (real) {
+      this.viewer ??= new ItemViewer(model);
+      void this.viewer.show(weapon.id, weapon.name, this.loadout);
+    } else this.viewer?.hide();
     for (const slot of MOD_SLOTS) {
       const button = this.element.querySelector<HTMLButtonElement>(`[data-socket="${slot}"]`)!;
       const item = ITEM_BY_ID.get(parts[slot]);

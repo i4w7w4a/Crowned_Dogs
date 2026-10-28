@@ -8,6 +8,8 @@ import { PersonaViewer } from "./persona-viewer.ts";
 import { WeaponScreen } from "./weapon-screen.ts";
 import { liquidGlass } from "../hud/liquid.ts";
 import { GlassScroll } from "./glass-scroll.ts";
+import { backArrow } from "./navigation-icons.ts";
+import { ItemViewer, ITEM_MODELS } from "./item-viewer.ts";
 
 export type BaseView = "base" | "fitting" | "weapon";
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
@@ -23,6 +25,7 @@ export class BaseScreen {
   private selectedSlot: GearSlot = "body";
   private weaponReturn: { slot: GearSlot; scroll: number } | null = null;
   private viewer: PersonaViewer | null = null;
+  private itemViewer: ItemViewer | null = null;
   private workshop: WeaponScreen;
   private loadAttempted = false;
   private modelReady = false;
@@ -47,8 +50,8 @@ export class BaseScreen {
       <section class="cd-home" aria-label="База Соль">
         <img class="cd-backdrop" src="${asset("salt-base.webp")}" alt="Убежище в соляной шахте: Персоны в ложементах, капсула оператора и узел очистки воды" draggable="false">
         <div class="cd-shade" aria-hidden="true"></div>
-        <header class="cd-home-header"><div class="cd-wordmark">CROWNED<span>DOGS</span></div><span class="cd-edition">БАЗА ОПЕРАТОРА</span></header>
-        <div class="cd-home-title"><p class="cd-overline">СОЛЯНАЯ ШАХТА</p><h1>СОЛЬ</h1><p>Здесь начинается следующий выход.</p></div>
+        <header class="cd-home-header"><img class="cd-brand-mark" src="${import.meta.env.BASE_URL}brand/maw.svg" alt="Пасть из двух корон" draggable="false"><img class="cd-wordmark" src="${import.meta.env.BASE_URL}brand/wordmark.svg" alt="Crowned Dogs" draggable="false"></header>
+        <div class="cd-home-title"><p class="cd-overline">БАЗА ОПЕРАТОРА</p><h1>СОЛЬ</h1></div>
         <div class="cd-home-bottom">
           <div class="cd-operator"><span class="cd-overline">ОПЕРАТОР</span><span class="cd-tag">K-417-093</span></div>
           <div class="cd-current-kit"><span>Основное оружие</span><strong data-kit-name></strong></div>
@@ -60,7 +63,7 @@ export class BaseScreen {
       <section class="cd-fitting" aria-label="Примерочная" hidden>
         <img class="cd-backdrop" src="${asset("fitting-room-v2.png")}" alt="Оборудованная ниша примерочной в соляной шахте" draggable="false">
         <div class="cd-fit-shade" aria-hidden="true"></div>
-        <header class="cd-fit-header"><button class="glass cd-back" type="button" aria-label="Вернуться на базу">Назад</button><h1>Примерочная</h1><span class="glass cd-3d-badge">3D</span></header>
+        <header class="cd-fit-header"><button class="glass cd-back" type="button" aria-label="Вернуться на базу">${backArrow}<span>Назад</span></button></header>
         <div class="cd-model-stage">
           <canvas class="cd-persona-canvas" tabindex="0" role="img" aria-label="Персона на вращающемся постаменте. Перетаскивайте или используйте клавиши влево и вправо, чтобы повернуть."></canvas>
           <div class="glass cd-model-status" role="status">Загрузка Персоны…</div>
@@ -80,6 +83,7 @@ export class BaseScreen {
             <div id="cd-slot-options" class="sheet glass cd-select-options" role="listbox" aria-label="Слоты снаряжения" hidden>${GEAR_SLOTS.map((s) => `<button class="glass" type="button" role="option" data-category="${s}" aria-selected="false">${GEAR_SLOT_NAMES[s]}</button>`).join("")}</div>
           </div>
         </div>
+        <div class="cd-item-preview" hidden><div class="cd-item-viewport"></div><p class="cd-preview-name"></p></div>
         <div class="cd-dialog-content">
           <p class="cd-catalog-error" role="alert" hidden></p>
           <div class="cd-catalog-items"></div>
@@ -100,7 +104,7 @@ export class BaseScreen {
     for (const b of root.querySelectorAll<HTMLButtonElement>("[data-slot]")) b.addEventListener("click", () => this.openCatalog(b.dataset.slot as GearSlot));
     root.querySelector(".cd-dialog-close")!.addEventListener("click", () => this.dialog.close());
     this.dialog.addEventListener("click", (e) => { if (e.target === this.dialog) { const r = this.dialog.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) this.dialog.close(); } });
-    this.dialog.addEventListener("close", () => { this.setPickerOpen(false); if (this.view === "fitting") this.origin?.focus(); });
+    this.dialog.addEventListener("close", () => { this.setPickerOpen(false); this.itemViewer?.setActive(false); if (this.view === "fitting") this.origin?.focus(); });
     const picker = root.querySelector<HTMLElement>(".cd-slot-picker")!;
     root.querySelector(".cd-select-trigger")!.addEventListener("click", () => this.setPickerOpen(root.querySelector<HTMLElement>(".cd-select-options")!.hidden));
     picker.addEventListener("click", e => {
@@ -122,9 +126,12 @@ export class BaseScreen {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-item]");
       if (!b) return;
       try {
+        const scroll = this.catalog.parentElement!.scrollTop;
         this.loadout = equipItem(this.loadout, this.selectedSlot, b.dataset.item || null);
         const saved = saveLocalLoadout(this.loadout);
-        this.refresh(); this.dialog.close();
+        this.refresh(); this.renderCatalog(b.dataset.item || null);
+        this.catalog.parentElement!.scrollTop = scroll;
+        this.catalog.querySelector<HTMLButtonElement>(`[data-item="${CSS.escape(b.dataset.item ?? "")}"]`)?.focus({ preventScroll: true });
         const saveStatus = root.querySelector<HTMLElement>(".cd-save-status")!;
         saveStatus.hidden = saved;
         saveStatus.textContent = saved ? "" : "Не удалось сохранить комплект. Он будет доступен до закрытия страницы.";
@@ -213,12 +220,13 @@ export class BaseScreen {
     if (slot === "weapon1") { this.weaponReturn = null; this.navigate("weapon"); return; }
     this.selectedSlot = slot; this.origin = document.activeElement as HTMLElement;
     this.renderCatalog(); this.dialog.showModal();
+    this.itemViewer?.setActive(true);
     this.catalog.parentElement!.scrollTop = 0;
     this.catalogScroll.refresh();
     this.root.querySelector<HTMLButtonElement>(".cd-dialog-close")!.focus({ preventScroll: true });
   }
 
-  private renderCatalog(): void {
+  private renderCatalog(previewId?: string | null): void {
     this.root.querySelector("#cd-catalog-title")!.textContent = GEAR_SLOT_NAMES[this.selectedSlot];
     this.root.querySelector(".cd-select-trigger")!.textContent = GEAR_SLOT_NAMES[this.selectedSlot];
     this.root.querySelectorAll<HTMLElement>("[data-category]").forEach(option => {
@@ -235,6 +243,17 @@ export class BaseScreen {
     }).join("");
     this.catalog.parentElement!.scrollTop = 0;
     liquidGlass(this.catalog);
+    const available = itemsForSlot(this.selectedSlot);
+    const id = previewId === undefined ? (selected && ITEM_MODELS[selected] ? selected : available.find(item => ITEM_MODELS[item.id])?.id) : previewId;
+    const preview = this.root.querySelector<HTMLElement>(".cd-item-preview")!;
+    const item = id ? ITEM_BY_ID.get(id) : null;
+    preview.hidden = !id || !ITEM_MODELS[id];
+    if (item && !preview.hidden) {
+      this.root.querySelector(".cd-preview-name")!.textContent = item.name;
+      this.itemViewer ??= new ItemViewer(this.root.querySelector<HTMLElement>(".cd-item-viewport")!);
+      void this.itemViewer.show(item.id, item.name, this.loadout);
+    } else this.itemViewer?.hide();
+    this.catalogScroll.refresh();
   }
 
   private setPickerOpen(open: boolean): void {
@@ -271,5 +290,5 @@ export class BaseScreen {
     finally { button.disabled = false; }
   }
 
-  dispose(): void { this.observer.disconnect(); this.catalogScroll.dispose(); this.viewer?.dispose(); this.workshop.dispose(); this.root.remove(); }
+  dispose(): void { this.observer.disconnect(); this.catalogScroll.dispose(); this.viewer?.dispose(); this.itemViewer?.dispose(); this.workshop.dispose(); this.root.remove(); }
 }

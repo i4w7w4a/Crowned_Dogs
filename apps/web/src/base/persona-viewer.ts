@@ -78,6 +78,11 @@ export class PersonaViewer {
     fill.position.set(2.4, 1.9, 2.1); this.scene.add(fill);
     const rim = new THREE.DirectionalLight(0xe8eef2, 2.0);
     rim.position.set(1.4, 2.7, -1.8); this.scene.add(rim);
+    // The two warm utility lamps in the plate also catch the platform's lower rim.
+    for (const x of [-1.3, 1.3]) {
+      const practical = new THREE.PointLight(0xe4cbb0, .7, 3.5, 2);
+      practical.position.set(x, .65, .25); this.scene.add(practical);
+    }
   }
 
   load(): Promise<void> {
@@ -263,7 +268,7 @@ export class PersonaViewer {
     const mount = realRifle ? this.varyag : this.hand?.mount;
     if (!mount) return;
     mount.scale.setScalar(1);
-    mount.position.set(weapon === "pistol" ? .25 : -.035, weapon === "pistol" ? .94 : 1.18, weapon === "pistol" ? .15 : .29);
+    mount.position.set(weapon === "pistol" ? .25 : -.035, weapon === "pistol" ? .94 : 1.18, weapon === "pistol" ? .15 : .215);
     mount.rotation.set(0, 0, weapon === "pistol" ? -Math.PI / 2 : -.96);
     if (this.sling) { this.sling.removeFromParent(); disposeObject(this.sling); }
     this.sling = makeSling(mount, weapon === "pistol");
