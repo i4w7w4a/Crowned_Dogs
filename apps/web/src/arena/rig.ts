@@ -49,3 +49,32 @@ const AXES = new WeakMap<THREE.Object3D, { pitch: THREE.Vector3; roll: THREE.Vec
 export const pitch = (b: THREE.Object3D, a: number) => b.rotateOnAxis(AXES.get(b)!.pitch, a);
 /** Tilts a bone sideways about the figure's front-back line. */
 export const roll = (b: THREE.Object3D, a: number) => b.rotateOnAxis(AXES.get(b)!.roll, a);
+
+/** Arm bones: the upper arm down to the fingertips (UE Mannequin and Mixamo names). */
+const ARM = /^(upperarm|lowerarm|hand|thumb|index|middle|ring|pinky)_|^mixamorig(Left|Right)(Arm|ForeArm|Hand)/;
+
+/** First person: a switch that shows only a figure's arms and hands. Seen from inside its own head the rest
+ *  of the body (the neck, the collar, the shoulders) would fill the lens. A triangle stays when all its
+ *  corners follow arm bones the most; a mesh with no such triangles (the head) is hidden. */
+export function armsOnly(model: THREE.Object3D): (on: boolean) => void {
+  const swaps: [THREE.SkinnedMesh, THREE.BufferAttribute | null, THREE.BufferAttribute | null][] = [];
+  model.traverse((o) => {
+    if (!(o instanceof THREE.SkinnedMesh)) return;
+    const g = o.geometry, si = g.getAttribute("skinIndex"), sw = g.getAttribute("skinWeight");
+    const arm = o.skeleton.bones.map((b) => ARM.test(b.name));
+    const onArm = (v: number) => {
+      let best = 0, bone = 0;
+      for (let k = 0; k < 4; k++) { const w = sw.getComponent(v, k); if (w > best) { best = w; bone = si.getComponent(v, k); } }
+      return arm[bone];
+    };
+    const all = g.index, n = all ? all.count : g.getAttribute("position").count, kept: number[] = [];
+    for (let i = 0; i < n; i += 3) {
+      const [a, b, c] = all ? [all.getX(i), all.getX(i + 1), all.getX(i + 2)] : [i, i + 1, i + 2];
+      if (onArm(a) && onArm(b) && onArm(c)) kept.push(a, b, c);
+    }
+    swaps.push([o, all, kept.length ? new THREE.BufferAttribute(new Uint32Array(kept), 1) : null]);
+  });
+  return (on) => {
+    for (const [m, all, arms] of swaps) { m.visible = !on || arms !== null; m.geometry.setIndex(on && arms ? arms : all); }
+  };
+}

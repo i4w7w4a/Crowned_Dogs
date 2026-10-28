@@ -95,12 +95,34 @@ function point(z: Zone): [number, number] {
 let ringR = 7.2;
 /** The line from the aimed ring to its label, px; the same as --lead in the CSS. */
 const TAG_LEAD = 16;
+/** Where the controls start, in scene px: a ring under them could not be tapped. */
+let ctlTop = Infinity;
+const ctlEl = panel.querySelector<HTMLElement>(".ctl")!;
+function measureCtl(): void { ctlTop = panel.offsetTop + ctlEl.offsetTop - scene.offsetTop; }
+new ResizeObserver(measureCtl).observe(ctlEl);
+/** Where each ring is drawn this frame. */
+const ringAt = {} as Record<Zone, [number, number]>;
 function placeRings(): void {
-  for (const z of ZONES) { const [x, y] = point(z); ringEls[z].style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`; }
+  // On a short screen the enemy's legs (close up, the groin too) sink under the controls: those rings stop
+  // just above them, and the rings above keep a finger's width apart.
+  let limit = ctlTop - ringR - 6;
+  for (const z of [...ZONES].reverse()) {
+    const [x, y] = point(z), at = Math.min(y, limit);
+    ringAt[z] = [x, at]; limit = at - Math.max(22, 2 * ringR + 8);
+  }
+  for (const z of ZONES) {
+    // each ring's hit area ends halfway to its neighbour, so a tap never lands on the next zone
+    const [x, y] = ringAt[z];
+    let near = 40;
+    for (const o of ZONES) if (o !== z) near = Math.min(near, Math.hypot(ringAt[o][0] - x, ringAt[o][1] - y));
+    const el = ringEls[z], h = Math.max(2 * ringR + 4, near).toFixed(0) + "px";
+    if (el.style.height !== h) { el.style.height = h; el.style.marginTop = `calc(${h} / -2)`; }
+    el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+  }
   const zone = duel.draft.zone;
   if (!tagEl.hidden && zone) {
     // the label hangs off the ring to the right, or to the left when the screen edge or the distance column is in the way
-    const [x, y] = point(zone), w = tagEl.offsetWidth, gap = ringR + TAG_LEAD;
+    const [x, y] = ringAt[zone], w = tagEl.offsetWidth, gap = ringR + TAG_LEAD;
     const sc = scene.getBoundingClientRect(), col = movesEl.getBoundingClientRect();
     const besideCol = y + 14 > col.top - sc.top && y - 14 < col.bottom - sc.top;
     const right = x + gap + w <= (besideCol ? col.left - sc.left - 6 : scene.clientWidth - 8);
@@ -120,6 +142,7 @@ function layout(): void {
   arena?.resize(w, h, { x: vx / w, y: vy / h, w: (Math.min(w, cw - geo.x) - vx) / w, h: (Math.min(h, scene.clientHeight - geo.y) - vy) / h });
   ringR = Math.max(6, w * 0.02 - 0.75);
   for (const z of ZONES) ringEls[z].querySelector("circle")!.setAttribute("r", ringR.toFixed(2));
+  measureCtl();
   placeRings();
 }
 
