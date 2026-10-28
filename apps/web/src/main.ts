@@ -430,17 +430,19 @@ function renderMenu(): void {
     parent.appendChild(b);
   };
 
+  // the gun in hand at the start, which is the fitting room's when its kit is on
+  const held = duel.fighters[duel.me].weapon;
   const weapons = seg("weaponSeg", WEAPON_IDS.length);
   for (const w of WEAPON_IDS) {
-    option(weapons, WEAPONS[w].name, w === choice.weapon, () => {
-      if (w === choice.weapon) return;
+    option(weapons, WEAPONS[w].name, w === held, () => {
+      if (w === held) return;
       choice.weapon = w; store.set("cd-weapon", w); fitted = null;
       restart(true);
     });
   }
-  const vet = $("vetBtn");
-  vet.classList.toggle("off", !choice.veteran); vet.setAttribute("aria-pressed", String(choice.veteran));
-  $("vetState").textContent = choice.veteran ? "Вкл" : "Выкл";
+  const vet = $("vetBtn"), vetOn = choice.veteran && !fitted;
+  vet.classList.toggle("off", !vetOn); vet.setAttribute("aria-pressed", String(vetOn));
+  $("vetState").textContent = vetOn ? "Вкл" : "Выкл";
 
   const sb = $("soundBtn");
   sb.classList.toggle("off", !audio.on); sb.setAttribute("aria-pressed", String(audio.on));
@@ -526,7 +528,8 @@ $("closeX").addEventListener("click", () => setSheet(false));
 infoVeil.addEventListener("click", (e) => { if (e.target === infoVeil) setSheet(false); });
 $("soundBtn").addEventListener("click", () => { audio.toggle(); renderMenu(); });
 $("vetBtn").addEventListener("click", () => {
-  choice.veteran = !choice.veteran; store.set("cd-veteran", choice.veteran ? "on" : "off"); fitted = null;
+  // with the fitting room's kit on, the switch reads "off": a tap puts the veteran kit on instead
+  choice.veteran = fitted ? true : !choice.veteran; store.set("cd-veteran", choice.veteran ? "on" : "off"); fitted = null;
   restart(true);
 });
 $("logBtn").addEventListener("click", () => log.setOpen(!log.open));
