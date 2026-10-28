@@ -29,6 +29,16 @@ export interface PlayOptions {
 }
 
 const dbToGain = (db: number) => 10 ** (db / 20);
+/** Half a second of silence, a WAV made in place. */
+const SILENCE = (() => {
+  const n = 4000, b = new Uint8Array(44 + n), v = new DataView(b.buffer);
+  const w = (o: number, t: string) => { for (let i = 0; i < t.length; i++) b[o + i] = t.charCodeAt(i); };
+  w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  w(36, "data"); v.setUint32(40, n, true); b.fill(128, 44);
+  let s = ""; for (const x of b) s += String.fromCharCode(x);
+  return "data:audio/wav;base64," + btoa(s);
+})();
 const MUSIC_FADE = 0.4;
 const AMB_OVERLAP = 1.5;
 
@@ -62,8 +72,20 @@ export class GameAudio {
 
   /** Browsers start audio muted: call this from the first tap. */
   async unlock(): Promise<void> {
-    if (this.ctx.state !== "running") await this.ctx.resume();
+    // iOS mutes Web Audio with the ring/silent switch unless the page plays media: ask for
+    // "playback" (iOS 17+) and, for older ones, keep a silent <audio> loop going.
+    const nav = navigator as Navigator & { audioSession?: { type: string } };
+    if (nav.audioSession) try { nav.audioSession.type = "playback"; } catch { /* not allowed */ }
+    if (!this.keepAlive) {
+      const el = this.keepAlive = new Audio(SILENCE);
+      el.loop = true;
+      el.setAttribute("playsinline", "");
+    }
+    void this.keepAlive.play().catch(() => {});
+    if (this.ctx.state !== "running") await this.ctx.resume().catch(() => {});
   }
+
+  private keepAlive: HTMLAudioElement | null = null;
 
   /** A settings slider, 0..1. Squared so the whole travel is audible. */
   setVolume(bus: Bus | "master", value: number) {

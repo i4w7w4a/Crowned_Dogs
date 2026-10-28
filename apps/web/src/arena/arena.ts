@@ -220,6 +220,8 @@ export class Arena {
   private catcher: THREE.Mesh;
   private dust = new Dust();
   private tiers: TextureTiers[] = [];
+  /** The textures of the current quality level, once they are all on the figures. */
+  texturesDone: Promise<unknown> = Promise.resolve();
   /** The hall's light for reflections on the figures, made from the painting. */
   private env: THREE.Texture | null = null;
   private envSrc = "";
@@ -340,7 +342,7 @@ export class Arena {
       this.mirror.group.visible = q.mirror;
       this.mirror.mats.forEach((m) => tune(m, q, mirrorShader));
     }
-    for (const t of this.tiers) void t.set(q.textures, Math.min(q.anisotropy, r.capabilities.getMaxAnisotropy()));
+    this.texturesDone = Promise.all(this.tiers.map((t) => t.set(q.textures, Math.min(q.anisotropy, r.capabilities.getMaxAnisotropy())).catch(() => {})));
     this.resize(this.size.w, this.size.h, this.size.view);
   }
 

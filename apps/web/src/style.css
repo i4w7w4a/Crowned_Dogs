@@ -301,7 +301,9 @@ button:disabled { cursor: default; }
   -webkit-backdrop-filter: blur(12px) saturate(1.5); backdrop-filter: var(--lens,) blur(12px) saturate(1.5); animation: sheetUp .24s ease-out; }
 .sh-in { flex: 1 1 auto; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
 .sh-in > * { flex-shrink: 0; }
-.sheet .sh-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.sheet .sh-head { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  /* the title and the cross stay put while the menu scrolls */
+  position: sticky; top: -18px; z-index: 2; margin: -18px -16px 0; padding: 18px 16px 10px; background: rgba(12,13,13,.94); }
 .sheet h2 { margin: 0 0 0 2px; font: 600 22px/1.1 var(--display); }
 .sheet p { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.5; }
 .sheet .label { margin: 6px 0 -2px 2px; font: 500 14px/1.2 var(--body); color: rgba(236,232,223,.62); }
@@ -338,7 +340,7 @@ button:disabled { cursor: default; }
 .tracks button small { display: block; margin-top: 3px; font: 400 12px/1.2 var(--body); color: rgba(236,232,223,.55); }
 .tracks button[aria-pressed="true"] { color: #fff; }
 .tracks button[aria-pressed="true"] small { color: var(--cyan); }
-.sheet .acts2 { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; margin-top: 6px; }
+.sheet .acts2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
 .sheet .home { width: 100%; margin-top: 8px; }
 .ghost { height: 52px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 500 16px/1 var(--body); color: var(--fg); }
 .ghost .ico { width: 18px; height: 18px; }

@@ -15,9 +15,8 @@ let inBattle = false;
 let loading = false;
 const base = new BaseScreen(root, enterBattle);
 mountSoundSettings();
-// browsers start sound only after a tap
-document.addEventListener("pointerdown", () => gameAudio.unlock(), { once: true });
-document.addEventListener("keydown", () => gameAudio.unlock(), { once: true });
+// browsers start sound only after a tap; iOS counts touchend and click, not pointerdown, so try on each
+for (const e of ["pointerdown", "touchend", "click", "keydown"]) document.addEventListener(e, () => gameAudio.unlock(), { passive: true });
 
 /** A base screen with its own radio songs and the settings button. */
 function showBase(view: BaseView): void {

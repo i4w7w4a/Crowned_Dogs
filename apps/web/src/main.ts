@@ -473,7 +473,7 @@ function renderMenu(): void {
   $("gfxNote").textContent = GFX_NOTE[quality] + (byHand ? "" : " Подобрано под это устройство.");
 
   const fs = seg("frameSeg", frames.length);
-  $("frameLabel").hidden = frames.length < 2; fs.hidden = frames.length < 2;
+  $("frameLabel").hidden = true; fs.hidden = true; // the backdrop is not picked in the menu any more (Art)
   for (const f of frames) option(fs, f.name, f === frame, () => { if (f !== frame) { setFrame(f); restart(); } });
   liquidGlass(infoVeil);
 }
@@ -564,7 +564,8 @@ window.addEventListener("resize", layout);
 // bodycam). An old link with #fp at the end still opens first person.
 type CameraView = "back" | "fp";
 const CAMERAS: [CameraView, string][] = [["back", "Из-за плеча"], ["fp", "От первого лица"]];
-let cameraView: CameraView = store.get("cd-camera") === "fp" || location.hash === "#fp" ? "fp" : "back";
+// first person unless "from behind" was picked (Art, 2026-10-28)
+let cameraView: CameraView = store.get("cd-camera") === "back" && location.hash !== "#fp" ? "back" : "fp";
 function setCamera(v: CameraView): void {
   cameraView = v; store.set("cd-camera", v);
   arena?.setFirstPerson(v === "fp");
@@ -590,6 +591,10 @@ function prepareArena(): Promise<void> {
     arenaLoading = arena.load(MY_MODEL, FOE_MODEL, duel.match.distance).then(() => {
       if (!arena?.ready) throw new Error("Арена ещё не готова");
       armBoth(); arena.reset(duel.match.distance);
+      // the loader stays until the textures and the painted hall are in too (at most 25 s)
+      const all = Promise.all([arena.texturesDone, bg.decode().catch(() => {})]);
+      return Promise.race([all, new Promise((r) => setTimeout(r, 25000))]);
+    }).then(() => {
       $("status").hidden = true;
       layout(); render();
     }).catch((error: unknown) => {
@@ -605,6 +610,10 @@ export async function startBattle(
   kit: Loadout, onExit: () => void, beforeEnter: () => Promise<void> = async () => {}, signal?: AbortSignal,
 ): Promise<void> {
   const selected = structuredClone(kit);
+  // the base's settings may have changed the camera or the graphics since the last fight
+  setCamera(store.get("cd-camera") === "back" ? "back" : "fp");
+  const q = store.get("cd-quality") as QualityId | null;
+  if (arena && q && q in QUALITY && q !== quality) { quality = q; byHand = true; arena.setQuality(QUALITY[q]); }
   if (validateLoadout(selected)) throw new Error("Некорректный комплект");
   await activateAfterReady(prepareArena, beforeEnter, () => {
     fitted = selected;
