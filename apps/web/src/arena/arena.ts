@@ -16,6 +16,8 @@ import { tune } from "./materials.ts";
 import { Motion, type Attack, type Stance } from "./motion.ts";
 import { QUALITY, type Quality } from "./quality.ts";
 import { armsOnly, findBones, pitch, roll, type Bones } from "./rig.ts";
+import { Feet } from "./ik.ts";
+import { Viewmodel } from "./viewmodel.ts";
 import { TextureTiers } from "./textures.ts";
 import { Hand, gripOf } from "./weapons.ts";
 
@@ -33,12 +35,11 @@ const PORT = { up: 0.08, depth: 0.45 };
  *  arms and the gun come up into the picture. The camera itself never turns: the painted hall must match. */
 type Spot = { at: [number, number, number]; tilt: number };
 const VIEW: Record<Stance, Spot> & Partial<Record<Attack, Spot>> = {
-  // the gun at the shoulder; the lens above it and a little to the left, so it lies low on the right
-  rifle: { at: [0.02, 1.55, -0.15], tilt: 0.05 },
-  shotgun: { at: [0.042, 1.61, -0.2], tilt: 0.05 },
-  sniper: { at: [0.042, 1.61, -0.2], tilt: 0.05 },
-  // the pistol held out at chest height (Motion.aim), seen from the face, to the left of the hands
-  pistol: { at: [0.07, 1.52, 0.12], tilt: 0.3 },
+  // with a gun the lens is a bodycam between the shoulders; the arms reach for the gun (viewmodel.ts)
+  rifle: { at: [0, 1.57, 0.04], tilt: 0 },
+  shotgun: { at: [0, 1.57, 0.04], tilt: 0 },
+  sniper: { at: [0, 1.57, 0.04], tilt: 0 },
+  pistol: { at: [0, 1.57, 0.04], tilt: 0 },
   // during a stab or a throw the lens glides to where the hand goes: the knife thrusts low on the right,
   // the grenade leaves the hand low on the left
   knife: { at: [-0.2, 1.36, 0.12], tilt: 0.3 },
@@ -48,6 +49,8 @@ const VIEW: Record<Stance, Spot> & Partial<Record<Attack, Spot>> = {
   const t = new URLSearchParams(location.search).get("fpview")?.split(",").map(Number);
   if (t?.length === 4) { const [x = 0, y = 0, z = 0, tilt = 0] = t; for (const v of Object.values(VIEW)) { v.at = [x, y, z]; v.tilt = tilt; } }
 }
+/** How much wider the first-person lens on our own arms is than the hall's (a squeeze of the picture). */
+const WIDE = Number(new URLSearchParams(location.search).get("wide") ?? 0.62);
 const FPKEY = Number(new URLSearchParams(location.search).get("fpkey") ?? 2.5);
 /** The render layer of our own figure. */
 const NEAR = 1;
@@ -74,6 +77,8 @@ interface Figure {
   motion: Motion;
   /** What it holds in the right hand (stand-in guns for now); null if the rig has no fingers to hold with. */
   hand: Hand | null;
+  /** Keeps its feet flat on the floor while it stands. */
+  feet: Feet;
   port: THREE.Mesh;
   kick: Record<Zone, number>;
   /** 0..1 while falling, -1 when standing. */
@@ -145,7 +150,7 @@ async function loadModel(url: string): Promise<GLTF> {
 }
 
 const smooth = (u: number) => u * u * (3 - 2 * u);
-const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpSize = new THREE.Vector2();
+const aimAt = new THREE.Vector3(), tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpSize = new THREE.Vector2();
 
 /** The reflection fades away from the feet, like one in a thin layer of water, and is lit as the body above it is. */
 function mirrorShader(sh: THREE.WebGLProgramParametersWithUniforms): void {
@@ -189,6 +194,17 @@ export class Arena {
   private view = { at: new THREE.Vector3(), tilt: 0, set: false };
   /** Shows only our arms (first person) or the whole of us. */
   private armsOnly: ((on: boolean) => void) | null = null;
+  /** First person: our arms on the gun. */
+  private viewmodel: Viewmodel | null = null;
+  /** First person: our own figure is drawn as through a wider lens than the painted hall's, the way a
+   *  bodycam sees the arms (its picture squeezed `k` times towards the lens axis, at NDC height `y`). */
+  private wideK = { value: 1 };
+  private wideY = { value: 0 };
+  private widen = (shader: THREE.WebGLProgramParametersWithUniforms): void => {
+    shader.uniforms.wideK = this.wideK; shader.uniforms.wideY = this.wideY;
+    shader.vertexShader = "uniform float wideK;\nuniform float wideY;\n" + shader.vertexShader.replace("#include <project_vertex>",
+      "#include <project_vertex>\n\tgl_Position.xy = mix(vec2(0.0, wideY) * gl_Position.w, gl_Position.xy, wideK);");
+  };
   private mirror: Mirror | null = null;
   private lens: Lens;
   private q: Quality = QUALITY.medium;
@@ -255,7 +271,6 @@ export class Arena {
     this.en = this.makeFigure(foe, { body: 0x77756f, joints: 0x1c1d1d, fallSide: -1 });
     this.me = this.makeFigure(mine, { body: 0x8a8780, joints: 0x1c1d1d, jointsRough: 0.85, jointsMetal: 0, lift: 0x0a0908, fallSide: -1, near: true });
     this.me.blob.visible = !this.fp;
-    this.me.motion.aim(this.fp);
     this.armsOnly = armsOnly(this.me.model);
     this.armsOnly(this.fp);
     this.meKey.intensity = this.fp ? FPKEY : 5;
@@ -292,9 +307,11 @@ export class Arena {
     // the hall's light takes over from the flat sky light, so the figures stay as bright as before
     this.hemi.intensity = q.env ? 0.22 : 0.6;
     this.dust.setCount(q.dust);
-    const mats = new Set<THREE.Material>([this.catcher.material as THREE.Material]);
-    for (const f of [this.en, this.me]) f?.model.traverse((o) => { if (o instanceof THREE.Mesh) mats.add(o.material as THREE.Material); });
+    const mats = new Set<THREE.Material>([this.catcher.material as THREE.Material]), mine = new Set<THREE.Material>();
+    this.en?.model.traverse((o) => { if (o instanceof THREE.Mesh) mats.add(o.material as THREE.Material); });
+    this.me?.model.traverse((o) => { if (o instanceof THREE.Mesh) mine.add(o.material as THREE.Material); });
     for (const m of mats) tune(m, q);
+    for (const m of mine) tune(m, q, this.widen, "wide");
     if (this.mirror) {
       this.mirror.group.visible = q.mirror;
       this.mirror.mats.forEach((m) => tune(m, q, mirrorShader));
@@ -409,7 +426,6 @@ export class Arena {
     this.depth = this.depthOf(this.dist);
     const me = this.me!;
     me.blob.visible = !on;
-    me.motion.aim(on);
     this.armsOnly?.(on);
     this.meKey.intensity = on ? FPKEY : 5;
     this.view.set = false;
@@ -468,6 +484,7 @@ export class Arena {
 
     const mixer = new THREE.AnimationMixer(model);
     const motion = new Motion(mixer, gltf.animations);
+    const feet = new Feet(model, gltf.animations, motion.stances);
 
     // a small cyan light on the sync connector, as in the concept frames
     const port = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), new THREE.MeshBasicMaterial({ color: 0x7ff3ff, fog: false }));
@@ -477,7 +494,7 @@ export class Arena {
     if (look.near) { group.traverse((o) => o.layers.set(NEAR)); port.layers.set(NEAR); port.scale.setScalar(0.4); }
 
     return {
-      group, tilt, model, blob, mixer, motion, hand: null, port,
+      group, tilt, model, blob, mixer, motion, hand: null, feet, port,
       kick: { head: 0, body: 0, groin: 0, legs: 0 }, fallT: -1, fallSide: look.fallSide, bones,
     };
   }
@@ -517,7 +534,8 @@ export class Arena {
     const steel = new THREE.MeshStandardMaterial({ color: 0x1b1c1d, roughness: 0.45, metalness: 0.55 });
     const myGrip = gripOf(mine.scene), foeGrip = gripOf(foe.scene);
     const me = this.me!, en = this.en!, mirror = this.mirror!;
-    if (myGrip) me.hand = new Hand(me.model, myGrip, steel, NEAR);
+    // our gun has its own copy: it is drawn through the first-person wide lens
+    if (myGrip) me.hand = new Hand(me.model, myGrip, steel.clone(), NEAR);
     if (foeGrip) {
       en.hand = new Hand(en.model, foeGrip, steel);
       // the reflection's copy, darkened by the water like the rest of it
@@ -527,6 +545,10 @@ export class Arena {
       en.motion.onHold = (w) => { en.hand!.hold(w); inWater.hold(w); };
     }
     me.motion.onHold = (w) => me.hand?.hold(w);
+    if (me.hand) {
+      const vm = this.viewmodel = new Viewmodel(me.model, me.hand);
+      me.motion.onMark = (kind) => { if (kind !== "knife" && kind !== "grenade") vm.shot(); };
+    }
   }
 
   private place(): void {
@@ -590,8 +612,17 @@ export class Arena {
       }
     }
     this.place();
-    for (const f of [this.en!, this.me!]) { f.motion.update(dt); f.mixer.update(dt); f.motion.settle(); applyReactions(f, dt); }
-    if (this.fp) this.holdView(dt);
+    for (const f of [this.en!, this.me!]) {
+      f.motion.update(dt); f.mixer.update(dt); f.motion.settle();
+      if (!(this.fp && f === this.me)) f.feet.update(dt, f.motion.planted);
+      applyReactions(f, dt);
+    }
+    this.wideK.value = this.fp ? WIDE : 1; this.wideY.value = 1 - 2 * this.k!.hz;
+    if (this.fp) {
+      this.holdView(dt);
+      const me = this.me!, act = me.motion.attackKind;
+      this.viewmodel?.update(dt, me.fallT < 0 && act !== "knife" && act !== "grenade", this.myGun, this.camera, zoneWorld(this.en!, "body", aimAt));
+    }
     syncMirror(this.mirror!);
     this.scene.updateMatrixWorld();
     placePort(this.en!); placePort(this.me!);

@@ -24,8 +24,9 @@ const SPECULAR_AA = /* glsl */ `#include <lights_physical_fragment>
   material.roughness = sqrt( clamp( material.roughness * material.roughness + kernel, 0.0, 1.0 ) );
 }`;
 
-/** Fits a material to the graphics level; `extra` adds its own shader changes. */
-export function tune(m: THREE.Material, q: Quality, extra?: (shader: THREE.WebGLProgramParametersWithUniforms) => void): void {
+/** Fits a material to the graphics level; `extra` adds its own shader changes, named by `extraKey` (materials
+ *  with different changes must not share a compiled program). */
+export function tune(m: THREE.Material, q: Quality, extra?: (shader: THREE.WebGLProgramParametersWithUniforms) => void, extraKey = "x"): void {
   const taps = Math.max(5, q.shadowSamples);
   const standard = (m as THREE.MeshStandardMaterial).isMeshStandardMaterial === true;
   m.onBeforeCompile = (shader) => {
@@ -33,7 +34,7 @@ export function tune(m: THREE.Material, q: Quality, extra?: (shader: THREE.WebGL
     if (standard) shader.fragmentShader = shader.fragmentShader.replace("#include <lights_physical_fragment>", SPECULAR_AA);
     extra?.(shader);
   };
-  const key = `cd-${taps}-${extra ? "x" : ""}`;
+  const key = `cd-${taps}-${extra ? extraKey : ""}`;
   m.customProgramCacheKey = () => key;
   if (standard) (m as THREE.MeshStandardMaterial).envMapIntensity = q.env ? 0.35 : 0;
   m.needsUpdate = true;
