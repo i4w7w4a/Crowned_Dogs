@@ -102,6 +102,12 @@ export class BaseScreen {
     root.querySelector(".cd-to-fitting")!.addEventListener("click", () => this.navigate("fitting"));
     const home = root.querySelector<HTMLElement>(".cd-home")!;
     driftBackdrop(home, 1882 / 3344);
+    // The Persona's canvas rides on the fitting room's drift, a touch further for being nearer, and her camera leans along
+    driftBackdrop(this.fitting, 941 / 1672, (tx, ty, lean) => {
+      const w = this.fitting.clientWidth, h = this.fitting.clientHeight;
+      this.canvas.style.transform = `translate(${(tx - w * DRIFT.near * lean[0]).toFixed(2)}px, ${(ty - h * DRIFT.near * lean[1]).toFixed(2)}px)`;
+      this.viewer?.lean(lean[0], lean[1]);
+    });
     root.querySelector(".cd-back")!.addEventListener("click", () => this.navigate("base"));
     root.querySelector(".cd-enter")!.addEventListener("click", () => { void this.enterBattle(); });
     root.querySelector(".cd-open-catalog")!.addEventListener("click", () => this.openCatalog(this.selectedSlot));
@@ -299,14 +305,14 @@ export class BaseScreen {
 }
 
 /** How far the camera drifts: the zoom that hides the edges, and the sway as a share of the screen. */
-const DRIFT = { zoom: 1.07, sway: 0.022, tilt: 0.018 };
+const DRIFT = { zoom: 1.07, sway: 0.022, tilt: 0.018, near: 0.012 };
 
 /**
  * A slow, breathing camera over a screen's picture (pseudo 3D): the picture sways and the
  * phone's tilt or the mouse leans it a little. Rings on the picture (.cd-tunnel with data-u/v,
- * a share of the picture) ride on the same move.
+ * a share of the picture) ride on the same move; `follow` hands it to what stands in front.
  */
-function driftBackdrop(home: HTMLElement, ratio: number): void {
+function driftBackdrop(home: HTMLElement, ratio: number, follow?: (tx: number, ty: number, lean: [number, number]) => void): void {
   const img = home.querySelector<HTMLElement>(".cd-backdrop")!, rings = [...home.querySelectorAll<HTMLElement>(".cd-tunnel")];
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let lean: [number, number] = [0, 0], want: [number, number] = [0, 0];
@@ -338,6 +344,7 @@ function driftBackdrop(home: HTMLElement, ratio: number): void {
       ring.style.left = (w / 2 + s * (px - w / 2) + tx).toFixed(1) + "px";
       ring.style.top = (h / 2 + s * (py - h / 2) + ty).toFixed(1) + "px";
     }
+    follow?.(tx, ty, still ? [0, 0] : lean);
   };
   requestAnimationFrame(frame);
 }

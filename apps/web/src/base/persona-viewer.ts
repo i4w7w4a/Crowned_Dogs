@@ -19,6 +19,9 @@ const ROOM = `${import.meta.env.BASE_URL}img/base/fitting-room-v2.png`;
 const VARYAG = `${import.meta.env.BASE_URL}preview/varyag.json`;
 const AUTHORED_PERSONA = `${import.meta.env.BASE_URL}preview/persona-authored.json`;
 
+/** How far the camera swings with the backdrop's lean: radians around the Persona, metres up and down. */
+const LEAN = { yaw: .14, rise: .22 };
+
 /** The user's edited Persona and Kit A, on a lit, rotating service platform. */
 export class PersonaViewer {
   readonly previewDescription = "3D: комплект A и Варяг · остальные предметы пока показаны условно";
@@ -48,6 +51,9 @@ export class PersonaViewer {
   private width = 1;
   private height = 1;
   private frame = 0;
+  /** The camera's distance from the fit, and the lean the backdrop's drift hands over. */
+  private distance = 3;
+  private leaning: [number, number] = [0, 0];
   private drag: { id: number; x: number } | null = null;
   private readonly previousTouchAction: string;
   private readonly canvas: HTMLCanvasElement;
@@ -215,6 +221,7 @@ export class PersonaViewer {
       if (outline.every((point) => { const p = point.clone().project(this.camera); return Math.abs(p.x) < .94 && Math.abs(p.y) < limitY; })) break;
       distance *= 1.015;
     }
+    this.distance = distance; this.aim();
     if (this.renderer) {
       const q = this.quality;
       const ratio = Math.max(.5, Math.min((globalThis.devicePixelRatio || 1) * q.ssaa, q.maxDpr, Math.sqrt(q.maxPixels / (this.width * this.height))));
@@ -232,6 +239,18 @@ export class PersonaViewer {
       if (before !== this.quality.id) { void this.updateTextureQuality(); this.resize(this.width, this.height); }
       this.render();
     } else { cancelAnimationFrame(this.frame); this.frame = 0; this.drag = null; }
+  }
+
+  /** The backdrop's lean (each about -0.5..0.5): the camera swings a little around the Persona, so she keeps depth against the picture. */
+  lean(x: number, y: number): void {
+    if (Math.abs(x - this.leaning[0]) + Math.abs(y - this.leaning[1]) < .002) return; // eased to rest: no new frame
+    this.leaning = [x, y]; this.aim(); this.render();
+  }
+
+  private aim(): void {
+    const yaw = this.leaning[0] * LEAN.yaw, d = this.distance;
+    this.camera.position.set(Math.sin(yaw) * d, 1.36 - this.leaning[1] * LEAN.rise, Math.cos(yaw) * d);
+    this.camera.lookAt(0, .88, 0); this.camera.updateMatrixWorld();
   }
 
   rotate(deltaRadians: number): void {
