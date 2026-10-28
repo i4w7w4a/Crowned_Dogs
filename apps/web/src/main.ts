@@ -408,6 +408,8 @@ function finish(): void {
   $("againBtn").textContent = w.again;
   $("endStats").innerHTML = `<div><b>${dealt}</b><span>Нанесено</span></div><div><b>${taken}</b><span>Получено</span></div><div><b>${turns}</b><span>${turnsWord(turns)}</span></div>`;
   $("endBadge").innerHTML = icon(w.lost ? "i-signal" : "i-shot");
+  // Art: a dead operator wakes up in the capsule, that is back at the base; a winner picks a new fight or the base
+  $("baseEndBtn").hidden = w.lost; againGoesHome = w.lost;
   endVeil.hidden = false; $("againBtn").focus();
   audio.finish(res.winner === null ? null : res.winner === duel.me);
 }
@@ -533,7 +535,8 @@ function setFrame(f: Frame): void {
 
 // ---------- wiring ----------
 $("goBtn").addEventListener("click", endTurn);
-$("againBtn").addEventListener("click", () => restart());
+let againGoesHome = false;
+$("againBtn").addEventListener("click", () => { if (againGoesHome) leaveBattle(); else restart(); });
 $("restartBtn").addEventListener("click", () => restart());
 $("moreBtn").addEventListener("click", () => setSheet(true));
 $("closeInfo").addEventListener("click", () => setSheet(false));

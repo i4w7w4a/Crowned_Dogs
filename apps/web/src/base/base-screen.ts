@@ -53,7 +53,7 @@ export class BaseScreen {
         <img class="cd-backdrop" src="${asset("salt-base.webp")}" alt="Убежище в соляной шахте: Персоны в ложементах, капсула оператора и узел очистки воды" draggable="false">
         <div class="cd-shade" aria-hidden="true"></div>
         <button class="cd-tunnel cd-to-fitting" type="button" data-u="0.333" data-v="0.36" aria-label="Примерочная: боец и снаряжение"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">Примерочная</span></button>
-        <button class="cd-tunnel cd-enter" type="button" data-u="0.213" data-v="0.529" aria-label="В бой: дуэль с ботом"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">В бой</span></button>
+        <button class="cd-tunnel cd-enter" type="button" data-u="0.235" data-v="0.527" aria-label="В бой: дуэль с ботом"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">В бой</span></button>
         <header class="cd-home-header"><img class="cd-brand-mark" src="${import.meta.env.BASE_URL}brand/maw.svg" alt="Пасть из двух корон" draggable="false"><img class="cd-wordmark" src="${import.meta.env.BASE_URL}brand/wordmark.svg" alt="Crowned Dogs" draggable="false"></header>
         <div class="cd-home-title"><p class="cd-overline">БАЗА ОПЕРАТОРА</p><h1>СОЛЬ</h1></div>
         <div class="cd-home-bottom">

@@ -38,7 +38,7 @@ export class MawLoader implements LoadingPresentation {
     this.dialog.className = "cd-maw-loader";
     this.dialog.setAttribute("aria-label", "Загрузка боя");
     this.dialog.innerHTML = `<div class="cd-maw-inner">
-      <div class="cd-maw-stage" aria-hidden="true"><img class="cd-maw-fallback" src="${base}brand/maw.svg" alt=""><canvas></canvas></div>
+      <div class="cd-maw-stage" aria-hidden="true"><canvas></canvas></div>
       <div class="cd-maw-hud"><h1 class="cd-maw-word"><img src="${base}brand/wordmark.svg" alt="CROWNED DOGS"></h1><p class="cd-maw-tag">PMC · 2051</p>
         <div class="cd-maw-progress" role="progressbar" aria-label="Загрузка арены"></div>
         <p class="cd-maw-status" role="status">Загрузка арены…</p>
