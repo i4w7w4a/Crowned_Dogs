@@ -48,14 +48,16 @@ export class LocalDuel {
   constructor(opts: LocalDuelOptions) {
     const seed = opts.seed ?? crypto.randomUUID();
     const pick = <T>(list: readonly T[], salt: number): T => list[(hash(seed) + salt) % list.length]!;
-    this.fighters = [opts.player, opts.bot];
+    const player = setup("me", opts.player), bot = setup("bot", opts.bot);
+    // With a kit, the gun in the kit is the one in hand, whatever `weapon` says.
+    this.fighters = [{ ...opts.player, weapon: player.weapon }, { ...opts.bot, weapon: bot.weapon }];
     this.match = createMatch({
       seed,
       mapId: opts.mapId ?? "saltHall",
       weather: opts.weather ?? pick(WEATHERS, 1),
       time: opts.time ?? pick(TIMES, 2),
       ...(opts.startDistance ? { startDistance: opts.startDistance } : {}),
-      fighters: [setup("me", opts.player), setup("bot", opts.bot)],
+      fighters: [player, bot],
     });
     this.draft = freshDraft(this.match, this.me);
   }

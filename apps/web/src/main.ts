@@ -1,12 +1,13 @@
 // The fight screen: a duel against the bot on the core rules, in the 3D arena.
 // The panel reads the duel's order draft after every tap. A played turn runs on a
 // short timeline (both walk, our attack lands, theirs lands, next turn) on the same
-// beats as the audio package's sound script.
+// beats as the audio package's sound script. The base screen (entry.ts) loads this module when the
+// player goes to fight and hands over the kit from the fitting room (startBattle).
 
 import { RADIO_PLAYLIST, TIMING, TRACKS } from "@crowned-dogs/audio";
 import {
   VETERAN_KITS, WEAPONS, WEAPON_IDS, ZONES, canThrowGrenade, canUseKnife, draftChance, grenadeSpec,
-  guardsNeeded, other, turnLimit, turnSeconds, type AttackReport, type Side, type TurnReport, type WeaponId, type Zone,
+  guardsNeeded, other, turnLimit, turnSeconds, type AttackReport, type Loadout, type Side, type TurnReport, type WeaponId, type Zone,
 } from "@crowned-dogs/core";
 import { Arena, type HitKind } from "./arena/arena.ts";
 import { CALIBRATION_FRAME, FRAMES, type Frame } from "./arena/frames.ts";
@@ -40,7 +41,12 @@ const choice = {
   veteran: store.get("cd-veteran") === "on",
 };
 
+/** The kit from the fitting room; picking a gun or the veteran kit in the fight menu puts it aside. */
+let fitted: Loadout | null = null;
 let duel = newDuel();
+/** True while the fight is on screen; the base screen has it otherwise. */
+let active = false;
+let exitBattle: (() => void) | null = null;
 let busy = false;
 /** Bumped by every new fight, so the timeline of an abandoned turn does nothing. */
 let fightNo = 0;
@@ -63,7 +69,7 @@ function newDuel(): LocalDuel {
   const foeWeapon = WEAPON_IDS[Math.floor(Math.random() * WEAPON_IDS.length)]!;
   return new LocalDuel({
     mapId: frame.mapId, weather: frame.weather, time: frame.time,
-    player: { ...PLAYER, weapon: choice.weapon, kit: choice.veteran ? VETERAN_KITS[choice.weapon] : undefined },
+    player: { ...PLAYER, weapon: choice.weapon, kit: fitted ?? (choice.veteran ? VETERAN_KITS[choice.weapon] : undefined) },
     bot: { name: FOE, weapon: foeWeapon, kit: choice.veteran ? VETERAN_KITS[foeWeapon] : undefined },
   });
 }
@@ -132,6 +138,7 @@ function placeRings(): void {
 }
 
 function layout(): void {
+  if (!active || !scene.clientWidth) return; // hidden behind the base: nothing to measure
   const cw = scene.clientWidth, top = scene.clientHeight * frame.top, ch = scene.clientHeight - top;
   const s = Math.max(cw / frame.w, ch / frame.h);
   const w = frame.w * s, h = frame.h * s;
@@ -149,7 +156,7 @@ function layout(): void {
 // ---------- the order: defence, movement, attack ----------
 /** One tap on the order. A refused tap says why in the log line. */
 function tap(fn: () => string | null): void {
-  if (busy || duel.over) return;
+  if (!active || busy || duel.over) return;
   const err = fn();
   if (err) log.note(err);
   render();
@@ -274,6 +281,7 @@ function drawTimer(): void {
 }
 function startTimer(): void {
   stopTimer();
+  if (!active) return;
   secondsLeft = turnSeconds(duel.match);
   drawTimer();
   timerId = setInterval(() => {
@@ -291,7 +299,7 @@ function stopTimer(): void {
 
 // ---------- the turn ----------
 function endTurn(): void {
-  if (busy || duel.over) return;
+  if (!active || busy || duel.over) return;
   const r = duel.submit();
   if (typeof r === "string") { log.note(r); return; }
   playTurn(r);
@@ -426,7 +434,7 @@ function renderMenu(): void {
   for (const w of WEAPON_IDS) {
     option(weapons, WEAPONS[w].name, w === choice.weapon, () => {
       if (w === choice.weapon) return;
-      choice.weapon = w; store.set("cd-weapon", w);
+      choice.weapon = w; store.set("cd-weapon", w); fitted = null;
       restart(true);
     });
   }
@@ -491,7 +499,7 @@ function watchSpeed(): void {
   let frames = 0, t0 = 0;
   const step = (t: number) => {
     if (byHand) return;
-    if (document.hidden) { t0 = 0; frames = 0; requestAnimationFrame(step); return; }
+    if (document.hidden || !active) { t0 = 0; frames = 0; requestAnimationFrame(step); return; }
     if (!t0) t0 = t;
     frames += 1;
     if (t - t0 < 4000) { requestAnimationFrame(step); return; }
@@ -518,7 +526,7 @@ $("closeX").addEventListener("click", () => setSheet(false));
 infoVeil.addEventListener("click", (e) => { if (e.target === infoVeil) setSheet(false); });
 $("soundBtn").addEventListener("click", () => { audio.toggle(); renderMenu(); });
 $("vetBtn").addEventListener("click", () => {
-  choice.veteran = !choice.veteran; store.set("cd-veteran", choice.veteran ? "on" : "off");
+  choice.veteran = !choice.veteran; store.set("cd-veteran", choice.veteran ? "on" : "off"); fitted = null;
   restart(true);
 });
 $("logBtn").addEventListener("click", () => log.setOpen(!log.open));
@@ -527,10 +535,12 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (!infoVeil.hidden) setSheet(false); else if (log.open) log.setOpen(false);
 });
-// a soft sound on every button, except those with their own
+$("baseInfoBtn").addEventListener("click", leaveBattle);
+$("baseEndBtn").addEventListener("click", leaveBattle);
+// a soft sound on every fight button, except those with their own
 document.addEventListener("click", (e) => {
   const b = (e.target as Element | null)?.closest?.("button");
-  if (!b || b.id === "goBtn" || b.id === "soundBtn") return;
+  if (!active || !b || !$("app").contains(b) || b.id === "goBtn" || b.id === "soundBtn") return;
   audio.play(b.classList.contains("dz") ? "ui.guard" : b.classList.contains("mv") ? "ui.step" : "ui.tap");
 });
 document.addEventListener("pointerdown", () => audio.unlock(), { once: true });
@@ -559,7 +569,6 @@ try {
   $("status").textContent = "3D не запустилось на этом устройстве";
 }
 setFrame(frame);
-restart();
 arena?.load(MY_MODEL, FOE_MODEL, duel.match.distance)
   .then(() => {
     armBoth(); arena?.reset(duel.match.distance);
@@ -568,6 +577,29 @@ arena?.load(MY_MODEL, FOE_MODEL, duel.match.distance)
     setTimeout(watchSpeed, 1500);
   })
   .catch(() => { $("status").textContent = "Модель не загрузилась. Обнови страницу."; });
+
+/** Called by the base screen: the fight takes the stage with the fitting room's kit. */
+export function startBattle(kit: Loadout, onExit: () => void): void {
+  fitted = structuredClone(kit);
+  exitBattle = onExit;
+  active = true;
+  $("app").hidden = false;
+  restart();
+  layout();
+  arena?.resume();
+  audio.unlock();
+}
+
+/** Back to the base: the fight stops where it is (it is not saved) and the radio plays on. */
+function leaveBattle(): void {
+  active = false;
+  fightNo += 1; stopTimer(); busy = false;
+  arena?.pause();
+  infoVeil.hidden = true; endVeil.hidden = true; log.setOpen(false);
+  audio.finish(null);
+  $("app").hidden = true;
+  exitBattle?.();
+}
 
 /** For screenshots and checks from the browser console. */
 Object.assign(window, { __cd: { get duel() { return duel; }, audio, arena } });

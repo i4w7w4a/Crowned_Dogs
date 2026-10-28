@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 </head>
 <body>
-<main class="app" id="app">
+<main class="app" id="app" hidden>
 <svg class="sprite" aria-hidden="true" focusable="false">
   <!-- Combat UI icons, drawn for Crowned Dogs: thin instrument lines on a 24 grid, round ends, no fills
        (only .fl dots). Colour comes from currentColor; stroke width is set in CSS. -->
@@ -169,6 +169,7 @@
         <button type="button" class="ghost glass" id="restartBtn"><svg class="ico"><use href="#i-restart"/></svg>Новый бой</button>
         <button type="button" class="go glass" id="closeInfo">Вернуться в бой</button>
       </div>
+      <button type="button" class="ghost glass home" id="baseInfoBtn"><svg class="ico"><use href="#i-kit"/></svg>На базу</button>
     </div></div>
   </div>
 
@@ -179,9 +180,10 @@
       <p id="endText"></p>
       <div class="stats" id="endStats"></div>
       <button type="button" class="go glass" id="againBtn">Новый бой</button>
+      <button type="button" class="ghost glass home" id="baseEndBtn"><svg class="ico"><use href="#i-kit"/></svg>На базу</button>
     </div>
   </div>
 </main>
-<script type="module" src="/src/main.ts"></script>
+<script type="module" src="/src/entry.ts"></script>
 </body>
 </html>

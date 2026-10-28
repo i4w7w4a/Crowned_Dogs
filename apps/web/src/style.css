@@ -329,6 +329,7 @@ button:disabled { cursor: default; }
 .tracks button[aria-pressed="true"] { color: #fff; }
 .tracks button[aria-pressed="true"] small { color: var(--cyan); }
 .sheet .acts2 { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; margin-top: 6px; }
+.sheet .home { width: 100%; margin-top: 8px; }
 .ghost { height: 52px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 500 16px/1 var(--body); color: var(--fg); }
 .ghost .ico { width: 18px; height: 18px; }
 
@@ -345,7 +346,7 @@ button:disabled { cursor: default; }
 .stats div { display: flex; flex-direction: column; gap: 5px; }
 .stats b { font: 600 24px/1 var(--display); font-variant-numeric: tabular-nums; }
 .stats span { font: 500 10px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.end .go { width: 240px; }
+.end .go, .end .home { width: 240px; }
 @media (prefers-reduced-motion: reduce) {
   .ring.hint .rc, .shake, .flash.on, .ripple, .recdot, .ticker.fresh, .logsheet, .sheet { animation: none !important; }
   .float { animation-duration: 2.4s; }

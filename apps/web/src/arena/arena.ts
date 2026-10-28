@@ -6,8 +6,7 @@
 
 import type { Zone } from "@crowned-dogs/core";
 import * as THREE from "three";
-import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
-import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
+import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { dress, KIT_A } from "./dress.ts";
 import { Dust } from "./dust.ts";
@@ -20,6 +19,7 @@ import { armsOnly, findBones, pitch, roll, type Bones } from "./rig.ts";
 import { Feet } from "./ik.ts";
 import { Viewmodel } from "./viewmodel.ts";
 import { TextureTiers } from "./textures.ts";
+import { loadModel } from "./load-model.ts";
 import { Hand, gripOf } from "./weapons.ts";
 
 export type Who = "me" | "enemy";
@@ -134,22 +134,6 @@ function softTexture(stops: [number, string][]): THREE.CanvasTexture {
   return t;
 }
 
-/** Fetches and parses a figure model: a .glb, or a .json with the .glb inside as base64. */
-async function loadModel(url: string): Promise<GLTF> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`model: ${res.status}`);
-  let bytes: ArrayBuffer;
-  if (url.endsWith(".json")) {
-    const bin = atob(((await res.json()) as { data: string }).data);
-    const arr = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-    bytes = arr.buffer;
-  } else {
-    bytes = await res.arrayBuffer();
-  }
-  return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(bytes, "");
-}
-
 const smooth = (u: number) => u * u * (3 - 2 * u);
 const aimAt = new THREE.Vector3(), tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpSize = new THREE.Vector2();
 
@@ -170,6 +154,7 @@ export class Arena {
   onFrame: (() => void) | null = null;
 
   private renderer: THREE.WebGLRenderer;
+  private running = false;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(45, 1024 / 1536, 0.1, 80);
   private timer = new THREE.Timer();
@@ -282,7 +267,20 @@ export class Arena {
     this.ready = true;
     this.setQuality(this.q);
     this.reset(distance);
-    this.renderer.setAnimationLoop((t) => this.tick(t));
+    if (this.running) this.resume();
+  }
+
+  /** May be called before loading finishes. A hidden base never keeps a render loop alive. */
+  resume(): void {
+    this.running = true;
+    if (!this.ready) return;
+    this.timer.reset();
+    this.renderer.setAnimationLoop((time) => this.tick(time));
+  }
+
+  pause(): void {
+    this.running = false;
+    this.renderer.setAnimationLoop(null);
   }
 
   /** The WebGL context, to tell what the device can carry. */
@@ -437,6 +435,8 @@ export class Arena {
     if (this.k) { this.camera.position.set(0, this.k.camH, 0); this.camera.rotation.set(0, 0, 0); }
     if (!this.ready) return;
     this.walk = null; this.dist = distance;
+    this.sparkLife = 0;
+    this.spark.visible = false;
     this.depth = this.depthOf(distance);
     resetFigure(this.en!, 0.0);
     resetFigure(this.me!, 0.43);

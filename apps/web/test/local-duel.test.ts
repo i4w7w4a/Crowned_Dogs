@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { VETERAN_KITS } from "@crowned-dogs/core";
+import { compileKit, starterLoadout, VETERAN_KITS } from "@crowned-dogs/core";
 import { LocalDuel, moveCommand } from "../src/game/local-duel.ts";
 
 const duel = (seed = "web-1") => new LocalDuel({
@@ -93,4 +93,24 @@ test("without a kit there is nothing to swap to", () => {
   const d = duel();
   assert.equal(d.spare, null);
   assert.equal(d.press({ type: "swap" }), "Второго оружия нет");
+});
+
+test("the fitting-room kit supplies the actual weapon and combat properties", () => {
+  const loadout = structuredClone(VETERAN_KITS.sniper);
+  const kit = compileKit(loadout);
+  const d = new LocalDuel({
+    seed: "equipped", weather: "clear", time: "night",
+    player: { name: "Тень", weapon: "rifle", kit: loadout },
+    bot: { name: "Искра", weapon: "rifle" },
+  });
+  assert.equal(d.fighters[0].weapon, "sniper", "metadata follows selected gun, not a stale rifle default");
+  assert.equal(d.match.fighters[0].weapon, "sniper");
+  assert.deepEqual(d.match.config.fighters[0].kit, kit);
+  assert.deepEqual(d.match.fighters[0].armor, kit.armor);
+  assert.equal(d.match.fighters[0].gear.nvg, kit.nvg);
+  assert.equal(d.match.fighters[0].grenades, kit.grenades);
+  assert.equal(d.match.config.fighters[0].kit?.sidearm?.id, "pistol");
+  // Subsequent menu edits cannot rewrite a fight that has already started.
+  loadout.weapon1.item = starterLoadout("rifle").weapon1.item;
+  assert.equal(d.match.config.fighters[0].kit?.weapon.id, "sniper");
 });
