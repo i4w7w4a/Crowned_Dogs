@@ -113,6 +113,7 @@ export class Hand {
   /** Puts the kit's mods on the real guns (slot → item id, as in a Loadout); a mod without a mesh, or no mod,
    *  leaves the factory part. */
   fit(mods: Partial<Record<string, string>> = {}): void {
+    this.muzzles.clear(); // a silencer moves the muzzle
     for (const g of this.items.values()) {
       const on = new Set<string>();
       g.traverse((o) => {
@@ -126,5 +127,42 @@ export class Hand {
 
   hold(what: Held | null): void {
     for (const [k, g] of this.items) g.visible = k === what;
+    this.shown = what;
   }
+
+  /** Puts the muzzle of the gun in hand, the front end of its barrel, into `out` (world). False when the hand
+   *  holds no gun. */
+  muzzle(out: THREE.Vector3): boolean {
+    const what = this.shown, g = what && this.items.get(what);
+    if (!g || what === "knife" || what === "grenade") return false;
+    let at = this.muzzles.get(what);
+    if (!at) this.muzzles.set(what, at = frontOf(g));
+    out.copy(at);
+    this.mount.localToWorld(out);
+    return true;
+  }
+
+  private shown: Held | null = null;
+  /** Each gun's muzzle in the gun's frame, found once from its meshes. */
+  private muzzles = new Map<Held, THREE.Vector3>();
+}
+
+/** The front end of a gun, in its frame: the middle of whatever reaches furthest forward along the barrel. */
+function frontOf(gun: THREE.Object3D): THREE.Vector3 {
+  gun.updateMatrixWorld(true);
+  const into = gun.matrixWorld.clone().invert(), p = new THREE.Vector3(), front: THREE.Vector3[] = [];
+  let max = -Infinity;
+  gun.traverse((o) => {
+    if (!(o instanceof THREE.Mesh) || !o.visible) return;
+    o.geometry.computeBoundingBox();
+    const b = o.geometry.boundingBox!, m = new THREE.Matrix4().multiplyMatrices(into, o.matrixWorld);
+    for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
+      p.set(x, y, z).applyMatrix4(m);
+      front.push(p.clone());
+      max = Math.max(max, p.x);
+    }
+  });
+  const near = front.filter((v) => v.x > max - 0.03);
+  const at = near.reduce((s, v) => s.add(v), new THREE.Vector3()).divideScalar(Math.max(1, near.length));
+  return at.setX(max);
 }

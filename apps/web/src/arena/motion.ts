@@ -104,6 +104,13 @@ export class Motion {
   /** The attack under way, if any. */
   get attackKind(): Attack | null { return this.kind; }
 
+  /** How much of the upper body holds the pistol stance right now, 0..1 (it fades as an attack or another gun
+   *  takes over). */
+  get pistolReady(): number {
+    const a = this.layers.body.get(READY.pistol);
+    return a?.isRunning() ? a.getEffectiveWeight() : 0;
+  }
+
   /** The stance whose footprint the feet keep, while the figure stands on them (not walking, not stabbing
    *  or throwing, not falling); null lets the animation move the feet. */
   get planted(): string | null {

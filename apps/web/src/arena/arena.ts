@@ -17,6 +17,7 @@ import { Motion, Pose, type Attack, type Stance } from "./motion.ts";
 import { QUALITY, type Quality } from "./quality.ts";
 import { armsOnly, findBones, pitch, type Bones } from "./rig.ts";
 import { Collapse, FALL_TIME } from "./fall.ts";
+import { Flash, HoldOut } from "./hold.ts";
 import { Feet, gaitOf, type Gait } from "./ik.ts";
 import { Viewmodel } from "./viewmodel.ts";
 import { TextureTiers } from "./textures.ts";
@@ -51,6 +52,8 @@ const VIEW: Record<Stance, Spot> & Partial<Record<Attack, Spot>> = {
   const t = new URLSearchParams(location.search).get("fpview")?.split(",").map(Number);
   if (t?.length === 4) { const [x = 0, y = 0, z = 0, tilt = 0] = t; for (const v of Object.values(VIEW)) { v.at = [x, y, z]; v.tilt = tilt; } }
 }
+/** How big each gun's muzzle flash is, metres across. */
+const MUZZLE: Record<Stance, number> = { pistol: 0.16, rifle: 0.24, shotgun: 0.3, sniper: 0.28 };
 /** How much wider the first-person lens on our own arms is than the hall's (a squeeze of the picture). */
 const WIDE = Number(new URLSearchParams(location.search).get("wide") ?? 0.62);
 const FPKEY = Number(new URLSearchParams(location.search).get("fpkey") ?? 2.5);
@@ -87,6 +90,10 @@ interface Figure {
   gait: Record<"walk" | "run", Gait | null>;
   /** The fall: folds the body down onto the floor where it stood. */
   collapse: Collapse;
+  /** Brings a pistol held in at the chest out clear of the body. */
+  holdOut: HoldOut;
+  /** The flash at its gun's muzzle as it fires. */
+  flash: Flash;
   port: THREE.Mesh;
   kick: Record<Zone, number>;
   /** 0..1 while falling, -1 when standing. */
@@ -173,6 +180,9 @@ export class Arena {
   private spark: THREE.Sprite;
   private sparkLife = 0;
   private sparkMax = 0.18;
+  /** The muzzle flash's light, for whichever figure fired last. */
+  private muzzleLight = new THREE.PointLight(0xffb36b, 0, 4, 2);
+  private flashOf: Figure | null = null;
   private k: Calibrated | null = null;
   private frame: Frame | null = null;
   /** The distance in steps the figures stand at (or walk to). */
@@ -260,6 +270,8 @@ export class Arena {
     }));
     this.spark.visible = false;
     this.scene.add(this.spark);
+    this.muzzleLight.layers.enable(NEAR);
+    this.scene.add(this.muzzleLight);
     this.timer.connect(document);
   }
 
@@ -473,6 +485,8 @@ export class Arena {
     this.walk = null; this.dist = distance;
     this.sparkLife = 0;
     this.spark.visible = false;
+    for (const f of [this.en!, this.me!]) f.flash.stop();
+    this.muzzleLight.intensity = 0;
     this.depth = this.depthOf(distance);
     resetFigure(this.en!, 0.0);
     resetFigure(this.me!, 0.43);
@@ -532,8 +546,11 @@ export class Arena {
     // right in front of the lens the light is a pinpoint, not a lamp
     if (look.near) { group.traverse((o) => o.layers.set(NEAR)); port.layers.set(NEAR); port.scale.setScalar(0.4); }
 
+    const flash = new Flash(softTexture([[0, "rgba(255,250,235,1)"], [0.18, "rgba(255,214,150,.9)"], [0.5, "rgba(255,150,60,.35)"], [1, "rgba(255,110,30,0)"]]), look.near ? NEAR : 0);
+    this.scene.add(flash.sprite);
+
     return {
-      group, tilt, model, blob, mixer, pose: new Pose(model), motion, hand: null, feet, gait, collapse: new Collapse(model), port,
+      group, tilt, model, blob, mixer, pose: new Pose(model), motion, hand: null, feet, gait, collapse: new Collapse(model), holdOut: new HoldOut(model), flash, port,
       kick: { head: 0, body: 0, groin: 0, legs: 0 }, fallT: -1, fallSide: look.fallSide, bones,
     };
   }
@@ -591,9 +608,14 @@ export class Arena {
       en.motion.onHold = (w) => { en.hand!.hold(w); inWater.hold(w); };
     }
     me.motion.onHold = (w) => me.hand?.hold(w);
-    if (me.hand) {
-      const vm = this.viewmodel = new Viewmodel(me.model, me.hand);
-      me.motion.onMark = (kind) => { if (kind !== "knife" && kind !== "grenade") vm.shot(); };
+    const vm = this.viewmodel = me.hand ? new Viewmodel(me.model, me.hand) : null;
+    for (const f of [me, en]) {
+      f.motion.onMark = (kind) => {
+        if (kind === "knife" || kind === "grenade" || !f.hand) return;
+        f.flash.fire(f.hand, MUZZLE[kind]);
+        this.flashOf = f;
+        if (f === me) vm?.shot();
+      };
     }
   }
 
@@ -670,6 +692,7 @@ export class Arena {
     this.step(dt, w ? Math.abs(w.mine * travel(w.t, w.dur)[1]) : 0);
     for (const f of [this.en!, this.me!]) {
       f.pose.restore(); f.motion.update(dt); f.mixer.update(dt); f.pose.save(); f.motion.settle();
+      if (!(this.fp && f === this.me)) f.holdOut.apply(f.group, f.motion.pistolReady);
       if (!(this.fp && f === this.me)) f.feet.update(dt, f.motion.planted);
       applyReactions(f, dt);
     }
@@ -677,12 +700,17 @@ export class Arena {
     if (this.fp) {
       this.holdView(dt);
       const me = this.me!, act = me.motion.attackKind;
-      this.viewmodel?.update(dt, me.fallT < 0 && act !== "knife" && act !== "grenade", this.myGun, this.camera, zoneWorld(this.en!, "body", aimAt));
-    }
+      const gun = me.fallT < 0 && act !== "knife" && act !== "grenade";
+      this.viewmodel?.update(dt, gun, gun && !!act, this.myGun, this.camera, zoneWorld(this.en!, "body", aimAt));
+    } else this.viewmodel?.off();
     syncMirror(this.mirror!);
     this.scene.updateMatrixWorld();
     placePort(this.en!); placePort(this.me!);
     if (this.fp) this.me!.port.visible = false;
+    // the muzzle flashes after everything has moved, so it sits on the muzzle where it is drawn
+    const lit = Math.max(this.en!.flash.update(dt), this.me!.flash.update(dt));
+    if (this.flashOf && lit > 0) this.muzzleLight.position.copy(this.flashOf.flash.sprite.position);
+    this.muzzleLight.intensity = 6 * lit;
     if (this.sparkLife > 0) {
       this.sparkLife = Math.max(0, this.sparkLife - dt);
       const u = 1 - this.sparkLife / this.sparkMax;
