@@ -11,20 +11,25 @@
               512,
               512
             ],
-            "sourceUvCoverage": 0.9853825972027697,
+            "sourceUvCoverage": 0.9853825972027696,
             "testedPixels": 101386
           },
-          "depthMeters": 0.00026025279657915235,
+          "depthMeters": 0.002400000113993883,
+          "detailDepthMeters": 0.0016,
+          "detailProfileVersion": 1,
           "eligible": true,
+          "fabricDepthMeters": 0.0004,
+          "fabricPeriodMeters": 0.0018,
           "height": "tex/relief/tripo-vest-tripo_553af5ba_b593_4046_ba87_3732ededa326.height.png",
           "height16": "tex/relief/tripo-vest-tripo_553af5ba_b593_4046_ba87_3732ededa326.height16.png",
           "mask": "tex/relief/tripo-vest-tripo_553af5ba_b593_4046_ba87_3732ededa326.mask.png",
-          "maximumDepthMeters": 0.000699999975040555,
+          "maximumDepthMeters": 0.002400000113993883,
           "midpoint": 0.5019607843137255,
+          "profile": "Manually selected textile panels/MOLLE margins: weave, sewing channel and thread. No colour-to-height conversion.",
           "relief": "tex/relief/tripo-vest-tripo_553af5ba_b593_4046_ba87_3732ededa326.relief.png",
           "resolution": [
-            1024,
-            1024
+            2048,
+            2048
           ],
           "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
           "seamFadePixels": 6,
@@ -34,7 +39,7 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.884245025024566e-6,
+            "relativeResidual": 9.884245025024566E-06,
             "robustHeightHalfRangePixels": 0.2839392423629761,
             "screeningLambda": 0.0024999999441206455
           },
@@ -64,13 +69,18 @@
       "intendedMaxDimensionMeters": 0.30000001192092896,
       "materials": {
         "ee736e5a_447a_4d51_8771_3b6e50183a5f": {
-          "depthMeters": 0.0003000000142492354,
+          "depthMeters": 0.0010999999940395355,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
           "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
           "height": "tex/relief/tripo-helmet-ee736e5a_447a_4d51_8771_3b6e50183a5f.height.png",
           "height16": "tex/relief/tripo-helmet-ee736e5a_447a_4d51_8771_3b6e50183a5f.height16.png",
           "mask": "tex/relief/tripo-helmet-ee736e5a_447a_4d51_8771_3b6e50183a5f.mask.png",
-          "maximumDepthMeters": 0.0003000000142492354,
+          "maximumDepthMeters": 0.0010999999940395355,
           "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
           "relief": "tex/relief/tripo-helmet-ee736e5a_447a_4d51_8771_3b6e50183a5f.relief.png",
           "resolution": [
             1024,
@@ -84,10 +94,11 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.96222340905092e-6,
+            "relativeResidual": 9.96222340905092E-06,
             "robustHeightHalfRangePixels": 0.3967698812484741,
             "screeningLambda": 0.0024999999441206455
           },
+          "sourceDepthMeters": 0.0003000000142492354,
           "sourceMaterial": "ee736e5a_447a_4d51_8771_3b6e50183a5f",
           "sourceResolution": [
             2048,
@@ -99,7 +110,7 @@
             "clippedInteriorPixels": 554,
             "detrendedNormalSlopeRms": 0.06804365666876065,
             "flatNormalMeanErrorDegrees": 1.8790158024078931,
-            "integratedNormalMeanErrorDegrees": 1.3573459404833899,
+            "integratedNormalMeanErrorDegrees": 1.35734594048339,
             "interiorPixels": 99526,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
             "uvCoveredPixels": 381307
@@ -135,7 +146,7 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.948863584557702e-6,
+            "relativeResidual": 9.948863584557702E-06,
             "robustHeightHalfRangePixels": 1.4036284685134888,
             "screeningLambda": 0.0024999999441206455
           },
@@ -166,17 +177,22 @@
       "intendedMaxDimensionMeters": 0.6000000238418579,
       "materials": {
         "tripo_553af5ba_b593_4046_ba87_3732ededa326": {
-          "depthMeters": 0.00026025279657915235,
+          "depthMeters": 0.002400000113993883,
+          "detailDepthMeters": 0.0016,
+          "detailProfileVersion": 1,
           "eligible": true,
+          "fabricDepthMeters": 0.0004,
+          "fabricPeriodMeters": 0.0018,
           "height": "tex/relief/tripo-vest-tripo_553af5ba_b593_4046_ba87_3732ededa326.height.png",
           "height16": "tex/relief/tripo-vest-tripo_553af5ba_b593_4046_ba87_3732ededa326.height16.png",
           "mask": "tex/relief/tripo-vest-tripo_553af5ba_b593_4046_ba87_3732ededa326.mask.png",
-          "maximumDepthMeters": 0.000699999975040555,
+          "maximumDepthMeters": 0.002400000113993883,
           "midpoint": 0.5019607843137255,
+          "profile": "Manually selected textile panels/MOLLE margins: weave, sewing channel and thread. No colour-to-height conversion.",
           "relief": "tex/relief/tripo-vest-tripo_553af5ba_b593_4046_ba87_3732ededa326.relief.png",
           "resolution": [
-            1024,
-            1024
+            2048,
+            2048
           ],
           "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
           "seamFadePixels": 6,
@@ -186,10 +202,11 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.884245025024566e-6,
+            "relativeResidual": 9.884245025024566E-06,
             "robustHeightHalfRangePixels": 0.2839392423629761,
             "screeningLambda": 0.0024999999441206455
           },
+          "sourceDepthMeters": 0.00026025279657915235,
           "sourceMaterial": "tripo_553af5ba_b593_4046_ba87_3732ededa326",
           "sourceResolution": [
             2048,
@@ -217,13 +234,18 @@
       "intendedMaxDimensionMeters": 0.7900000810623169,
       "materials": {
         "M_Sokol": {
-          "depthMeters": 0.0003499999875202775,
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
           "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
           "height": "tex/relief/varyag-M_Sokol.height.png",
           "height16": "tex/relief/varyag-M_Sokol.height16.png",
           "mask": "tex/relief/varyag-M_Sokol.mask.png",
-          "maximumDepthMeters": 0.0003499999875202775,
+          "maximumDepthMeters": 0.0015999999595806003,
           "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
           "relief": "tex/relief/varyag-M_Sokol.relief.png",
           "resolution": [
             1024,
@@ -237,10 +259,11 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.926861738335647e-6,
+            "relativeResidual": 9.926861738335648E-06,
             "robustHeightHalfRangePixels": 5.395988464355469,
             "screeningLambda": 0.0024999999441206455
           },
+          "sourceDepthMeters": 0.0003499999875202775,
           "sourceMaterial": "M_Sokol",
           "sourceResolution": [
             1024,
@@ -250,7 +273,7 @@
           "uvSet": 0,
           "validation": {
             "clippedInteriorPixels": 1011,
-            "detrendedNormalSlopeRms": 0.43769518866306867,
+            "detrendedNormalSlopeRms": 0.4376951886630686,
             "flatNormalMeanErrorDegrees": 14.8255516327799,
             "integratedNormalMeanErrorDegrees": 8.260869204529406,
             "interiorPixels": 182990,
@@ -259,13 +282,18 @@
           }
         },
         "M_Tishina": {
-          "depthMeters": 0.0003499999875202775,
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
           "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
           "height": "tex/relief/varyag-M_Tishina.height.png",
           "height16": "tex/relief/varyag-M_Tishina.height16.png",
           "mask": "tex/relief/varyag-M_Tishina.mask.png",
-          "maximumDepthMeters": 0.0003499999875202775,
+          "maximumDepthMeters": 0.0015999999595806003,
           "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
           "relief": "tex/relief/varyag-M_Tishina.relief.png",
           "resolution": [
             1024,
@@ -279,10 +307,11 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.91122369119711e-6,
+            "relativeResidual": 9.91122369119711E-06,
             "robustHeightHalfRangePixels": 7.60512113571167,
             "screeningLambda": 0.0024999999441206455
           },
+          "sourceDepthMeters": 0.0003499999875202775,
           "sourceMaterial": "M_Tishina",
           "sourceResolution": [
             1024,
@@ -294,20 +323,25 @@
             "clippedInteriorPixels": 930,
             "detrendedNormalSlopeRms": 0.6938206883930429,
             "flatNormalMeanErrorDegrees": 21.191920357710657,
-            "integratedNormalMeanErrorDegrees": 10.638425774299451,
+            "integratedNormalMeanErrorDegrees": 10.638425774299453,
             "interiorPixels": 167661,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
             "uvCoveredPixels": 347541
           }
         },
         "M_Varyag": {
-          "depthMeters": 0.0003499999875202775,
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
           "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
           "height": "tex/relief/varyag-M_Varyag.height.png",
           "height16": "tex/relief/varyag-M_Varyag.height16.png",
           "mask": "tex/relief/varyag-M_Varyag.mask.png",
-          "maximumDepthMeters": 0.0003499999875202775,
+          "maximumDepthMeters": 0.0015999999595806003,
           "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
           "relief": "tex/relief/varyag-M_Varyag.relief.png",
           "resolution": [
             1024,
@@ -321,10 +355,11 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.668167097119517e-6,
-            "robustHeightHalfRangePixels": 9.361175537109375,
+            "relativeResidual": 9.668167097119517E-06,
+            "robustHeightHalfRangePixels": 9.361175537109377,
             "screeningLambda": 0.0024999999441206455
           },
+          "sourceDepthMeters": 0.0003499999875202775,
           "sourceMaterial": "M_Varyag",
           "sourceResolution": [
             1024,
@@ -349,5 +384,6 @@
       "unitsPerMeter": 1.0
     }
   },
+  "runtimePacking": "R=combined height; G=UV coverage; B=authored-only detail height; A=255. Midpoint=128/255. Source normal is not re-applied as a second bump.",
   "version": 1
 }

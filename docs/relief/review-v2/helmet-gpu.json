@@ -1,0 +1,9 @@
+{
+  "model": "tripo-helmet",
+  "configured": 1,
+  "changedPixels": 121754,
+  "maxChannelDifference": 134,
+  "silhouetteMismatch": 0,
+  "shaderErrors": [],
+  "passed": true
+}
