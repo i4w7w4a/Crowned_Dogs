@@ -18,7 +18,18 @@
     "web": "npm run dev -w @crowned-dogs/web",
     "web:build": "npm run build -w @crowned-dogs/web",
     "kits": "node packages/core/scripts/kits.ts",
-    "icons": "node packages/icons/scripts/build.ts"
+    "icons": "node packages/icons/scripts/build.ts",
+    "rust:build": "node tools/rust-build.mjs wasm",
+    "rust:check": "node tools/rust-build.mjs check",
+    "local:build": "node tools/rust-build.mjs local",
+    "precheck": "npm run rust:build",
+    "preweb:build": "npm run rust:build",
+    "preweb": "npm run rust:build",
+    "pretest": "npm run rust:build",
+    "pretypecheck": "npm run rust:build",
+    "prebot": "npm run rust:build",
+    "prebalance": "npm run rust:build",
+    "prekits": "npm run rust:build"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
