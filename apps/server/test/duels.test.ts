@@ -48,6 +48,33 @@ function press(d: DuelService, who: string, duelId: string, cmds: Command[]) {
 
 const plainShot: Command[] = [{ type: "zone", zone: "body" }, { type: "guard", zone: "head" }, { type: "guard", zone: "body" }];
 
+test("event delivery can reenter the Rust service without losing live references or timers", () => {
+  const clock = fakeClock();
+  let sequence = 0;
+  let observed: unknown;
+  const duels = new DuelService({
+    clock: clock.clock,
+    seed: () => `reentrant-${sequence++}`,
+    onEvent(event) {
+      if (event.type !== "start") return;
+      observed = duels.duelOf("100");
+      assert.equal(observed, event.duel);
+      duels.press("100", event.duel.id, event.duel.match.turn, { type: "zone", zone: "body" });
+    },
+  });
+  try {
+    const duel = duels.startVsBot(ann);
+    assert.equal(duel, observed);
+    assert.equal(duels.get(duel.id), duel);
+    assert.equal(duel.drafts[0].zone, "body");
+    assert.equal(clock.pending(), 1, "reentry keeps only the current turn timer");
+  } finally {
+    duels.close();
+    duels.close();
+  }
+  assert.equal(clock.pending(), 0, "closing is idempotent and cancels host callbacks");
+});
+
 // ---------- draft ----------
 
 test("buttons build an order step by step", () => {

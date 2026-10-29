@@ -9,23 +9,11 @@ import type { Random } from "./pick.ts";
 import { createRadio } from "./radio.ts";
 export interface GameAudioOptions { baseUrl: string; random?: Random }
 export interface PlayOptions { delay?: number; gainDb?: number; pan?: number }
-export class GameAudio {
-  private readonly controller: BrowserGameAudio;
-  constructor(opts: GameAudioOptions) {
-    this.controller = new BrowserGameAudio(opts, { FILES, MIX, SOUNDS, TRACKS, MusicDirector, createRadio });
-  }
-  get ctx(): AudioContext { return this.controller.ctx as AudioContext; }
-  get music(): MusicDirector { return this.controller.music as MusicDirector; }
-  unlock(): Promise<void> { return this.controller.unlock(); }
-  setVolume(bus: Bus | "master", value: number): void { this.controller.setVolume(bus, value); }
-  url(file: string): string { return this.controller.url(file); }
-  preload(ids: SoundId[]): Promise<void> { return this.controller.preload(ids); }
-  play(id: SoundId, options: PlayOptions = {}): void { this.controller.play(id, options); }
-  playCues(cues: Cue[], startIn = 0.05): void { this.controller.playCues(cues, startIn); }
-  setAmbience(ids: SoundId[], fade = 2): void { this.controller.setAmbience(ids, fade); }
-  setFightMusic(value: number): void { this.controller.setFightMusic(value); }
-  placeRadio(pan: number, far: number): void { this.controller.placeRadio(pan, far); }
-  musicBus(): AudioNode { return this.controller.musicBus() as AudioNode; }
-  gainNode(db: number, to: AudioNode): GainNode { return this.controller.gainNode(db, to) as GainNode; }
-  decode(file: string): Promise<AudioBuffer> { return this.controller.decode(file); }
+export class GameAudio extends BrowserGameAudio {
+  declare readonly ctx: AudioContext;
+  declare readonly music: MusicDirector;
+  constructor(opts: GameAudioOptions) { super(opts, { FILES, MIX, SOUNDS, TRACKS, MusicDirector, createRadio }); }
+  override play(id: SoundId, options: PlayOptions = {}): void { super.play(id, options); }
+  override playCues(cues: Cue[], startIn = 0.05): void { super.playCues(cues, startIn); }
+  override setAmbience(ids: SoundId[], fade = 2): void { super.setAmbience(ids, fade); }
 }

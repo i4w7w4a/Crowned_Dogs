@@ -1,59 +1,28 @@
-// Random choices that do not repeat: the same gunshot twice in a row sounds
-// like a machine, and the same song twice in a row sounds like a bug.
-
-import { callRust } from "../../runtime/src/index.ts";
+/** Typed host handles; Rust remembers variants, enforces playlists and consumes randomness. */
+import { RustShuffle, RustVariantPicker, audio_pick_other, audio_jitter } from "../../runtime/src/index.ts";
 export type Random = () => number;
-
-/** Index in [0, n) that differs from `last` whenever n > 1. */
-export function pickOther(n: number, last: number | undefined, random: Random = Math.random): number {
-  return callRust("audio.pickOther", [n, last, n > 1 ? random() : 0]);
-}
-
-/** Remembers the last variant of every sound. */
+export const pickOther = (n: number, last: number | undefined, random: Random = Math.random): number =>
+  audio_pick_other(n, last, random);
 export class VariantPicker {
-  private last = new Map<string, number>();
+  private runtime: RustVariantPicker;
   private random: Random;
-
   constructor(random: Random = Math.random) {
     this.random = random;
+    this.runtime = new RustVariantPicker(this.random);
   }
-
-  pick<T>(key: string, items: readonly T[]): T {
-    const i = pickOther(items.length, this.last.get(key), this.random);
-    this.last.set(key, i);
-    return items[i]!;
-  }
+  pick<T>(key: string, items: readonly T[]): T { return this.runtime.pick(key, items); }
 }
-
-/** A playlist that picks at random and never plays the same track twice in a row. */
 export class Shuffle<T> {
-  private current: T | undefined;
-  readonly items: readonly T[];
+  private runtime: RustShuffle;
   private random: Random;
-
+  readonly items: readonly T[];
   constructor(items: readonly T[], random: Random = Math.random) {
-    if (items.length === 0) throw new Error("Empty playlist");
-    this.items = items;
-    this.random = random;
+    this.items = items; this.random = random;
+    this.runtime = new RustShuffle(this.items, this.random);
   }
-
-  get now(): T | undefined {
-    return this.current;
-  }
-
-  next(): T {
-    const last = this.current === undefined ? undefined : this.items.indexOf(this.current);
-    this.current = this.items[pickOther(this.items.length, last, this.random)]!;
-    return this.current;
-  }
-
-  /** Jump to a chosen item; the random picks carry on from it. */
-  set(item: T): void {
-    if (!this.items.includes(item)) throw new Error("Not in the playlist");
-    this.current = item;
-  }
+  get now(): T | undefined { return this.runtime.now; }
+  next(): T { return this.runtime.next(); }
+  set(item: T): void { this.runtime.set(item); }
 }
-
-/** Uniform in [-spread, spread]. */
-export const jitter = (spread: number | undefined, random: Random = Math.random) =>
-  callRust<number>("audio.jitter", [spread, spread ? random() : 0]);
+export const jitter = (spread: number | undefined, random: Random = Math.random): number =>
+  audio_jitter(spread, random);

@@ -1,5 +1,5 @@
 /** Browser deck adapter; the complete music state machine lives in Rust. */
-import { callRust } from "../../runtime/src/index.ts";
+import { RustMusicDirector } from "../../runtime/src/index.ts";
 import { RADIO_PLAYLIST, type SoundId, type Station, type TrackId } from "./bank.ts";
 import type { Random } from "./pick.ts";
 export type Channel = "fight" | "radio";
@@ -14,32 +14,20 @@ export interface MusicDeck {
 interface State { scene: Scene; menuOpen: boolean; fightTrack?: TrackId; radioTrack?: Station; fightPaused: boolean }
 type Operation = { method: "play"; args: [Channel, TrackId] } | { method: "cue"; args: [SoundId] } | { method: "pause" | "resume" | "stop"; args: [Channel] };
 export class MusicDirector {
-  private data: unknown = callRust("audio.music.new", []);
-  private deck: MusicDeck;
-  private random: Random;
-  private radioPlaylist: readonly Station[] = RADIO_PLAYLIST;
-  constructor(deck: MusicDeck, random: Random = Math.random) { this.deck = deck; this.random = random; }
-  get state(): State { return callRust("audio.music.state", [this.data]); }
-  private send(method: string, argument: unknown = null): void {
-    const random = callRust<boolean>("audio.music.needsRandom", [this.data, method, argument]) ? this.random() : 0;
-    const result = callRust<{ state: unknown; operations: Operation[] }>("audio.music.step", [this.data, method, argument, random]);
-    this.data = result.state;
-    for (const operation of result.operations) {
-      if (operation.method === "play") this.deck.play(...operation.args);
-      else if (operation.method === "cue") this.deck.cue(...operation.args);
-      else this.deck[operation.method](...operation.args);
-    }
+  private runtime: RustMusicDirector;
+  private host: { deck: MusicDeck; random: Random };
+  constructor(deck: MusicDeck, random: Random = Math.random) {
+    this.host = { deck, random };
+    this.runtime = new RustMusicDirector(this.host, RADIO_PLAYLIST);
   }
-  enterMenu(): void { this.send("enterMenu"); }
-  enterFight(): void { this.send("enterFight"); }
-  openMenu(): void { this.send("openMenu"); }
-  closeMenu(): void { this.send("closeMenu"); }
-  silence(): void { this.send("silence"); }
-  ended(channel: Channel): void { this.send("ended", channel); }
-  nextStation(): void { this.send("nextStation"); }
-  tune(station: Station): void { this.send("tune", station); }
-  playlist(list: readonly Station[]): void {
-    if (list === this.radioPlaylist) return;
-    this.send("playlist", list); this.radioPlaylist = list;
-  }
+  get state(): State { return this.runtime.state; }
+  enterMenu(): void { this.runtime.send("enterMenu", null); }
+  enterFight(): void { this.runtime.send("enterFight", null); }
+  openMenu(): void { this.runtime.send("openMenu", null); }
+  closeMenu(): void { this.runtime.send("closeMenu", null); }
+  silence(): void { this.runtime.send("silence", null); }
+  ended(channel: Channel): void { this.runtime.send("ended", channel); }
+  nextStation(): void { this.runtime.send("nextStation", null); }
+  tune(station: Station): void { this.runtime.send("tune", station); }
+  playlist(list: readonly Station[]): void { this.runtime.playlist(list); }
 }

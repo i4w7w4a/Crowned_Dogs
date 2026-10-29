@@ -16,11 +16,7 @@ const host = { THREE, RoomEnvironment, MOD_SLOTS, loadModel, QUALITY, startQuali
   tune, fitVaryag, prepareVaryag, ITEM_MODELS, base: import.meta.env.BASE_URL };
 
 /** Platform imports only; Rust owns requests, input, rendering and disposal. */
-export class ItemViewer {
-  private readonly controller: RustItemViewer;
-  constructor(element: HTMLElement, options: ViewerOptions = {}) { this.controller = new RustItemViewer(host, element, options); }
-  show(id: string, name: string, loadout?: Loadout): Promise<void> { return this.controller.show(id, name, loadout); }
-  setActive(active: boolean): void { this.controller.setActive(active); }
-  hide(): void { this.controller.hide(); }
-  dispose(): void { this.controller.dispose(); }
+export class ItemViewer extends RustItemViewer {
+  constructor(element: HTMLElement, options: ViewerOptions = {}) { super(host, element, options); }
+  override show(id: string, name: string, loadout?: Loadout): Promise<void> { return super.show(id, name, loadout); }
 }

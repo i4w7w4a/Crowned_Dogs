@@ -685,6 +685,7 @@ fn render(s: &JsValue) {
     );
 }
 fn release_gpu(s: &JsValue) {
+    method_if(&get(s, "hand"), "dispose", &[]);
     if yes(s, "gpuReleased") {
         return;
     }

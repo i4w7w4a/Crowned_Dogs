@@ -2,8 +2,8 @@
 // Every level draws the same picture, the higher ones just draw it cleaner and add
 // light: the haze, the light shafts from the roof, dust in the air.
 
-import { callRust } from "../../../../packages/runtime/src/index.ts";
-import { store } from "../store.ts";
+import { callRust, guess_quality, start_quality, keep_quality } from "../../../../packages/runtime/src/index.ts";
+
 
 export type QualityId = "low" | "medium" | "high" | "ultra";
 
@@ -50,25 +50,6 @@ export interface Quality {
 
 export const QUALITY = callRust<{ QUALITY: Record<QualityId, Quality> }>("client.data", []).QUALITY;
 export const QUALITY_IDS = Object.keys(QUALITY) as QualityId[];
-const KEY = "cd-quality";
-
-/** Only platform facts cross this boundary; selection policy is Rust. */
-function deviceFacts(gl: WebGL2RenderingContext | null) {
-  if (!gl) return { webgl: false };
-  const info = gl.getExtension("WEBGL_debug_renderer_info");
-  const nav = navigator as Navigator & { deviceMemory?: number };
-  return {
-    webgl: true,
-    gpu: String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)),
-    memory: nav.deviceMemory ?? 4, cores: nav.hardwareConcurrency ?? 4,
-    phone: /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) || (window.matchMedia?.("(pointer: coarse)").matches ?? false),
-  };
-}
-export function guessQuality(gl: WebGL2RenderingContext | null): QualityId {
-  return callRust("quality.guess", [deviceFacts(gl)]);
-}
-export function startQuality(gl: WebGL2RenderingContext | null): { id: QualityId; picked: boolean } {
-  const url = new URLSearchParams(location.search).get("q");
-  return callRust("quality.start", [url, store.get(KEY), deviceFacts(gl)]);
-}
-export function keepQuality(id: QualityId): void { store.set(KEY, id); }
+export const guessQuality = guess_quality as (gl: WebGL2RenderingContext | null) => QualityId;
+export const startQuality = start_quality as (gl: WebGL2RenderingContext | null) => { id: QualityId; picked: boolean };
+export const keepQuality = keep_quality as (id: QualityId) => void;

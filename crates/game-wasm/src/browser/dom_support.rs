@@ -140,11 +140,24 @@ pub struct Listener {
 }
 impl Listener {
     pub fn new(target: &JsValue, kind: &str, handler: impl FnMut(JsValue) + 'static) -> Self {
+        Self::with_passive(target, kind, handler, false)
+    }
+    pub fn passive(target: &JsValue, kind: &str, handler: impl FnMut(JsValue) + 'static) -> Self {
+        Self::with_passive(target, kind, handler, true)
+    }
+    fn with_passive(
+        target: &JsValue,
+        kind: &str,
+        handler: impl FnMut(JsValue) + 'static,
+        passive: bool,
+    ) -> Self {
         let callback = Closure::wrap(Box::new(handler) as Box<dyn FnMut(JsValue)>);
+        let options = Object::new();
+        set(&options, "passive", &flag(passive));
         call(
             target,
             "addEventListener",
-            &[js(kind), callback.as_ref().clone()],
+            &[js(kind), callback.as_ref().clone(), options.into()],
         );
         Self {
             target: target.clone(),

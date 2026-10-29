@@ -5,8 +5,7 @@
 import { randomInt } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { TAG_COUNT } from "@crowned-dogs/core";
-import { callRust } from "../../../packages/runtime/src/index.ts";
+import { RustOperatorRegistry } from "../../../packages/runtime/src/index.ts";
 
 export interface Operator {
   /** K-XXX-XXX, given once and never changed. */
@@ -25,56 +24,12 @@ export interface OperatorRegistryOptions {
   now?: () => number;
 }
 
+/** Stable public types around the Rust registry and its injected Node filesystem. */
 export class OperatorRegistry {
-  private byTg = new Map<string, Operator>();
-  private opts: OperatorRegistryOptions;
-
+  private runtime: RustOperatorRegistry;
   constructor(opts: OperatorRegistryOptions = {}) {
-    this.opts = opts;
-    if (opts.file) {
-      let saved: Operator[] = [];
-      try {
-        saved = JSON.parse(readFileSync(opts.file, "utf8")) as Operator[];
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-      }
-      for (const op of saved) this.add(op);
-    }
+    this.runtime = new RustOperatorRegistry(opts, { randomInt, mkdirSync, readFileSync, renameSync, writeFileSync, dirname });
   }
-
-  byTelegram(telegramId: string): Operator | undefined {
-    return this.byTg.get(telegramId);
-  }
-
-  /** Signs the contract and hands out a tag. Signing again returns the same operator. */
-  sign(telegramId: string, name: string): Operator {
-    const known = this.byTg.get(telegramId);
-    if (known) return known;
-    const pick = this.opts.pick ?? (() => randomInt(TAG_COUNT));
-    const picks: number[] = [];
-    const now = (this.opts.now ?? Date.now)();
-    let result: { needsPick?: boolean; operator: Operator; operators: Operator[] };
-    for (;;) {
-      result = callRust("server.operators.sign", [[...this.byTg.values()], telegramId, name, now, picks]);
-      if (!result.needsPick) break;
-      picks.push(pick());
-    }
-    const op = result.operator;
-    this.add(op);
-    this.save();
-    return op;
-  }
-
-  private add(op: Operator): void {
-    this.byTg.set(op.telegramId, op);
-  }
-
-  /** Writes a temp file and renames it, so a crash never leaves half a list. */
-  private save(): void {
-    const file = this.opts.file;
-    if (!file) return;
-    mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(`${file}.tmp`, JSON.stringify([...this.byTg.values()], null, 2));
-    renameSync(`${file}.tmp`, file);
-  }
+  byTelegram(telegramId: string): Operator | undefined { return this.runtime.byTelegram(telegramId); }
+  sign(telegramId: string, name: string): Operator { return this.runtime.sign(telegramId, name); }
 }

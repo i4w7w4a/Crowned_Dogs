@@ -773,6 +773,23 @@ impl ArenaState {
         self.on_frame = JsValue::NULL;
         // A renderer retains its JS animation callback; cancel before Rust drops that closure.
         let _ = try_call(&self.renderer, "setAnimationLoop", &[JsValue::NULL]);
+        // Stop mixer callbacks before releasing the figure graph; late events must
+        // not re-enter a disposed arena or keep its state alive.
+        for figure in [self.me.as_ref(), self.enemy.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            for resource in [&figure.motion, &figure.flash, &figure.hand] {
+                if get(resource, "dispose").is_function() {
+                    let _ = try_call(resource, "dispose", &[]);
+                }
+            }
+        }
+        for resource in [&self.dust, &self.arms_only] {
+            if get(resource, "dispose").is_function() {
+                let _ = try_call(resource, "dispose", &[]);
+            }
+        }
         for resource in [
             &self.timer,
             &self.lens,

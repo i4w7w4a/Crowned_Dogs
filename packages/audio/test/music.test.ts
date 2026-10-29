@@ -155,3 +155,22 @@ test("a station picked from the list plays at once, or when the radio comes on",
   assert.equal(deck.log.at(-1), `play radio ${next}`);
   assert.ok(deck.on("radio") && !deck.on("fight"));
 });
+
+test("deck callbacks see committed Rust state and can reenter the music director", () => {
+  const deck = new FakeDeck();
+  const originalPlay = deck.play.bind(deck);
+  let music: MusicDirector;
+  deck.play = (channel, track) => {
+    originalPlay(channel, track);
+    if (channel === "fight") {
+      assert.equal(music.state.scene, "fight");
+      music.openMenu();
+    }
+  };
+  music = new MusicDirector(deck, seeded("reentrant-deck"));
+  music.enterFight();
+  assert.equal(music.state.menuOpen, true);
+  assert.equal(music.state.fightPaused, true);
+  assert.ok(deck.on("radio"));
+  assert.ok(!deck.on("fight"));
+});

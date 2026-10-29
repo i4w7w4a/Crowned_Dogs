@@ -16,15 +16,7 @@ const host = { THREE, RoomEnvironment, getItem, loadModel, tuneFittingMaterial, 
   authoredWeaponFit, base: import.meta.env.BASE_URL };
 
 /** Keeps the authored model intact while Rust owns the preview lifecycle. */
-export class PersonaViewer {
-  private readonly controller: RustPersonaViewer;
-  constructor(canvas: HTMLCanvasElement) { this.controller = new RustPersonaViewer(host, canvas); }
-  get previewDescription(): string { return this.controller.previewDescription; }
-  load(): Promise<void> { return this.controller.load(); }
-  resize(width: number, height: number): void { this.controller.resize(width, height); }
-  setActive(active: boolean): void { this.controller.setActive(active); }
-  shift(x: number, y: number): void { this.controller.shift(x, y); }
-  rotate(delta: number): void { this.controller.rotate(delta); }
-  updateLoadout(loadout: Loadout): PersonaPreviewCoverage { return this.controller.updateLoadout(loadout); }
-  dispose(): void { this.controller.dispose(); }
+export class PersonaViewer extends RustPersonaViewer {
+  constructor(canvas: HTMLCanvasElement) { super(host, canvas); }
+  override updateLoadout(loadout: Loadout): PersonaPreviewCoverage { return super.updateLoadout(loadout); }
 }

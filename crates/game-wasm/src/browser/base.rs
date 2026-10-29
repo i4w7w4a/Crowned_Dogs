@@ -503,6 +503,9 @@ impl Base {
             return;
         }
         self.disposed = true;
+        // The application's callback captures its route state, which holds this
+        // screen's JS wrapper. Break that cross-heap cycle on explicit teardown.
+        self.on_battle = JsValue::NULL;
         if exists(&self.frame_id) {
             call(&global(), "cancelAnimationFrame", &[self.frame_id.clone()]);
         }
