@@ -5,6 +5,7 @@ import { equipmentIcon, equipmentItemIcon } from "./equipment-icons.ts";
 import { GEAR_SLOT_NAMES, GEAR_SLOTS, compileKit, loadLocalLoadout, saveLocalLoadout } from "./loadout-state.ts";
 import { PersonaViewer } from "./persona-viewer.ts";
 import { DepthBackdrop } from "./depth-backdrop.ts";
+import { HomeStage } from "./home-stage.ts";
 import { WeaponScreen } from "./weapon-screen.ts";
 import { liquidGlass } from "../hud/liquid.ts";
 import { gameAudio } from "../audio/arena-audio.ts";
@@ -17,7 +18,7 @@ export class BaseScreen extends BrowserBase {
     super(root, onBattle, {
       baseUrl: import.meta.env.BASE_URL, ITEM_BY_ID, GEAR_SLOT_NAMES, GEAR_SLOTS,
       compileKit, loadLocalLoadout, saveLocalLoadout, equipmentIcon, equipmentItemIcon,
-      PersonaViewer, DepthBackdrop, WeaponScreen, ItemViewer, ITEM_MODELS,
+      PersonaViewer, DepthBackdrop, HomeStage, WeaponScreen, ItemViewer, ITEM_MODELS,
       availableInFitting, liquidGlass, gameAudio, backArrow,
     });
   }

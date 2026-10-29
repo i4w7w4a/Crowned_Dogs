@@ -5,6 +5,11 @@ body { margin: 0; }
 .cd-shell button:focus-visible, .cd-persona-canvas:focus-visible { outline: 2px solid #ddd; outline-offset: 3px; }
 .cd-home, .cd-fitting { position: relative; height: 100%; isolation: isolate; }
 .cd-home { display: flex; flex-direction: column; padding: max(var(--cd-edge), env(safe-area-inset-top)) var(--cd-edge) max(var(--cd-edge), env(safe-area-inset-bottom)); }
+.cd-home-projection { transition: none; }
+.cd-home-header, .cd-home-title, .cd-home-bottom, .cd-home .cd-tunnel, .cd-home .cd-shade { transition: opacity .24s ease; }
+.cd-home.cd-travelling > :not(.cd-backdrop) { opacity: 0; pointer-events: none; }
+.cd-home.cd-travelling { pointer-events: none; }
+.cd-home::after { content: ""; position: absolute; inset: 0; z-index: 8; background: #080b0c; opacity: var(--cd-travel-fade, 0); pointer-events: none; }
 .cd-backdrop { position: absolute; inset: 0; z-index: -3; width: 100%; height: 100%; object-fit: cover; pointer-events: none; user-select: none; }
 .cd-shade { position: absolute; inset: 0; z-index: -2; background: linear-gradient(180deg, #04080970, transparent 36%, #05080a15 45%, #05080ab3 66%, #070a0bea); }
 .cd-home-header { display: flex; align-items: center; gap: 8px; width: 50%; }

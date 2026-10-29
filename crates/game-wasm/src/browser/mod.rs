@@ -10,6 +10,7 @@ pub mod collapse;
 pub mod dom_support;
 pub mod first_person;
 pub mod held_effects;
+pub mod home_stage;
 pub mod hud;
 pub mod icons;
 pub mod item;

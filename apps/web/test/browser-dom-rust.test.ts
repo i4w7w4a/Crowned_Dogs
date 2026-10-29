@@ -195,3 +195,42 @@ test("free without dispose cancels base RAF, global tilt listeners and owned vie
     globals.forEach((key, i) => { if (old[i]) Object.defineProperty(globalThis, key, old[i]!); else Reflect.deleteProperty(globalThis, key); });
   }
 }));
+
+test("base waits for its camera journey, ignores repeated clicks and cancels navigation on disposal", async () => {
+  const keys=["document","ResizeObserver","MutationObserver","requestAnimationFrame","cancelAnimationFrame","matchMedia","addEventListener","removeEventListener","history"];
+  const old=keys.map(k=>Object.getOwnPropertyDescriptor(globalThis,k));
+  const events=new EventTarget(),frames=new Map<number,(time:number)=>void>();
+  let next=0,battles=0,disposed=0;const draws:Array<[string,number]>=[];
+  Object.assign(globalThis,{
+    document:fakeDocument,ResizeObserver:Observer,MutationObserver:Observer,
+    requestAnimationFrame:(cb:(t:number)=>void)=>{const id=++next;frames.set(id,cb);return id;},
+    cancelAnimationFrame:(id:number)=>frames.delete(id),matchMedia:()=>({matches:false}),
+    addEventListener:events.addEventListener.bind(events),removeEventListener:events.removeEventListener.bind(events),
+    history:{replaceState(){}},
+  });
+  const root=new SelectorElement(),home=root.querySelector(".cd-home");
+  for(const selector of [".cd-enter",".cd-to-fitting"]) root.selectors.set(selector,home.querySelector(selector));
+  class Home {ready=Promise.resolve();draw(target:string,p:number){draws.push([target,p]);}dispose(){disposed++;}}
+  class Workshop {dispose(){} hide(){}}
+  class Depth {ready=Promise.resolve();dispose(){} draw(){}}
+  const step=(time:number)=>{const pending=[...frames.values()];frames.clear();for(const callback of pending)callback(time);};
+  let base:BrowserBase|undefined;
+  try {
+    base=new BrowserBase(root,async()=>{battles++;},{
+      baseUrl:"/",backArrow:"",GEAR_SLOT_NAMES:{},GEAR_SLOTS:[],ITEM_BY_ID:new Map(),
+      loadLocalLoadout:()=>({weapon1:{item:"rifle-ak"}}),compileKit:()=>({armor:{head:0,body:0,legs:0}}),
+      WeaponScreen:Workshop,DepthBackdrop:Depth,HomeStage:Home,liquidGlass(){},gameAudio:{screen(){}},
+    });
+    await new Promise(resolve=>setImmediate(resolve));
+    const enter=root.querySelector(".cd-enter");const now=performance.now();
+    enter.dispatchEvent(new Event("click"));enter.dispatchEvent(new Event("click"));
+    assert.equal(battles,0);assert.equal(home.getAttribute("aria-busy"),"true");
+    step(now+1000);assert.equal(battles,0);assert.ok(draws.at(-1)![1]>0);
+    step(now+2200);assert.equal(battles,1);step(now+2300);assert.equal(battles,1);
+    await new Promise(resolve=>setImmediate(resolve));
+    base.show("base");enter.dispatchEvent(new Event("click"));base.free();base=undefined;
+    step(now+8000);assert.equal(battles,1);assert.equal(disposed,1);assert.equal(frames.size,0);
+  } finally {
+    base?.free();keys.forEach((k,i)=>{if(old[i])Object.defineProperty(globalThis,k,old[i]!);else Reflect.deleteProperty(globalThis,k);});
+  }
+});

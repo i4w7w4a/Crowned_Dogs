@@ -289,6 +289,23 @@ impl RustProjectedStage {
     pub fn dispose(&self) {
         self.state.borrow_mut().dispose();
     }
+
+    /// The base has no battle lens: draw its photo-calibrated set directly.
+    #[wasm_bindgen(js_name = drawToScreen)]
+    pub fn draw_to_screen(&self, camera: JsValue) -> Result<(), JsValue> {
+        let s = self.state.borrow();
+        if s.disposed || !s.ready {
+            return Ok(());
+        }
+        let target = call(&s.renderer, "getRenderTarget", &[]);
+        let background = get(&s.scene, "background");
+        set(&s.scene, "background", &JsValue::NULL);
+        let result = try_call(&s.renderer, "setRenderTarget", &[JsValue::NULL])
+            .and_then(|_| try_call(&s.renderer, "render", &[s.scene.clone(), camera]));
+        set(&s.scene, "background", &background);
+        let restore = try_call(&s.renderer, "setRenderTarget", &[target]);
+        result.and(restore).map(|_| ())
+    }
 }
 
 impl Drop for RustProjectedStage {
@@ -467,6 +484,44 @@ async fn load_assets(
     let current = active(state, request)?;
     let mut s = current.borrow_mut();
     s.textures = textures.iter().filter(|t| present(t)).cloned().collect();
+    // Use the original image everywhere except the traced silhouettes that need
+    // repair after their independent objects move. The mask is rasterised from
+    // geometry outlines, not inferred from a depth map.
+    let repair = manifest_data["repairPolygons"]
+        .as_array()
+        .filter(|p| !p.is_empty());
+    let repair_mask = if let Some(polygons) = repair {
+        let canvas = call(&document(), "createElement", &["canvas".into()]);
+        let w = 1024.;
+        let h = (w / number("aspect")).round();
+        set(&canvas, "width", &n(w));
+        set(&canvas, "height", &n(h));
+        let ctx = call(&canvas, "getContext", &["2d".into()]);
+        set(&ctx, "fillStyle", &"black".into());
+        call(&ctx, "fillRect", &[n(0.), n(0.), n(w), n(h)]);
+        set(&ctx, "fillStyle", &"white".into());
+        set(&ctx, "strokeStyle", &"white".into());
+        set(&ctx, "lineWidth", &n(2.));
+        for polygon in polygons {
+            call(&ctx, "beginPath", &[]);
+            for (i, p) in polygon.as_array().unwrap().iter().enumerate() {
+                call(
+                    &ctx,
+                    if i == 0 { "moveTo" } else { "lineTo" },
+                    &[n(p[0].as_f64().unwrap() * w), n(p[1].as_f64().unwrap() * h)],
+                );
+            }
+            call(&ctx, "closePath", &[]);
+            call(&ctx, "fill", &[]);
+            call(&ctx, "stroke", &[]);
+        }
+        let texture = make(&three, "CanvasTexture", &[canvas]);
+        set(&texture, "colorSpace", &get(&three, "NoColorSpace"));
+        s.textures.push(texture.clone());
+        texture
+    } else {
+        textures[0].clone()
+    };
     for part in manifest_data["meshes"].as_array().unwrap() {
         let geometry = make(&three, "BufferGeometry", &[]);
         let positions: Vec<f32> = part["positions"]
@@ -484,6 +539,8 @@ async fn load_assets(
         call(&geometry, "setIndex", &[json(&part["indices"])]);
         call(&geometry, "computeBoundingSphere", &[]);
         let kind = part["material"].as_str().unwrap();
+        let projected_side =
+            kind == "side" && manifest_data["projectSides"].as_bool() == Some(true);
         let tile_index = match kind {
             "floor" => 2,
             "wall" => 3,
@@ -509,13 +566,35 @@ async fn load_assets(
             FRAGMENT,
             &[
                 ("sourceViewProjection", source.clone()),
-                ("photo", textures[usize::from(kind == "equipment")].clone()),
+                (
+                    "photo",
+                    textures[usize::from(kind == "equipment" || projected_side)].clone(),
+                ),
+                ("originalPhoto", textures[1].clone()),
+                ("repairMask", repair_mask.clone()),
+                (
+                    "useRepair",
+                    n(
+                        if repair.is_some() && kind != "equipment" && kind != "side" {
+                            1.
+                        } else {
+                            0.
+                        },
+                    ),
+                ),
                 (
                     "surfaceTile",
                     textures[if has_tile { tile_index } else { 0 }].clone(),
                 ),
                 ("surfaceKind", n(surface_kind)),
-                ("isSide", n(if kind == "side" { 1. } else { 0. })),
+                (
+                    "isSide",
+                    n(if kind == "side" && !projected_side {
+                        1.
+                    } else {
+                        0.
+                    }),
+                ),
                 (
                     "sideColor",
                     make(&three, "Vector3", &[n(color[0]), n(color[1]), n(color[2])]),
@@ -559,6 +638,30 @@ fn validate_manifest(data: &serde_json::Value) -> Result<(), JsValue> {
     for key in ["clean", "equipment"] {
         if data["textures"][key].as_str().unwrap_or("").is_empty() {
             return Err(invalid());
+        }
+    }
+    if let Some(polygons) = data.get("repairPolygons") {
+        let polygons = polygons.as_array().ok_or_else(invalid)?;
+        if polygons.len() > 128 {
+            return Err(invalid());
+        }
+        for polygon in polygons {
+            let points = polygon
+                .as_array()
+                .filter(|p| p.len() >= 3 && p.len() <= 128)
+                .ok_or_else(invalid)?;
+            for point in points {
+                let point = point
+                    .as_array()
+                    .filter(|p| p.len() == 2)
+                    .ok_or_else(invalid)?;
+                if point.iter().any(|v| {
+                    !v.as_f64()
+                        .is_some_and(|v| v.is_finite() && (0. ..=1.).contains(&v))
+                }) {
+                    return Err(invalid());
+                }
+            }
         }
     }
     let parts = data["meshes"]

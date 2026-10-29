@@ -39,6 +39,9 @@ struct Base {
     workshop: JsValue,
     depth: JsValue,
     depth_ready: bool,
+    home_stage: JsValue,
+    home_ready: bool,
+    home_motion: Option<(String, f64)>,
     load_attempted: bool,
     model_ready: bool,
     scroll: BrowserScroll,
@@ -76,6 +79,7 @@ impl Base {
         self.show(view, weak);
     }
     fn show(&mut self, view: &str, weak: Weak<RefCell<Self>>) {
+        self.reset_home();
         call(&get(&self.host, "gameAudio"), "screen", &[js(view)]);
         if boolean(&self.dialog, "open") {
             call(&self.dialog, "close", &[]);
@@ -99,6 +103,9 @@ impl Base {
         );
     }
     fn active(&mut self, active: bool) {
+        if !active {
+            self.home_motion = None;
+        }
         self.active = active;
         hidden(&self.root, !active);
         if !active && boolean(&self.dialog, "open") {
@@ -430,9 +437,21 @@ impl Base {
             }
         }
     }
-    fn tick(&mut self, now: f64) {
+    fn reset_home(&mut self) {
+        self.home_motion = None;
+        toggle(&self.home, "cd-travelling", false);
+        attr(&self.home, "aria-busy", "false");
+        style(&self.home, "--cd-travel-fade", "0");
+        for selector in [".cd-enter", ".cd-to-fitting"] {
+            set(&query(&self.home, selector), "disabled", &flag(false));
+        }
+        if self.home_ready {
+            call_optional(&self.home_stage, "draw", &[js("base"), number(0.)]);
+        }
+    }
+    fn tick(&mut self, now: f64) -> Option<String> {
         if self.disposed {
-            return;
+            return None;
         }
         if let Some(frame) = &self.frame {
             self.frame_id = call(
@@ -441,10 +460,48 @@ impl Base {
                 &[frame.as_ref().clone()],
             );
         }
+        if !self.active {
+            return None;
+        }
+        let mut completed = None;
+        if self.view == "base" && self.home_ready {
+            let (target, progress) = if let Some((target, start)) = &self.home_motion {
+                let duration = if target == "battle" { 2100. } else { 2400. };
+                (target.clone(), ((now - start) / duration).clamp(0., 1.))
+            } else {
+                ("base".into(), 0.)
+            };
+            if invoke(&self.home_stage, "draw", &[js(&target), number(progress)]).is_err() {
+                self.home_ready = false;
+                hidden(&query(&self.home, ".cd-home-projection"), true);
+                hidden(&query(&self.home, "img.cd-backdrop"), false);
+                completed = self.home_motion.take().map(|x| x.0);
+            } else if self.home_motion.is_some() {
+                style(
+                    &self.home,
+                    "--cd-travel-fade",
+                    &format!("{}", ((progress - 0.92) / 0.08).clamp(0., 1.)),
+                );
+                if progress >= 1. {
+                    completed = self.home_motion.take().map(|x| x.0);
+                }
+            }
+        }
         for drift in &mut self.drifts {
             let w = num(&drift.home, "clientWidth");
             let h = num(&drift.home, "clientHeight");
             if w <= 0.0 {
+                continue;
+            }
+            if drift.flat && self.home_ready {
+                let iw = (h * drift.ratio).max(w);
+                let ih = (w / drift.ratio).max(h);
+                for ring in &drift.rings {
+                    let u: f64 = data(ring, "u").parse().unwrap_or(0.5);
+                    let v: f64 = data(ring, "v").parse().unwrap_or(0.5);
+                    style(ring, "left", &format!("{}px", (w - iw) * 0.5 + u * iw));
+                    style(ring, "top", &format!("{}px", (h - ih) * 0.5 + v * ih));
+                }
                 continue;
             }
             let points = Array::new();
@@ -497,6 +554,7 @@ impl Base {
                 call_optional(&self.viewer, "shift", &[number(tx * 0.6), number(ty * 0.6)]);
             }
         }
+        completed
     }
     fn dispose(&mut self) {
         if self.disposed {
@@ -514,6 +572,8 @@ impl Base {
         call_optional(&self.viewer, "dispose", &[]);
         call_optional(&self.item_viewer, "dispose", &[]);
         call_optional(&self.workshop, "dispose", &[]);
+        self.home_motion = None;
+        call_optional(&self.home_stage, "dispose", &[]);
         if get(&self.depth, "dispose").is_function() {
             call(&self.depth, "dispose", &[]);
         }
@@ -609,6 +669,9 @@ impl BrowserBase {
             workshop: JsValue::NULL,
             depth: JsValue::NULL,
             depth_ready: false,
+            home_stage: JsValue::NULL,
+            home_ready: false,
+            home_motion: None,
             load_attempted: false,
             model_ready: false,
             scroll,
@@ -626,6 +689,7 @@ impl BrowserBase {
         bind(&state);
         setup_workshop(&state)?;
         setup_drift(&state, &home, 1882.0 / 3344.0, true);
+        setup_home_stage(&state);
         setup_depth(&state);
         let weak = Rc::downgrade(&state);
         let callback = Closure::wrap(Box::new(move |_: JsValue| {
@@ -642,8 +706,9 @@ impl BrowserBase {
         let weak = Rc::downgrade(&state);
         let frame = Closure::wrap(Box::new(move |now: f64| {
             if let Some(state) = weak.upgrade() {
-                if let Ok(mut state) = state.try_borrow_mut() {
-                    state.tick(now);
+                let complete = state.try_borrow_mut().ok().and_then(|mut s| s.tick(now));
+                if let Some(target) = complete {
+                    finish_home_transition(&state, &target);
                 }
             }
         }) as Box<dyn FnMut(f64)>);
@@ -703,8 +768,8 @@ fn bind(state: &Rc<RefCell<Base>>) {
             let Some(state) = weak.upgrade() else {
                 return;
             };
-            if action == "battle" {
-                enter_battle(&state);
+            if action == "battle" || action == "fitting" {
+                begin_home_transition(&state, action);
                 return;
             }
             let Ok(mut s) = state.try_borrow_mut() else {
@@ -835,6 +900,98 @@ fn setup_workshop(state: &Rc<RefCell<Base>>) -> Result<(), JsValue> {
     s.changed = Some(change);
     Ok(())
 }
+fn begin_home_transition(state: &Rc<RefCell<Base>>, target: &str) {
+    let animate = {
+        let mut s = state.borrow_mut();
+        if s.disposed
+            || !s.active
+            || s.view != "base"
+            || s.home_motion.is_some()
+            || boolean(&query(&s.home, ".cd-enter"), "disabled")
+        {
+            return;
+        }
+        let reduce = boolean(
+            &call(
+                &global(),
+                "matchMedia",
+                &[js("(prefers-reduced-motion: reduce)")],
+            ),
+            "matches",
+        );
+        if s.home_ready && !reduce {
+            s.home_motion = Some((
+                target.into(),
+                call(&get(&global(), "performance"), "now", &[])
+                    .as_f64()
+                    .unwrap_or(0.),
+            ));
+            toggle(&s.home, "cd-travelling", true);
+            attr(&s.home, "aria-busy", "true");
+            for selector in [".cd-enter", ".cd-to-fitting"] {
+                set(&query(&s.home, selector), "disabled", &flag(true));
+            }
+            // Load the Persona during the tunnel journey, while the base remains visible.
+            if target == "fitting" {
+                s.ensure_viewer(Rc::downgrade(state));
+            }
+            true
+        } else {
+            false
+        }
+    };
+    if !animate {
+        finish_home_transition(state, target);
+    }
+}
+fn finish_home_transition(state: &Rc<RefCell<Base>>, target: &str) {
+    if state.borrow().disposed {
+        return;
+    }
+    if target == "battle" {
+        enter_battle(state);
+    } else {
+        state.borrow_mut().navigate("fitting", Rc::downgrade(state));
+    }
+}
+fn setup_home_stage(state: &Rc<RefCell<Base>>) {
+    let host = state.borrow().host.clone();
+    if !get(&host, "HomeStage").is_function() {
+        return;
+    }
+    let canvas = query(&state.borrow().home, ".cd-home-projection");
+    // Hidden canvases have no layout size: reveal it only once textures are ready.
+    let url = format!(
+        "{}img/base-stage/manifest.json",
+        text(&get(&host, "baseUrl"))
+    );
+    let Ok(stage) = construct(&host, "HomeStage", &[canvas.clone(), js(&url)]) else {
+        return;
+    };
+    let ready = get(&stage, "ready");
+    state.borrow_mut().home_stage = stage;
+    let weak = Rc::downgrade(state);
+    spawn_local(async move {
+        if JsFuture::from(Promise::resolve(&ready)).await.is_err() {
+            return;
+        }
+        let Some(state) = weak.upgrade() else {
+            return;
+        };
+        let mut s = state.borrow_mut();
+        if s.disposed {
+            return;
+        }
+        hidden(&canvas, false);
+        if invoke(&s.home_stage, "draw", &[js("base"), number(0.)]).is_err() {
+            hidden(&canvas, true);
+            return;
+        }
+        s.home_ready = true;
+        hidden(&query(&s.home, "img.cd-backdrop"), true);
+        attr(&canvas, "data-projected-base", "true");
+    });
+}
 fn enter_battle(state: &Rc<RefCell<Base>>) {
     let (callback, loadout, button) = {
         let state = state.borrow();
@@ -864,6 +1021,7 @@ fn enter_battle(state: &Rc<RefCell<Base>>) {
             return;
         }
         if result.is_err() {
+            state.reset_home();
             state.active(true);
             content(
                 &query(&state.root, ".cd-home-message"),
