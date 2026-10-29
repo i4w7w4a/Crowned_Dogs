@@ -7,3 +7,7 @@ apps/web/public/media/
 apps/web/public/models/
 apps/web/dist/
 __pycache__/
+target/
+release-local/
+packages/runtime/wasm/
+apps/desktop/gen/

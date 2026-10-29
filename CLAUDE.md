@@ -20,9 +20,9 @@ Read `HANDOFF.md` first: it has the state of every area, where the files are and
 
 ## Code
 
-- Node.js 22.18+, TypeScript run directly by Node (no build step), npm workspaces: `packages/core` (rules, match, bot AI), `packages/audio`, `packages/icons`, `apps/server` (Telegram bot, grammY), `apps/web` (three.js arena, Vite).
+- Node.js 22.18+, Rust stable with wasm32-unknown-unknown and wasm-bindgen-cli 0.2.129. Read `LOCAL_BUILD.md` for setup. Production rules/state/math live in `crates/`; TypeScript connects Rust/WASM to DOM, Three.js, WebAudio and Telegram. `packages/core/reference/` is a frozen test oracle, never a production fallback.
 - Before every push: `npm run check` (types + 102 tests) and `npm run web:build`. CI runs the same.
-- Balance numbers live in `packages/core/src/rules.ts`. After rule changes run `npm run balance` and `npm run kits`.
+- Balance numbers and catalogue live in `crates/game-core/catalog/catalog.json`. After rule changes run `npm run balance` and `npm run kits`. Run Rust tests when changing Rust modules.
 - Commit messages in English, short, describing the change for a player or a designer. README and texts for Art in Russian.
 - Package.json scripts, `.gitignore`, README and `package-lock.json` are where branches usually conflict.
 

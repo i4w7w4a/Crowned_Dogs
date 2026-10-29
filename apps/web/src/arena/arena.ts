@@ -5,6 +5,7 @@
 // attack, hit, fall and reset; everything else here is about looking right.
 
 import type { Zone } from "@crowned-dogs/core";
+import { callRust, motionCompute } from "../../../../packages/runtime/src/index.ts";
 import * as THREE from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
@@ -27,33 +28,14 @@ import { Hand, gripOf, loadGuns, type Guns } from "./weapons.ts";
 export type Who = "me" | "enemy";
 export type HitKind = "hit" | "blocked" | "grenade";
 
-/** Every figure is scaled to this height, metres. */
-const HEIGHT = 1.8;
-/** Each step changes the distance by 7%, so every step reads the same on screen. */
-const STEP_GROWTH = 1.07;
-/** Where the sync connector sits on the nape: share of the head height up, share of it back. */
-const PORT = { up: 0.08, depth: 0.45 };
 /** First person: where the lens sits in our figure's own frame for each stance (metres: x to its left, y up,
  *  z forward; the head is folded away), and how far our figure is tilted back about the lens, radians, so the
  *  arms and the gun come up into the picture. The camera itself never turns: the painted hall must match. */
 type Spot = { at: [number, number, number]; tilt: number };
-const VIEW: Record<Stance, Spot> & Partial<Record<Attack, Spot>> = {
-  // with a gun the lens is a bodycam between the shoulders; the arms reach for the gun (viewmodel.ts)
-  rifle: { at: [0, 1.57, 0.04], tilt: 0 },
-  shotgun: { at: [0, 1.57, 0.04], tilt: 0 },
-  sniper: { at: [0, 1.57, 0.04], tilt: 0 },
-  pistol: { at: [0, 1.57, 0.04], tilt: 0 },
-  // during a stab or a throw the lens glides to where the hand goes: the knife thrusts low on the right,
-  // the grenade leaves the hand low on the left
-  knife: { at: [-0.2, 1.36, 0.12], tilt: 0.3 },
-  grenade: { at: [0.17, 1.47, 0.12], tilt: 0.53 },
-};
-{ // ?fpview=x,y,z,tilt tries another lens spot for every stance (tuning)
-  const t = new URLSearchParams(location.search).get("fpview")?.split(",").map(Number);
-  if (t?.length === 4) { const [x = 0, y = 0, z = 0, tilt = 0] = t; for (const v of Object.values(VIEW)) { v.at = [x, y, z]; v.tilt = tilt; } }
-}
+const sceneData = callRust<{ views: Record<Stance, Spot> & Partial<Record<Attack, Spot>>; muzzle: Record<Stance, number> }>("client.arena.data", [new URLSearchParams(location.search).get("fpview")?.split(",").map(Number)]);
+const VIEW = sceneData.views;
 /** How big each gun's muzzle flash is, metres across. */
-const MUZZLE: Record<Stance, number> = { pistol: 0.16, rifle: 0.24, shotgun: 0.3, sniper: 0.28 };
+const MUZZLE = sceneData.muzzle;
 /** How much wider the first-person lens on our own arms is than the hall's (a squeeze of the picture). */
 const WIDE = Number(new URLSearchParams(location.search).get("wide") ?? 0.62);
 const FPKEY = Number(new URLSearchParams(location.search).get("fpkey") ?? 2.5);
@@ -129,14 +111,7 @@ interface Calibrated {
 /** The live camera for a painted frame. In first person it sits lower, at our eyes, under the same painted
  *  horizon, and the enemy stands a little closer. */
 function calibrate(f: Frame, fp = false): Calibrated {
-  const c = f.cal, aspect = f.w / f.h;
-  const fn = 0.5 / Math.tan(THREE.MathUtils.degToRad(c.fov) / 2);
-  return {
-    fn, aspect, d7: HEIGHT * fn / c.height * (fp ? c.fp.near : 1), camH: fp ? c.fp.camH : c.camH,
-    hz: c.feet[1] - c.camH * c.height / HEIGHT,
-    kx: (c.feet[0] - 0.5) * aspect / fn,
-    me: c.me, back: fp ? 0 : c.back,
-  };
+  return callRust("client.arena.calibrate", [f, fp]);
 }
 
 function softTexture(stops: [number, string][]): THREE.CanvasTexture {
@@ -148,17 +123,15 @@ function softTexture(stops: [number, string][]): THREE.CanvasTexture {
   return t;
 }
 
-const smooth = (u: number) => u * u * (3 - 2 * u);
 const aimAt = new THREE.Vector3(), tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpSize = new THREE.Vector2();
 
 /** The reflection fades away from the feet, like one in a thin layer of water, and is lit as the body above it is. */
 function mirrorShader(sh: THREE.WebGLProgramParametersWithUniforms): void {
-  sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying float vWorldY;")
-    .replace("#include <project_vertex>", "#include <project_vertex>\nvWorldY = (modelMatrix * vec4(transformed, 1.0)).y;");
-  sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vWorldY;")
-    // flipped upside down, its surfaces face the floor; light them as the real body's surfaces are lit
-    .replace("#include <normal_fragment_maps>", "#include <normal_fragment_maps>\n{ vec3 w = transpose(mat3(viewMatrix)) * normal; w.y = -w.y; normal = normalize(mat3(viewMatrix) * w); }")
-    .replace("#include <dithering_fragment>", "#include <dithering_fragment>\ngl_FragColor *= clamp(1.0 + vWorldY / 1.1, 0.0, 1.0);");
+  patchShader(sh, "mirror");
+}
+function patchShader(sh: THREE.WebGLProgramParametersWithUniforms, kind: string): void {
+  const out = callRust<{ vertex: string; fragment: string }>("client.arena.shader", [kind, sh.vertexShader, sh.fragmentShader]);
+  sh.vertexShader = out.vertex; sh.fragmentShader = out.fragment;
 }
 
 export class Arena {
@@ -211,8 +184,7 @@ export class Arena {
   private wideY = { value: 0 };
   private widen = (shader: THREE.WebGLProgramParametersWithUniforms): void => {
     shader.uniforms.wideK = this.wideK; shader.uniforms.wideY = this.wideY;
-    shader.vertexShader = "uniform float wideK;\nuniform float wideY;\n" + shader.vertexShader.replace("#include <project_vertex>",
-      "#include <project_vertex>\n\tgl_Position.xy = mix(vec2(0.0, wideY) * gl_Position.w, gl_Position.xy, wideK);");
+    patchShader(shader, "wide");
   };
   private mirror: Mirror | null = null;
   private lens: Lens;
@@ -351,9 +323,8 @@ export class Arena {
     const k = this.k = calibrate(f, this.fp);
     this.camera.position.set(0, k.camH, 0);
     // Off-centre lens: the painted horizon is not in the middle of the picture, verticals stay vertical.
-    const n = this.camera.near;
-    const top = n * k.hz / k.fn, bottom = -n * (1 - k.hz) / k.fn, half = n * k.aspect / 2 / k.fn;
-    this.camera.projectionMatrix.makePerspective(-half, half, top, bottom, n, this.camera.far);
+    const p = arenaCompute("arena.project", [this.camera.near, k.hz, k.fn, k.aspect, this.camera.far]);
+    this.camera.projectionMatrix.makePerspective(p[0]!, p[1]!, p[2]!, p[3]!, p[4]!, p[5]!);
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
     this.renderer.toneMappingExposure = f.look.exposure;
     this.lens.setHorizon(k.hz);
@@ -388,10 +359,9 @@ export class Arena {
   resize(width: number, height: number, view: View = { x: 0, y: 0, w: 1, h: 1 }): void {
     this.size = { w: width, h: height, view };
     // as sharp as the screen allows, within the level's pixel budget
-    const q = this.q, area = Math.max(1, width * height);
-    const ratio = Math.max(0.5, Math.min(window.devicePixelRatio || 1, q.maxDpr, Math.sqrt(q.maxPixels / area)));
-    this.renderer.setPixelRatio(ratio);
-    this.renderer.setSize(Math.round(width), Math.round(height), false);
+    const q = this.q, size = arenaCompute("arena.resize", [width, height, window.devicePixelRatio || 1, q.maxDpr, q.maxPixels]);
+    this.renderer.setPixelRatio(size[0]!);
+    this.renderer.setSize(size[1]!, size[2]!, false);
     const px = this.renderer.getDrawingBufferSize(new THREE.Vector2());
     this.lens.setSize(px.x, px.y, width, height, view);
   }
@@ -411,26 +381,19 @@ export class Arena {
    *  with the ground and never slide. Our own steps show as the body bobbing (our feet are out of the picture). */
   move(distance: number, meMove: number, enemyMove: number): void {
     if (!this.ready) return;
-    const from = this.depth, to = this.depthOf(distance), ground = Math.abs(to - from);
-    const mine = meMove ? this.depthOf(this.dist) - this.depthOf(this.dist - meMove) : 0;
+    const plan = callRust<{ to: number; walk: Arena["walk"]; stride: number | null; bob: number | null }>("client.arena.move", [this.depth, distance, meMove, this.dist, this.k!.d7, this.k!.back]);
     this.dist = distance;
-    if (ground < 0.01 && !meMove) { this.walk = null; this.depth = to; return; }
-    // a step is a walk at an easy pace, two steps ahead a run, a dash a sprint; backing off is a walk, never quick
-    const ahead = to < from, far = Math.max(ground, Math.abs(mine));
-    const cruise = !ahead ? Math.min(1.5, far / 0.45) : far < 0.8 ? far / 0.47 : far < 1.4 ? 2.5 : 3;
-    const dur = 0.2 + far / Math.max(cruise, 0.1);
-    this.walk = { from, to, t: 0, dur, mine };
-    if (ground >= 0.01) this.stride(this.en!, ahead ? ground : -ground, dur);
-    if (meMove) this.bob.depth = Math.abs(mine) / (dur - ramp(dur)) > 2 ? 0.035 : 0.02;
+    this.walk = plan.walk;
+    if (!plan.walk) { this.depth = plan.to; return; }
+    if (plan.stride !== null) this.stride(this.en!, plan.stride, plan.walk.dur);
+    if (plan.bob !== null) this.bob.depth = plan.bob;
   }
 
   /** Starts a figure's walk (or run) over `ground` metres (negative: backwards) in `dur` seconds, from the
    *  moment of the loop that brings it to a stop just as the free foot passes the planted one. */
   private stride(f: Figure, ground: number, dur: number): void {
-    const cruise = Math.abs(ground) / (dur - ramp(dur)), w = f.gait.walk, r = f.gait.run, s = f.model.scale.x;
-    const run = !!r && ground > 0 && (!w || cruise > Math.sqrt(w.speed * r.speed) * s);
-    const g = run ? r : w;
-    if (g) f.motion.walk(run ? "run" : "walk", g.passing - ground / (g.speed * s));
+    const gait = callRust<{ kind: "run" | "walk"; phase: number } | null>("client.arena.stride", [ground, dur, f.gait.walk, f.gait.run, f.model.scale.x]);
+    if (gait) f.motion.walk(gait.kind, gait.phase);
   }
 
   /** A figure attacks so that its shot (the stab, the throw) comes `inSeconds` from now, with the sound. */
@@ -443,14 +406,14 @@ export class Arena {
   hit(who: Who, zone: Zone, kind: HitKind): void {
     if (!this.ready) return;
     const f = who === "enemy" ? this.en! : this.me!;
-    f.kick[zone] = Math.min(1.4, f.kick[zone] + (kind === "blocked" ? 0.45 : 1));
-    if (kind === "grenade") { f.kick.body = 1; f.kick.legs = 0.8; }
+    const hit = callRust<{ kick: Record<Zone, number>; zone: Zone; height: number | null; size: number; color: number; life: number }>("client.arena.hit", [f.kick, zone, kind]);
+    Object.assign(f.kick, hit.kick);
     if (who !== "enemy") return;
-    zoneWorld(f, kind === "grenade" ? "legs" : zone, this.spark.position);
-    if (kind === "grenade") this.spark.position.y = 0.35;
-    this.spark.userData.size = kind === "grenade" ? 1.6 : 0.32;
-    this.spark.material.color.set(kind === "blocked" ? 0x7fe6f2 : 0xffffff);
-    this.sparkMax = kind === "grenade" ? 0.4 : 0.18;
+    zoneWorld(f, hit.zone, this.spark.position);
+    if (hit.height !== null) this.spark.position.y = hit.height;
+    this.spark.userData.size = hit.size;
+    this.spark.material.color.set(hit.color);
+    this.sparkMax = hit.life;
     this.sparkLife = this.sparkMax;
     this.spark.visible = true;
   }
@@ -496,13 +459,14 @@ export class Arena {
 
   /** Where a zone of the enemy is right now, as fractions of the canvas (0..1 from the top left). */
   zoneOnScreen(zone: Zone): [number, number] {
-    if (!this.ready) return [0.645, { head: 0.26, body: 0.34, groin: 0.42, legs: 0.49 }[zone]];
+    if (!this.ready) return callRust("client.arena.zoneFallback", [zone]);
     zoneWorld(this.en!, zone, tmpA).project(this.camera);
-    return this.lens.toScreen((tmpA.x + 1) / 2, (1 - tmpA.y) / 2);
+    const p = arenaCompute("arena.screen", [tmpA.x, tmpA.y]);
+    return this.lens.toScreen(p[0]!, p[1]!);
   }
 
   private depthOf(d: number): number {
-    return this.k!.d7 * Math.pow(STEP_GROWTH, d - 7) + this.k!.back;
+    return arenaCompute("arena.depth", [d, this.k!.d7, this.k!.back])[0]!;
   }
 
   private makeFigure(gltf: GLTF, look: Look): Figure {
@@ -524,9 +488,9 @@ export class Arena {
     const bones = findBones(model, box);
     // a model made in metres keeps its own height (the female Persona is 1.70 m, 1.75 with her hair);
     // anything else (the stand-in mannequin) is brought to a grown man's height
-    const tall = box.max.y - box.min.y, s = tall > 1.4 && tall < 2.2 ? 1 : HEIGHT / tall;
-    model.scale.multiplyScalar(s);
-    model.position.y = -box.min.y * s;
+    const size = arenaCompute("arena.scale", [box.min.y, box.max.y]);
+    model.scale.multiplyScalar(size[0]!);
+    model.position.y = size[1]!;
 
     const tilt = new THREE.Group(); tilt.add(model); // falls around the feet
     const blob = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.7), new THREE.MeshBasicMaterial({
@@ -622,31 +586,14 @@ export class Arena {
   }
 
   private place(): void {
-    const k = this.k!, D = this.depth, en = this.en!, me = this.me!;
-    const ex = k.kx * D, ez = -D;
-    en.group.position.set(ex, 0, ez);
-    en.group.rotation.y = Math.atan2(-ex, D); // faces the camera
-    if (this.fp) return this.placeView(ex, ez);
-    // stepped back, our Persona stays in the same corner of the picture, only smaller
-    const mz = k.me.z - k.back, mx = k.me.x * mz / k.me.z;
-    me.group.position.set(mx, k.me.y, mz);
-    me.group.rotation.y = Math.atan2(ex - mx, ez - mz); // faces the enemy
-    this.rim.position.set(ex - 4, 7.5, ez - 14); this.rim.target.position.set(ex, 0.9, ez);
-    this.fill.position.set(ex - 2, 3.4, ez + 3.2); this.fill.target.position.set(ex, 1, ez);
-    this.meKey.position.set(mx - 1, 3.4, mz + 3); this.meKey.target.position.set(mx, 1.5, mz);
-    this.bounce.position.set(ex - 0.2, 0.12, ez + 0.9);
-  }
-
-  /** First person: our figure faces the enemy from the camera; holdView() then puts its eyes on the lens. */
-  private placeView(ex: number, ez: number): void {
-    const me = this.me!, c = this.camera.position;
-    me.group.rotation.y = Math.atan2(ex - c.x, ez - c.z);
-    me.group.position.set(c.x, 0, c.z);
-    this.rim.position.set(ex - 4, 7.5, ez - 14); this.rim.target.position.set(ex, 0.9, ez);
-    this.fill.position.set(ex - 2, 3.4, ez + 3.2); this.fill.target.position.set(ex, 1, ez);
-    // the arms catch the light of the windows ahead, on their edges
-    this.meKey.position.set(c.x + 1.0, c.y + 1.5, c.z - 2.5); this.meKey.target.position.set(c.x + 0.1, c.y - 0.3, c.z - 0.5);
-    this.bounce.position.set(ex - 0.2, 0.12, ez + 0.9);
+    const k = this.k!, c = this.camera.position, en = this.en!, me = this.me!;
+    const p = arenaCompute("arena.place", [this.depth, k.kx, k.me.x, k.me.y, k.me.z, k.back, Number(this.fp), c.x, c.y, c.z]);
+    en.group.position.fromArray(p, 0); en.group.rotation.y = p[3]!;
+    me.group.position.fromArray(p, 4); me.group.rotation.y = p[7]!;
+    this.rim.position.fromArray(p, 8); this.rim.target.position.fromArray(p, 11);
+    this.fill.position.fromArray(p, 14); this.fill.target.position.fromArray(p, 17);
+    this.meKey.position.fromArray(p, 20); this.meKey.target.position.fromArray(p, 23);
+    this.bounce.position.fromArray(p, 26);
   }
 
   /** First person: puts our figure around the lens, as VIEW says for our stance (tilted back about it, so the
@@ -657,48 +604,47 @@ export class Arena {
     const me = this.me!, g = me.group, v = this.view;
     if (me.fallT >= 0) { g.visible = false; return; }
     g.visible = true;
-    const act = me.motion.attackKind, want = (act && VIEW[act]) || VIEW[this.myGun], k = v.set ? 1 - Math.exp(-dt * 6) : 1;
-    v.at.lerp(tmpB.fromArray(want.at), k); v.tilt += (want.tilt - v.tilt) * k; v.set = true;
+    const act = me.motion.attackKind, want = (act && VIEW[act]) || VIEW[this.myGun], c = this.camera.position;
+    const p = arenaCompute("arena.view", [v.at.x, v.at.y, v.at.z, v.tilt, ...want.at, want.tilt, Number(v.set), dt, g.rotation.y, c.x, c.y, c.z]);
+    v.at.fromArray(p); v.tilt = p[3]!; v.set = true;
     g.rotation.set(-v.tilt, g.rotation.y, 0, "YXZ");
-    g.position.copy(this.camera.position).sub(tmpA.copy(v.at).applyEuler(g.rotation));
+    g.position.fromArray(p, 4);
   }
 
   /** Our body dips once a step (lowest as the foot lands) and sways a little from foot to foot, as fast as
    *  we cover the ground, `speed` m/s; it settles back when we stop. */
   private step(dt: number, speed: number): void {
     const b = this.bob, me = this.me!;
-    b.phase += (speed * dt * Math.PI) / 0.7;
-    b.k += ((speed > 0.05 && me.fallT < 0 ? 1 : 0) - b.k) * (1 - Math.exp(-dt * 8));
-    if (b.k < 1e-3) { b.k = 0; b.phase = 0; }
-    const s = Math.sin(b.phase);
-    me.tilt.position.set(0.012 * b.k * s, -b.depth * b.k * s * s, 0);
+    const p = arenaCompute("arena.bob", [b.phase, b.k, b.depth, dt, speed, me.fallT]);
+    b.phase = p[0]!; b.k = p[1]!;
+    me.tilt.position.set(p[2]!, p[3]!, 0);
   }
 
   private tick(time: number): void {
     this.timer.update(time);
     // Slow devices skip time instead of jumping: animations stay smooth, just slower.
-    const dt = Math.min(this.timer.getDelta(), 0.05);
+    const frame = arenaCompute("arena.frame", [this.timer.getDelta(), this.k!.hz]), dt = frame[0]!;
     const w = this.walk;
+    let speed = 0;
     if (w) {
-      w.t = Math.min(w.t + dt, w.dur);
-      const [s, v] = travel(w.t, w.dur);
-      this.depth = w.from + (w.to - w.from) * s;
+      const p = arenaCompute("arena.walk", [w.from, w.to, w.t, w.dur, w.mine, dt]);
+      w.t = p[0]!; this.depth = p[1]!; speed = p[3]!;
       // each walk loop plays exactly as fast as its figure covers the ground (the enemy faces us: nearer is ahead)
-      pace(this.en!, (w.from - w.to) * v);
-      if (w.t >= w.dur) {
+      pace(this.en!, p[2]!);
+      if (p[4]) {
         this.walk = null;
         for (const f of [this.en!, this.me!]) if (f.fallT < 0) f.motion.stand(0.35);
       }
     }
     this.place();
-    this.step(dt, w ? Math.abs(w.mine * travel(w.t, w.dur)[1]) : 0);
+    this.step(dt, speed);
     for (const f of [this.en!, this.me!]) {
       f.pose.restore(); f.motion.update(dt); f.mixer.update(dt); f.pose.save(); f.motion.settle();
       if (!(this.fp && f === this.me)) f.holdOut.apply(f.group, f.motion.pistolReady);
       if (!(this.fp && f === this.me)) f.feet.update(dt, f.motion.planted);
       applyReactions(f, dt);
     }
-    this.wideK.value = this.fp ? WIDE : 1; this.wideY.value = 1 - 2 * this.k!.hz;
+    this.wideK.value = this.fp ? WIDE : 1; this.wideY.value = frame[1]!;
     if (this.fp) {
       this.holdView(dt);
       const me = this.me!, act = me.motion.attackKind;
@@ -714,11 +660,9 @@ export class Arena {
     if (this.flashOf && lit > 0) this.muzzleLight.position.copy(this.flashOf.flash.sprite.position);
     this.muzzleLight.intensity = 6 * lit;
     if (this.sparkLife > 0) {
-      this.sparkLife = Math.max(0, this.sparkLife - dt);
-      const u = 1 - this.sparkLife / this.sparkMax;
-      this.spark.material.opacity = 1 - u;
-      this.spark.scale.setScalar((this.spark.userData.size as number) * (0.6 + 0.8 * u));
-      this.spark.visible = this.sparkLife > 0;
+      const p = arenaCompute("arena.spark", [this.sparkLife, this.sparkMax, this.spark.userData.size as number, dt]);
+      this.sparkLife = p[0]!; this.spark.material.opacity = p[1]!;
+      this.spark.scale.setScalar(p[2]!); this.spark.visible = !!p[3];
     }
     if (this.q.dust) {
       this.lens.sunDirection(this.camera, this.sunDir);
@@ -730,22 +674,14 @@ export class Arena {
   }
 }
 
-/** How long a walk takes to get up to pace, and to stop, seconds. */
-const ramp = (dur: number) => Math.min(0.2, dur / 3);
-
-/** A walk of `dur` seconds, `t` seconds in: the share of the way covered and the speed (shares per second).
- *  It gets up to pace and stops in a fifth of a second, as feet do, and keeps an even pace in between. */
-function travel(t: number, dur: number): [number, number] {
-  const r = ramp(dur), v = 1 / (dur - r);
-  if (t < r) return [(v * t * t) / (2 * r), (v * t) / r];
-  if (t > dur - r) { const e = dur - t; return [1 - (v * e * e) / (2 * r), (v * e) / r]; }
-  return [v * (t - r / 2), v];
+function arenaCompute(kind: string, input: number[]): Float64Array<ArrayBuffer> {
+  return motionCompute(kind, new Float64Array(input));
 }
 
 /** Keeps a figure's walk loop in step with the ground it covers, `speed` metres per second (+ ahead). */
 function pace(f: Figure, speed: number): void {
   const name = f.motion.gait, g = name && f.gait[name];
-  if (g) f.motion.pace(speed / (g.speed * f.model.scale.x));
+  if (g) f.motion.pace(arenaCompute("arena.pace", [speed, g.speed, f.model.scale.x])[0]!);
 }
 
 /** How a figure's walk (or run) loop covers the ground, if the model has one. */
@@ -770,39 +706,35 @@ function syncMirror(m: Mirror): void {
 
 /** Hit reactions and the fall, layered on top of whatever the animation is doing this frame. */
 function applyReactions(f: Figure, dt: number): void {
-  const k = f.kick, b = f.bones, decay = Math.exp(-dt * 6.5);
-  if (k.head) { pitch(b.head, -0.6 * k.head); pitch(b.neck, -0.25 * k.head); }
-  if (k.body) { pitch(b.spine2, -0.32 * k.body); pitch(b.spine1, -0.22 * k.body); }
-  if (k.groin) { pitch(b.spine, 0.42 * k.groin); pitch(b.spine1, 0.2 * k.groin); }
-  if (k.legs) { pitch(b.rUpLeg, 0.35 * k.legs); pitch(b.rLeg, -0.75 * k.legs); }
-  for (const z of Object.keys(k) as Zone[]) k[z] = k[z] * decay < 0.01 ? 0 : k[z] * decay;
+  const k = f.kick, b = f.bones;
+  const p = arenaCompute("arena.reactions", [k.head, k.body, k.groin, k.legs, dt, f.fallT, f.fallSide, FALL_TIME]);
+  if (k.head) { pitch(b.head, p[0]!); pitch(b.neck, p[1]!); }
+  if (k.body) { pitch(b.spine2, p[2]!); pitch(b.spine1, p[3]!); }
+  if (k.groin) { pitch(b.spine, p[4]!); pitch(b.spine1, p[5]!); }
+  if (k.legs) { pitch(b.rUpLeg, p[6]!); pitch(b.rLeg, p[7]!); }
+  k.head = p[8]!; k.body = p[9]!; k.groin = p[10]!; k.legs = p[11]!;
 
   if (f.fallT >= 0) {
     // falls on its side where it stands: from this low camera a body lying sideways reads best
     if (f.fallT === 0) f.collapse.begin(f.group, f.fallSide);
-    f.fallT = Math.min(f.fallT + dt / FALL_TIME, 1);
-    f.collapse.apply(f.fallT * FALL_TIME);
+    f.fallT = p[12]!;
+    f.collapse.apply(p[13]!);
     // the shadow spreads under the body as it comes down beside the feet
-    const e = smooth(Math.min(1, f.fallT * 1.4));
-    f.blob.scale.set(1 + 0.8 * e, 1, 1.15); f.blob.position.x = f.fallSide * 0.3 * e;
+    f.blob.scale.set(p[14]!, 1, 1.15); f.blob.position.x = p[15]!;
   }
 }
 
 /** The sync connector sits on the nape, so it shows on our Persona and hides behind the enemy's head. */
 function placePort(f: Figure): void {
   f.bones.head.getWorldPosition(tmpA); f.bones.top.getWorldPosition(tmpB);
-  const r = tmpA.distanceTo(tmpB) * PORT.depth, yaw = f.group.rotation.y;
-  tmpA.lerp(tmpB, PORT.up);
-  f.port.position.set(tmpA.x - Math.sin(yaw) * r, tmpA.y, tmpA.z - Math.cos(yaw) * r);
+  f.port.position.fromArray(arenaCompute("arena.port", [tmpA.x, tmpA.y, tmpA.z, tmpB.x, tmpB.y, tmpB.z, f.group.rotation.y]));
   f.port.visible = f.fallT < 0 && f.group.visible;
 }
 
 /** A point on the body for each attack zone. */
 function zoneWorld(f: Figure, z: Zone, out: THREE.Vector3): THREE.Vector3 {
   const b = f.bones;
-  if (z === "head") { b.head.getWorldPosition(out); b.top.getWorldPosition(tmpB); return out.lerp(tmpB, 0.45); }
-  if (z === "body") { b.spine1.getWorldPosition(out); b.spine2.getWorldPosition(tmpB); return out.lerp(tmpB, 0.75); }
-  if (z === "groin") { b.hips.getWorldPosition(out); out.y -= 0.08; return out; }
-  b.rLeg.getWorldPosition(out); b.rUpLeg.getWorldPosition(tmpB);
-  return out.lerp(tmpB, 0.15);
+  const pair = { head: [b.head, b.top], body: [b.spine1, b.spine2], groin: [b.hips, b.hips], legs: [b.rLeg, b.rUpLeg] }[z];
+  pair[0]!.getWorldPosition(out); pair[1]!.getWorldPosition(tmpB);
+  return out.fromArray(arenaCompute("arena.zone", [out.x, out.y, out.z, tmpB.x, tmpB.y, tmpB.z, { head: 0, body: 1, groin: 2, legs: 3 }[z]]));
 }

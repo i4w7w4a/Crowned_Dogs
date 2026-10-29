@@ -14,6 +14,7 @@ import * as THREE from "three";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 import { composeShader, hazeShader, lensShader, raysBlurShader, raysMaskShader, vertexShader } from "./lens-shaders.ts";
 import type { Quality } from "./quality.ts";
+import { motionCompute } from "../../../../packages/runtime/src/index.ts";
 
 export interface LensLook {
   /** Radial smear and colour fan at the edges, as a share of the distance from the centre. */
@@ -54,7 +55,9 @@ export interface HazeScene {
 }
 
 /** Our figure is drawn at this many pixels per CSS pixel divided by look.near: soft the same way on every screen. */
-const NEAR_DPR = 2;
+function lensCompute(kind: string, input: number[]): Float64Array<ArrayBuffer> {
+  return motionCompute("arena.lens." + kind, new Float64Array(input));
+}
 
 const shaderMaterial = (fragmentShader: string, uniforms: Record<string, THREE.IUniform>) => new THREE.ShaderMaterial({
   vertexShader, fragmentShader, uniforms, depthTest: false, depthWrite: false, toneMapped: false,
@@ -224,17 +227,8 @@ export class Lens {
   /** Where a point of the undistorted picture shows after the fisheye bend (canvas fractions from the top left). */
   toScreen(x: number, y: number): [number, number] {
     const v = this.view, k = this.look?.barrel ?? 0;
-    if (!k) return [x, y];
-    const cx = v.x + v.w / 2, cy = v.y + v.h / 2, hx = v.w / 2, hy = v.h / 2;
-    const aspect = (v.w * this.px.x) / (v.h * this.px.y), n = Math.hypot(aspect, 1);
-    // the shader samples s = c + (p - c)(1 + k r²(p)); solve for p a few times over
-    let px = x, py = y;
-    for (let i = 0; i < 4; i++) {
-      const ex = ((px - cx) / hx) * aspect / n, ey = ((py - cy) / hy) / n;
-      const f = 1 + k * (ex * ex + ey * ey);
-      px = cx + (x - cx) / f; py = cy + (y - cy) / f;
-    }
-    return [px, py];
+    const p = lensCompute("screen", [x, y, v.x, v.y, v.w, v.h, this.px.x, this.px.y, k]);
+    return [p[0]!, p[1]!];
   }
 
   /** Draws the scene (layer 0), our own figure (layer `near`) on its own, the haze and the shafts, then the lens to the screen. */
@@ -332,41 +326,34 @@ export class Lens {
     if (!g) return;
     g.drawImage(img, 0, 0, w, h);
     const px = g.getImageData(0, 0, w, h).data;
-    let sx = 0, sy = 0, sw = 0;
-    for (let y = 0; y < Math.round(h * this.horizon); y++) for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4, l = (0.2126 * px[i]! + 0.7152 * px[i + 1]! + 0.0722 * px[i + 2]!) / 255;
-      const wt = Math.max(0, l - 0.72) ** 2;
-      sx += wt * (x + 0.5); sy += wt * (y + 0.5); sw += wt;
-    }
-    if (sw > 0) this.sun.set(sx / sw / w, 1 - sy / sw / h);
+    const input = new Float64Array(5 + px.length);
+    input.set([w, h, this.horizon, this.sun.x, this.sun.y]); input.set(px, 5);
+    this.sun.fromArray(motionCompute("arena.lens.sun", input));
   }
 
   private sizeTargets(): void {
     const q = this.q, look = this.look;
     if (!q) return;
-    const max = Math.min(this.renderer.capabilities.maxTextureSize, 8192);
-    const ss = Math.min(q.ssaa, max / Math.max(this.px.x, this.px.y));
-    const w = Math.max(1, Math.round(this.px.x * ss)), h = Math.max(1, Math.round(this.px.y * ss));
+    const p = lensCompute("size", [this.px.x, this.px.y, this.css.x, this.css.y, this.renderer.capabilities.maxTextureSize, q.ssaa, look?.near ?? 1, q.hazeScale, q.raysScale]);
+    const w = p[0]!, h = p[1]!, nw = p[2]!, nh = p[3]!;
     this.fig.setSize(w, h);
     this.comp.setSize(w, h);
-    const nk = NEAR_DPR / Math.max(1, look?.near ?? 1);
-    const nw = Math.max(1, Math.round(Math.min(this.px.x, this.css.x * nk))), nh = Math.max(1, Math.round(Math.min(this.px.y, this.css.y * nk)));
     this.near.setSize(nw, nh);
     (this.composeMat.uniforms.nearSize!.value as THREE.Vector2).set(nw, nh);
     if (this.haze) {
-      const hw = Math.max(1, Math.round(this.px.x * q.hazeScale)), hh = Math.max(1, Math.round(this.px.y * q.hazeScale));
+      const hw = p[4]!, hh = p[5]!;
       this.haze.setSize(hw, hh);
       (this.composeMat.uniforms.hazeSize!.value as THREE.Vector2).set(hw, hh);
     }
     if (this.raysA && this.raysB) {
-      const rw = Math.max(1, Math.round(this.px.x * q.raysScale)), rh = Math.max(1, Math.round(this.px.y * q.raysScale));
+      const rw = p[6]!, rh = p[7]!;
       this.raysA.setSize(rw, rh); this.raysB.setSize(rw, rh);
-      this.maskMat.uniforms.lod!.value = Math.max(0, Math.log2(w / rw));
+      this.maskMat.uniforms.lod!.value = p[8]!;
     }
     const u = this.lensMat.uniforms;
     (u.compSize!.value as THREE.Vector2).set(w, h);
     (u.outSize!.value as THREE.Vector2).set(this.px.x, this.px.y);
-    u.ssaa!.value = w / this.px.x;
-    u.glowLod!.value = Math.log2(w / 941);
+    u.ssaa!.value = p[9]!;
+    u.glowLod!.value = p[10]!;
   }
 }

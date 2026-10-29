@@ -10,6 +10,8 @@ import type { Match, TurnReport, WeaponId } from "@crowned-dogs/core";
 import { store } from "../store.ts";
 
 const UI: SoundId[] = ["ui.tap", "ui.guard", "ui.step", "ui.confirm", "ui.tick", "ui.tick.urgent", "ui.turn", "ui.victory", "ui.defeat"];
+// Explicit QA mode never constructs an AudioContext and never changes the player's saved volume.
+const SILENT_TEST = new URLSearchParams(location.search).get("muted") === "1";
 /** A location bed per map, and a layer for the weather on top. */
 const BED: Record<string, SoundId> = { saltHall: "amb.hall", blocks: "amb.blocks" };
 const WEATHER_LAYER: Partial<Record<Match["config"]["weather"], SoundId>> = { dust: "amb.dust", storm: "amb.storm", fog: "amb.fog" };
@@ -37,7 +39,7 @@ function guns(m: Match, side: 0 | 1): WeaponId[] {
 export class ArenaAudio {
   on = store.get("cd-music") !== "off";
   private picked: Station = (RADIO_PLAYLIST as readonly string[]).includes(store.get("cd-station") ?? "")
-    ? store.get("cd-station") as Station : RADIO_PLAYLIST[0];
+    ? store.get("cd-station") as Station : RADIO_PLAYLIST[0]!;
   private audio: GameAudio | null = null;
   private preloads: SoundId[] = [...UI];
   /** fight: the fight track; menu: the radio (base, fitting room, end screen); paused: the menu sheet over a fight. */
@@ -50,6 +52,7 @@ export class ArenaAudio {
 
   /** Call from the first tap. */
   unlock(): void {
+    if (SILENT_TEST) return;
     if (this.audio) { void this.audio.unlock(); return; }
     try {
       this.audio = new GameAudio({ baseUrl: "./" });

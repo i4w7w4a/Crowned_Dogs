@@ -3,9 +3,10 @@
 
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
+import { installSurfaceRelief } from "./surface-relief.ts";
 
 /** The Persona both screens show when no other model is set for the build. */
-export const PERSONA_MODEL: string = import.meta.env.VITE_MODEL ?? "models/persona-male.json";
+export const PERSONA_MODEL: string = import.meta.env?.VITE_MODEL ?? "models/persona-male.json";
 
 /** Fetches and parses a figure model: a .glb, or a .json with the .glb inside as base64. */
 export async function loadModel(url: string): Promise<GLTF> {
@@ -20,5 +21,7 @@ export async function loadModel(url: string): Promise<GLTF> {
   } else {
     bytes = await res.arrayBuffer();
   }
-  return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(bytes, "");
+  const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(bytes, "");
+  await installSurfaceRelief(gltf.scene, url).catch(() => { /* Original PBR remains available if optional relief metadata is unavailable. */ });
+  return gltf;
 }

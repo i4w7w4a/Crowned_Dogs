@@ -1,0 +1,18 @@
+[workspace]
+members = ["crates/game-core", "crates/game-client", "crates/game-graphics", "crates/game-wasm", "crates/game-motion", "crates/game-ui", "apps/desktop"]
+resolver = "2"
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+license = "UNLICENSED"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"

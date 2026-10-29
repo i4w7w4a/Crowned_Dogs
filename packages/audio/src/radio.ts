@@ -3,6 +3,8 @@
 // that sits in a small concrete room. Plain Web Audio nodes, so it runs in the
 // Telegram webview on phones.
 
+import { audioSamples, callRust } from "../../runtime/src/index.ts";
+
 export interface RadioChain {
   input: AudioNode;
   output: AudioNode;
@@ -12,17 +14,7 @@ export interface RadioChain {
   place(pan: number, far: number): void;
 }
 
-export const RADIO = {
-  lowCutHz: 380,
-  presenceHz: 1600,
-  presenceDb: 5,
-  highCutHz: 3400,
-  drive: 2.2,
-  hissDb: -50,
-  /** The room around the speaker: how long its echo rings, and how loud it is. */
-  roomSeconds: 0.6,
-  roomDb: -9,
-} as const;
+export const RADIO = callRust<{ lowCutHz: number; presenceHz: number; presenceDb: number; highCutHz: number; drive: number; hissDb: number; roomSeconds: number; roomDb: number }>("audio.dsp.radio", []);
 
 export function createRadio(ctx: BaseAudioContext): RadioChain {
   const lowCut = ctx.createBiquadFilter();
@@ -43,10 +35,10 @@ export function createRadio(ctx: BaseAudioContext): RadioChain {
 
   // a small speaker breaking up a little; the trim keeps the level where it was
   const clip = ctx.createWaveShaper();
-  clip.curve = softClipCurve(RADIO.drive);
+  clip.curve = audioSamples("clip", 1024, RADIO.drive, 0);
   clip.oversample = "2x";
   const trim = ctx.createGain();
-  trim.gain.value = 1 / (1 + RADIO.drive * 0.35);
+  trim.gain.value = callRust("audio.dsp.radioTrim", [RADIO.drive]);
 
   const speaker = ctx.createGain();
   lowCut.connect(presence).connect(highCut).connect(clip).connect(trim).connect(speaker);
@@ -59,7 +51,7 @@ export function createRadio(ctx: BaseAudioContext): RadioChain {
   const room = ctx.createConvolver();
   room.buffer = roomImpulse(ctx, RADIO.roomSeconds);
   const roomLevel = ctx.createGain();
-  roomLevel.gain.value = 10 ** (RADIO.roomDb / 20);
+  roomLevel.gain.value = callRust("audio.dsp.dbToGain", [RADIO.roomDb]);
   speaker.connect(room).connect(roomLevel).connect(out);
 
   const hiss = ctx.createBufferSource();
@@ -80,45 +72,30 @@ export function createRadio(ctx: BaseAudioContext): RadioChain {
     place(pan, far) {
       const t = ctx.currentTime;
       panner.pan.setTargetAtTime(pan, t, 0.3);
-      direct.gain.setTargetAtTime(10 ** (-9 * far / 20), t, 0.3);
-      roomLevel.gain.setTargetAtTime(10 ** ((RADIO.roomDb + 6 * far - 3 * (1 - far)) / 20), t, 0.3);
+      const levels = callRust<{ direct: number; room: number }>("audio.dsp.radioPlace", [far]);
+      direct.gain.setTargetAtTime(levels.direct, t, 0.3);
+      roomLevel.gain.setTargetAtTime(levels.room, t, 0.3);
     },
     setHiss(on) {
-      const target = on ? 10 ** (RADIO.hissDb / 20) : 0;
+      const target = on ? callRust<number>("audio.dsp.dbToGain", [RADIO.hissDb]) : 0;
       hissGain.gain.setTargetAtTime(target, ctx.currentTime, 0.08);
     },
   };
 }
 
-function softClipCurve(drive: number, n = 1024): Float32Array<ArrayBuffer> {
-  const curve = new Float32Array(n);
-  const norm = Math.tanh(drive);
-  for (let i = 0; i < n; i++) {
-    const x = (i / (n - 1)) * 2 - 1;
-    curve[i] = Math.tanh(drive * x) / norm;
-  }
-  return curve;
-}
-
-/** A small room's echo: noise that dies away, a touch dull because the walls soak up the highs. */
+/** Sample arrays are generated in Rust and copied into WebAudio buffers. */
 function roomImpulse(ctx: BaseAudioContext, seconds: number): AudioBuffer {
   const rate = ctx.sampleRate;
-  const buf = ctx.createBuffer(2, Math.floor(rate * seconds), rate);
-  const gap = Math.floor(rate * 0.008);
-  for (let ch = 0; ch < 2; ch++) {
-    const data = buf.getChannelData(ch);
-    let dull = 0;
-    for (let i = gap; i < data.length; i++) {
-      dull += 0.35 * (Math.random() * 2 - 1 - dull);
-      data[i] = dull * Math.exp((-6.9 * (i - gap)) / rate / seconds);
-    }
-  }
-  return buf;
+  const samples = audioSamples("room", rate, seconds, (Math.random() * 0xffffffff) >>> 0);
+  const length = samples.length / 2;
+  const buffer = ctx.createBuffer(2, length, rate);
+  buffer.copyToChannel(samples.subarray(0, length), 0);
+  buffer.copyToChannel(samples.subarray(length), 1);
+  return buffer;
 }
-
 function noiseBuffer(ctx: BaseAudioContext, seconds: number): AudioBuffer {
-  const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * seconds), ctx.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-  return buf;
+  const samples = audioSamples("noise", ctx.sampleRate, seconds, (Math.random() * 0xffffffff) >>> 0);
+  const buffer = ctx.createBuffer(1, samples.length, ctx.sampleRate);
+  buffer.copyToChannel(samples, 0);
+  return buffer;
 }

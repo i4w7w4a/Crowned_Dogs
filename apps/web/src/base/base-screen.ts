@@ -13,10 +13,9 @@ import { GlassScroll } from "./glass-scroll.ts";
 import { backArrow } from "./navigation-icons.ts";
 import { ItemViewer, ITEM_MODELS } from "./item-viewer.ts";
 import { availableInFitting } from "./model-catalog.ts";
+import { callRust } from "../rust/engine.ts";
 
 export type BaseView = "base" | "fitting" | "weapon";
-const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
-const equippedCheck = '<span class="cd-equipped-check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>';
 const asset = (name: string) => `${import.meta.env.BASE_URL}img/base/${name}`;
 const columns: GearSlot[][] = [["head", "body", "weapon1", "knife"], ["suit", "boots", "weapon2", "grenade"]];
 
@@ -263,11 +262,8 @@ export class BaseScreen {
     });
     this.root.querySelector<HTMLElement>(".cd-catalog-error")!.hidden = true;
     const selected = equippedItemId(this.loadout, this.selectedSlot);
-    const empty = this.selectedSlot === "weapon2" ? `<button class="glass cd-item-card" type="button" data-item="" aria-pressed="${selected === null}"><span class="cd-item-art" aria-hidden="true">—</span><span class="cd-item-copy"><strong>Без второго оружия</strong></span>${selected === null ? equippedCheck : ""}</button>` : "";
-    this.catalog.innerHTML = empty + itemsForSlot(this.selectedSlot).filter(availableInFitting).map((item) => {
-      const effects = describeItem(item);
-      return `<button class="glass cd-item-card" type="button" data-item="${item.id}" aria-pressed="${selected === item.id}"><span class="cd-item-art">${equipmentItemIcon(item.id)}</span><span class="cd-item-copy"><strong>${escape(item.name)}</strong><small>${escape(item.note)}</small>${effects.length ? `<span class="cd-effects">${effects.map(escape).join(" · ")}</span>` : ""}</span>${selected === item.id ? equippedCheck : ""}</button>`;
-    }).join("");
+    this.catalog.innerHTML = callRust("ui.catalog", [this.selectedSlot, selected,
+      itemsForSlot(this.selectedSlot).filter(availableInFitting).map(item => ({ item, icon: equipmentItemIcon(item.id) }))]);
     this.catalog.parentElement!.scrollTop = 0;
     liquidGlass(this.catalog);
     const available = itemsForSlot(this.selectedSlot).filter(availableInFitting);
@@ -305,7 +301,7 @@ export class BaseScreen {
     if (options.hidden) { this.setPickerOpen(true); return; }
     const items = [...options.querySelectorAll<HTMLButtonElement>("[data-category]")];
     const index = items.indexOf(document.activeElement as HTMLButtonElement);
-    const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    const next = callRust<number>("ui.pickerNext", [event.key, index, items.length]);
     items[next]?.focus();
   }
 
@@ -350,18 +346,14 @@ function driftBackdrop(home: HTMLElement, ratio: number, follow?: (tx: number, t
     requestAnimationFrame(frame);
     const w = home.clientWidth, h = home.clientHeight;
     if (!w) return; // the base is hidden
-    const t = still ? 0 : now / 1000;
-    lean = [lean[0] + (want[0] - lean[0]) * 0.04, lean[1] + (want[1] - lean[1]) * 0.04];
-    const s = still ? 1 : DRIFT.zoom;
-    const tx = w * (DRIFT.sway * Math.sin(t / 9) - DRIFT.tilt * lean[0] * (still ? 0 : 1));
-    const ty = h * (DRIFT.sway * 0.6 * Math.sin(t / 13 + 1) - DRIFT.tilt * lean[1] * (still ? 0 : 1));
+    const result = callRust<{lean:[number,number];scale:number;tx:number;ty:number;points:[number,number][]}>("ui.backdrop", [w,h,ratio,still,now,lean,want,rings.map(r => [Number(r.dataset.u),Number(r.dataset.v)])]);
+    lean = result.lean;
+    const {scale:s,tx,ty} = result;
     if (flat) img.style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${s})`;
     // the picture fills the screen like object-fit: cover, then the move above scales it about the centre
-    const fit = Math.max(w / ratio, h), iw = fit * ratio, ih = fit;
-    for (const ring of rings) {
-      const px = (w - iw) / 2 + Number(ring.dataset.u) * iw, py = (h - ih) / 2 + Number(ring.dataset.v) * ih;
-      ring.style.left = (w / 2 + s * (px - w / 2) + tx).toFixed(1) + "px";
-      ring.style.top = (h / 2 + s * (py - h / 2) + ty).toFixed(1) + "px";
+    for (const [i,ring] of rings.entries()) {
+      ring.style.left = result.points[i]![0].toFixed(1) + "px";
+      ring.style.top = result.points[i]![1].toFixed(1) + "px";
     }
     follow?.(tx, ty);
   };

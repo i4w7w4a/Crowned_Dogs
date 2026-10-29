@@ -1,0 +1,724 @@
+{
+  "SOUNDS": {
+    "shot.pistol.near": {
+      "files": [
+        "sfx/shot-pistol-near-1.mp3",
+        "sfx/shot-pistol-near-2.mp3",
+        "sfx/shot-pistol-near-3.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.4,
+      "gainJitter": 1
+    },
+    "shot.pistol.far": {
+      "files": [
+        "sfx/shot-pistol-far-1.mp3",
+        "sfx/shot-pistol-far-2.mp3",
+        "sfx/shot-pistol-far-3.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.4,
+      "gainJitter": 1.5
+    },
+    "shot.shotgun.near": {
+      "files": [
+        "sfx/shot-shotgun-near-1.mp3",
+        "sfx/shot-shotgun-near-2.mp3",
+        "sfx/shot-shotgun-near-3.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.4,
+      "gainJitter": 1
+    },
+    "shot.shotgun.far": {
+      "files": [
+        "sfx/shot-shotgun-far-1.mp3",
+        "sfx/shot-shotgun-far-2.mp3",
+        "sfx/shot-shotgun-far-3.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.4,
+      "gainJitter": 1.5
+    },
+    "shot.rifle.near": {
+      "files": [
+        "sfx/shot-rifle-near-1.mp3",
+        "sfx/shot-rifle-near-2.mp3",
+        "sfx/shot-rifle-near-3.mp3",
+        "sfx/shot-rifle-near-4.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.4,
+      "gainJitter": 1
+    },
+    "shot.rifle.far": {
+      "files": [
+        "sfx/shot-rifle-far-1.mp3",
+        "sfx/shot-rifle-far-2.mp3",
+        "sfx/shot-rifle-far-3.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.4,
+      "gainJitter": 1.5
+    },
+    "shot.sniper.near": {
+      "files": [
+        "sfx/shot-sniper-near-1.mp3",
+        "sfx/shot-sniper-near-2.mp3",
+        "sfx/shot-sniper-near-3.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.4,
+      "gainJitter": 1
+    },
+    "shot.sniper.far": {
+      "files": [
+        "sfx/shot-sniper-far-1.mp3",
+        "sfx/shot-sniper-far-2.mp3",
+        "sfx/shot-sniper-far-3.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.4,
+      "gainJitter": 1.5
+    },
+    "casing": {
+      "files": [
+        "sfx/casing-1.mp3",
+        "sfx/casing-2.mp3",
+        "sfx/casing-3.mp3"
+      ],
+      "bus": "sfx",
+      "gainDb": -4,
+      "pitchJitter": 1.5,
+      "gainJitter": 2
+    },
+    "knife.swing": {
+      "files": [
+        "sfx/knife-swing-1.mp3",
+        "sfx/knife-swing-2.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 1
+    },
+    "knife.hit": {
+      "files": [
+        "sfx/knife-hit-1.mp3",
+        "sfx/knife-hit-2.mp3",
+        "sfx/knife-hit-3.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.8
+    },
+    "knife.blocked": {
+      "files": [
+        "sfx/knife-blocked-1.mp3",
+        "sfx/knife-blocked-2.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.8
+    },
+    "hit.armor": {
+      "files": [
+        "sfx/hit-armor-1.mp3",
+        "sfx/hit-armor-2.mp3",
+        "sfx/hit-armor-3.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 1,
+      "gainJitter": 1.5
+    },
+    "hit.suit": {
+      "files": [
+        "sfx/hit-suit-1.mp3",
+        "sfx/hit-suit-2.mp3",
+        "sfx/hit-suit-3.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 1,
+      "gainJitter": 1.5
+    },
+    "hit.head": {
+      "files": [
+        "sfx/hit-head-1.mp3",
+        "sfx/hit-head-2.mp3"
+      ],
+      "bus": "sfx",
+      "gainDb": -2,
+      "pitchJitter": 1
+    },
+    "hit.crit": {
+      "files": [
+        "sfx/hit-crit-1.mp3",
+        "sfx/hit-crit-2.mp3"
+      ],
+      "bus": "sfx",
+      "gainDb": -2,
+      "pitchJitter": 1
+    },
+    "shield.block": {
+      "files": [
+        "sfx/shield-block-1.mp3",
+        "sfx/shield-block-2.mp3",
+        "sfx/shield-block-3.mp3"
+      ],
+      "bus": "sfx",
+      "gainDb": -1,
+      "pitchJitter": 0.7
+    },
+    "shield.break": {
+      "files": [
+        "sfx/shield-break.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.5
+    },
+    "miss.near": {
+      "files": [
+        "sfx/miss-near-1.mp3",
+        "sfx/miss-near-2.mp3",
+        "sfx/miss-near-3.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 1.5,
+      "gainJitter": 2
+    },
+    "miss.far": {
+      "files": [
+        "sfx/miss-far-1.mp3",
+        "sfx/miss-far-2.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 1.5,
+      "gainJitter": 2
+    },
+    "grenade.pin": {
+      "files": [
+        "sfx/grenade-pin.mp3"
+      ],
+      "bus": "sfx"
+    },
+    "grenade.throw": {
+      "files": [
+        "sfx/grenade-throw.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 1
+    },
+    "grenade.bounce": {
+      "files": [
+        "sfx/grenade-bounce.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 1.5
+    },
+    "grenade.blast": {
+      "files": [
+        "sfx/grenade-blast.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.6,
+      "duckDb": 6
+    },
+    "step": {
+      "files": [
+        "sfx/step-1.mp3",
+        "sfx/step-2.mp3",
+        "sfx/step-3.mp3",
+        "sfx/step-4.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 1,
+      "gainJitter": 2
+    },
+    "dash.whoosh": {
+      "files": [
+        "sfx/dash-whoosh.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 1
+    },
+    "gear.rustle": {
+      "files": [
+        "sfx/gear-rustle-1.mp3",
+        "sfx/gear-rustle-2.mp3"
+      ],
+      "bus": "sfx",
+      "gainDb": -3,
+      "pitchJitter": 1.5,
+      "gainJitter": 2
+    },
+    "body.fall": {
+      "files": [
+        "sfx/body-fall.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 0.8,
+      "duckDb": 4
+    },
+    "persona.powerdown": {
+      "files": [
+        "sfx/persona-powerdown.mp3"
+      ],
+      "bus": "sfx",
+      "gainDb": -2
+    },
+    "persona.powerup": {
+      "files": [
+        "sfx/persona-powerup.mp3"
+      ],
+      "bus": "sfx",
+      "gainDb": -2
+    },
+    "sync.lost": {
+      "files": [
+        "sfx/sync-lost.mp3"
+      ],
+      "bus": "sfx",
+      "duckDb": 8
+    },
+    "ui.tap": {
+      "files": [
+        "sfx/ui-tap.mp3"
+      ],
+      "bus": "ui",
+      "pitchJitter": 0.5
+    },
+    "ui.guard": {
+      "files": [
+        "sfx/ui-guard.mp3"
+      ],
+      "bus": "ui",
+      "pitchJitter": 0.5
+    },
+    "ui.step": {
+      "files": [
+        "sfx/ui-step.mp3"
+      ],
+      "bus": "ui",
+      "pitchJitter": 0.5
+    },
+    "ui.confirm": {
+      "files": [
+        "sfx/ui-confirm.mp3"
+      ],
+      "bus": "ui"
+    },
+    "ui.tick": {
+      "files": [
+        "sfx/ui-tick.mp3"
+      ],
+      "bus": "ui"
+    },
+    "ui.tick.urgent": {
+      "files": [
+        "sfx/ui-tick-urgent.mp3"
+      ],
+      "bus": "ui"
+    },
+    "ui.open": {
+      "files": [
+        "sfx/ui-open.mp3"
+      ],
+      "bus": "ui"
+    },
+    "ui.close": {
+      "files": [
+        "sfx/ui-close.mp3"
+      ],
+      "bus": "ui"
+    },
+    "ui.turn": {
+      "files": [
+        "sfx/ui-turn.mp3"
+      ],
+      "bus": "ui"
+    },
+    "ui.error": {
+      "files": [
+        "sfx/ui-error.mp3"
+      ],
+      "bus": "ui"
+    },
+    "ui.match.found": {
+      "files": [
+        "sfx/ui-match-found.mp3"
+      ],
+      "bus": "ui"
+    },
+    "ui.victory": {
+      "files": [
+        "sfx/ui-victory.mp3"
+      ],
+      "bus": "ui"
+    },
+    "ui.defeat": {
+      "files": [
+        "sfx/ui-defeat.mp3"
+      ],
+      "bus": "ui"
+    },
+    "loot.water": {
+      "files": [
+        "sfx/loot-water.mp3"
+      ],
+      "bus": "ui"
+    },
+    "loot.scrap": {
+      "files": [
+        "sfx/loot-scrap.mp3"
+      ],
+      "bus": "ui"
+    },
+    "equip.pistol": {
+      "files": [
+        "sfx/equip-pistol.mp3"
+      ],
+      "bus": "ui"
+    },
+    "equip.shotgun": {
+      "files": [
+        "sfx/equip-shotgun.mp3"
+      ],
+      "bus": "ui"
+    },
+    "equip.rifle": {
+      "files": [
+        "sfx/equip-rifle.mp3"
+      ],
+      "bus": "ui"
+    },
+    "equip.sniper": {
+      "files": [
+        "sfx/equip-sniper.mp3"
+      ],
+      "bus": "ui"
+    },
+    "equip.knife": {
+      "files": [
+        "sfx/equip-knife.mp3"
+      ],
+      "bus": "ui"
+    },
+    "equip.grenade": {
+      "files": [
+        "sfx/equip-grenade.mp3"
+      ],
+      "bus": "ui"
+    },
+    "equip.armor": {
+      "files": [
+        "sfx/equip-armor.mp3"
+      ],
+      "bus": "ui"
+    },
+    "equip.helmet": {
+      "files": [
+        "sfx/equip-helmet.mp3"
+      ],
+      "bus": "ui"
+    },
+    "equip.suit": {
+      "files": [
+        "sfx/equip-suit.mp3"
+      ],
+      "bus": "ui"
+    },
+    "equip.boots": {
+      "files": [
+        "sfx/equip-boots.mp3"
+      ],
+      "bus": "ui"
+    },
+    "equip.chevron": {
+      "files": [
+        "sfx/equip-chevron.mp3"
+      ],
+      "bus": "ui"
+    },
+    "radio.on": {
+      "files": [
+        "sfx/radio-on.mp3"
+      ],
+      "bus": "ui",
+      "gainDb": -2
+    },
+    "radio.off": {
+      "files": [
+        "sfx/radio-off.mp3"
+      ],
+      "bus": "ui",
+      "gainDb": -2
+    },
+    "radio.tune": {
+      "files": [
+        "sfx/radio-tune.mp3"
+      ],
+      "bus": "ui",
+      "gainDb": -11
+    },
+    "thunder": {
+      "files": [
+        "sfx/thunder-1.mp3",
+        "sfx/thunder-2.mp3"
+      ],
+      "bus": "amb",
+      "pitchJitter": 1
+    },
+    "helicopter.flyby": {
+      "files": [
+        "sfx/helicopter-flyby.mp3"
+      ],
+      "bus": "amb"
+    },
+    "artillery.far": {
+      "files": [
+        "sfx/artillery-far.mp3"
+      ],
+      "bus": "amb",
+      "pitchJitter": 1.5,
+      "gainJitter": 2
+    },
+    "amb.hall": {
+      "files": [
+        "amb/amb-hall.mp3"
+      ],
+      "bus": "amb"
+    },
+    "amb.blocks": {
+      "files": [
+        "amb/amb-blocks.mp3"
+      ],
+      "bus": "amb"
+    },
+    "amb.storm": {
+      "files": [
+        "amb/amb-storm.mp3"
+      ],
+      "bus": "amb"
+    },
+    "amb.dust": {
+      "files": [
+        "amb/amb-dust.mp3"
+      ],
+      "bus": "amb"
+    },
+    "amb.fog": {
+      "files": [
+        "amb/amb-fog.mp3"
+      ],
+      "bus": "amb",
+      "gainDb": 2
+    },
+    "amb.base": {
+      "files": [
+        "amb/amb-base.mp3"
+      ],
+      "bus": "amb"
+    }
+  },
+  "TRACKS": {
+    "the-limbo-3": {
+      "file": "music/the-limbo-3.mp3",
+      "title": "The Limbo"
+    },
+    "404-room": {
+      "file": "music/404-room.mp3",
+      "title": "404 Room"
+    },
+    "in-the-middle-of-nowhere": {
+      "file": "music/in-the-middle-of-nowhere.mp3",
+      "title": "In The Middle of Nowhere"
+    },
+    "crazy-2": {
+      "file": "music/crazy-2.mp3",
+      "title": "Crazy"
+    },
+    "fxck-wag-6": {
+      "file": "music/fxck-wag-6.mp3",
+      "title": "FXCK $WAG"
+    },
+    "fog-3": {
+      "file": "music/fog-3.mp3",
+      "title": "Fog"
+    },
+    "try-to-fake": {
+      "file": "music/try-to-fake.mp3",
+      "title": "Try To Fake"
+    }
+  },
+  "FIGHT_PLAYLIST": [
+    "the-limbo-3",
+    "404-room",
+    "in-the-middle-of-nowhere"
+  ],
+  "RADIO_PLAYLIST": [
+    "crazy-2",
+    "fxck-wag-6",
+    "fog-3",
+    "try-to-fake"
+  ],
+  "BASE_PLAYLIST": [
+    "crazy-2",
+    "fog-3"
+  ],
+  "FITTING_PLAYLIST": [
+    "fxck-wag-6",
+    "try-to-fake"
+  ],
+  "MIX": {
+    "master": 0,
+    "sfx": 0,
+    "ui": -3,
+    "amb": -2,
+    "music": 0,
+    "fightMusic": -15.5,
+    "radioMusic": -17,
+    "distanceDbPerStep": 0.6,
+    "distanceDbMax": 6
+  },
+  "TIMING": {
+    "move": 0,
+    "ourAttack": 0.85,
+    "enemyAttack": 1.45,
+    "stepGap": 0.27,
+    "dashStepGap": 0.19,
+    "knifeLands": 0.18,
+    "grenadeBounce": 0.45,
+    "grenadeBlast": 0.9,
+    "fallAfterLastAttack": 0.45
+  },
+  "QUALITY": {
+    "low": {
+      "id": "low",
+      "name": "Низкая",
+      "maxDpr": 1,
+      "maxPixels": 500000,
+      "ssaa": 1,
+      "msaa": 4,
+      "shadow": 0,
+      "shadowRadius": 0,
+      "shadowSamples": 0,
+      "taps": 5,
+      "mips": false,
+      "rays": 0,
+      "raysScale": 0.5,
+      "haze": 0,
+      "hazeScale": 0.5,
+      "dofTaps": 1,
+      "dust": 0,
+      "textures": 512,
+      "anisotropy": 1,
+      "env": false,
+      "mirror": false,
+      "sharpBackdrop": false
+    },
+    "medium": {
+      "id": "medium",
+      "name": "Средняя",
+      "maxDpr": 2,
+      "maxPixels": 1700000,
+      "ssaa": 1,
+      "msaa": 4,
+      "shadow": 1024,
+      "shadowRadius": 3,
+      "shadowSamples": 8,
+      "taps": 8,
+      "mips": true,
+      "rays": 28,
+      "raysScale": 0.5,
+      "haze": 0,
+      "hazeScale": 0.5,
+      "dofTaps": 8,
+      "dust": 220,
+      "textures": 1024,
+      "anisotropy": 4,
+      "env": true,
+      "mirror": true,
+      "sharpBackdrop": false
+    },
+    "high": {
+      "id": "high",
+      "name": "Высокая",
+      "maxDpr": 3,
+      "maxPixels": 3800000,
+      "ssaa": 1,
+      "msaa": 8,
+      "shadow": 2048,
+      "shadowRadius": 5,
+      "shadowSamples": 16,
+      "taps": 12,
+      "mips": true,
+      "rays": 56,
+      "raysScale": 0.5,
+      "haze": 24,
+      "hazeScale": 0.5,
+      "dofTaps": 16,
+      "dust": 600,
+      "textures": 2048,
+      "anisotropy": 8,
+      "env": true,
+      "mirror": true,
+      "sharpBackdrop": true
+    },
+    "ultra": {
+      "id": "ultra",
+      "name": "Ультра",
+      "maxDpr": 3,
+      "maxPixels": 8000000,
+      "ssaa": 1.5,
+      "msaa": 8,
+      "shadow": 4096,
+      "shadowRadius": 9,
+      "shadowSamples": 32,
+      "taps": 18,
+      "mips": true,
+      "rays": 96,
+      "raysScale": 0.75,
+      "haze": 64,
+      "hazeScale": 0.5,
+      "dofTaps": 32,
+      "dust": 1500,
+      "textures": 4096,
+      "anisotropy": 16,
+      "env": true,
+      "mirror": true,
+      "sharpBackdrop": true
+    }
+  },
+  "ZONE_TO": {
+    "head": "в голову",
+    "body": "в корпус",
+    "groin": "в пах",
+    "legs": "по ногам"
+  },
+  "GUN_ACC": {
+    "pistol": "пистолет",
+    "shotgun": "дробовик",
+    "rifle": "автомат",
+    "sniper": "снайперку"
+  },
+  "GUN_WITH": {
+    "pistol": "с пистолетом",
+    "shotgun": "с дробовиком",
+    "rifle": "с автоматом",
+    "sniper": "со снайперкой"
+  },
+  "TIME_WORD": {
+    "morning": "Утро",
+    "day": "День",
+    "evening": "Вечер",
+    "night": "Ночь"
+  },
+  "WEATHER_WORD": {
+    "clear": "Ясно",
+    "dust": "Пыль",
+    "storm": "Гроза",
+    "fog": "Туман"
+  },
+  "SERVER_TEXT": {
+    "CONTRACT": "<b>Контракт оператора</b>\n\nТы поступаешь на службу в ЧВК на несколько лет. Сам ты живёшь на передовой базе, а в бой идёт Персона, боевой робот с твоим лицом. Ты чувствуешь всё, что чувствует она, и её смерть тоже. Отказаться от боя нельзя: это ведь не твоя смерть.\n\nМногие здесь подписали контракт прямо из тюрьмы. О прошлом не спрашивают.\n\nПосле подписи тебе выдадут жетон с личным номером.",
+    "VETERAN_NOTE": "Набор ветерана: оружие с обвесами, броня получше, у снайпера запасной пистолет. Бот получит такой же.",
+    "WELCOME": "<b>Crowned Dogs</b> — пошаговые дуэли Персон.\n\nКаждый ход оба тайно выбирают атаку (куда стрелять), щит на две зоны и движение. Потом ход разыгрывается одновременно.\n\n/fight — бой с ботом\n/duel — ссылка, чтобы позвать друга\n/rules — коротко о правилах\n/me — твой жетон",
+    "RULES": "<b>Правила</b>\n• У каждого 100 здоровья, старт в 7 шагах. На ход 60 секунд.\n• Атака: зона на враге. Голова бьёт сильнее всего, ноги слабее всего.\n• Щит прикрывает 2 зоны и пропускает около четверти урона. Нож проходит щит наполовину.\n• С выстрелом можно сделать шаг вперёд или назад.\n• Перебежка на 2 шага и рывок на 3 шага вперёд заменяют выстрел. При рывке щит только на одну зону, зато попасть по тебе труднее.\n• Нож бьёт с 2 шагов. Граната бьёт мимо щита, но не задевает того, кто убежал. Обычная граната одна на бой и летит на 2–8 шагов.\n• Если в наборе есть второй ствол, его можно взять вместо атаки. Шаг и щит при этом остаются.\n• После 6-го хода поле сжимается. Бой длится до 15 ходов (в грозу 10), потом побеждает тот, у кого больше здоровья.\n• Снайперке нужно стоять два хода подряд, иначе точность вдвое ниже.\n• Три пропущенных хода подряд — поражение."
+  }
+}

@@ -2,12 +2,13 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { getItem, type Loadout, type WeaponId } from "@crowned-dogs/core";
 import { loadModel } from "../arena/load-model.ts";
-import { tune } from "../arena/materials.ts";
+import { tuneFittingMaterial } from "./turntable-material.ts";
 import { QUALITY, startQuality, type Quality } from "../arena/quality.ts";
 import { TextureTiers } from "../arena/textures.ts";
 import { Hand } from "../arena/weapons.ts";
 import { fitVaryag, makeFittingStage, makeSling, PLATFORM_TOP, prepareVaryag } from "./fitting-stage.ts";
 import { authoredWeaponFit } from "./user-fitting-layout.ts";
+import { callRust } from "../rust/engine.ts";
 
 export interface PersonaPreviewCoverage {
   exact: false;
@@ -161,6 +162,7 @@ export class PersonaViewer {
     if (!this.renderer) return;
     this.quality = QUALITY[startQuality(this.renderer.getContext() as WebGL2RenderingContext).id];
     const q = this.quality;
+    this.stage.setQuality(q.id);
     this.canvas.dataset.previewQuality = q.id;
     this.renderer.shadowMap.enabled = q.shadow > 0;
     this.key.castShadow = q.shadow > 0;
@@ -179,7 +181,7 @@ export class PersonaViewer {
       for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material);
     });
     for (const material of materials) {
-      tune(material, this.quality);
+      tuneFittingMaterial(material, this.quality);
       material.alphaToCoverage = material.alphaTest > 0;
       for (const value of Object.values(material)) if (value instanceof THREE.Texture) value.anisotropy = anisotropy;
     }
@@ -200,30 +202,16 @@ export class PersonaViewer {
 
   resize(width: number, height: number): void {
     if (this.disposed) return;
-    this.width = Math.max(1, Math.round(width)); this.height = Math.max(1, Math.round(height));
-    this.camera.aspect = this.width / this.height;
-    const halfFov = THREE.MathUtils.degToRad(this.camera.fov) / 2;
+    const fit = callRust<{ width: number; height: number; aspect: number; distance: number; ratio: number }>("graphics.fittingCamera", {
+      width, height, fov: this.camera.fov, dpr: globalThis.devicePixelRatio || 1, ...this.quality,
+    });
+    this.width = fit.width; this.height = fit.height;
+    this.camera.aspect = fit.aspect;
     this.camera.updateProjectionMatrix();
-    let distance = Math.max(1.12 / Math.tan(halfFov), .86 / (Math.tan(halfFov) * this.camera.aspect));
-    // Fit the platform's front edge as well as the helmet: a figure-only fit clips the disc.
-    const outline = [new THREE.Vector3(-.2, 1.95, .2), new THREE.Vector3(.2, 1.95, .2)];
-    for (let i = 0; i < 16; i++) {
-      const angle = i / 16 * Math.PI * 2;
-      outline.push(new THREE.Vector3(Math.cos(angle) * .81, 0, Math.sin(angle) * .81));
-      outline.push(new THREE.Vector3(Math.cos(angle) * .63, 1.1, Math.sin(angle) * .63));
-    }
-    const limitY = 1 - 24 / this.height;
-    for (let i = 0; i < 60; i++) {
-      this.camera.position.set(0, 1.36, distance); this.camera.lookAt(0, .88, 0); this.camera.updateMatrixWorld();
-      if (outline.every((point) => { const p = point.clone().project(this.camera); return Math.abs(p.x) < .94 && Math.abs(p.y) < limitY; })) break;
-      distance *= 1.015;
-    }
-    this.distance = distance; this.aim();
+    this.distance = fit.distance; this.aim();
     if (this.renderer) {
-      const q = this.quality;
-      const ratio = Math.max(.5, Math.min((globalThis.devicePixelRatio || 1) * q.ssaa, q.maxDpr, Math.sqrt(q.maxPixels / (this.width * this.height))));
-      this.renderer.setPixelRatio(ratio); this.renderer.setSize(this.width, this.height, false);
-      this.canvas.dataset.previewDpr = ratio.toFixed(2);
+      this.renderer.setPixelRatio(fit.ratio); this.renderer.setSize(this.width, this.height, false);
+      this.canvas.dataset.previewDpr = fit.ratio.toFixed(2);
     }
     this.render();
   }
@@ -248,28 +236,22 @@ export class PersonaViewer {
   }
 
   private aim(): void {
-    this.camera.position.set(0, 1.36, this.distance); this.camera.lookAt(0, .88, 0);
-    // CSS pixels per metre at her distance
-    const k = this.height / 2 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) / Math.hypot(this.distance, .48);
-    this.camera.translateX(-this.moved[0] / k); this.camera.translateY(this.moved[1] / k);
+    const aim = callRust<{ position: [number, number, number]; target: [number, number, number] }>("graphics.fittingAim", {
+      distance: this.distance, height: this.height, fov: this.camera.fov, x: this.moved[0], y: this.moved[1],
+    });
+    this.camera.position.fromArray(aim.position); this.camera.lookAt(...aim.target);
     this.camera.updateMatrixWorld();
   }
 
   rotate(deltaRadians: number): void {
     if (this.disposed || !Number.isFinite(deltaRadians)) return;
-    this.stage.rotating.rotation.y = THREE.MathUtils.euclideanModulo(this.stage.rotating.rotation.y + deltaRadians, Math.PI * 2);
+    this.stage.rotating.rotation.y = callRust<number>("graphics.fittingRotation", { angle: this.stage.rotating.rotation.y, delta: deltaRadians });
     this.render();
   }
 
   updateLoadout(loadout: Loadout): PersonaPreviewCoverage {
     this.loadout = loadout; this.applyWeapon(); this.render();
-    const missing = [loadout.head, loadout.body, loadout.suit, loadout.boots, loadout.knife, loadout.grenade];
-    const realRifle = !!this.varyag && weaponOf(loadout.weapon1.item) === "rifle";
-    if (!realRifle) missing.push(loadout.weapon1.item);
-    if (loadout.weapon2) missing.push(loadout.weapon2.item);
-    missing.push(...Object.values(loadout.weapon1.mods ?? {}).filter((id) => !realRifle || !["optic-sokol", "muzzle-tishina"].includes(id)));
-    if (loadout.weapon1.skin) missing.push(loadout.weapon1.skin);
-    return { exact: false, description: this.previewDescription, missingItemIds: [...new Set(missing)] };
+    return callRust<PersonaPreviewCoverage>("graphics.fittingCoverage", { loadout, weapon: weaponOf(loadout.weapon1.item), hasRifleModel: !!this.varyag });
   }
 
   private applyWeapon(): void {
@@ -280,9 +262,9 @@ export class PersonaViewer {
     if (this.varyag) { this.varyag.visible = realRifle; fitVaryag(this.varyag, this.loadout); }
     const mount = realRifle ? this.varyag : this.hand?.mount;
     if (!mount) return;
+    const pose = callRust<{ position: [number, number, number]; rotation: [number, number, number] }>("graphics.equipmentPose", { weapon });
     mount.scale.setScalar(1);
-    mount.position.set(weapon === "pistol" ? .25 : -.035, weapon === "pistol" ? .94 : 1.18, weapon === "pistol" ? .15 : .215);
-    mount.rotation.set(0, 0, weapon === "pistol" ? -Math.PI / 2 : -.96);
+    mount.position.fromArray(pose.position); mount.rotation.set(...pose.rotation);
     if (this.sling) { this.sling.removeFromParent(); disposeObject(this.sling); }
     this.sling = realRifle ? authoredWeaponFit(mount) : makeSling(mount, weapon === "pistol");
     this.equipment.add(this.sling); this.tuneObject(this.equipment);

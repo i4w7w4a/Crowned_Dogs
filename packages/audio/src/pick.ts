@@ -1,14 +1,12 @@
 // Random choices that do not repeat: the same gunshot twice in a row sounds
 // like a machine, and the same song twice in a row sounds like a bug.
 
+import { callRust } from "../../runtime/src/index.ts";
 export type Random = () => number;
 
 /** Index in [0, n) that differs from `last` whenever n > 1. */
 export function pickOther(n: number, last: number | undefined, random: Random = Math.random): number {
-  if (n <= 1) return 0;
-  if (last === undefined || last < 0 || last >= n) return Math.floor(random() * n);
-  const i = Math.floor(random() * (n - 1));
-  return i >= last ? i + 1 : i;
+  return callRust("audio.pickOther", [n, last, n > 1 ? random() : 0]);
 }
 
 /** Remembers the last variant of every sound. */
@@ -58,4 +56,4 @@ export class Shuffle<T> {
 
 /** Uniform in [-spread, spread]. */
 export const jitter = (spread: number | undefined, random: Random = Math.random) =>
-  spread ? (random() * 2 - 1) * spread : 0;
+  callRust<number>("audio.jitter", [spread, spread ? random() : 0]);

@@ -2,6 +2,7 @@
 // muzzle when a gun fires.
 
 import * as THREE from "three";
+import { motionCompute } from "../../../../packages/runtime/src/index.ts";
 import { reach, setWorldQuat } from "./ik.ts";
 import type { Hand } from "./weapons.ts";
 
@@ -30,14 +31,12 @@ export class HoldOut {
   apply(group: THREE.Object3D, w: number): void {
     if (w < 0.01 || this.arms.length < 2) return;
     group.getWorldQuaternion(qa);
-    const fwd = vf.set(0, 0, 1).applyQuaternion(qa), side = vs.set(1, 0, 0).applyQuaternion(qa);
     for (const a of this.arms) {
       const keep = a.hand.getWorldQuaternion(qb);
-      const target = a.hand.getWorldPosition(vt).addScaledVector(fwd, AHEAD * w).addScaledVector(UP, LIFT * w);
-      // the elbow eases from where the clip has it to hanging down and out
-      const elbow = a.lower.getWorldPosition(vp);
-      const pole = a.upper.getWorldPosition(vu).addScaledVector(UP, -0.5).addScaledVector(side, 0.35 * a.out).addScaledVector(fwd, 0.15);
-      reach(a.upper, a.lower, a.hand, target, pole.lerp(elbow, 1 - w));
+      const pose = motionCompute("holdOut", new Float64Array([
+        ...qa.toArray(), w, a.out, ...a.hand.getWorldPosition(vt).toArray(), ...a.lower.getWorldPosition(vp).toArray(), ...a.upper.getWorldPosition(vu).toArray(),
+      ]));
+      reach(a.upper, a.lower, a.hand, new THREE.Vector3().fromArray(pose), new THREE.Vector3().fromArray(pose, 3));
       setWorldQuat(a.hand, keep);
     }
   }
@@ -65,11 +64,12 @@ export class Flash {
 
   /** Follows the muzzle while it lasts; returns how bright it is now (0..1), for the light. */
   update(dt: number): number {
-    this.life = Math.max(0, this.life - dt);
-    const s = this.sprite, k = this.life / FLASH;
+    const frame = motionCompute("flash", new Float64Array([this.life, dt, this.size]));
+    this.life = frame[0]!;
+    const s = this.sprite, k = frame[1]!;
     s.visible = k > 0 && !!this.hand?.muzzle(s.position);
     if (!s.visible) return 0;
-    s.scale.setScalar(this.size * (0.7 + 0.5 * k));
+    s.scale.setScalar(frame[2]!);
     s.material.rotation = Math.random() * Math.PI * 2;
     s.material.opacity = k;
     return k;

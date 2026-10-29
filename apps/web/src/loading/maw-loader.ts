@@ -4,6 +4,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { liquidGlass } from "../hud/liquid.ts";
 import type { LoadingPresentation } from "./battle-loading.ts";
 import "./maw-loader.css";
+import { callRust } from "../rust/engine.ts";
 
 const base = import.meta.env.BASE_URL;
 const d2r = Math.PI / 180;
@@ -165,8 +166,7 @@ export class MawLoader implements LoadingPresentation {
     if (!width || !height) return;
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
-    const vfov = this.camera.fov * d2r / 2, hfov = Math.atan(Math.tan(vfov) * this.camera.aspect);
-    this.camera.position.set(0, 0, this.radius / Math.sin(Math.min(vfov, hfov)) * 1.02);
+    this.camera.position.set(0, 0, callRust("ui.loaderDistance", [this.camera.fov, this.camera.aspect, this.radius]));
     this.camera.lookAt(0, 0, 0); this.camera.updateProjectionMatrix();
     this.draw(0);
   }
@@ -185,10 +185,9 @@ export class MawLoader implements LoadingPresentation {
   private draw(dt: number): void {
     if (!this.renderer || !this.scene || !this.camera || !this.pivot) return;
     this.elapsed += dt; this.mixer?.update(dt);
-    const t = this.elapsed, sway = this.reduced ? 0 : 1;
-    this.pivot.rotation.set((16 + sway * 2 * Math.sin(t * .7)) * d2r, (-22 + sway * 9 * Math.sin(t * .45)) * d2r, (-13 + sway * 1.5 * Math.cos(t * .33)) * d2r, "ZXY");
-    const breath = this.idle ? .5 - .5 * Math.cos(2 * Math.PI * (this.idle.time % 4) / 4) : 0;
-    this.pivot.scale.setScalar(1 + .012 * breath);
+    const pose = callRust<{rotation:[number,number,number];scale:number}>("ui.loaderPose", [this.elapsed, this.reduced, this.idle?.time ?? null]);
+    this.pivot.rotation.set(...pose.rotation, "ZXY");
+    this.pivot.scale.setScalar(pose.scale);
     this.renderer.render(this.scene, this.camera);
   }
   private release(): void {

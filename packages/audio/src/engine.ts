@@ -8,6 +8,7 @@
 //   fight track ──────┤ (music bus, dips under big hits)
 //   radio track ─ radio ┘
 
+import { callRust } from "../../runtime/src/index.ts";
 import { FILES } from "./files.generated.ts";
 import { MIX, SOUNDS, TRACKS, type Bus, type SoundId, type TrackId } from "./bank.ts";
 import type { Cue } from "./cues.ts";
@@ -28,7 +29,7 @@ export interface PlayOptions {
   pan?: number;
 }
 
-const dbToGain = (db: number) => 10 ** (db / 20);
+const dbToGain = (db: number): number => callRust("audio.dsp.dbToGain", [db]);
 /** Half a second of silence, a WAV made in place. */
 const SILENCE = (() => {
   const n = 4000, b = new Uint8Array(44 + n), v = new DataView(b.buffer);
@@ -40,7 +41,6 @@ const SILENCE = (() => {
   return "data:audio/wav;base64," + btoa(s);
 })();
 const MUSIC_FADE = 0.4;
-const AMB_OVERLAP = 1.5;
 
 export class GameAudio {
   readonly ctx: AudioContext;
@@ -90,9 +90,8 @@ export class GameAudio {
 
   /** A settings slider, 0..1. Squared so the whole travel is audible. */
   setVolume(bus: Bus | "master", value: number) {
-    const v = Math.min(1, Math.max(0, value));
     const base = bus === "master" ? MIX.master : MIX[bus];
-    this.buses[bus].gain.setTargetAtTime(dbToGain(base) * v * v, this.ctx.currentTime, 0.03);
+    this.buses[bus].gain.setTargetAtTime(callRust("audio.dsp.volume", [base, value]), this.ctx.currentTime, 0.03);
   }
 
   url(file: string): string {
@@ -111,9 +110,9 @@ export class GameAudio {
     void this.buffer(file).then((buf) => {
       const src = this.ctx.createBufferSource();
       src.buffer = buf;
-      src.playbackRate.value = 2 ** (jitter(def.pitchJitter, this.random) / 12);
-      const level = (def.gainDb ?? 0) + (FILES[file]?.trimDb ?? 0) + jitter(def.gainJitter, this.random) + (o.gainDb ?? 0);
-      const g = this.gainNode(level, this.buses[def.bus]);
+      const levels = callRust<{ playbackRate: number; gainDb: number }>("audio.dsp.play", [id, FILES[file]?.trimDb ?? 0, o, jitter(def.pitchJitter, this.random), jitter(def.gainJitter, this.random)]);
+      src.playbackRate.value = levels.playbackRate;
+      const g = this.gainNode(levels.gainDb, this.buses[def.bus]);
       let head: AudioNode = g;
       if (o.pan) {
         const p = this.ctx.createStereoPanner();
@@ -239,15 +238,16 @@ class AmbienceLoop {
     src.buffer = buf;
     const g = this.ctx.createGain();
     src.connect(g).connect(this.level);
-    const end = t + buf.duration;
+    const schedule = callRust<{ end: number; fadeInEnd: number; fadeOutStart: number; stopAt: number; next: number; delay: number }>("audio.dsp.loop", [t, buf.duration, this.ctx.currentTime]);
+    const { end } = schedule;
     g.gain.setValueAtTime(first ? 1 : 0, t);
-    if (!first) g.gain.linearRampToValueAtTime(1, t + AMB_OVERLAP);
-    g.gain.setValueAtTime(1, end - AMB_OVERLAP);
+    if (!first) g.gain.linearRampToValueAtTime(1, schedule.fadeInEnd);
+    g.gain.setValueAtTime(1, schedule.fadeOutStart);
     g.gain.linearRampToValueAtTime(0, end);
     src.start(t);
-    src.stop(end + 0.05);
-    const next = end - AMB_OVERLAP;
-    this.timer = setTimeout(() => this.pass(buf, next, false), Math.max(0, (next - this.ctx.currentTime - 1) * 1000));
+    src.stop(schedule.stopAt);
+    const next = schedule.next;
+    this.timer = setTimeout(() => this.pass(buf, next, false), schedule.delay);
   }
 }
 
@@ -331,7 +331,7 @@ class BufferDeck implements MusicDeck {
   /** The fight track's own slider, 0..1, on top of the music bus. */
   fightLevel(v: number) {
     const c = this.ch.fight;
-    c.lvl.gain.setTargetAtTime(dbToGain(c.base) * v * v, this.audio.ctx.currentTime, 0.05);
+    c.lvl.gain.setTargetAtTime(callRust("audio.dsp.volume", [c.base, v]), this.audio.ctx.currentTime, 0.05);
   }
 
   cue(sound: SoundId) {

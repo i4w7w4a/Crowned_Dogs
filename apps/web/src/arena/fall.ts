@@ -3,6 +3,7 @@
 // were, so nothing slides or flies: the feet stay put and the body folds above them.
 
 import * as THREE from "three";
+import { motionCompute } from "../../../../packages/runtime/src/index.ts";
 import { reach, setWorldQuat, turn as aim } from "./ik.ts";
 
 /** Seconds from the last hit to lying still. */
@@ -17,7 +18,10 @@ type Leg = { thigh: THREE.Object3D; calf: THREE.Object3D; foot: THREE.Object3D; 
 type Solid = { bone: THREE.Object3D; r: number };
 
 /** Turns a bone about a world axis. */
-const spin = (o: THREE.Object3D, axis: THREE.Vector3, a: number) => setWorldQuat(o, qc.setFromAxisAngle(axis, a).multiply(o.getWorldQuaternion(qd)));
+const spin = (o: THREE.Object3D, axis: THREE.Vector3, a: number) => {
+  o.quaternion.fromArray(motionCompute("spin", new Float64Array([...axis.toArray(), a, ...o.getWorldQuaternion(qd).toArray(), ...o.parent!.getWorldQuaternion(qc).toArray()])));
+  o.updateMatrixWorld(true);
+};
 const ease = (u: number) => u * u * (3 - 2 * u);
 const clamp01 = (u: number) => Math.min(1, Math.max(0, u));
 
@@ -74,21 +78,13 @@ export class Collapse {
     if (!p || !p.parent) return;
     // the knees give at once; the slump onto the side starts while they are still bending and speeds up as a
     // falling body does, then the body settles with a small rebound where it hits the floor
-    const knees = ease(clamp01(t / 0.42));
-    const u = clamp01((t - 0.28) / 0.72), over = u * u;
-    const land = t > 1 ? Math.exp(-(t - 1) * 10) * Math.sin((t - 1) * 30) * 0.06 : 0;
-    const h0 = f.at.y;
-    const y = THREE.MathUtils.lerp(h0, h0 * 0.62, knees) + (0.14 - h0 * 0.62) * over + land * 0.4;
-    const along = 0.06 * knees + 0.06 * over, across = 0.34 * over;
-    const target = va.copy(f.at).setY(y).addScaledVector(f.fwd, along).addScaledVector(f.side, across * f.dir);
-    // bent at the hips as the knees give, then rolled over onto the side
-    const roll = (1.42 + land) * over, bend = 0.18 * knees - 0.1 * over;
-    const turn = qa.setFromAxisAngle(f.fwd, -roll * f.dir).multiply(qb.setFromAxisAngle(f.side, bend)).multiply(f.turn);
+    const frame = motionCompute("collapse", new Float64Array([t, ...f.at.toArray(), ...f.turn.toArray(), ...f.fwd.toArray(), ...f.side.toArray(), f.dir]));
+    const target = va.fromArray(frame), turn = qa.fromArray(frame, 3), over = frame[8]!;
     this.place(target, turn);
     // the spine slumps forward, then lies out along the floor; the head drops and rolls onto the floor last
-    const slump = 0.1 * knees * (1 - 0.6 * over);
+    const slump = frame[9]!;
     for (const s of this.spine) spin(s, f.side, slump);
-    if (this.head) { spin(this.head, f.side, 0.2 * knees); spin(this.head, f.fwd, 0.9 * over * f.dir); }
+    if (this.head) { spin(this.head, f.side, frame[10]!); spin(this.head, f.fwd, frame[11]!); }
     // the arm it falls on is flung out ahead along the floor, not left under the shoulder to prop the body up
     const arm = this.arms.length === 2 ? this.arms[f.dir > 0 ? 0 : 1] : undefined;
     if (arm && over > 0) {

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { motionCompute } from "../../../../packages/runtime/src/index.ts";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { MOD_SLOTS, type Loadout, type ModSlot } from "@crowned-dogs/core";
 import { loadModel } from "../arena/load-model.ts";
@@ -135,10 +136,11 @@ export class ItemViewer {
     if (this.displayed) {
       this.scene.updateMatrixWorld(true);
       const b = visibleBounds(this.displayed), tanY = Math.tan(half), tanX = tanY * w / h;
-      distance = 0;
+      const corners: number[] = [];
       for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
-        distance = Math.max(distance, z + Math.max(Math.abs(x) / tanX, Math.abs(y) / tanY) * (this.options.workbench ? 1.28 : 1.16));
+        corners.push(x, y, z);
       }
+      distance = motionCompute("cameraDistance", new Float64Array([tanY, tanX, this.options.workbench ? 1.28 : 1.16, ...corners]))[0]!;
     }
     this.camera.position.set(0, 0, distance);
     this.camera.lookAt(0, 0, 0); this.render();
@@ -166,8 +168,7 @@ export class ItemViewer {
   private turn(horizontal: number, vertical: number): void {
     if (this.options.workbench) {
       // Camera-facing roll remains usable at every viewing angle, including a side view.
-      this.pivot.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), horizontal);
-      this.pivot.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), -vertical);
+      this.pivot.quaternion.fromArray(motionCompute("viewerTurn", new Float64Array([...this.pivot.quaternion.toArray(), horizontal, vertical])));
     } else {
       this.pivot.rotation.y += horizontal;
       this.pivot.rotation.x = THREE.MathUtils.clamp(this.pivot.rotation.x + vertical, -1.1, 1.1);

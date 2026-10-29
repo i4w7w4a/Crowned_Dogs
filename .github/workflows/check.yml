@@ -15,6 +15,24 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: rustup update stable && rustup target add wasm32-unknown-unknown
+      - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - run: npm run rust:build
+      - run: cargo test --locked --release -p game-core -p game-client -p game-motion -p game-graphics -p game-ui
       - run: npm run typecheck
       - run: npm test
       - run: npm run web:build
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: rustup update stable
+      - run: rustup target add wasm32-unknown-unknown
+      - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - run: npm run local:build

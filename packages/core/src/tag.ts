@@ -1,20 +1,11 @@
-// The dog tag an operator gets when signing the contract. Its number,
-// K-XXX-XXX with six digits, is the player's id in the bot and in the client.
-
-export const TAG_COUNT = 1_000_000;
-
-/** 417093 -> "K-417-093". */
-export function formatTag(n: number): string {
-  if (!Number.isInteger(n) || n < 0 || n >= TAG_COUNT) throw new RangeError(`no tag for ${n}`);
-  const d = String(n).padStart(6, "0");
-  return `K-${d.slice(0, 3)}-${d.slice(3)}`;
-}
-
-/**
- * Reads a tag the way people type it: "K-417-093", "k417093", "К 417 093"
- * (Cyrillic К) all give "K-417-093". Anything else gives null.
- */
-export function parseTag(text: string): string | null {
-  const m = /^[KkКк][\s-]*(\d{3})[\s-]*(\d{3})$/.exec(text.trim());
-  return m ? `K-${m[1]}-${m[2]}` : null;
-}
+// Browser/Node ABI only. All game calculations are implemented in crates/game-core.
+import { callRust } from "../../runtime/src/index.ts";
+import type * as Contract from "../reference/tag.ts";
+export type * from "../reference/tag.ts";
+const constants = callRust<Record<string, unknown>>("core.constants", []);
+export const TAG_COUNT = constants.TAG_COUNT as typeof Contract.TAG_COUNT;
+export const formatTag: typeof Contract.formatTag = (...args) => {
+  try { return callRust("core.formatTag", args); }
+  catch (e) { throw new RangeError(e instanceof Error ? e.message : String(e)); }
+};
+export const parseTag: typeof Contract.parseTag = (...args) => callRust("core.parseTag", args);

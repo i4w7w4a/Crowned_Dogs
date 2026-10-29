@@ -20,6 +20,7 @@ import { GUN_ACC, GUN_WITH, TIME_WORD, WEATHER_WORD, endWords, steps, turnsWord,
 import { store } from "./store.ts";
 import { activateAfterReady } from "./loading/battle-loading.ts";
 import "./style.css";
+import { callRust } from "./rust/engine.ts";
 
 /** The figure models: the .glb inside JSON as base64, since artifact pages do not serve .glb (see npm run assets).
  *  We play the male Persona; the enemy, Искра, is the female one (both from Art's Tripo parts). VITE_MODEL puts one model on both. */
@@ -117,17 +118,12 @@ const ringAt = {} as Record<Zone, [number, number]>;
 function placeRings(): void {
   // On a short screen the enemy's legs (close up, the groin too) sink under the controls: those rings stop
   // just above them, and the rings above keep a finger's width apart.
-  let limit = ctlTop - ringR - 6;
-  for (const z of [...ZONES].reverse()) {
-    const [x, y] = point(z), at = Math.min(y, limit);
-    ringAt[z] = [x, at]; limit = at - Math.max(22, 2 * ringR + 8);
-  }
-  for (const z of ZONES) {
+  const placed = callRust<[number, number, number][]>("ui.reticles", [ZONES.map(point), ringR, Number.isFinite(ctlTop) ? ctlTop : 1e9]);
+  for (const [index, z] of ZONES.entries()) {
     // each ring's hit area ends halfway to its neighbour, so a tap never lands on the next zone
-    const [x, y] = ringAt[z];
-    let near = 40;
-    for (const o of ZONES) if (o !== z) near = Math.min(near, Math.hypot(ringAt[o][0] - x, ringAt[o][1] - y));
-    const el = ringEls[z], h = Math.max(2 * ringR + 4, near).toFixed(0) + "px";
+    const [x, y, height] = placed[index]!;
+    ringAt[z] = [x, y];
+    const el = ringEls[z], h = height + "px";
     if (el.style.height !== h) { el.style.height = h; el.style.marginTop = `calc(${h} / -2)`; }
     el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
   }
@@ -145,15 +141,13 @@ function placeRings(): void {
 
 function layout(): void {
   if (!active || !scene.clientWidth) return; // hidden behind the base: nothing to measure
-  const cw = scene.clientWidth, top = scene.clientHeight * frame.top, ch = scene.clientHeight - top;
-  const s = Math.max(cw / frame.w, ch / frame.h);
-  const w = frame.w * s, h = frame.h * s;
-  geo = { x: (cw - w) * 0.5, y: top, w, h };
+  const measured = callRust<{x:number;y:number;w:number;h:number;radius:number;viewport:{x:number;y:number;w:number;h:number}}>("ui.layout", [scene.clientWidth, scene.clientHeight, frame]);
+  const { w, h } = measured;
+  geo = { x: measured.x, y: measured.y, w, h };
   for (const el of [bg, canvas]) Object.assign(el.style, { width: w + "px", height: h + "px", left: geo.x + "px", top: geo.y + "px" });
   // the part of the picture on screen, so the bodycam lens centres on what the player sees
-  const vx = Math.max(0, -geo.x), vy = Math.max(0, -geo.y);
-  arena?.resize(w, h, { x: vx / w, y: vy / h, w: (Math.min(w, cw - geo.x) - vx) / w, h: (Math.min(h, scene.clientHeight - geo.y) - vy) / h });
-  ringR = Math.max(6, w * 0.02 - 0.75);
+  arena?.resize(w, h, measured.viewport);
+  ringR = measured.radius;
   for (const z of ZONES) ringEls[z].querySelector("circle")!.setAttribute("r", ringR.toFixed(2));
   measureCtl();
   placeRings();
@@ -192,14 +186,12 @@ $("swapBtn").addEventListener("click", () => tap(() => duel.press({ type: "swap"
 // ---------- render ----------
 function render(): void {
   const m = duel.match, d = duel.draft, me = m.fighters[duel.me];
-  const lock = busy || duel.over;
-  const run = d.kind === "run" || d.kind === "dash" || d.kind === "flee";
-  const aimed = d.kind === "shoot" || d.kind === "knife";
-  const step = Math.abs(d.move) <= 1;
-  const knifeMove = canUseKnife(m, d.move) ? d.move : 1;
-  const knifeOk = step && canUseKnife(m, knifeMove);
-  const nadeOk = step && canThrowGrenade(m, duel.me);
-  const planned = duel.plannedDistance;
+  const controls = callRust<{
+    lock:boolean; aimed:boolean; knifeOk:boolean; nadeOk:boolean; chance:number|null;
+    need:number; dist:number; noShot:boolean; knifeChance:number|null;
+    grenade:ReturnType<typeof grenadeSpec>; spare:WeaponId|null; message:string|null;
+  }>("ui.battleControls", [m,d,busy]);
+  const { lock, aimed, knifeOk, nadeOk } = controls;
 
   // a shot is a tap on the enemy: the rings stay live while a grenade, a swap or a run is picked, and tapping one turns the order back into a shot
   ringsEl.classList.toggle("off", busy);
@@ -210,7 +202,7 @@ function render(): void {
     ringEls[z].classList.toggle("sel", aimed && d.zone === z);
     ringEls[z].classList.toggle("hint", aimed && !d.zone && m.turn === 1);
   }
-  const chance = duel.chance;
+  const chance = controls.chance;
   tagEl.hidden = !aimed || !d.zone || chance === null || lock;
   if (!tagEl.hidden) tagEl.textContent = (d.kind === "knife" ? "Нож · " : "") + cap(zoneName(d.zone!)) + " · " + pct(chance);
   placeRings();
@@ -220,7 +212,7 @@ function render(): void {
     const on = d.defend.includes(b.dataset.z as Zone);
     b.classList.toggle("on", on); b.disabled = lock; b.setAttribute("aria-pressed", String(on));
   }
-  const pips = $("pips"), need = guardsNeeded(d);
+  const pips = $("pips"), need = controls.need;
   pips.textContent = `${d.defend.length}/${need}`;
   pips.classList.toggle("done", d.defend.length >= need);
   pips.setAttribute("aria-label", `Выбрано ${d.defend.length} из ${need}`);
@@ -231,7 +223,7 @@ function render(): void {
     b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on));
     b.disabled = lock || m.distance - mv < 1;
   }
-  const dist = d.move !== 0 && !busy ? planned : m.distance, noShot = (run || d.kind === "swap") && !lock;
+  const { dist, noShot } = controls;
   $("distLabel").textContent = `${dist} ${steps(dist)}`;
   const note = $("distNote");
   note.hidden = !noShot; note.textContent = d.kind === "swap" ? "без выстрела" : "без атаки";
@@ -243,15 +235,15 @@ function render(): void {
   for (const [b, v] of on) { b.classList.toggle("on", v); b.setAttribute("aria-pressed", String(v)); }
   // a range is drawn with the steps icon: ≤2 👣
   const STEPS = icon("i-steps");
-  $("knifeSub").innerHTML = knifeOk ? pct(draftChance(m, duel.me, { ...d, kind: "knife", move: knifeMove })) : "≤2" + STEPS;
-  const g = grenadeSpec(m, duel.me);
+  $("knifeSub").innerHTML = knifeOk ? pct(controls.knifeChance) : "≤2" + STEPS;
+  const g = controls.grenade;
   $("nadeSub").innerHTML = me.grenades ? (nadeOk ? "×" + me.grenades : `${g.minDistance}–${g.maxDistance}${STEPS}`) : "×0";
-  const spare = duel.spare;
+  const spare = controls.spare;
   wb.hidden = !spare;
   if (spare) { $("swapText").textContent = "Взять " + GUN_ACC[spare]; wb.setAttribute("aria-label", "Взять " + GUN_ACC[spare] + ", в этот ход без выстрела"); }
 
   const go = $<HTMLButtonElement>("goBtn");
-  const msg = duel.over ? "Бой окончен" : busy ? "Ход идёт…" : duel.missing;
+  const msg = controls.message;
   go.disabled = !!msg;
   // a run or a dash is told by the distance column ("без атаки"), so the button keeps its one wording
   $("goText").textContent = msg ?? (d.kind === "flee" ? "Уйти из боя" : "Подтвердить ход");
@@ -263,10 +255,10 @@ function render(): void {
 
 function drawHP(side: Side): void {
   const id = side === 0 ? "Me" : "En", hp = shown.hp[side]!, max = duel.match.fighters[side].maxHp;
-  const w = clamp(hp / max * 100, 0, 100) + "%";
-  $("hp" + id).textContent = String(Math.max(0, Math.round(hp)));
-  $("bar" + id).style.width = w; $("ghost" + id).style.width = w;
-  $("side" + id).classList.toggle("low", hp > 0 && hp <= max * 0.25);
+  const view = callRust<{text:string;width:string;low:boolean}>("ui.health", [hp,max]);
+  $("hp" + id).textContent = view.text;
+  $("bar" + id).style.width = view.width; $("ghost" + id).style.width = view.width;
+  $("side" + id).classList.toggle("low", view.low);
 }
 
 function drawHeader(): void {
@@ -400,13 +392,11 @@ function finish(): void {
   stopTimer(); render();
   const m = duel.match, res = m.result!, turns = m.history.length;
   const w = endWords(res, duel.me, duel.fighters[1].name, turns);
-  let dealt = 0, taken = 0;
-  for (const t of m.history) { dealt += t.attacks[0]?.damage ?? 0; taken += t.attacks[1]?.damage ?? 0; }
   endVeil.classList.toggle("lost", w.lost);
   $("endTitle").textContent = w.title;
   $("endText").textContent = w.text;
   $("againBtn").textContent = w.again;
-  $("endStats").innerHTML = `<div><b>${dealt}</b><span>Нанесено</span></div><div><b>${taken}</b><span>Получено</span></div><div><b>${turns}</b><span>${turnsWord(turns)}</span></div>`;
+  $("endStats").innerHTML = callRust("ui.finishStats", [m.history]);
   $("endBadge").innerHTML = icon(w.lost ? "i-signal" : "i-shot");
   // Art: a dead operator wakes up in the capsule, that is back at the base; a winner picks a new fight or the base
   $("baseEndBtn").hidden = w.lost; againGoesHome = w.lost;

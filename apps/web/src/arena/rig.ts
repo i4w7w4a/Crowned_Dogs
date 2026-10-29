@@ -3,6 +3,7 @@
 // and the UE Mannequin skeleton of our Personas.
 
 import * as THREE from "three";
+import { motionCompute } from "../../../../packages/runtime/src/index.ts";
 
 /** The bones moved by hand: Mixamo names (the placeholder X Bot; three drops the colon) and the UE Mannequin names of our Personas. */
 export const RIG = {
@@ -63,16 +64,16 @@ export function armsOnly(model: THREE.Object3D): (on: boolean) => void {
     if (!(o instanceof THREE.SkinnedMesh)) return;
     const g = o.geometry, si = g.getAttribute("skinIndex"), sw = g.getAttribute("skinWeight");
     const arm = o.skeleton.bones.map((b) => ARM.test(b.name));
-    const onArm = (v: number) => {
-      let best = 0, bone = 0;
-      for (let k = 0; k < 4; k++) { const w = sw.getComponent(v, k); if (w > best) { best = w; bone = si.getComponent(v, k); } }
-      return arm[bone];
-    };
-    const all = g.index, n = all ? all.count : g.getAttribute("position").count, kept: number[] = [];
-    for (let i = 0; i < n; i += 3) {
-      const [a, b, c] = all ? [all.getX(i), all.getX(i + 1), all.getX(i + 2)] : [i, i + 1, i + 2];
-      if (onArm(a) && onArm(b) && onArm(c)) kept.push(a, b, c);
+    const all = g.index, n = all ? all.count : g.getAttribute("position").count;
+    const count = si.count, weightsAt = 3 + count * 4, armsAt = weightsAt + count * 4, indicesAt = armsAt + arm.length;
+    const input = new Float64Array(indicesAt + n);
+    input.set([count, arm.length, n]);
+    for (let v = 0; v < count; v++) for (let k = 0; k < 4; k++) {
+      input[3 + v * 4 + k] = si.getComponent(v, k); input[weightsAt + v * 4 + k] = sw.getComponent(v, k);
     }
+    input.set(arm.map(Number), armsAt);
+    for (let i = 0; i < n; i++) input[indicesAt + i] = all ? all.getX(i) : i;
+    const kept = motionCompute("armTriangles", input);
     swaps.push([o, all, kept.length ? new THREE.BufferAttribute(new Uint32Array(kept), 1) : null, o.visible]);
   });
   return (on) => {

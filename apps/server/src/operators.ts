@@ -5,7 +5,8 @@
 import { randomInt } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { TAG_COUNT, formatTag } from "@crowned-dogs/core";
+import { TAG_COUNT } from "@crowned-dogs/core";
+import { callRust } from "../../../packages/runtime/src/index.ts";
 
 export interface Operator {
   /** K-XXX-XXX, given once and never changed. */
@@ -26,7 +27,6 @@ export interface OperatorRegistryOptions {
 
 export class OperatorRegistry {
   private byTg = new Map<string, Operator>();
-  private tags = new Set<string>();
   private opts: OperatorRegistryOptions;
 
   constructor(opts: OperatorRegistryOptions = {}) {
@@ -50,11 +50,16 @@ export class OperatorRegistry {
   sign(telegramId: string, name: string): Operator {
     const known = this.byTg.get(telegramId);
     if (known) return known;
-    if (this.tags.size >= TAG_COUNT) throw new Error("all tags are taken");
     const pick = this.opts.pick ?? (() => randomInt(TAG_COUNT));
-    let tag = formatTag(pick());
-    while (this.tags.has(tag)) tag = formatTag(pick());
-    const op: Operator = { tag, telegramId, name, signedAt: (this.opts.now ?? Date.now)() };
+    const picks: number[] = [];
+    const now = (this.opts.now ?? Date.now)();
+    let result: { needsPick?: boolean; operator: Operator; operators: Operator[] };
+    for (;;) {
+      result = callRust("server.operators.sign", [[...this.byTg.values()], telegramId, name, now, picks]);
+      if (!result.needsPick) break;
+      picks.push(pick());
+    }
+    const op = result.operator;
     this.add(op);
     this.save();
     return op;
@@ -62,7 +67,6 @@ export class OperatorRegistry {
 
   private add(op: Operator): void {
     this.byTg.set(op.telegramId, op);
-    this.tags.add(op.tag);
   }
 
   /** Writes a temp file and renames it, so a crash never leaves half a list. */

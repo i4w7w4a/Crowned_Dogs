@@ -1,24 +1,16 @@
-import { BASE_STATS, ITEM_BY_ID, WEAPONS, type Loadout, type ModSlot, type WeaponItem } from "@crowned-dogs/core";
+import type { Item, Loadout, ModSlot, WeaponItem } from "@crowned-dogs/core";
+import { callRust } from "../../../../packages/runtime/src/index.ts";
 import { bbox, composeWeapon, itemArt, markup, svg, WEAPON_ART, type Slot } from "../../../../packages/icons/src/index.ts";
 import { equipmentItemIcon } from "./equipment-icons.ts";
 import { liquidGlass } from "../hud/liquid.ts";
 import { GlassScroll } from "./glass-scroll.ts";
 import { backArrow } from "./navigation-icons.ts";
 import { ItemViewer } from "./item-viewer.ts";
-import { availableInFitting } from "./model-catalog.ts";
-import {
-  MOD_SLOTS, MOD_SLOT_NAMES, compileKit, describeItem, effectiveWeaponModId,
-  equipItem, equipWeaponMod, itemsForSlot, weaponModsForSlot,
-} from "./loadout-state.ts";
+import { MOD_SLOTS, equipItem, equipWeaponMod } from "./loadout-state.ts";
 import "./weapon-screen.css";
 
-const escape = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
-const equippedCheck = '<span class="cd-equipped-check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>';
-const socketNames: Record<ModSlot, string> = { ...MOD_SLOT_NAMES, muzzle: "Дуло", rail: "Планка", stock: "Приклад" };
-// Labels stay far enough apart for a finger; the leaders end at the real art sockets.
-const labelPoints: Record<ModSlot, [number, number]> = {
-  optic: [76, 53], muzzle: [286, 53], rail: [292, 256], mag: [184, 310], stock: [56, 264],
-};
+interface WorkshopModel { weapon: WeaponItem; parts: Record<Slot, string>; className: string; displayName: string; model: string | null; sockets: { slot: ModSlot; name: string; title: string; modified: boolean }[] }
+interface Choice { item: Item; selected: boolean }
 let iconSerial = 0;
 function partIcon(id: string): string {
   const art = itemArt(id);
@@ -43,25 +35,7 @@ export class WeaponScreen {
     this.element.className = "cw-screen";
     this.element.hidden = true;
     this.element.setAttribute("aria-label", "Оружие");
-    this.element.innerHTML = `
-      <img class="cw-room" src="${import.meta.env.BASE_URL}img/base/fitting-room.webp" alt="" draggable="false">
-      <header class="cw-header">
-        <button class="cw-back glass" type="button" aria-label="Назад к снаряжению">${backArrow}<span>Назад</span></button>
-        <span>Оружие</span>
-        <button class="cw-info cw-icon glass" type="button" aria-label="Характеристики оружия"><span aria-hidden="true">i</span></button>
-      </header>
-      <div class="cw-title"><p class="cw-class"></p><h1 class="cw-name"></h1></div>
-      <div class="cw-stage">
-        <div class="cw-model" hidden></div>
-        <svg class="cw-gun" viewBox="0 0 360 360" role="img" aria-label="Оружие с установленными модификациями"></svg>
-        <svg class="cw-links" hidden aria-hidden="true"></svg>
-        <div class="cw-sockets">${MOD_SLOTS.map(slot => `<button class="cw-socket glass" type="button" data-socket="${slot}" style="left:${labelPoints[slot][0] / 3.6}%;top:${labelPoints[slot][1] / 3.6}%"><span class="cw-socket-dot" aria-hidden="true"></span><span class="cw-socket-name">${socketNames[slot]}</span></button>`).join("")}</div>
-      </div>
-      <footer class="cw-footer"><button class="cw-change glass" type="button">Сменить оружие</button><p class="cw-error" role="status" hidden></p></footer>
-      <dialog class="cw-sheet sheet glass" aria-labelledby="cw-sheet-title">
-        <header class="cw-sheet-header"><h2 id="cw-sheet-title"></h2><button class="cw-close cw-icon glass" type="button" aria-label="Закрыть панель">×</button></header>
-        <div class="cw-sheet-body"></div>
-      </dialog>`;
+    this.element.innerHTML = callRust("client.workshop.initial", [import.meta.env.BASE_URL, backArrow]);
     parent.append(this.element);
     liquidGlass(this.element);
     this.sheet = this.element.querySelector("dialog")!;
@@ -126,36 +100,20 @@ export class WeaponScreen {
   hide(): void { this.element.hidden = true; this.viewer?.setActive(false); if (this.sheet.open) this.sheet.close(); }
   dispose(): void { this.hide(); this.viewer?.dispose(); this.sheetScroll.dispose(); this.element.remove(); }
 
-  private weapon(): WeaponItem {
-    const item = ITEM_BY_ID.get(this.loadout!.weapon1.item);
-    if (!item || item.kind !== "weapon") throw new Error("Неизвестное оружие");
-    return item;
-  }
-
   private slotName(slot: ModSlot): string {
-    return slot === "stock" && this.weapon().weapon === "pistol" ? "Рукоять" : socketNames[slot];
+    return callRust("client.workshop.slotName", [this.loadout, slot]);
   }
 
   private render(): void {
     if (!this.loadout) return;
-    const weapon = this.weapon();
-    this.element.querySelector(".cw-class")!.textContent = WEAPONS[weapon.weapon].name;
-    this.element.querySelector(".cw-name")!.textContent = weapon.name.match(/«(.*?)»/)?.[1] ?? weapon.name;
-    const parts = Object.fromEntries(MOD_SLOTS.map(slot => [slot, effectiveWeaponModId(this.loadout!, slot)])) as Record<Slot, string>;
+    const view = callRust<WorkshopModel>("client.workshop.model", [this.loadout]);
+    const { weapon, parts } = view;
+    this.element.querySelector(".cw-class")!.textContent = view.className;
+    this.element.querySelector(".cw-name")!.textContent = view.displayName;
     const shape = composeWeapon(weapon.weapon, parts);
-    const [x, y, w, h] = bbox(shape);
-    const angle = -Math.PI / 6, cos = Math.cos(angle), sin = Math.sin(angle);
-    const scale = Math.min(300 / (w * cos + h * -sin), 260 / (w * -sin + h * cos));
-    const cx = x + w / 2, cy = y + h / 2;
-    const project = ([ax, ay]: [number, number]): [number, number] => [180 + ((ax - cx) * cos - (ay - cy) * sin) * scale, 180 + ((ax - cx) * sin + (ay - cy) * cos) * scale];
-    const lines = MOD_SLOTS.map(slot => {
-      const [ax, ay] = project(WEAPON_ART[weapon.weapon].anchors[slot]);
-      const [lx, ly] = labelPoints[slot];
-      return `<g class="cw-anchor" data-anchor="${slot}" aria-hidden="true"><path d="M${lx} ${ly} L${ax} ${ay}"/><circle class="cw-anchor-hit" cx="${ax}" cy="${ay}" r="15"/><circle class="cw-anchor-pin" cx="${ax}" cy="${ay}" r="4"/></g>`;
-    }).join("");
-    this.element.querySelector(".cw-gun")!.innerHTML = `<g class="cw-gun-body" transform="translate(180 180) rotate(-30) scale(${scale}) translate(${-cx} ${-cy})">${markup(shape, `cw-weapon-${iconSerial++}`)}</g>${lines}`;
+    this.element.querySelector(".cw-gun")!.innerHTML = callRust("client.workshop.fallback", [bbox(shape), WEAPON_ART[weapon.weapon].anchors, markup(shape, "cw-weapon-" + iconSerial++)]);
     const model = this.element.querySelector<HTMLElement>(".cw-model")!;
-    const real = weapon.id === "rifle-varyag";
+    const real = view.model !== null;
     this.element.querySelector(".cw-stage")!.classList.toggle("cw-stage-3d", real);
     this.element.querySelector(".cw-gun")!.toggleAttribute("hidden", real);
     this.element.querySelector(".cw-links")!.toggleAttribute("hidden", !real);
@@ -164,15 +122,14 @@ export class WeaponScreen {
       this.viewer ??= new ItemViewer(model, { workbench: true, onSockets: points => this.drawSocketLinks(points) });
       void this.viewer.show(weapon.id, weapon.name, this.loadout);
     } else this.viewer?.hide();
-    for (const slot of MOD_SLOTS) {
-      const button = this.element.querySelector<HTMLButtonElement>(`[data-socket="${slot}"]`)!;
-      const item = ITEM_BY_ID.get(parts[slot]);
-      button.querySelector(".cw-socket-name")!.textContent = this.slotName(slot);
-      button.setAttribute("aria-label", `${this.slotName(slot)}: ${item?.name ?? "штатная деталь"}`);
+    for (const socket of view.sockets) {
+      const button = this.element.querySelector<HTMLButtonElement>('[data-socket="' + socket.slot + '"]')!;
+      button.querySelector(".cw-socket-name")!.textContent = socket.name;
+      button.setAttribute("aria-label", socket.name + ": " + socket.title);
       button.setAttribute("aria-haspopup", "dialog");
-      button.setAttribute("aria-expanded", String(this.sheet.open && this.selectedSlot === slot));
-      button.classList.toggle("cw-modified", parts[slot] !== weapon.stock[slot]);
-      button.title = item?.name ?? "";
+      button.setAttribute("aria-expanded", String(this.sheet.open && this.selectedSlot === socket.slot));
+      button.classList.toggle("cw-modified", socket.modified);
+      button.title = socket.title;
     }
   }
 
@@ -180,12 +137,8 @@ export class WeaponScreen {
     const stage = this.element.querySelector<HTMLElement>(".cw-stage")!;
     const links = this.element.querySelector<SVGSVGElement>(".cw-links")!;
     const w = stage.clientWidth, h = stage.clientHeight;
-    links.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    links.innerHTML = MOD_SLOTS.map(slot => {
-      const p = points[slot]; if (!p) return "";
-      const [lx, ly] = labelPoints[slot];
-      return `<g class="cw-anchor" data-anchor="${slot}"><path d="M${lx / 360 * w} ${ly / 360 * h} L${p[0]} ${p[1]}"/><circle class="cw-anchor-hit" cx="${p[0]}" cy="${p[1]}" r="18"/><circle class="cw-anchor-pin" cx="${p[0]}" cy="${p[1]}" r="4"/></g>`;
-    }).join("");
+    links.setAttribute("viewBox", "0 0 " + w + " " + h);
+    links.innerHTML = callRust("client.workshop.links", [points, w, h]);
   }
 
   private openSheet(title: string): void {
@@ -201,31 +154,22 @@ export class WeaponScreen {
   private showMods(slot: ModSlot): void {
     if (!this.loadout) return;
     this.selectedSlot = slot;
-    const selected = effectiveWeaponModId(this.loadout, slot);
-    this.sheetBody.innerHTML = `<div class="cw-options">${weaponModsForSlot(this.loadout, slot).filter(availableInFitting).map(item => `<button class="cw-option glass" type="button" data-mod="${item.id}" aria-pressed="${item.id === selected}"><span class="cw-part-icon">${partIcon(item.id)}</span><strong>${escape(item.name)}</strong>${item.id === selected ? equippedCheck : ""}</button>`).join("")}</div>`;
+    const choices = callRust<Choice[]>("client.workshop.choices", [this.loadout, slot]);
+    this.sheetBody.innerHTML = callRust("client.workshop.options", [choices.map(c => ({ ...c, icon: partIcon(c.item.id) })), "mod"]);
     this.openSheet(this.slotName(slot));
-    this.element.querySelector(`[data-socket="${slot}"]`)!.setAttribute("aria-expanded", "true");
+    this.element.querySelector('[data-socket="' + slot + '"]')!.setAttribute("aria-expanded", "true");
   }
 
   private showWeapons(): void {
     if (!this.loadout) return;
-    const weapons = itemsForSlot("weapon1").filter(availableInFitting).filter((item): item is WeaponItem => item.kind === "weapon");
-    this.sheetBody.innerHTML = `<div class="cw-options">${weapons.map(item => `<button class="cw-option glass" type="button" data-weapon="${item.id}" aria-pressed="${item.id === this.loadout!.weapon1.item}"><span class="cw-part-icon">${equipmentItemIcon(item.id)}</span><strong>${escape(item.name)}</strong>${item.id === this.loadout!.weapon1.item ? equippedCheck : ""}</button>`).join("")}</div>`;
+    const choices = callRust<Choice[]>("client.workshop.choices", [this.loadout, "weapon1"]);
+    this.sheetBody.innerHTML = callRust("client.workshop.options", [choices.map(c => ({ ...c, icon: equipmentItemIcon(c.item.id) })), "weapon"]);
     this.openSheet("Сменить оружие");
   }
 
   private showStats(): void {
     if (!this.loadout) return;
-    const kit = compileKit(this.loadout).weapon;
-    const damage = (BASE_STATS.personal + kit.power * BASE_STATS.mastery) * kit.falloff[6]!;
-    const stats = [
-      ["Базовый урон в корпус", damage.toLocaleString("ru-RU", { maximumFractionDigits: 1 })],
-      [kit.needsStance ? "Точность из стойки" : "Точность оружия", `${Math.round(kit.accuracy[6]! * 100)}%`],
-      ["Пробитие брони", String(kit.flatPen)],
-      ["Шанс критического попадания", `${Math.round((BASE_STATS.critChance + kit.crit) * 100)}%`],
-    ];
-    const mods = MOD_SLOTS.map(slot => ITEM_BY_ID.get(effectiveWeaponModId(this.loadout!, slot))!).filter(item => describeItem(item).length);
-    this.sheetBody.innerHTML = `<p class="cw-stat-context">7 шагов. Обычное попадание без брони, щита и влияния погоды.</p><dl class="cw-stat-list">${stats.map(([name, value]) => `<div><dt>${name}</dt><dd>${value}</dd></div>`).join("")}</dl>${mods.length ? `<div class="cw-effects"><h3>Установленные модификации</h3>${mods.map(item => `<p><strong>${escape(item.name)}</strong><span>${describeItem(item).map(escape).join(" · ")}</span></p>`).join("")}</div>` : ""}`;
+    this.sheetBody.innerHTML = callRust("client.workshop.stats", [this.loadout]);
     this.openSheet("Характеристики");
   }
 }

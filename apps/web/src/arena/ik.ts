@@ -2,6 +2,7 @@
 // the floor while a figure stands, and fingers closed on a grip.
 
 import * as THREE from "three";
+import { motionCompute } from "../../../../packages/runtime/src/index.ts";
 
 const qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), qc = new THREE.Quaternion();
 const va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3(), vd = new THREE.Vector3(), ve = new THREE.Vector3();
@@ -10,37 +11,30 @@ const UP = new THREE.Vector3(0, 1, 0);
 /** Sets a bone's world rotation. */
 export function setWorldQuat(o: THREE.Object3D, q: THREE.Quaternion): void {
   o.parent!.getWorldQuaternion(qc);
-  o.quaternion.copy(qc.invert().multiply(q));
+  o.quaternion.fromArray(motionCompute("worldQuat", new Float64Array([...qc.toArray(), ...q.toArray()])));
   o.updateMatrixWorld(true);
 }
 
 /** Turns a bone so that the world direction `from` (unit) it carries points along `to` (unit). */
 export function turn(o: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3): void {
-  qa.setFromUnitVectors(from, to).multiply(o.getWorldQuaternion(qb));
-  setWorldQuat(o, qa);
+  o.quaternion.fromArray(motionCompute("turn", new Float64Array([
+    ...from.toArray(), ...to.toArray(), ...o.getWorldQuaternion(qb).toArray(), ...o.parent!.getWorldQuaternion(qc).toArray(),
+  ])));
+  o.updateMatrixWorld(true);
 }
 
 /** Bends a limb (upper `a`, lower `b`, end `c`) so that `c` lands on `target`, the middle joint towards `pole`.
  *  A target out of reach is met with the limb straight. */
 export function reach(a: THREE.Object3D, b: THREE.Object3D, c: THREE.Object3D, target: THREE.Vector3, pole: THREE.Vector3): void {
-  const A = a.getWorldPosition(va), B = b.getWorldPosition(vb), C = c.getWorldPosition(vc);
-  const l1 = A.distanceTo(B), l2 = B.distanceTo(C);
-  const n = vd.subVectors(target, A), len = n.length();
-  if (len < 1e-5) return;
-  n.divideScalar(len);
-  const d = THREE.MathUtils.clamp(len, Math.abs(l1 - l2) + 1e-4, l1 + l2 - 1e-4);
-  // the bend: towards the pole, across the line to the target
-  const m = ve.subVectors(pole, A); m.addScaledVector(n, -m.dot(n));
-  if (m.lengthSq() < 1e-10) return;
-  m.normalize();
-  const cos = (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), sin = Math.sqrt(Math.max(0, 1 - cos * cos));
-  // the middle joint goes to A + n·l1·cos + m·l1·sin
-  const from = B.sub(A).normalize();
-  const to = m.multiplyScalar(l1 * sin).addScaledVector(n, l1 * cos).normalize();
-  turn(a, from, to);
-  const B2 = b.getWorldPosition(vb), C2 = c.getWorldPosition(vc);
-  const end = va.copy(A).addScaledVector(n, d); // A is va: the reachable target
-  turn(b, C2.sub(B2).normalize(), end.sub(B2).normalize());
+  // Read the scene once; Rust solves both joints together, with no JSON per bone.
+  const pose = motionCompute("reach", new Float64Array([
+    ...a.getWorldPosition(va).toArray(), ...b.getWorldPosition(vb).toArray(), ...c.getWorldPosition(vc).toArray(),
+    ...target.toArray(), ...pole.toArray(), ...a.getWorldQuaternion(qa).toArray(), ...b.getWorldQuaternion(qb).toArray(),
+    ...a.parent!.getWorldQuaternion(qc).toArray(), ...b.parent!.getWorldQuaternion(qc).toArray(),
+  ]));
+  if (!pose[0]) return;
+  a.quaternion.fromArray(pose, 1); b.quaternion.fromArray(pose, 5);
+  a.updateMatrixWorld(true);
 }
 
 /** Fingers bent from their rest shape: each joint turns about the line across the palm. */
@@ -73,13 +67,11 @@ export class Grip {
 
   /** Closes the hand: degrees for each finger's three joints; `w` (0..1) blends from the animated hand. */
   close(curl: Record<string, [number, number, number]>, w: number): void {
-    for (const j of this.joints) {
-      const deg = curl[j.finger]?.[j.n - 1];
-      if (deg === undefined) continue;
-      qa.setFromAxisAngle(j.axis, THREE.MathUtils.degToRad(deg));
-      qb.copy(j.rest).multiply(qa);
-      j.bone.quaternion.slerp(qb, w);
-    }
+    const joints = this.joints.filter(j => curl[j.finger]?.[j.n - 1] !== undefined);
+    const input = new Float64Array(joints.length * 13);
+    joints.forEach((j, i) => input.set([...j.bone.quaternion.toArray(), ...j.rest.toArray(), ...j.axis.toArray(), curl[j.finger]![j.n - 1]!, w], i * 13));
+    const result = motionCompute("grip", input);
+    joints.forEach((j, i) => j.bone.quaternion.fromArray(result, i * 4));
   }
 }
 
@@ -107,16 +99,7 @@ export function gaitOf(model: THREE.Object3D, clip: THREE.AnimationClip): Gait |
   for (const [o, p, q, s] of bones) { o.position.copy(p); o.quaternion.copy(q); o.scale.copy(s); }
   model.updateMatrixWorld(true);
   // the planted foot is the lower one; how fast it slides back (the figure faces +z) is how fast the body walks
-  const low = Math.min(...pts.map((p) => Math.min(p.l.y, p.r.y))), v: number[] = [];
-  let passing = 0, gap = Infinity;
-  for (let i = 0; i < N; i++) {
-    const a = pts[i]!, b = pts[(i + 1) % N]!, s = a.l.y < a.r.y ? "l" : "r";
-    if (a[s].y < low + 0.03) v.push((a[s].z - b[s].z) / dt);
-    const g = Math.abs(a.l.z - a.r.z);
-    if (g < gap) { gap = g; passing = i * dt; }
-  }
-  v.sort((x, y) => x - y);
-  const speed = v[v.length >> 1] ?? 0;
+  const [speed = 0, passing = 0] = motionCompute("gait", new Float64Array([dt, ...pts.flatMap(p => [...p.l.toArray(), ...p.r.toArray()])]));
   return speed > 0.1 ? { speed, passing } : null;
 }
 
@@ -170,14 +153,10 @@ export class Feet {
       act.stop();
       const print = {} as Record<"l" | "r", Footprint>;
       for (const s of ["l", "r"] as const) {
-        const at = sum[s].at.divideScalar(N).setY(rest[s].ankle.y);
-        const restDir = vd.copy(rest[s].toe).sub(rest[s].ankle).setY(0).normalize();
-        // a foot turned out more than 40° from the body's front looks twisted: no further
-        const yawTo = THREE.MathUtils.clamp(Math.atan2(sum[s].dir.x, sum[s].dir.z), -0.7, 0.7);
-        const dir = new THREE.Vector3(Math.sin(yawTo), 0, Math.cos(yawTo));
-        // the same flat foot as at rest, turned about the vertical to the stance's average heading
-        const yaw = new THREE.Quaternion().setFromUnitVectors(restDir, dir);
-        print[s] = { at, turn: yaw.multiply(restTurn[s]), toe: dir.clone() };
+        const p = motionCompute("footprint", new Float64Array([
+          ...sum[s].at.divideScalar(N).toArray(), ...sum[s].dir.toArray(), ...rest[s].ankle.toArray(), ...rest[s].toe.toArray(), ...restTurn[s].toArray(),
+        ]));
+        print[s] = { at: new THREE.Vector3().fromArray(p), turn: new THREE.Quaternion().fromArray(p, 3), toe: new THREE.Vector3().fromArray(p, 7) };
       }
       this.prints.set(name, print);
     }
@@ -199,16 +178,13 @@ export class Feet {
     const mq = model.getWorldQuaternion(new THREE.Quaternion());
     for (const s of ["l", "r"] as const) {
       const { thigh, calf, foot } = legs[s];
-      const target = model.localToWorld(vc.copy(p[s].at));
-      const now = foot.getWorldPosition(new THREE.Vector3());
-      target.lerp(now, 1 - this.w);
-      // the knee points the way the foot does, a little outwards
-      const toe = vb.copy(p[s].toe).applyQuaternion(mq);
-      const hip = thigh.getWorldPosition(new THREE.Vector3());
-      const pole = hip.lerp(target, 0.5).addScaledVector(toe, 0.6).addScaledVector(UP, 0.05);
-      reach(thigh, calf, foot, target.clone(), pole);
-      const flat = qa.copy(mq).multiply(p[s].turn);
-      setWorldQuat(foot, foot.getWorldQuaternion(qb).slerp(flat, this.w));
+      const pose = motionCompute("feet", new Float64Array([
+        this.w, ...model.localToWorld(vc.copy(p[s].at)).toArray(), ...foot.getWorldPosition(va).toArray(), ...p[s].toe.toArray(),
+        ...thigh.getWorldPosition(vb).toArray(), ...mq.toArray(), ...p[s].turn.toArray(), ...foot.getWorldQuaternion(qb).toArray(),
+      ]));
+      reach(thigh, calf, foot, new THREE.Vector3().fromArray(pose), new THREE.Vector3().fromArray(pose, 3));
+      const turn = motionCompute("worldBlend", new Float64Array([...foot.getWorldQuaternion(qb).toArray(), ...pose.slice(6, 10), this.w]));
+      setWorldQuat(foot, qa.fromArray(turn));
     }
   }
   private modelQuat(o: THREE.Object3D): THREE.Quaternion {

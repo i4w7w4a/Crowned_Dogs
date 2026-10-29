@@ -2,11 +2,8 @@
 // Knows nothing about Telegram, so the same logic can later serve the web client.
 // Everything is in memory for now: a restart ends all running fights.
 
-import {
-  MAPS, REGION_EVENTS, TIMES, VETERAN_KITS, WEAPON_IDS, WEATHERS, applyCommand, botOrder, compileKit, createMatch,
-  freshDraft, nextInt, pickWeighted, resolveTurn, seedRng, toOrder, turnSeconds, type Command, type Draft,
-  type FighterSetup, type Loadout, type Match, type Order, type Side, type TurnReport, type WeaponId,
-} from "@crowned-dogs/core";
+import type { Command, Draft, Loadout, Match, Order, Side, TurnReport, WeaponId, Weather, TimeOfDay } from "@crowned-dogs/core";
+import { callRust } from "../../../packages/runtime/src/index.ts";
 
 export interface Player {
   id: string;
@@ -59,227 +56,71 @@ export interface DuelServiceOptions {
   /** Source of seeds for fights and invite codes. Random by default. */
   seed?: () => string;
   /** Fix the map and conditions (tests, events). */
-  setting?: { mapId: string; weather: (typeof WEATHERS)[number]; time: (typeof TIMES)[number] };
+  setting?: { mapId: string; weather: Weather; time: TimeOfDay };
 }
 
-function fighterOf(p: Player): FighterSetup {
-  return p.kit ? { id: p.id, name: p.name, weapon: p.weapon, kit: compileKit(p.kit) } : { id: p.id, name: p.name, weapon: p.weapon };
-}
-
-/** Thrown with a message that can be shown to the player as is. */
+/** Only host clocks, random seeds and event delivery remain here. */
 export class DuelError extends Error {}
-
-const INVITE_TTL = 30 * 60 * 1000;
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const BOT_NAMES = ["Искра", "Сварка", "Глушь", "Ржавый", "Соль"];
-
+interface ServiceState { duels: Record<string, Duel>; byPlayer: Record<string, string>; invites: Record<string, Invite> }
+interface Response { state?: ServiceState; value?: unknown; events?: DuelEvent[]; error?: string; needsSeed?: boolean }
 export class DuelService {
-  private duels = new Map<string, Duel>();
-  private byPlayer = new Map<string, string>();
-  private invites = new Map<string, Invite>();
-  private timers = new Map<string, unknown>();
+  private state = callRust<ServiceState>("server.duels.new", []);
+  private references = new Map<string, Duel>();
+  private timers = new Map<string, { handle: unknown; turn: number; deadline: number }>();
   private clock: Clock;
   private seed: () => string;
   private opts: DuelServiceOptions;
-
   constructor(opts: DuelServiceOptions) {
-    this.opts = opts;
-    this.clock = opts.clock ?? realClock;
+    this.opts = opts; this.clock = opts.clock ?? realClock;
     this.seed = opts.seed ?? (() => crypto.randomUUID());
   }
-
-  duelOf(playerId: string): Duel | undefined {
-    const id = this.byPlayer.get(playerId);
-    return id ? this.duels.get(id) : undefined;
+  private reference(duel: Duel): Duel {
+    const known = this.references.get(duel.id);
+    if (known) { Object.assign(known, duel); return known; }
+    this.references.set(duel.id, duel); return duel;
   }
-
-  get(duelId: string): Duel | undefined {
-    return this.duels.get(duelId);
-  }
-
-  sideOf(duel: Duel, playerId: string): Side | null {
-    if (duel.players[0].id === playerId) return 0;
-    if (duel.players[1].id === playerId) return 1;
-    return null;
-  }
-
-  // ---------- starting fights ----------
-
-  startVsBot(player: Omit<Player, "bot">): Duel {
-    this.ensureFree(player.id);
-    const rng = seedRng(this.seed());
-    const weapon = WEAPON_IDS[nextInt(rng, WEAPON_IDS.length)]!;
-    const bot: Player = {
-      id: `bot:${nextInt(rng, 1e9)}`,
-      name: BOT_NAMES[nextInt(rng, BOT_NAMES.length)]!,
-      weapon,
-      // a veteran meets a veteran
-      ...(player.kit ? { kit: VETERAN_KITS[weapon] } : {}),
-      bot: true,
-    };
-    return this.start({ ...player, bot: false }, bot);
-  }
-
-  createInvite(host: Omit<Player, "bot">): Invite {
-    this.ensureFree(host.id);
-    for (const [code, inv] of this.invites) if (inv.host.id === host.id) this.invites.delete(code);
-    const rng = seedRng(this.seed());
-    let code = "";
-    do {
-      code = Array.from({ length: 6 }, () => CODE_ALPHABET[nextInt(rng, CODE_ALPHABET.length)]).join("");
-    } while (this.invites.has(code));
-    const invite: Invite = { code, host: { ...host, bot: false }, expires: this.clock.now() + INVITE_TTL };
-    this.invites.set(code, invite);
-    return invite;
-  }
-
-  inviteInfo(code: string): Invite | undefined {
-    const inv = this.invites.get(code);
-    if (inv && inv.expires < this.clock.now()) {
-      this.invites.delete(code);
-      return undefined;
+  private send<T>(method: string, args: unknown[]): T {
+    const seeds: string[] = [], now = this.clock.now();
+    let result: Response;
+    for (;;) {
+      result = callRust<Response>("server.duels.step", [this.state, method, args, now, seeds, this.opts.setting]);
+      if (!result.needsSeed) break;
+      seeds.push(this.seed());
     }
-    return inv;
+    this.state = result.state!;
+    for (const [id, duel] of Object.entries(this.state.duels)) this.state.duels[id] = this.reference(duel);
+    const value = result.value as Duel | null;
+    const returned = value && typeof value === "object" && "match" in value ? this.reference(value) : result.value;
+    this.syncTimers();
+    for (const event of result.events ?? []) this.emit({ ...event, duel: this.reference(event.duel) });
+    for (const id of this.references.keys()) if (!this.state.duels[id]) this.references.delete(id);
+    if (result.error) throw new DuelError(result.error);
+    return returned as T;
   }
-
-  acceptInvite(code: string, guest: Omit<Player, "bot">): Duel {
-    const inv = this.inviteInfo(code);
-    if (!inv) throw new DuelError("Приглашение не найдено или устарело");
-    if (inv.host.id === guest.id) throw new DuelError("Это твоё приглашение. Перешли ссылку другу");
-    this.ensureFree(guest.id);
-    if (this.byPlayer.has(inv.host.id)) throw new DuelError("Соперник уже в другом бою");
-    this.invites.delete(code);
-    return this.start(inv.host, { ...guest, bot: false });
-  }
-
-  private ensureFree(playerId: string): void {
-    if (this.byPlayer.has(playerId)) throw new DuelError("Ты уже в бою. Сначала закончи его");
-  }
-
-  private start(a: Player, b: Player): Duel {
-    const seed = this.seed();
-    const rng = seedRng(`${seed}:setting`);
-    const maps = Object.keys(MAPS);
-    const odds = REGION_EVENTS.calm.odds;
-    const setting = this.opts.setting ?? {
-      mapId: maps[nextInt(rng, maps.length)]!,
-      weather: pickWeighted(rng, WEATHERS.map((w) => [w, odds[w]] as const)),
-      time: TIMES[nextInt(rng, TIMES.length)]!,
-    };
-    const match = createMatch({
-      seed,
-      ...setting,
-      fighters: [fighterOf(a), fighterOf(b)],
-    });
-    const duel: Duel = {
-      id: this.newDuelId(),
-      players: [a, b],
-      match,
-      drafts: [freshDraft(match, 0), freshDraft(match, 1)],
-      orders: [null, null],
-      deadline: 0,
-    };
-    this.duels.set(duel.id, duel);
-    for (const p of duel.players) if (!p.bot) this.byPlayer.set(p.id, duel.id);
-    this.armTimer(duel);
-    this.emit({ type: "start", duel });
-    return duel;
-  }
-
-  private newDuelId(): string {
-    const rng = seedRng(this.seed());
-    let id = "";
-    do {
-      id = Array.from({ length: 6 }, () => CODE_ALPHABET[nextInt(rng, CODE_ALPHABET.length)]).join("").toLowerCase();
-    } while (this.duels.has(id));
-    return id;
-  }
-
-  // ---------- during a fight ----------
-
-  /** Checks that a button belongs to the current turn of this player's fight. */
-  private locate(playerId: string, duelId: string, turn: number): { duel: Duel; side: Side } {
-    const duel = this.duels.get(duelId);
-    if (!duel || duel.match.result) throw new DuelError("Этот бой уже закончился");
-    const side = this.sideOf(duel, playerId);
-    if (side === null) throw new DuelError("Это не твой бой");
-    if (duel.match.turn !== turn) throw new DuelError("Этот ход уже прошёл");
-    return { duel, side };
-  }
-
-  press(playerId: string, duelId: string, turn: number, cmd: Command): Duel {
-    const { duel, side } = this.locate(playerId, duelId, turn);
-    if (duel.orders[side]) throw new DuelError("Приказ уже отдан, ждём соперника");
-    const next = applyCommand(duel.match, side, duel.drafts[side], cmd);
-    if (typeof next === "string") throw new DuelError(next);
-    duel.drafts[side] = next;
-    return duel;
-  }
-
-  /** Locks the order. Plays the turn at once when everyone is ready. */
-  submit(playerId: string, duelId: string, turn: number): Duel {
-    const { duel, side } = this.locate(playerId, duelId, turn);
-    if (duel.orders[side]) throw new DuelError("Приказ уже отдан, ждём соперника");
-    const order = toOrder(duel.match, side, duel.drafts[side]);
-    if (typeof order === "string") throw new DuelError(order);
-    duel.orders[side] = order;
-    const waiting = duel.players.some((p, s) => !p.bot && !duel.orders[s]);
-    if (!waiting) this.play(duel);
-    return duel;
-  }
-
-  /** Is this side's order locked for the current turn? */
-  isReady(duel: Duel, side: Side): boolean {
-    return duel.orders[side] !== null;
-  }
-
-  private armTimer(duel: Duel): void {
-    this.disarm(duel.id);
-    const ms = turnSeconds(duel.match) * 1000;
-    duel.deadline = this.clock.now() + ms;
-    const turn = duel.match.turn;
-    this.timers.set(duel.id, this.clock.setTimeout(() => {
-      const d = this.duels.get(duel.id);
-      if (d && !d.match.result && d.match.turn === turn) this.play(d);
-    }, ms));
-  }
-
-  private disarm(duelId: string): void {
-    const t = this.timers.get(duelId);
-    if (t !== undefined) this.clock.clearTimeout(t);
-    this.timers.delete(duelId);
-  }
-
-  private play(duel: Duel): void {
-    const m = duel.match;
-    const orders = duel.players.map((p, s) =>
-      p.bot ? botOrder(m, s as Side) : duel.orders[s as Side],
-    ) as [Order | null, Order | null];
-    const { match, report } = resolveTurn(m, orders);
-    duel.match = match;
-    duel.orders = [null, null];
-    duel.drafts = [freshDraft(match, 0), freshDraft(match, 1)];
-    if (match.result) this.finish(duel);
-    else this.armTimer(duel);
-    this.emit({ type: "turn", duel, report });
-  }
-
-  private finish(duel: Duel): void {
-    this.disarm(duel.id);
-    for (const p of duel.players) if (this.byPlayer.get(p.id) === duel.id) this.byPlayer.delete(p.id);
-    this.duels.delete(duel.id);
-  }
-
-  private emit(e: DuelEvent): void {
-    try {
-      void Promise.resolve(this.opts.onEvent(e)).catch((err) => console.error("duel event failed", err));
-    } catch (err) {
-      console.error("duel event failed", err);
+  duelOf(playerId: string): Duel | undefined { return this.send<Duel | null>("duelOf", [playerId]) ?? undefined; }
+  get(duelId: string): Duel | undefined { return this.send<Duel | null>("get", [duelId]) ?? undefined; }
+  sideOf(duel: Duel, playerId: string): Side | null { return callRust("server.sideOf", [duel, playerId]); }
+  startVsBot(player: Omit<Player, "bot">): Duel { return this.send("startVsBot", [player]); }
+  createInvite(host: Omit<Player, "bot">): Invite { return this.send("createInvite", [host]); }
+  inviteInfo(code: string): Invite | undefined { return this.send<Invite | null>("inviteInfo", [code]) ?? undefined; }
+  acceptInvite(code: string, guest: Omit<Player, "bot">): Duel { return this.send("acceptInvite", [code, guest]); }
+  press(playerId: string, duelId: string, turn: number, command: Command): Duel { return this.send("press", [playerId, duelId, turn, command]); }
+  submit(playerId: string, duelId: string, turn: number): Duel { return this.send("submit", [playerId, duelId, turn]); }
+  isReady(duel: Duel, side: Side): boolean { return callRust("server.isReady", [duel, side]); }
+  private syncTimers(): void {
+    for (const [id, timer] of this.timers) if (!this.state.duels[id]) { this.clock.clearTimeout(timer.handle); this.timers.delete(id); }
+    for (const duel of Object.values(this.state.duels)) {
+      const previous = this.timers.get(duel.id);
+      if (previous?.turn === duel.match.turn && previous.deadline === duel.deadline) continue;
+      if (previous) this.clock.clearTimeout(previous.handle);
+      const turn = duel.match.turn;
+      const handle = this.clock.setTimeout(() => { this.send("timeout", [duel.id, turn]); }, Math.max(0, duel.deadline - this.clock.now()));
+      this.timers.set(duel.id, { handle, turn, deadline: duel.deadline });
     }
   }
-
-  /** Stops all timers (for a clean shutdown and in tests). */
-  close(): void {
-    for (const id of [...this.timers.keys()]) this.disarm(id);
+  private emit(event: DuelEvent): void {
+    try { void Promise.resolve(this.opts.onEvent(event)).catch(error => console.error("duel event failed", error)); }
+    catch (error) { console.error("duel event failed", error); }
   }
+  close(): void { for (const timer of this.timers.values()) this.clock.clearTimeout(timer.handle); this.timers.clear(); }
 }
