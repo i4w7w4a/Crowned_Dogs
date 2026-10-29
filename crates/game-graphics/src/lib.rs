@@ -1,5 +1,6 @@
 //! Platform-independent procedural graphics. Three.js only uploads these results.
 mod stage;
+mod surface;
 mod texture;
 mod view;
 
@@ -41,20 +42,8 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             "normal": "float faceDirection = gl_FrontFacing ? 1.0 : -1.0;\nvec3 normal = normalize(cdPomNormalMatrix * cdPomNormal(cdPomHit));\nvec3 nonPerturbedNormal = normal;",
             "version": "cd-finite-relief-v1"
         })),
-        "graphics.surfacePom" => {
-            let quality = args["quality"].as_str().unwrap_or("medium");
-            let (steps, refine) = match quality {
-                "low" => (0, 0),
-                "medium" => (12, 3),
-                "high" => (24, 4),
-                "ultra" => (36, 5),
-                _ => return Err(format!("Unknown graphics quality: {quality}")),
-            };
-            Ok(
-                json!({"common":include_str!("surface-pom.glsl"), "steps":steps,
-                "refine":refine,"version":"cd-surface-relief-v1"}),
-            )
-        }
+        "graphics.surfacePom" => surface::program(&args),
+        "graphics.surfaceProfile" => Ok(surface::profile(&args)),
         "graphics.pomQuality" => {
             let quality = args["quality"].as_str().unwrap_or("medium");
             let (steps, refine, texture_size) = match quality {

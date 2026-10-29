@@ -1,0 +1,9 @@
+{
+  "model": "tripo-vest",
+  "configured": 1,
+  "changedPixels": 363459,
+  "maxChannelDifference": 16,
+  "silhouetteMismatch": 0,
+  "shaderErrors": [],
+  "passed": true
+}

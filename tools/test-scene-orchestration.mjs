@@ -75,7 +75,7 @@ const pending=[],renderers=[];class TextureLoader{loadAsync(url){const d={...def
 class Renderer{constructor(){this.renders=0;this.disposals=0;renderers.push(this);}setPixelRatio(v){this.ratio=v;}setSize(w,h){this.size=[w,h];}render(){this.renders++;}dispose(){this.disposals++;}}
 const backdropHost={...host,THREE:{...THREE,TextureLoader,WebGLRenderer:Renderer}},flush=()=>new Promise(resolve=>setImmediate(resolve));
 let disposed=0;const tex=()=>{const t=new THREE.Texture();t.addEventListener("dispose",()=>disposed++);return t;};
-const entry={eligible:true,relief:"height.png",depthMeters:.0004,midpoint:.5};
+const entry={eligible:true,relief:"tex/relief/height.png",depthMeters:.0004,midpoint:.5,resolution:[1024,1024],uvSet:0};
 globalThis.fetch=async()=>({ok:true,json:async()=>({version:1,models:{varyag:{unitsPerMeter:100,materials:{steel:entry}}}})});
 const reliefMaterial=()=>{const m=new THREE.MeshStandardMaterial({normalMap:new THREE.Texture()});m.name="steel";return m;};
 const staleMaterial=reliefMaterial(),staleRoot=new THREE.Mesh(new THREE.BoxGeometry(),staleMaterial);

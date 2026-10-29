@@ -485,10 +485,10 @@ fn preview() -> bool {
         let mut v = v.borrow_mut();
         *v.get_or_insert_with(|| {
             let search = string(&get(&get(&global(), "location"), "search"));
-            search
+            !search
                 .trim_start_matches('?')
                 .split('&')
-                .any(|p| p == "relief=1")
+                .any(|p| p == "relief=0")
         })
     })
 }
@@ -574,14 +574,19 @@ async fn install_relief_async(host: JsValue, root: JsValue, url: String) -> Resu
         {
             continue;
         }
-        let depth = num(&get(&entry, "depthMeters"));
-        let midpoint = num(&get(&entry, "midpoint"));
-        if !(depth > 0. && depth <= 0.001 && (0.4..=0.6).contains(&midpoint)) {
+        let profile = compute(
+            &host,
+            "graphics.surfaceProfile",
+            object(&[
+                ("material", entry),
+                ("unitsPerMeter", get(&model, "unitsPerMeter")),
+            ]),
+        );
+        if !present(&profile) {
             continue;
         }
         let host = host.clone();
         let url = format!("{base}{relief}");
-        let units = get(&model, "unitsPerMeter").as_f64().unwrap_or(1.);
         pending.push(&future_to_promise(async move {
             let disposed = Rc::new(Cell::new(false));
             let observed = disposed.clone();
@@ -630,15 +635,7 @@ async fn install_relief_async(host: JsValue, root: JsValue, url: String) -> Resu
                 set(&height, "needsUpdate", &true.into());
                 set(&material, "bumpMap", &height);
                 set(&material, "bumpScale", &0.into());
-                set(
-                    &get(&material, "userData"),
-                    "cdSurfaceRelief",
-                    &object(&[
-                        ("depthUnits", (depth * units).into()),
-                        ("midpoint", midpoint.into()),
-                        ("source", relief.into()),
-                    ]),
-                );
+                set(&get(&material, "userData"), "cdSurfaceRelief", &profile);
                 set(&material, "needsUpdate", &true.into());
             }
             Ok(JsValue::UNDEFINED)
@@ -716,11 +713,16 @@ pub fn relief_hook(host: JsValue, material: JsValue, quality: JsValue) -> JsValu
     let key = format!("{}-{id}", string(&get(&program, "version")));
     let height_map = get(&material, "bumpMap");
     let compile=Closure::wrap(Box::new(move|shader:JsValue|{
-        let uniforms=get(&shader,"uniforms");for (key,value) in [("cdSurfaceHeight",height_map.clone()),("cdSurfaceDepth",get(&data,"depthUnits")),("cdSurfaceMidpoint",get(&data,"midpoint")),("cdSurfaceSteps",get(&program,"steps")),("cdSurfaceRefine",get(&program,"refine"))]{set(&uniforms,key,&uniform(value));}
+        let uniforms=get(&shader,"uniforms");for (key,value) in [("cdSurfaceHeight",height_map.clone()),("cdSurfaceDepth",get(&data,"depthUnits")),("cdSurfaceDetailDepth",num(&get(&data,"detailDepthUnits")).into()),("cdSurfaceFabricDepth",num(&get(&data,"fabricDepthUnits")).into()),("cdSurfaceFabricPeriod",num(&get(&data,"fabricPeriodUnits")).into()),("cdSurfaceMidpoint",get(&data,"midpoint")),("cdSurfaceSteps",get(&program,"steps")),("cdSurfaceRefine",get(&program,"refine")),("cdSurfaceShadowSteps",get(&program,"shadowSteps"))]{set(&uniforms,key,&uniform(value));}
         let vertex=format!("{}{}",include_str!("../../shaders/surface-scale-prefix.glsl"),string(&get(&shader,"vertexShader"))).replacen("#include <begin_vertex>",include_str!("../../shaders/surface-scale-begin.glsl"),1);
+        let vertex=vertex.replacen("#include <project_vertex>","#include <project_vertex>\ncdSurfaceLocal=transformed;",1);
         set(&shader,"vertexShader",&vertex.into());
         let mut fragment=string(&get(&shader,"fragmentShader")).replacen("#include <common>",&format!("#include <common>\n{}",string(&get(&program,"common"))),1).replacen("void main() {",include_str!("../../shaders/surface-main.glsl"),1);
-        for chunk in ["map_fragment","normal_fragment_maps","roughnessmap_fragment","metalnessmap_fragment","aomap_fragment","emissivemap_fragment","lights_physical_fragment"]{fragment=fragment.replacen(&format!("#include <{chunk}>"),&string(&get(&three(&host,"ShaderChunk"),chunk)),1);}
+        for chunk in ["map_fragment","roughnessmap_fragment","metalnessmap_fragment","aomap_fragment","emissivemap_fragment","lights_physical_fragment"]{fragment=fragment.replacen(&format!("#include <{chunk}>"),&string(&get(&three(&host,"ShaderChunk"),chunk)),1);}
+        let normals=format!("{}\nnormal=cdSurfaceDetailNormal(normal);",string(&get(&three(&host,"ShaderChunk"),"normal_fragment_maps")));
+        fragment=fragment.replacen("#include <normal_fragment_maps>",&normals,1);
+        let lighting=string(&get(&three(&host,"ShaderChunk"),"lights_fragment_begin")).replace("RE_Direct( directLight,","directLight.color *= cdSurfaceLightVisibility(directLight.direction);\nRE_Direct( directLight,");
+        fragment=fragment.replacen("#include <lights_fragment_begin>",&lighting,1);
         fragment=replace_regex(&fragment,r"texture2D\(\s*(map|normalMap|roughnessMap|metalnessMap|aoMap|emissiveMap|specularColorMap|specularIntensityMap)\s*,\s*v\w+Uv\s*\)","g","textureGrad( $1, cdSurfaceUv, cdSurfaceDx, cdSurfaceDy )");set(&shader,"fragmentShader",&fragment.into());
     })as Box<dyn FnMut(JsValue)>).into_js_value();
     object(&[("key", key.into()), ("compile", compile)])

@@ -1,6 +1,8 @@
 <!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Проверка карт высот</title></head><body><main>
 <h1>Карты высот: сравнение с оригиналом</h1>
 <p>Только рельеф поверхности. Исходная геометрия, силуэты, нормали и цвета сохранены. Звук отсутствует.</p>
-<nav><select id="model"><option value="varyag">Варяг</option><option value="tripo-helmet">Каска</option><option value="tripo-vest">Бронежилет</option></select>
-<button id="original">Оригинал</button><button id="relief">Рельеф</button><button id="grazing">Скользящий угол</button><button id="turn">Повернуть</button><button id="verify">Проверить</button></nav>
+<nav><select id="model"><option value="control">Контроль: известная поверхность</option><option value="varyag" selected>Варяг</option><option value="tripo-helmet">Каска</option><option value="tripo-vest">Бронежилет</option></select>
+<button id="original">Оригинал</button><button id="relief">Рельеф</button><button id="compare">До / после</button><button id="grazing">Скользящий угол</button><button id="turn">Повернуть</button><button id="verify">Проверить</button><button id="probe">Проверить UV</button>
+<label>Масштаб <select id="zoom"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label></nav>
+<div class="pair-labels" hidden><span>ДО · исходный материал</span><span>ПОСЛЕ · новый POM и тени</span></div>
 <canvas id="surface"></canvas><pre id="result" role="status">Загрузка…</pre></main><script type="module" src="/src/base/surface-check.ts"></script></body></html>

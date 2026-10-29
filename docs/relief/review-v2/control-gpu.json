@@ -1,0 +1,57 @@
+{
+  "control": "POM UV versus displaced reference mesh; per-light self-shadow",
+  "results": [
+    {
+      "angle": 0,
+      "pixels": 86290,
+      "meanUvError": 0.000008134903051497549,
+      "badFraction": 0
+    },
+    {
+      "angle": 35,
+      "pixels": 74200,
+      "meanUvError": 0.000018867924528301827,
+      "badFraction": 0
+    },
+    {
+      "angle": 65,
+      "pixels": 40939,
+      "meanUvError": 0.000050768982450695246,
+      "badFraction": 0
+    }
+  ],
+  "shadows": [
+    {
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "covered": 131693,
+      "dark": 0,
+      "changed": 0
+    },
+    {
+      "direction": [
+        0.98,
+        0,
+        0.16
+      ],
+      "covered": 131693,
+      "dark": 9774,
+      "changed": 12522
+    },
+    {
+      "direction": [
+        -0.98,
+        0,
+        0.16
+      ],
+      "covered": 131693,
+      "dark": 11091,
+      "changed": 25724
+    }
+  ],
+  "shaderErrors": [],
+  "passed": true
+}
