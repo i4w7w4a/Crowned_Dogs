@@ -1,0 +1,44 @@
+
+      <section class="cd-home" aria-label="База Соль">
+        <img class="cd-backdrop" src="{{BASE}}img/base/salt-base.webp" alt="Убежище в соляной шахте: Персоны в ложементах, капсула оператора и узел очистки воды" draggable="false">
+        <div class="cd-shade" aria-hidden="true"></div>
+        <button class="cd-tunnel cd-to-fitting" type="button" data-u="0.333" data-v="0.36" aria-label="Примерочная: боец и снаряжение"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">Примерочная</span></button>
+        <button class="cd-tunnel cd-enter" type="button" data-u="0.235" data-v="0.527" aria-label="В бой: дуэль с ботом"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">В бой</span></button>
+        <header class="cd-home-header"><img class="cd-brand-mark" src="{{BASE}}brand/maw.svg" alt="Пасть из двух корон" draggable="false"><img class="cd-wordmark" src="{{BASE}}brand/wordmark.svg" alt="Crowned Dogs" draggable="false"></header>
+        <div class="cd-home-title"><p class="cd-overline">БАЗА ОПЕРАТОРА</p><h1>СОЛЬ</h1></div>
+        <div class="cd-home-bottom">
+          <div class="cd-operator"><span class="cd-overline">ОПЕРАТОР</span><span class="cd-tag">K-417-093</span></div>
+          <div class="cd-current-kit"><span>Основное оружие</span><strong data-kit-name></strong></div>
+          <p class="cd-home-message" aria-live="polite"></p>
+        </div>
+      </section>
+      <section class="cd-fitting" aria-label="Примерочная" hidden>
+        <img class="cd-backdrop" src="{{BASE}}img/base/fitting-room-v2.png" alt="Оборудованная ниша примерочной в соляной шахте" draggable="false">
+        <canvas class="cd-backdrop cd-backdrop-depth" aria-hidden="true" hidden></canvas>
+        <div class="cd-fit-shade" aria-hidden="true"></div>
+        <header class="cd-fit-header"><button class="glass cd-back" type="button" aria-label="Вернуться на базу">{{BACK}}<span>Назад</span></button></header>
+        <div class="cd-model-stage">
+          <canvas class="cd-persona-canvas" tabindex="0" role="img" aria-label="Персона на вращающемся постаменте. Перетаскивайте или используйте клавиши влево и вправо, чтобы повернуть."></canvas>
+          <div class="glass cd-model-status" role="status">Загрузка Персоны…</div>
+{{COLUMNS}}
+        </div>
+        <footer class="cd-fit-footer">
+          <p class="cd-rotation">Проведи, чтобы повернуть</p>
+          <div class="cd-stats" aria-label="Защита выбранного комплекта"></div>
+          <button class="go glass cd-primary cd-open-catalog" type="button">Каталог снаряжения</button>
+          <p class="cd-save-status" aria-live="polite" hidden></p>
+        </footer>
+      </section>
+      <dialog class="sheet glass cd-dialog" aria-labelledby="cd-catalog-title">
+        <header class="cd-dialog-header"><div><p class="cd-overline">КАТАЛОГ СНАРЯЖЕНИЯ</p><h2 id="cd-catalog-title"></h2></div><button class="glass cd-dialog-close" type="button" aria-label="Закрыть каталог">×</button></header>
+        <div class="cd-catalog-toolbar">
+          <div class="cd-slot-picker"><span class="cd-picker-label">Слот</span><button class="glass cd-select-trigger" type="button" aria-label="Категория снаряжения" aria-haspopup="listbox" aria-controls="cd-slot-options" aria-expanded="false"></button>
+            <div id="cd-slot-options" class="sheet glass cd-select-options" role="listbox" aria-label="Слоты снаряжения" hidden>{{OPTIONS}}</div>
+          </div>
+        </div>
+        <div class="cd-item-preview" hidden><div class="cd-item-viewport"></div><p class="cd-preview-name"></p></div>
+        <div class="cd-dialog-content">
+          <p class="cd-catalog-error" role="alert" hidden></p>
+          <div class="cd-catalog-items"></div>
+        </div>
+      </dialog>

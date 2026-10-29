@@ -1,5 +1,6 @@
 //! Platform-independent view models, text/HTML composition and interaction geometry.
 //! DOM events and painting are deliberately kept at the browser boundary.
+pub mod icons;
 use serde_json::{Value, json};
 
 fn n(v: &Value) -> f64 {

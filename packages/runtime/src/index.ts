@@ -1,4 +1,7 @@
 import init, { initSync, dispatch, graphics_texture, engine_version, audio_samples, motion_compute } from "../wasm/game_wasm.js";
+export { RustBattle, RustArena, RustLens, RustTextureTiers, BrowserScroll, BrowserWeapon, RustItemViewer, RustPersonaViewer, RustMawLoader } from "../wasm/game_wasm.js";
+export { BrowserBase, mount_sound_settings, show_sound_settings, equipment_icon, equipment_item_icon, fitting_room_icon, navigation_back_arrow } from "../wasm/game_wasm.js";
+export { BrowserGameAudio, BrowserArenaAudio } from "../wasm/game_wasm.js";
 
 const wasmUrl = new URL("../wasm/game_wasm_bg.wasm", import.meta.url);
 const node = (globalThis as { process?: { versions?: { node?: string } } }).process?.versions?.node;

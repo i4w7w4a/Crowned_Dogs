@@ -1,11 +1,15 @@
 use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
+mod browser;
 
 /// The same Rust implementations run in the browser and in the Windows webview.
 /// Errors cross the bridge as exceptions, never as a silent JavaScript fallback.
 #[wasm_bindgen]
 pub fn dispatch(method: &str, args_json: &str) -> Result<String, JsValue> {
     let args = serde_json::from_str(args_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let result = if method.starts_with("graphics.") {
+    let result = if method.starts_with("icons.") {
+        game_ui::icons::dispatch(method, args)
+    } else if method.starts_with("graphics.") {
         game_graphics::dispatch(method, args)
     } else if method.starts_with("ui.") {
         game_ui::dispatch(method, args)

@@ -1,0 +1,197 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { getEventListeners } from "node:events";
+import { BrowserBase, BrowserScroll, BrowserWeapon, equipment_icon, equipment_item_icon } from "../../../packages/runtime/src/index.ts";
+import { equipmentIcon as originalIcon, equipmentItemIcon as originalItemIcon } from "../../../crates/game-wasm/reference/browser/equipment-icons.ts";
+import type { GearSlot } from "@crowned-dogs/core";
+
+test("Rust equipment selection preserves all original vector variants and unknown-item behavior", () => {
+  const ids = ["", "head-cap", "head-sfera", "head-marevo", "head-filin", "head-sych", "body-light", "body-plita4", "body-bastion", "suit-leshy", "suit-ryvok", "suit-ten", "suit-solonchak", "boots-sprint", "boots-saper", "boots-hodok", "knife-kogot", "knife-shtyk", "knife-zhalo", "knife-iskra", "grenade-emp", "grenade-smoke", "grenade-grad", "rifle-ak", "pistol-pm", "sniper-svd", "shotgun-12", "unknown-item"];
+  const slots: GearSlot[] = ["head", "body", "suit", "boots", "knife", "grenade", "weapon1", "weapon2"];
+  for (const id of ids) {
+    for (const slot of slots) assert.equal(equipment_icon(slot, id), originalIcon(slot, id), `${slot}: ${id}`);
+    assert.equal(equipment_item_icon(id), originalItemIcon(id), id);
+  }
+});
+
+class Element extends EventTarget {
+  className = "";
+  children: Element[] = [];
+  parentNode: Element | null = null;
+  hidden = false;
+  scrollTop = 0;
+  scrollLeft = 0;
+  clientHeight = 200;
+  scrollHeight = 1000;
+  attributes = new Map<string, string>();
+  styles = new Map<string, string>();
+  captures = new Set<number>();
+  style = { setProperty: (key: string, value: string) => this.styles.set(key, value) };
+  classList = {
+    contains: (name: string) => this.className.split(" ").includes(name),
+    toggle: (name: string, on: boolean) => {
+      const names = new Set(this.className.split(" ").filter(Boolean));
+      if (on) names.add(name); else names.delete(name);
+      this.className = [...names].join(" ");
+    },
+  };
+  get tabIndex() { return Number(this.attributes.get("tabindex") ?? -1); }
+  set tabIndex(value: number) { this.attributes.set("tabindex", String(value)); }
+  append(...children: Element[]) { for (const child of children) { child.remove(); child.parentNode = this; this.children.push(child); } }
+  insertBefore(child: Element, next: Element) { child.remove(); child.parentNode = this; this.children.splice(this.children.indexOf(next), 0, child); }
+  remove() { if (this.parentNode) { this.parentNode.children = this.parentNode.children.filter(child => child !== this); this.parentNode = null; } }
+  contains(child: Element | null): boolean { return child === this || this.children.some(candidate => candidate.contains(child)); }
+  setAttribute(key: string, value: string) { this.attributes.set(key, value); }
+  getAttribute(key: string) { return this.attributes.get(key) ?? null; }
+  hasAttribute(key: string) { return this.attributes.has(key); }
+  removeAttribute(key: string) { this.attributes.delete(key); }
+  focus() { fakeDocument.activeElement = this; }
+  getBoundingClientRect() { return { top: 0 }; }
+  setPointerCapture(id: number) { this.captures.add(id); }
+  hasPointerCapture(id: number) { return this.captures.has(id); }
+  releasePointerCapture(id: number) { this.captures.delete(id); pointer(this, "lostpointercapture", id, 0); }
+}
+/** Selector fixtures exercise controller ownership, without pretending to render a browser layout. */
+class SelectorElement extends Element {
+  selectors = new Map<string, SelectorElement>();
+  get parentElement() { return this.parentNode; }
+  querySelector(selector: string) {
+    if (!this.selectors.has(selector)) { const element = new SelectorElement(); this.append(element); this.selectors.set(selector, element); }
+    return this.selectors.get(selector)!;
+  }
+  querySelectorAll() { return []; }
+}
+const fakeDocument = { activeElement: null as Element | null, createElement: () => new SelectorElement() };
+class Observer {
+  static all: Observer[] = [];
+  observed = new Set<Element>();
+  disconnected = false;
+  callback: () => void;
+  constructor(callback: () => void) { this.callback = callback; Observer.all.push(this); }
+  observe(element: Element) { this.observed.add(element); }
+  unobserve(element: Element) { this.observed.delete(element); }
+  disconnect() { this.disconnected = true; this.observed.clear(); }
+}
+function pointer(element: Element, name: string, id: number, y: number, primary = true) {
+  const event = new Event(name, { cancelable: true });
+  Object.assign(event, { pointerId: id, clientY: y, button: 0, isPrimary: primary });
+  element.dispatchEvent(event);
+}
+function withDom(run: () => void) {
+  const old = ["document", "ResizeObserver", "MutationObserver"].map(key => Object.getOwnPropertyDescriptor(globalThis, key));
+  Object.assign(globalThis, { document: fakeDocument, ResizeObserver: Observer, MutationObserver: Observer });
+  Observer.all = []; fakeDocument.activeElement = null;
+  try { run(); } finally {
+    ["document", "ResizeObserver", "MutationObserver"].forEach((key, i) => {
+      if (old[i]) Object.defineProperty(globalThis, key, old[i]!); else Reflect.deleteProperty(globalThis, key);
+    });
+  }
+}
+test("Rust scrollbar supports drag cancellation, dynamic contents and reversible mounting", () => withDom(() => {
+  const parent = new Element(), viewport = new Element(), focused = new Element();
+  parent.append(viewport); viewport.append(focused); focused.focus(); viewport.scrollTop = 100;
+  const scroll = new BrowserScroll(viewport);
+  const frame = parent.children[0]!, track = frame.children[1]!;
+  assert.equal(fakeDocument.activeElement, focused);
+  assert.equal(viewport.scrollTop, 100);
+  assert.equal(track.hidden, false);
+  pointer(track, "pointerdown", 1, 50, false);
+  assert.equal(track.hasPointerCapture(1), false);
+  pointer(track, "pointerdown", 1, 50);
+  assert.equal(track.hasPointerCapture(1), true);
+  const initial = viewport.scrollTop;
+  pointer(track, "pointermove", 2, 200);
+  assert.equal(viewport.scrollTop, initial, "other pointers cannot hijack a drag");
+  pointer(track, "pointermove", 1, 1000);
+  assert.equal(viewport.scrollTop, 800);
+  pointer(track, "pointercancel", 1, 1000);
+  assert.equal(track.hasPointerCapture(1), false);
+  pointer(track, "pointermove", 1, 0);
+  assert.equal(viewport.scrollTop, 800);
+  const replacement = new Element(); focused.remove(); viewport.append(replacement);
+  Observer.all[1]!.callback();
+  assert.equal(Observer.all[0]!.observed.has(focused), false);
+  assert.equal(Observer.all[0]!.observed.has(replacement), true);
+  replacement.focus(); viewport.scrollHeight = viewport.clientHeight; scroll.refresh();
+  assert.equal(track.hidden, true);
+  scroll.dispose(); scroll.dispose();
+  assert.deepEqual(parent.children, [viewport]);
+  assert.equal(fakeDocument.activeElement, replacement);
+  assert.equal(viewport.classList.contains("cd-scroll-viewport"), false);
+  assert.equal(viewport.hasAttribute("tabindex"), false);
+  assert.ok(Observer.all.every(observer => observer.disconnected));
+}));
+
+test("Rust scrollbar preserves an existing viewport class and keyboard tab order", () => withDom(() => {
+  const parent = new Element(), viewport = new Element(); parent.append(viewport);
+  viewport.className = "existing cd-scroll-viewport"; viewport.tabIndex = 3;
+  const scroll = new BrowserScroll(viewport); scroll.dispose();
+  assert.equal(viewport.className, "existing cd-scroll-viewport");
+  assert.equal(viewport.tabIndex, 3);
+}));
+
+test("free without dispose detaches scrollbar listeners and observers", () => withDom(() => {
+  const parent = new Element(), viewport = new Element(); parent.append(viewport);
+  const scroll = new BrowserScroll(viewport);
+  const track = parent.children[0]!.children[1]!;
+  pointer(track, "pointerdown", 3, 50);
+  assert.equal(track.hasPointerCapture(3), true);
+  assert.equal(getEventListeners(track, "pointermove").length, 1);
+  scroll.free();
+  assert.equal(track.hasPointerCapture(3), false);
+  assert.equal(getEventListeners(track, "pointermove").length, 0);
+  assert.equal(getEventListeners(viewport, "scroll").length, 0);
+  assert.deepEqual(parent.children, [viewport]);
+  assert.ok(Observer.all.every(observer => observer.disconnected));
+}));
+
+test("free without dispose removes the weapon workshop and its event handlers", () => withDom(() => {
+  const parent = new SelectorElement();
+  const workshop = new BrowserWeapon(parent, () => {}, () => true, { baseUrl: "/", backArrow: "", liquidGlass() {} });
+  const element = workshop.element as SelectorElement;
+  const back = element.querySelector(".cw-back");
+  assert.equal(getEventListeners(back, "click").length, 1);
+  workshop.free();
+  assert.equal(getEventListeners(back, "click").length, 0);
+  assert.equal(element.parentNode, null);
+  assert.ok(Observer.all.every(observer => observer.disconnected));
+}));
+
+test("free without dispose cancels base RAF, global tilt listeners and owned viewers", () => withDom(() => {
+  const globals = ["requestAnimationFrame", "cancelAnimationFrame", "matchMedia", "addEventListener", "removeEventListener"];
+  const old = globals.map(key => Object.getOwnPropertyDescriptor(globalThis, key));
+  const events = new EventTarget();
+  const frames = new Map<number, (at: number) => void>();
+  let nextFrame = 0, workshopDisposals = 0, depthDisposals = 0;
+  Object.assign(globalThis, {
+    requestAnimationFrame: (callback: (at: number) => void) => { const id = ++nextFrame; frames.set(id, callback); return id; },
+    cancelAnimationFrame: (id: number) => { frames.delete(id); },
+    matchMedia: () => ({ matches: true }),
+    addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events),
+  });
+  try {
+    const parent = new Element(), root = new SelectorElement(); parent.append(root);
+    class Workshop { dispose() { workshopDisposals++; } }
+    class Depth { ready = Promise.resolve(); dispose() { depthDisposals++; } }
+    const base = new BrowserBase(root, async () => {}, {
+      baseUrl: "/", backArrow: "", GEAR_SLOT_NAMES: {}, GEAR_SLOTS: [], ITEM_BY_ID: new Map(),
+      loadLocalLoadout: () => ({ weapon1: { item: "rifle-ak" } }),
+      compileKit: () => ({ armor: { head: 0, body: 0, legs: 0 } }),
+      WeaponScreen: Workshop, DepthBackdrop: Depth, liquidGlass() {},
+    });
+    const back = root.querySelector(".cd-back");
+    assert.equal(frames.size, 1);
+    assert.equal(getEventListeners(events, "deviceorientation").length, 2);
+    assert.equal(getEventListeners(back, "click").length, 1);
+    base.free();
+    assert.equal(frames.size, 0);
+    assert.equal(getEventListeners(events, "deviceorientation").length, 0);
+    assert.equal(getEventListeners(back, "click").length, 0);
+    assert.equal(root.parentNode, null);
+    assert.equal(workshopDisposals, 1);
+    assert.equal(depthDisposals, 1);
+    assert.ok(Observer.all.every(observer => observer.disconnected));
+  } finally {
+    globals.forEach((key, i) => { if (old[i]) Object.defineProperty(globalThis, key, old[i]!); else Reflect.deleteProperty(globalThis, key); });
+  }
+}));

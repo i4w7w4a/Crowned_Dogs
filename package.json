@@ -12,7 +12,8 @@
   "scripts": {
     "test": "node --test \"packages/*/test/*.test.ts\" \"apps/*/test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json && tsc -p apps/web/tsconfig.json",
-    "check": "npm run typecheck && npm test",
+    "check": "npm run typecheck && npm test && npm run test:render",
+    "test:render": "node tools/test-render-orchestration.mjs",
     "bot": "node --env-file-if-exists=.env apps/server/src/main.ts",
     "balance": "node packages/core/scripts/balance.ts",
     "web": "npm run dev -w @crowned-dogs/web",
@@ -21,6 +22,7 @@
     "icons": "node packages/icons/scripts/build.ts",
     "rust:build": "node tools/rust-build.mjs wasm",
     "rust:check": "node tools/rust-build.mjs check",
+    "source:share": "node tools/source-share.mjs",
     "local:build": "node tools/rust-build.mjs local",
     "precheck": "npm run rust:build",
     "preweb:build": "npm run rust:build",

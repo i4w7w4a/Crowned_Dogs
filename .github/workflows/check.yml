@@ -21,6 +21,7 @@ jobs:
       - run: cargo test --locked --release -p game-core -p game-client -p game-motion -p game-graphics -p game-ui
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:render
       - run: npm run web:build
 
   windows:
