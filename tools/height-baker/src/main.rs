@@ -13,6 +13,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const LIMIT: u32 = 1024;
 const LAMBDA: f32 = 1.0 / (20.0 * 20.0);
 const SEAM: usize = 6;
+mod details;
 struct Gltf {
     doc: Value,
     bin: Vec<u8>,
@@ -638,6 +639,17 @@ fn verify_alias(source: &Gltf, target: &Gltf, mi: usize) -> Result<Value> {
     )
 }
 fn main() {
+    if std::env::args().any(|a| a == "--details") {
+        let root = std::env::args()
+            .nth(1)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."));
+        if let Err(e) = details::run(&root) {
+            eprintln!("material-details: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if let Err(e) = run() {
         eprintln!("height-baker: {e}");
         std::process::exit(1);

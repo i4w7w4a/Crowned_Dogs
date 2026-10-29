@@ -37,6 +37,10 @@ test("surface relief composes battle tuning and shifts every PBR channel with st
   source.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
   assert.match(shader.fragmentShader, /existing-extra-hook/);
   assert.match(source.customProgramCacheKey(), /existing.*cd-surface-relief/);
+  assert.ok(shader.fragmentShader.includes("normal=cdSurfaceDetailNormal(normal)"));
+  assert.ok(shader.fragmentShader.includes("directLight.color *= cdSurfaceLightVisibility(directLight.direction)"));
+  assert.equal(shader.uniforms.cdSurfaceDetailDepth?.value, 0, "legacy maps do not add their recovered normal twice");
+  assert.equal(shader.uniforms.cdSurfaceShadowSteps?.value, 14);
   for (const name of ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "specularColorMap", "specularIntensityMap"]) {
     assert.ok(shader.fragmentShader.includes(`textureGrad( ${name}, cdSurfaceUv, cdSurfaceDx, cdSurfaceDy )`), name);
   }
@@ -50,10 +54,28 @@ test("surface relief composes battle tuning and shifts every PBR channel with st
   source.onBeforeCompile(next, {} as THREE.WebGLRenderer);
   assert.equal(next.fragmentShader.split("vec2 cdSurfaceReliefUv(").length - 1, 1);
   assert.equal(next.fragmentShader.includes("existing-extra-hook"), false);
-  assert.match(source.customProgramCacheKey(), /cd-surface-relief-v1-high/);
+  assert.match(source.customProgramCacheKey(), /cd-surface-relief-v2-high/);
   setSurfaceReliefPreview(false);
   tune(source, QUALITY.high);
   const original = { vertexShader: THREE.ShaderLib.physical.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader, uniforms: {} } as THREE.WebGLProgramParametersWithUniforms;
   source.onBeforeCompile(original, {} as THREE.WebGLRenderer);
   assert.equal(original.fragmentShader.includes("cdSurfaceReliefUv"), false);
+});
+
+test("authored detail and fabric retain physical scale and all direct-light families receive relief visibility", () => {
+  setSurfaceReliefPreview(true);
+  const source=material();
+  source.userData.cdSurfaceRelief.detailDepthUnits=.0016;
+  source.userData.cdSurfaceRelief.fabricDepthUnits=.00016;
+  source.userData.cdSurfaceRelief.fabricPeriodUnits=.0012;
+  const hook=surfaceReliefHook(source,QUALITY.high)!;
+  const shader={vertexShader:THREE.ShaderLib.physical.vertexShader,fragmentShader:THREE.ShaderLib.physical.fragmentShader,uniforms:{}} as THREE.WebGLProgramParametersWithUniforms;
+  hook.compile(shader);
+  assert.equal(shader.uniforms.cdSurfaceFabricDepth?.value,.00016);
+  assert.equal(shader.uniforms.cdSurfaceFabricPeriod?.value,.0012);
+  assert.equal(shader.uniforms.cdSurfaceDetailDepth?.value,.0016);
+  assert.ok(shader.vertexShader.includes('cdSurfaceLocal=transformed;'));
+  const directCalls=THREE.ShaderChunk.lights_fragment_begin.split('RE_Direct( directLight,').length-1;
+  assert.equal(shader.fragmentShader.split('directLight.color *= cdSurfaceLightVisibility(directLight.direction);').length-1,directCalls);
+  setSurfaceReliefPreview(false);
 });

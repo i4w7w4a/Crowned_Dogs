@@ -57,10 +57,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let hp = map.get_pixel(x, y)[0];
                 let mp = mask.get_pixel(x, y)[0];
                 let rp = packed.get_pixel(x, y);
-                assert_eq!(rp.0, [hp, mp, 128, 255]);
+                assert_eq!(rp[0], hp);
+                assert_eq!(rp[1], mp);
+                assert_eq!(rp[3], 255);
+                if data.get("detailProfileVersion").is_none() {
+                    assert_eq!(rp[2], 128);
+                }
                 if mp == 0 {
                     assert_eq!(hp, 128);
                     assert_eq!(master.get_pixel(x, y)[0], 32768);
+                    assert_eq!(rp[2], 128);
                 }
             }
         }

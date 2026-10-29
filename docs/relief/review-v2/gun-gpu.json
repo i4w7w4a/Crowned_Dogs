@@ -1,0 +1,9 @@
+{
+  "model": "varyag",
+  "configured": 3,
+  "changedPixels": 34773,
+  "maxChannelDifference": 135,
+  "silhouetteMismatch": 0,
+  "shaderErrors": [],
+  "passed": true
+}
