@@ -227,6 +227,116 @@ async function exerciseArena(useRust) {
   return { screen, snapshot, projection, events: h.events, vm: h.viewmodels.map(v => ({ shots: v.shots, active: v.active, stance: v.stance })) };
 }
 
+// New projected-hall behavior is tested separately from the frozen painted-hall
+// oracle. Keep the original fixture and parity assertions unchanged above.
+function projectedArenaHost(gate = Promise.resolve()) {
+  const h = arenaHost(), stages = [], lenses = [];
+  class ProjectedStage {
+    constructor() { this.ready = false; this.travel = 0; this.directionX = 0; this.moves = []; this.loads = []; this.disposals = 0; stages.push(this); }
+    load(url) {
+      this.loads.push(url);
+      return gate.then(() => { if (!this.disposals) this.ready = true; });
+    }
+    setTravel(metres, directionX = 0) { this.travel = metres; this.directionX = directionX; this.moves.push([metres, directionX]); }
+    dispose() { this.disposals++; this.ready = false; }
+  }
+  const PaintedLens = h.Lens;
+  class StageLens extends PaintedLens {
+    constructor(renderer) { super(renderer); this.stage = null; lenses.push(this); }
+    setStage(stage) { this.stage = stage; }
+  }
+  Object.assign(h, { ProjectedStage, Lens: StageLens, stages, lenses });
+  return h;
+}
+
+async function testProjectedArenaMovement() {
+  const h = projectedArenaHost(), arena = new RustArena(h, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  try {
+    arena.setFrame({ ...frame, id: "hall1" }); arena.resize(720, 1280, { x: 0, y: 0, w: 1, h: 1 });
+    arena.setFirstPerson(true); arena.resume(); await arena.load("same.glb", "same.glb", 7);
+    const stage = h.stages[0], renderer = h.renderers[0];
+    assert.equal(stage.ready, true); assert.equal(h.lenses[0].stage, stage);
+    assert.deepEqual(stage.loads, ["img/battle-stage/manifest.json"]);
+    let ticks = 0;
+    const stepFrames = (count = 180) => { for (let i = 0; i < count; i++) renderer.loop(++ticks * 1000 / 60); };
+    const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
+
+    const walks = () => h.events.filter(event => event[0] === "walk").length;
+    const beforeOwn = walks();
+    arena.move(6, 1, 0); stepFrames();
+    const ownStep = stage.travel;
+    assert.ok(ownStep > .4 && ownStep < .6, `own step must move the world by about half a metre: ${ownStep}`);
+    assert.equal(walks(), beforeOwn, "a stationary opponent must not walk when only our camera advances");
+    assert.ok(stage.moves.some(([m]) => m > 0 && m < ownStep), "world movement must animate through intermediate positions");
+    arena.move(7, -1, 0); stepFrames(); close(stage.travel, 0);
+
+    const beforeEnemy = walks();
+    arena.move(6, 0, 1); stepFrames(); close(stage.travel, 0);
+    assert.ok(walks() > beforeEnemy, "enemy-only motion must animate the opponent without moving the world");
+
+    arena.reset(7); arena.move(4, 3, 0); stepFrames();
+    const rush = stage.travel;
+    assert.ok(rush > 1.2 && rush < 1.5, `first-person rush must travel metres, not centimetres: ${rush}`);
+    arena.setFirstPerson(false); close(stage.travel, rush);
+    arena.setFirstPerson(true); close(stage.travel, rush);
+    arena.reset(7); close(stage.travel, 0);
+
+    // A view change settles an in-flight move once, and only once.
+    arena.move(6, 1, 0); stepFrames(8);
+    assert.ok(stage.travel > 0 && stage.travel < ownStep);
+    arena.setFirstPerson(false); close(stage.travel, ownStep);
+    stepFrames(); arena.setFirstPerson(true); close(stage.travel, ownStep);
+
+    // Equal relative range can still mean both fighters have moved in world space.
+    arena.reset(7); arena.move(7, 1, -1); stepFrames(); close(stage.travel, ownStep);
+    arena.reset(1); arena.move(1, 3, 0); stepFrames(); close(stage.travel, 0);
+
+    arena.dispose(); arena.dispose();
+    assert.equal(stage.disposals, 1); assert.equal(renderer.loop, null); assert.equal(arena.ready, false);
+  } finally { arena.free(); }
+}
+
+async function testProjectedArenaLifecycle() {
+  // Switching to another hall must not wait for a pending optional projection,
+  // and that stale completion must never reattach it to the new hall.
+  const old = deferred(), h = projectedArenaHost(old.promise);
+  const arena = new RustArena(h, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  try {
+    arena.setFrame({ ...frame, id: "hall1" });
+    arena.setFrame({ ...frame, id: "hall2" }); arena.resume();
+    assert.equal(h.lenses[0].stage, null);
+    let finished = false;
+    const loading = arena.load("same.glb", "same.glb", 7).then(() => { finished = true; });
+    await flush(); await flush();
+    assert.equal(finished, true, "the next hall must load independently of stale projection assets");
+    old.resolve(); await loading; await flush();
+    assert.equal(h.lenses[0].stage, null); assert.equal(arena.ready, true);
+  } finally { old.resolve(); arena.free(); }
+
+  const pending = deferred(), dying = projectedArenaHost(pending.promise);
+  const disposed = new RustArena(dying, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  disposed.setFrame({ ...frame, id: "hall1" }); disposed.resume();
+  const late = disposed.load("same.glb", "same.glb", 7);
+  disposed.dispose(); pending.resolve(); await late; await flush();
+  assert.equal(disposed.ready, false); assert.equal(dying.renderers[0].loop, null);
+  assert.equal(dying.stages[0].disposals, 1); assert.equal(dying.stages[0].ready, false);
+  disposed.free(); assert.equal(dying.stages[0].disposals, 1);
+
+  // Optional stage failure keeps the pre-existing painted hall usable.
+  const unavailable = deferred(), fallback = projectedArenaHost(unavailable.promise);
+  const painted = new RustArena(fallback, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  try {
+    painted.setFrame({ ...frame, id: "hall1" }); painted.resume();
+    const loading = painted.load("same.glb", "same.glb", 7);
+    unavailable.reject(new Error("optional projection asset unavailable")); await loading;
+    assert.equal(painted.ready, true); assert.equal(fallback.lenses[0].stage, null);
+    painted.move(6, 1, 0);
+    for (let i = 0; i < 180; i++) fallback.renderers[0].loop(i * 1000 / 60);
+    assert.equal(fallback.stages[0].travel, 0);
+    assert.ok(fallback.events.some(event => event[0] === "walk"), "painted fallback retains its original camera-relative gait");
+  } finally { painted.free(); }
+}
+
 async function testTeardown() {
   const h = makeHost(), renderer = new h.THREE.WebGLRenderer();
   const lens = new RustLens(h, renderer);
@@ -271,10 +381,14 @@ try {
   await testTextureTiers();
   parity(await exerciseArena(true), await exerciseArena(false));
   await testTeardown();
+  await testProjectedArenaMovement();
+  await testProjectedArenaLifecycle();
   console.log("PASS Rust lens: identical shaders, quality targets, passes, uniforms, projection, async backdrop cancellation");
   console.log("PASS Rust texture tiers: shared maps, shrink, stale completion, failed tier fallback, atomic restoration");
   console.log("PASS Rust arena: lifecycle, quality, first-person framing, walking, firing, hit/fall, reflection, callback reentry");
   console.log("PASS Rust teardown: idempotent disposal, cancelled late loads, no renderer callback after Rust owner drops");
+  console.log("PASS Rust projected combat: animated own step/retreat/rush, enemy-only movement, interrupted camera change, reset and blocked advance");
+  console.log("PASS Rust projected lifecycle: independent hall switching, cancelled teardown and usable painted fallback");
   if (process.env.CD_RENDER_BENCH === "1") {
     console.log("CPU-only orchestration benchmark (ms/frame, stub renderer, no GPU):", { rust: await benchmarkArena(true), typescript: await benchmarkArena(false) });
   }

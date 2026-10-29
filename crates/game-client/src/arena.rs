@@ -50,16 +50,27 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             let back = num(&args[5]);
             let to = depth(distance, d7, back);
             let ground = (to - from).abs();
-            let mine = if movement != 0.0 {
-                depth(previous, d7, back) - depth(previous - movement, d7, back)
+            let projected = truth(&args[6]);
+            let requested = movement + num(&args[7]);
+            // Range is clamped by combat rules. Blocked advances must not walk the camera through the opponent.
+            let actual_movement = if projected && requested.abs() > 1e-9 {
+                movement * ((previous - distance) / requested).clamp(0.0, 1.0)
+            } else {
+                movement
+            };
+            let mine = if actual_movement != 0.0 {
+                depth(previous, d7, back) - depth(previous - actual_movement, d7, back)
             } else {
                 0.0
             };
-            if ground < 0.01 && movement == 0.0 {
+            // On a moving 3D stage, the enemy gait covers its own world displacement.
+            // Legacy painted halls retain their camera-relative gait.
+            let stride = from - to - if projected { mine } else { 0.0 };
+            if ground < 0.01 && actual_movement == 0.0 {
                 json!({"to":to,"walk":null,"stride":null,"bob":null})
             } else {
                 let ahead = to < from;
-                let far = ground.max(mine.abs());
+                let far = ground.max(mine.abs()).max(stride.abs());
                 let cruise = if !ahead {
                     1.5_f64.min(far / 0.45)
                 } else if far < 0.8 {
@@ -70,7 +81,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
                     3.0
                 };
                 let dur = 0.2 + far / cruise.max(0.1);
-                json!({"to":to,"walk":{"from":from,"to":to,"t":0,"dur":dur,"mine":mine},"stride":if ground>=0.01{Some(if ahead{ground}else{-ground})}else{None},"bob":if movement!=0.0{Some(if mine.abs()/(dur-ramp(dur))>2.0{0.035}else{0.02})}else{None}})
+                json!({"to":to,"walk":{"from":from,"to":to,"t":0,"dur":dur,"mine":mine},"stride":if stride.abs()>=0.01{Some(stride)}else{None},"bob":if movement!=0.0{Some(if mine.abs()/(dur-ramp(dur))>2.0{0.035}else{0.02})}else{None}})
             }
         }
         "client.arena.stride" => {
@@ -139,7 +150,7 @@ pub fn compute(kind: &str, x: &[f64]) -> Result<Vec<f64>, String> {
         "arena.project" => 5,
         "arena.resize" => 5,
         "arena.scale" => 2,
-        "arena.walk" => 6,
+        "arena.walk" | "arena.walkStage" => 6,
         "arena.pace" => 3,
         "arena.place" => 10,
         "arena.view" => 14,
@@ -183,16 +194,21 @@ pub fn compute(kind: &str, x: &[f64]) -> Result<Vec<f64>, String> {
             };
             vec![scale, -x[0] * scale]
         }
-        "arena.walk" => {
+        "arena.walk" | "arena.walkStage" => {
             let t = (x[2] + x[5]).min(x[3]);
             let (s, v) = travel(t, x[3]);
-            vec![
+            let projected = kind == "arena.walkStage";
+            let mut result = vec![
                 t,
                 x[0] + (x[1] - x[0]) * s,
-                (x[0] - x[1]) * v,
+                (x[0] - x[1] - if projected { x[4] } else { 0.0 }) * v,
                 (x[4] * v).abs(),
                 if t >= x[3] { 1.0 } else { 0.0 },
-            ]
+            ];
+            if projected {
+                result.extend([x[4] * s, x[4] * v]);
+            }
+            result
         }
         "arena.pace" => vec![x[0] / (x[1] * x[2])],
         "arena.place" => {
@@ -369,5 +385,67 @@ mod tests {
     fn malformed_abi_is_rejected() {
         assert!(compute("arena.walk", &[]).is_err());
         assert!(compute("missing", &[]).is_err());
+    }
+
+    #[test]
+    fn projected_stage_separates_camera_and_enemy_motion() {
+        let d7 = 8.1551128032;
+        let start = depth(7.0, d7, 0.45);
+        // Our one-step advance travels about half a metre, while the stationary opponent does not walk.
+        let own = dispatch("client.arena.move", json!([start, 6, 1, 7, d7, 0.45, true])).unwrap();
+        let mine = num(&own["walk"]["mine"]);
+        assert!(mine > 0.5 && mine < 0.55);
+        assert!(own["stride"].is_null());
+        let dur = num(&own["walk"]["dur"]);
+        let mid = compute(
+            "arena.walkStage",
+            &[start, num(&own["to"]), 0.0, dur, mine, dur / 2.0],
+        )
+        .unwrap();
+        assert!(mid[2].abs() < 1e-9);
+        assert!(mid[5] > 0.0 && mid[5] < mine);
+        let end = compute(
+            "arena.walkStage",
+            &[start, num(&own["to"]), 0.0, dur, mine, dur + 1.0],
+        )
+        .unwrap();
+        assert_eq!(end[4], 1.0);
+        assert!((end[5] - mine).abs() < 1e-9);
+        assert_eq!(end[6], 0.0);
+        // An enemy-only advance changes range and gait but never moves the environment.
+        let enemy = dispatch("client.arena.move", json!([start, 6, 0, 7, d7, 0.45, true])).unwrap();
+        assert_eq!(num(&enemy["walk"]["mine"]), 0.0);
+        assert!(num(&enemy["stride"]) > 0.5);
+        // Equal forward/retreat movement can preserve relative range but must still move both in world space.
+        let parallel = dispatch(
+            "client.arena.move",
+            json!([start, 7, 1, 7, d7, 0.45, true, -1]),
+        )
+        .unwrap();
+        assert!((num(&parallel["stride"]) + mine).abs() < 1e-9);
+        let retreat = dispatch(
+            "client.arena.move",
+            json!([start, 8, -1, 7, d7, 0.45, true]),
+        )
+        .unwrap();
+        assert!(num(&retreat["walk"]["mine"]) < -0.55);
+        assert!(retreat["stride"].is_null());
+        let rush = dispatch("client.arena.move", json!([start, 4, 3, 7, d7, 0.45, true])).unwrap();
+        assert!(num(&rush["walk"]["mine"]) > 1.4);
+        let blocked = dispatch(
+            "client.arena.move",
+            json!([depth(1.0, d7, 0.45), 1, 3, 1, d7, 0.45, true, 0]),
+        )
+        .unwrap();
+        assert!(blocked["walk"].is_null());
+        let limited = dispatch(
+            "client.arena.move",
+            json!([depth(2.0, d7, 0.45), 1, 3, 2, d7, 0.45, true, 0]),
+        )
+        .unwrap();
+        assert!(
+            (num(&limited["walk"]["mine"]) - (depth(2.0, d7, 0.45) - depth(1.0, d7, 0.45))).abs()
+                < 1e-9
+        );
     }
 }

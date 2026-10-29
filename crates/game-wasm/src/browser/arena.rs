@@ -187,6 +187,13 @@ struct ArenaState {
     catcher: JsValue,
     dust: JsValue,
     lens: JsValue,
+    projected_stage: JsValue,
+    stage_loading: Promise,
+    stage_load_generation: u64,
+    stage_enabled: bool,
+    stage_travel: f64,
+    walk_origin: f64,
+    motion_debug: bool,
     quality: JsValue,
     env: JsValue,
     env_src: String,
@@ -277,6 +284,13 @@ impl RustArena {
             &get(&three, "PCFShadowMap"),
         );
         let lens = create(&host, "Lens", &[renderer.clone()]);
+        // Optional only for the frozen painted-renderer test host and halls that
+        // do not have a reconstructed stage. The production host supplies it.
+        let projected_stage = if get(&host, "ProjectedStage").is_function() {
+            create(&host, "ProjectedStage", &[renderer.clone()])
+        } else {
+            JsValue::NULL
+        };
         let scene = make(&host, "Scene", &[]);
         set(
             &scene,
@@ -452,6 +466,13 @@ impl RustArena {
             catcher,
             dust,
             lens,
+            projected_stage,
+            stage_loading: Promise::resolve(&JsValue::UNDEFINED),
+            stage_load_generation: 0,
+            stage_enabled: false,
+            stage_travel: 0.,
+            walk_origin: 0.,
+            motion_debug: boolean(&get(&options, "motionDebug")),
             quality: get(&host, "quality"),
             env: JsValue::NULL,
             env_src: String::new(),
@@ -561,6 +582,7 @@ impl RustArena {
                 sdk(&host, "loadModel", &[enemy_url.clone().into()])
             },
             sdk(&host, "loadGuns", &[]),
+            state.borrow().stage_loading.clone().into(),
         ]);
         future_to_promise(async move {
             let models = JsFuture::from(Promise::all(&requests)).await?;
@@ -640,6 +662,7 @@ impl RustArena {
             s.set_frame(f.clone());
             string(&get(&f, "src"))
         };
+        load_stage(&self.state);
         make_env(&self.state, src);
     }
     pub fn resize(&self, width: f64, height: f64, view: JsValue) {
@@ -668,17 +691,28 @@ impl RustArena {
         }
     }
     #[wasm_bindgen(js_name=move)]
-    pub fn move_to(&self, distance: f64, me_move: f64, _enemy_move: f64) {
+    pub fn move_to(&self, distance: f64, me_move: f64, enemy_move: f64) {
         let mut s = self.state.borrow_mut();
         if !s.ready {
             return;
         }
+        s.finish_walk();
         let k = s.k.as_ref().unwrap();
         let plan = policy(
             "client.arena.move",
-            serde_json::json!([s.depth, distance, me_move, s.dist, k.d7, k.back]),
+            serde_json::json!([
+                s.depth,
+                distance,
+                me_move,
+                s.dist,
+                k.d7,
+                k.back,
+                s.stage_enabled,
+                enemy_move
+            ]),
         );
         s.dist = distance;
+        s.walk_origin = s.stage_travel;
         if plan["walk"].is_null() {
             s.walk = None;
             s.depth = plan["to"].as_f64().unwrap();
@@ -694,6 +728,8 @@ impl RustArena {
         };
         if let Some(ground) = plan["stride"].as_f64() {
             s.stride(s.enemy.as_ref().unwrap(), ground, walk.dur);
+        } else if s.stage_enabled && enemy_move == 0. {
+            call(&s.enemy.as_ref().unwrap().motion, "stand", &[n(0.15)]);
         }
         if let Some(bob) = plan["bob"].as_f64() {
             s.bob_depth = bob;
@@ -793,6 +829,7 @@ impl ArenaState {
         for resource in [
             &self.timer,
             &self.lens,
+            &self.projected_stage,
             &self.env,
             &get(&get(&self.rim, "shadow"), "map"),
         ] {
@@ -1240,12 +1277,27 @@ impl ArenaState {
         let mut speed = 0.;
         if let Some(walk) = &mut self.walk {
             let q = math(
-                "walk",
+                if self.stage_enabled {
+                    "walkStage"
+                } else {
+                    "walk"
+                },
                 &[walk.from, walk.to, walk.t, walk.dur, walk.mine, dt],
             );
             walk.t = q[0];
             self.depth = q[1];
             speed = q[3];
+            if self.stage_enabled {
+                self.stage_travel = self.walk_origin + q[5];
+                call(
+                    &self.projected_stage,
+                    "setTravel",
+                    &[
+                        n(self.stage_travel),
+                        n(self.k.as_ref().map_or(0., |k| k.kx)),
+                    ],
+                );
+            }
             pace(self.enemy.as_ref().unwrap(), q[2]);
             if q[4] != 0. {
                 self.walk = None;
@@ -1403,6 +1455,25 @@ impl ArenaState {
                 object(&[("enemyDepth", n(self.depth)), ("light", self.rim.clone())]),
             ],
         );
+        if self.motion_debug {
+            let data = get(&get(&self.renderer, "domElement"), "dataset");
+            if present(&data) {
+                set(
+                    &data,
+                    "stageTravel",
+                    &format!("{:.6}", self.stage_travel).into(),
+                );
+                set(&data, "enemyDepth", &format!("{:.6}", self.depth).into());
+                set(
+                    &data,
+                    "projectedStage",
+                    &(self.stage_enabled && boolean(&get(&self.projected_stage, "ready")))
+                        .to_string()
+                        .into(),
+                );
+                set(&data, "walking", &self.walk.is_some().to_string().into());
+            }
+        }
     }
     fn resume(&mut self) {
         if self.disposed {
@@ -1497,7 +1568,32 @@ impl ArenaState {
         self.resize(self.width, self.height, self.view.clone());
     }
     fn set_frame(&mut self, f: JsValue) {
+        let changed = string(&get(&self.frame, "id")) != string(&get(&f, "id"));
         self.frame = f.clone();
+        self.stage_load_generation = self.stage_load_generation.wrapping_add(1);
+        self.stage_enabled = string(&get(&f, "id")) == "hall1" && present(&self.projected_stage);
+        if !self.stage_enabled {
+            self.stage_loading = Promise::resolve(&JsValue::UNDEFINED);
+        }
+        if present(&self.projected_stage) {
+            call(
+                &self.lens,
+                "setStage",
+                &[if self.stage_enabled {
+                    self.projected_stage.clone()
+                } else {
+                    JsValue::NULL
+                }],
+            );
+        }
+        if changed {
+            self.stage_travel = 0.;
+            self.walk_origin = 0.;
+            self.walk = None;
+            if present(&self.projected_stage) {
+                call(&self.projected_stage, "setTravel", &[n(0.), n(0.)]);
+            }
+        }
         let k = Calibration::new(&f, self.fp);
         vec_set(&get(&self.camera, "position"), &[0., k.cam_h, 0.]);
         let projection = math(
@@ -1620,6 +1716,7 @@ impl ArenaState {
         if on == self.fp {
             return;
         }
+        self.finish_walk();
         self.fp = on;
         if present(&self.frame) {
             let k = Calibration::new(&self.frame, on);
@@ -1649,6 +1746,11 @@ impl ArenaState {
         }
     }
     fn reset(&mut self, distance: f64) {
+        self.stage_travel = 0.;
+        self.walk_origin = 0.;
+        if present(&self.projected_stage) {
+            call(&self.projected_stage, "setTravel", &[n(0.), n(0.)]);
+        }
         if let Some(k) = &self.k {
             vec_set(&get(&self.camera, "position"), &[0., k.cam_h, 0.]);
             vec_set(&get(&self.camera, "rotation"), &[0., 0., 0.]);
@@ -1667,6 +1769,33 @@ impl ArenaState {
         self.depth = self.depth_of(distance);
         reset_figure(self.enemy.as_mut().unwrap(), 0.);
         reset_figure(self.me.as_mut().unwrap(), 0.43);
+    }
+    // Finish an interrupted step exactly once before changing view or starting a
+    // new turn. Accumulated movement belongs to the player, not opponent range.
+    fn finish_walk(&mut self) {
+        if !self.stage_enabled {
+            return;
+        }
+        let Some(walk) = self.walk.take() else {
+            return;
+        };
+        if self.stage_enabled {
+            self.stage_travel = self.walk_origin + walk.mine;
+            call(
+                &self.projected_stage,
+                "setTravel",
+                &[
+                    n(self.stage_travel),
+                    n(self.k.as_ref().map_or(0., |k| k.kx)),
+                ],
+            );
+        }
+        self.depth = walk.to;
+        if let Some(enemy) = &self.enemy {
+            if enemy.fall_t < 0. {
+                call(&enemy.motion, "stand", &[n(0.15)]);
+            }
+        }
     }
     fn hit(&mut self, who: &str, zone: &str, kind: &str) {
         if !self.ready {
@@ -1856,6 +1985,49 @@ fn zone_world(f: &Figure, zone: &str, out: &JsValue, tmp: &JsValue) {
             &[a[0], a[1], a[2], b[0], b[1], b[2], index as f64],
         ))],
     );
+}
+
+fn load_stage(state: &Rc<RefCell<ArenaState>>) {
+    let (request, generation) = {
+        let s = state.borrow();
+        if s.disposed || !s.stage_enabled {
+            return;
+        }
+        (
+            try_call(
+                &s.projected_stage,
+                "load",
+                &["img/battle-stage/manifest.json".into()],
+            ),
+            s.stage_load_generation,
+        )
+    };
+    let weak = Rc::downgrade(state);
+    let loading = future_to_promise(async move {
+        let result = match request {
+            Ok(request) => JsFuture::from(Promise::resolve(&request)).await,
+            Err(error) => Err(error),
+        };
+        if let Err(error) = result {
+            if let Some(state) = weak.upgrade() {
+                let mut s = state.borrow_mut();
+                if !s.disposed
+                    && s.stage_load_generation == generation
+                    && string(&get(&s.frame, "id")) == "hall1"
+                {
+                    s.stage_enabled = false;
+                    call(&s.lens, "setStage", &[JsValue::NULL]);
+                    let _ = try_call(
+                        &get(&global(), "console"),
+                        "warn",
+                        &["Projected stage unavailable; using backdrop".into(), error],
+                    );
+                }
+            }
+        }
+        Ok(JsValue::UNDEFINED)
+    });
+    state.borrow_mut().stage_loading = loading;
 }
 
 fn make_env(state: &Rc<RefCell<ArenaState>>, src: String) {

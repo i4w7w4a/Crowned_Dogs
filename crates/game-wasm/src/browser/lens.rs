@@ -2,6 +2,7 @@
 use super::bridge::*;
 use js_sys::{Float64Array, Promise, Uint8ClampedArray};
 use std::{cell::RefCell, rc::Rc};
+use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 
@@ -57,6 +58,7 @@ struct LensState {
     quality: JsValue,
     look: JsValue,
     bg: JsValue,
+    stage: JsValue,
     depth_map: JsValue,
     sun: JsValue,
     one: String,
@@ -231,6 +233,7 @@ impl RustLens {
                 quality: JsValue::NULL,
                 look: JsValue::NULL,
                 bg: JsValue::NULL,
+                stage: JsValue::NULL,
                 depth_map: JsValue::NULL,
                 sun,
                 one: String::new(),
@@ -242,6 +245,37 @@ impl RustLens {
                 css: [1., 1.],
                 view: [0., 0., 1., 1.],
             })),
+        }
+    }
+
+    #[wasm_bindgen(js_name = setStage)]
+    pub fn set_stage(&self, stage: JsValue) {
+        let mut s = self.state.borrow_mut();
+        if s.disposed {
+            return;
+        }
+        s.stage = stage;
+        // The stage owns its resources. Detaching it restores the painted hall
+        // without transferring or disposing either set of textures.
+        if !present(&s.stage) {
+            put(&s.compose, "tBg", s.bg.clone());
+            put(&s.compose, "hasBg", n(if present(&s.bg) { 1. } else { 0. }));
+            if present(&s.bg) {
+                let image = get(&s.bg, "image");
+                call(
+                    &uniform(&s.compose, "bgSize"),
+                    "set",
+                    &[get(&image, "width"), get(&image, "height")],
+                );
+            }
+            for m in [&s.compose, &s.haze_mat] {
+                put(m, "tDepth", s.depth_map.clone());
+                put(
+                    m,
+                    "hasDepth",
+                    n(if present(&s.depth_map) { 1. } else { 0. }),
+                );
+            }
         }
     }
 
@@ -476,11 +510,58 @@ impl RustLens {
         let shadow_map = get(r, "shadowMap");
         let mask = get(&layers, "mask");
         let auto = get(&shadow_map, "autoUpdate");
+        let stage = if present(&s.stage) && boolean(&get(&s.stage, "ready")) {
+            s.stage.clone()
+        } else {
+            JsValue::NULL
+        };
+        let has_bg = present(&s.bg) || present(&stage);
         call(&s.clock, "update", &[]);
         call(&layers, "set", &[n(0.)]);
+        if present(&stage) {
+            let projected = try_call(
+                &stage,
+                "render",
+                &[camera.clone(), get(&s.fig, "width"), get(&s.fig, "height")],
+            );
+            if projected.is_err() {
+                set(&layers, "mask", &mask);
+                set(&shadow_map, "autoUpdate", &auto);
+            }
+            let projected = projected.unwrap_throw();
+            put(&s.compose, "tBg", get(&projected, "color"));
+            put(&s.compose, "hasBg", n(1.));
+            call(
+                &uniform(&s.compose, "bgSize"),
+                "set",
+                &[get(&s.fig, "width"), get(&s.fig, "height")],
+            );
+            for m in [&s.compose, &s.haze_mat] {
+                put(m, "tDepth", get(&projected, "depth"));
+                put(m, "hasDepth", n(1.));
+            }
+        }
         call(r, "setRenderTarget", &[s.fig.clone()]);
         call(r, "clear", &[]);
-        call(r, "render", &[scene.clone(), camera.clone()]);
+        if present(&stage) {
+            let occluded = try_call(&stage, "occlude", &[camera.clone()]);
+            if occluded.is_err() {
+                set(&layers, "mask", &mask);
+                set(&shadow_map, "autoUpdate", &auto);
+            }
+            occluded.unwrap_throw();
+            let auto_clear = get(r, "autoClear");
+            set(r, "autoClear", &false.into());
+            let drawn = try_call(r, "render", &[scene.clone(), camera.clone()]);
+            set(r, "autoClear", &auto_clear);
+            if drawn.is_err() {
+                set(&layers, "mask", &mask);
+                set(&shadow_map, "autoUpdate", &auto);
+            }
+            drawn.unwrap_throw();
+        } else {
+            call(r, "render", &[scene.clone(), camera.clone()]);
+        }
         call(&layers, "set", &[n(near)]);
         set(&shadow_map, "autoUpdate", &false.into());
         call(r, "setRenderTarget", &[s.near.clone()]);
@@ -488,7 +569,7 @@ impl RustLens {
         call(r, "render", &[scene, camera.clone()]);
         set(&shadow_map, "autoUpdate", &auto);
         set(&layers, "mask", &mask);
-        if present(&s.haze) && present(&s.look) && present(&s.bg) {
+        if present(&s.haze) && present(&s.look) && has_bg {
             let h = &s.haze_mat;
             call(
                 &uniform(h, "invProj"),
@@ -533,7 +614,7 @@ impl RustLens {
             n(1. / prop(&haze, "enemyDepth").max(0.5)),
         );
         s.pass(&s.compose, &s.comp);
-        if present(&s.rays_a) && present(&s.rays_b) && present(&s.look) && present(&s.bg) {
+        if present(&s.rays_a) && present(&s.rays_b) && present(&s.look) && has_bg {
             put(&s.mask, "horizon", n(1. - s.horizon));
             s.pass(&s.mask, &s.rays_a);
             put(&s.blur, "tSrc", texture(&s.rays_a));
@@ -550,7 +631,7 @@ impl RustLens {
             s.pass(&s.blur, &s.rays_a);
             put(&s.lens, "rays", get(&s.look, "rays"));
         }
-        put(&s.lens, "hasBg", n(if present(&s.bg) { 1. } else { 0. }));
+        put(&s.lens, "hasBg", n(if has_bg { 1. } else { 0. }));
         s.pass(&s.lens, &JsValue::NULL);
     }
 
@@ -614,6 +695,7 @@ impl LensState {
             }
         }
         self.bg = JsValue::NULL;
+        self.stage = JsValue::NULL;
         self.depth_map = JsValue::NULL;
         self.haze = JsValue::NULL;
         self.rays_a = JsValue::NULL;

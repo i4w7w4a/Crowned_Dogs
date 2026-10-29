@@ -20,6 +20,7 @@ pub mod music;
 pub mod particles;
 pub mod persona;
 pub mod platform;
+pub mod projected_stage;
 pub mod radio;
 pub mod rigging;
 pub mod scene_assets;
