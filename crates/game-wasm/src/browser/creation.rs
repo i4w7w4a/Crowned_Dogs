@@ -39,15 +39,15 @@ pub const BRIEFING: [(&str, &str); 6] = [
 /// The briefing line whose button signs the contract.
 pub const SIGN_LINE: usize = 3;
 
-/// Creation steps: (id, tab, instructor's line, camera on the face).
-pub const STEPS: [(&str, &str, &str, bool); 7] = [
-    ("sex", "Пол", "Мужская Персона или женская? Броня сядет на любую.", false),
-    ("face", "Лицо", "Лицо. Пока на складе одно, новые уже в работе.", true),
-    ("skin", "Кожа", "Тон кожи. Под нашими лампами все бледные, не пугайся.", true),
-    ("eyes", "Глаза", "Свечение глаз. По нему тебя узнают свои, даже в дыму.", true),
-    ("hair", "Волосы", "Причёска. Под каской не видно, но по базе ходишь без неё.", true),
-    ("suit", "Костюм", "Цвет костюма. Выбирай, в чём не стыдно умирать.", false),
-    ("callsign", "Позывной", "Последнее: позывной. Так тебя будут звать в эфире.", false),
+/// Creation steps: (id, tab, camera on the face).
+pub const STEPS: [(&str, &str, bool); 7] = [
+    ("sex", "Пол", false),
+    ("face", "Лицо", true),
+    ("skin", "Кожа", true),
+    ("eyes", "Глаза", true),
+    ("hair", "Волосы", true),
+    ("suit", "Костюм", false),
+    ("callsign", "Позывной", false),
 ];
 
 fn list(options: &JsValue, key: &str) -> Vec<JsValue> {
@@ -73,8 +73,9 @@ fn segment(label: &str, key: &str, items: &[JsValue], current: &str) -> String {
     for item in items {
         let id = text(&get(item, "id"));
         out.push_str(&format!(
-            "<button class=\"glass\" type=\"button\" data-look=\"{key}\" data-value=\"{id}\" aria-pressed=\"{}\">{}</button>",
+            "<button class=\"glass\" type=\"button\" data-look=\"{key}\" data-value=\"{id}\" aria-pressed=\"{}\">{}<span>{}</span></button>",
             id == current,
+            icon(if key == "face" { "face" } else { &id }),
             text(&get(item, "name"))
         ));
     }
@@ -134,9 +135,18 @@ pub fn step_markup(look: &JsValue, step: usize) -> String {
     }
 }
 
-/// Line icons for the steps, drawn on a 24 grid like the combat icons.
-fn step_icon(id: &str) -> &'static str {
+/// Line icons for the steps, the camera, the buttons and the choices, drawn on a 24 grid like
+/// the combat icons.
+fn icon_paths(id: &str) -> &'static str {
     match id {
+        "body" => "<circle cx=\"12\" cy=\"4.8\" r=\"2.3\"/><path d=\"M7.6 21v-6.4L6 9.6c0-1.1.8-2 1.9-2h8.2c1.1 0 1.9.9 1.9 2l-1.6 5V21M12 13.6V21\"/>",
+        "next" => "<path d=\"M14 5l7 7-7 7M21 12H3\"/>",
+        "save" => "<path d=\"M4.5 12.5l5 5 10-11\"/>",
+        "male" => "<circle cx=\"10\" cy=\"14\" r=\"5.5\"/><path d=\"M14 10l6-6M15 4h5v5\"/>",
+        "female" => "<circle cx=\"12\" cy=\"9\" r=\"5.5\"/><path d=\"M12 14.5V21M9 18h6\"/>",
+        "long" => "<path d=\"M6 21c-1.2-4-1.4-9 .3-12.3C7.6 6 9.6 4.5 12 4.5s4.4 1.5 5.7 4.2C19.4 12 19.2 17 18 21\"/><path d=\"M9 10.6c.3 3.2 1.3 5.6 3 6.6 1.7-1 2.7-3.4 3-6.6\"/>",
+        "short" => "<path d=\"M6.4 15.6C5.5 10.4 7.7 4.6 12 4.6s6.5 5.8 5.6 11\"/><path d=\"M8.6 11.2c2.6-.2 4.8-1.3 6.4-3.2.6 1.2 1.2 2.3 2.1 3.2M9.2 15c.6 2.6 1.6 4 2.8 4s2.2-1.4 2.8-4\"/>",
+        "shaved" | "buzz" => "<path d=\"M7 12.5c0-4.3 2.2-7 5-7s5 2.7 5 7-2.2 7-5 7-5-2.7-5-7z\"/><path d=\"M8.6 8.3h.01M10.3 6.9h.01M12 6.5h.01M13.7 6.9h.01M15.4 8.3h.01\"/>",
         "sex" => "<circle cx=\"9\" cy=\"7.5\" r=\"3\"/><path d=\"M3.5 20v-1a5.5 5.5 0 0 1 11 0v1\"/><circle cx=\"17\" cy=\"9\" r=\"2.4\"/><path d=\"M15.6 14a4.6 4.6 0 0 1 5.9 4.4V20\"/>",
         "face" => "<path d=\"M12 3.2c-3.8 0-6.3 2.9-6.3 7 0 4.9 2.9 10.6 6.3 10.6s6.3-5.7 6.3-10.6c0-4.1-2.5-7-6.3-7z\"/><path d=\"M9.4 10.8h.01M14.6 10.8h.01M10.1 15.6c1.2.7 2.6.7 3.8 0\"/>",
         "skin" => "<path d=\"M12 3.5c3.1 3.9 6 7.3 6 10.7a6 6 0 0 1-12 0c0-3.4 2.9-6.8 6-10.7z\"/><path d=\"M9.2 14.6a2.9 2.9 0 0 0 2.8 2.8\"/>",
@@ -152,14 +162,21 @@ pub fn tabs(step: usize) -> String {
     STEPS
         .iter()
         .enumerate()
-        .map(|(i, (id, name, _, _))| {
+        .map(|(i, (id, name, _))| {
             format!(
-                "<button class=\"glass\" type=\"button\" role=\"tab\" data-step=\"{i}\" aria-selected=\"{}\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">{}</svg><span>{name}</span></button>",
+                "<button class=\"glass\" type=\"button\" role=\"tab\" data-step=\"{i}\" aria-selected=\"{}\" aria-label=\"{name}\">{}<span>{name}</span></button>",
                 i == step,
-                step_icon(id)
+                icon(id)
             )
         })
         .collect()
+}
+/// One line icon as inline SVG.
+pub fn icon(id: &str) -> String {
+    format!(
+        "<svg class=\"cd-icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\">{}</svg>",
+        icon_paths(id)
+    )
 }
 
 /// A line as words that appear one after another, as if spoken.

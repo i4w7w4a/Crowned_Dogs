@@ -1,14 +1,15 @@
-//! Close-up detail for the Persona creation screen. While a female look is made the game head
-//! and hair cards give their geometry over to models/persona-female-hd.glb: the head at full
-//! detail and a groom of about 1,800 narrow strips that follow Art's strands (cards_hd.py).
-//! The game meshes keep their materials, skeleton and eye spots, so the look applies unchanged.
+//! Close-up hair for the Persona creation screen. While a female look is made the game hair
+//! cards give their geometry over to models/persona-female-hd.glb: about 2,100 strips that
+//! follow Art's strands over a wide underlayer (cards_hd.py). The game mesh keeps its material
+//! and skeleton, so the look applies unchanged. The head stays the game's: at full detail its
+//! surface rose through the hair cap and speckled the nape and temples.
 use super::view_utils::*;
 use js_sys::{Float32Array, Float64Array, Uint16Array};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 /// Game mesh, and its close-up stand-in in the HD file.
-const PAIRS: [(&str, &str); 2] = [("FemHead", "FemHeadHD"), ("FemHairCards", "FemHairCardsHD")];
+const PAIRS: [(&str, &str); 1] = [("FemHairCards", "FemHairCardsHD")];
 /// Both files bind this bone alike; it carries the stand-in into the game mesh's space.
 const ANCHOR: &str = "head";
 

@@ -23,16 +23,15 @@
           <div class="cd-kit-picker"><button class="glass cd-kit-trigger" type="button" aria-haspopup="listbox" aria-controls="cd-kit-options" aria-expanded="false" aria-label="Выбрать набор снаряжения"><span>Набор</span><strong class="cd-kit-current">{{KIT}}</strong><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
             <div id="cd-kit-options" class="sheet glass cd-kit-options" role="listbox" aria-label="Наборы снаряжения" hidden>{{KITS}}</div>
           </div>
-          <div class="cd-focus" role="group" aria-label="Камера"><button class="glass" type="button" data-focus="face" aria-pressed="false">Лицо</button><button class="glass" type="button" data-focus="body" aria-pressed="true">Тело</button></div>
+          <div class="cd-focus" role="group" aria-label="Камера"><button class="glass" type="button" data-focus="face" aria-pressed="false">{{FACE}}<span>Лицо</span></button><button class="glass" type="button" data-focus="body" aria-pressed="true">{{BODY}}<span>Тело</span></button></div>
         </header>
         <div class="cd-model-stage">
           <canvas class="cd-persona-canvas" tabindex="0" role="img" aria-label="Персона на вращающемся постаменте. Перетаскивайте или используйте клавиши влево и вправо, чтобы повернуть."></canvas>
           <div class="glass cd-model-status" role="status">Загрузка Персоны…</div>
 {{COLUMNS}}
         </div>
+        <div class="cd-create-steps" role="tablist" aria-label="Шаги создания"></div>
         <div class="cd-create" hidden>
-          <div class="cd-coach"><img class="cd-coach-face" src="{{BASE}}img/base/instructor.webp" alt="" draggable="false"><p class="cd-coach-line" aria-live="polite"></p></div>
-          <div class="cd-create-steps" role="tablist" aria-label="Шаги создания"></div>
           <div class="cd-create-options"></div>
           <label class="cd-create-name" hidden><span class="cd-overline">ПОЗЫВНОЙ</span><input class="glass cd-callsign-input" type="text" maxlength="16" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Например, Сокол"><span class="cd-tag cd-create-tag"></span></label>
           <p class="cd-create-error" role="alert" hidden></p>

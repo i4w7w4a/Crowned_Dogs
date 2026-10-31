@@ -44,6 +44,8 @@ struct Base {
     load_attempted: bool,
     model_ready: bool,
     scroll: BrowserScroll,
+    /// The creation options' own glass scroll.
+    create_scroll: BrowserScroll,
     observer: JsValue,
     listeners: Vec<Listener>,
     callbacks: Vec<Closure<dyn FnMut(JsValue)>>,
@@ -153,8 +155,8 @@ impl Base {
         if briefing {
             self.render_briefing();
         } else {
-            attr(&query(&self.fitting, ".cd-coach-line"), "data-step", "");
-            let face = creation::STEPS[self.step].3;
+            attr(&query(&self.fitting, ".cd-create-options"), "data-step", "");
+            let face = creation::STEPS[self.step].2;
             self.set_focus(if face { "face" } else { "body" });
             self.render_create();
         }
@@ -204,20 +206,20 @@ impl Base {
         self.render_briefing();
     }
     fn render_create(&self) {
-        let (id, _, line, _) = creation::STEPS[self.step];
+        let (id, _, _) = creation::STEPS[self.step];
         let tabs = query(&self.fitting, ".cd-create-steps");
         html(&tabs, &creation::tabs(self.step));
         let options = query(&self.fitting, ".cd-create-options");
         html(&options, &creation::step_markup(&self.look, self.step));
-        // The instructor speaks once per step, not again after every pick.
-        let coach = query(&self.fitting, ".cd-coach-line");
-        if data(&coach, "step") != id {
-            attr(&coach, "data-step", id);
-            html(&coach, &creation::spoken(line));
+        // A new step starts at the top of its choices; a pick keeps the place.
+        if data(&options, "step") != id {
+            attr(&options, "data-step", id);
+            set(&options, "scrollTop", &number(0.0));
         }
         let naming = id == "callsign";
         hidden(&query(&self.fitting, ".cd-create-name"), !naming);
-        hidden(&options, naming);
+        // The options sit in the game's own scroll frame; the frame goes with them.
+        hidden(&get(&options, "parentNode"), naming);
         hidden(&query(&self.fitting, ".cd-create-error"), true);
         set(
             &query(&self.fitting, ".cd-callsign-input"),
@@ -228,15 +230,19 @@ impl Base {
             &query(&self.fitting, ".cd-create-tag"),
             &text(&get(&self.look, "tag")),
         );
-        let label = if exists(&self.saved) {
-            "Сохранить"
+        let (label, icon) = if exists(&self.saved) {
+            ("Сохранить", "save")
         } else if self.step + 1 == creation::STEPS.len() {
-            "Готово"
+            ("Готово", "save")
         } else {
-            "Дальше"
+            ("Дальше", "next")
         };
-        content(&query(&self.fitting, ".cd-create-next"), label);
+        html(
+            &query(&self.fitting, ".cd-create-next"),
+            &format!("<span>{label}</span>{}", creation::icon(icon)),
+        );
         call(&self.host, "liquidGlass", &[query(&self.fitting, ".cd-create")]);
+        call(&self.host, "liquidGlass", &[tabs]);
     }
     /// The typed callsign survives re-renders and step changes.
     fn keep_typed(&self) {
@@ -249,7 +255,7 @@ impl Base {
     fn go_step(&mut self, step: usize) {
         self.keep_typed();
         self.step = step.min(creation::STEPS.len() - 1);
-        let face = creation::STEPS[self.step].3;
+        let face = creation::STEPS[self.step].2;
         self.set_focus(if face { "face" } else { "body" });
         self.render_create();
         if creation::STEPS[self.step].0 == "callsign" {
@@ -914,6 +920,7 @@ impl Base {
         }
         call_optional(&self.observer, "disconnect", &[]);
         self.scroll.dispose();
+        self.create_scroll.dispose();
         call_optional(&self.viewer, "dispose", &[]);
         call_optional(&self.item_viewer, "dispose", &[]);
         call_optional(&self.workshop, "dispose", &[]);
@@ -969,6 +976,8 @@ fn initial(host: &JsValue) -> String {
         .replace("{{KITS}}", &kits)
         .replace("{{BASE}}", &text(&get(host, "baseUrl")))
         .replace("{{BACK}}", &text(&get(host, "backArrow")))
+        .replace("{{FACE}}", &creation::icon("face"))
+        .replace("{{BODY}}", &creation::icon("body"))
         .replace("{{COLUMNS}}", &columns)
         .replace("{{OPTIONS}}", &options)
 }
@@ -997,6 +1006,7 @@ impl BrowserBase {
         let catalog = query(&root, ".cd-catalog-items");
         let status = query(&root, ".cd-model-status");
         let scroll = BrowserScroll::new(query(&root, ".cd-dialog-content"))?;
+        let create_scroll = BrowserScroll::new(query(&root, ".cd-create-options"))?;
         let loadout = call(&host, "loadLocalLoadout", &[]);
         let saved = platform::load_local_look();
         let look = if exists(&saved) {
@@ -1035,6 +1045,7 @@ impl BrowserBase {
             load_attempted: false,
             model_ready: false,
             scroll,
+            create_scroll,
             observer: JsValue::NULL,
             listeners: vec![],
             callbacks: vec![],
