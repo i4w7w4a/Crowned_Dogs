@@ -54,7 +54,7 @@ function figureModels(): Plugin {
   };
 }
 
-// The build tells src/asset-cache.ts a content hash for every big file it serves, so the
+// The build tells packages/runtime/src/asset-cache.ts a content hash for every big file it serves, so the
 // browser keeps each file until that file changes. The dev server gets none and caches nothing.
 const PUBLIC = fileURLToPath(new URL("./public", import.meta.url));
 const WASM = fileURLToPath(new URL("../../packages/runtime/wasm/game_wasm_bg.wasm", import.meta.url));

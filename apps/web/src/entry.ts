@@ -1,4 +1,3 @@
-import "./asset-cache.ts";
 import "./style.css";
 import "./base/base.css";
 import { mount_application, unmount_application } from "../../../packages/runtime/src/index.ts";

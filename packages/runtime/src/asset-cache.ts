@@ -3,15 +3,15 @@
  * Cache Storage, so a restart loads them from disk instead of the network. Each file is
  * keyed by a hash of its content taken at build time: a changed model is fetched again,
  * an unchanged one never is. The dev server has no hashes, so nothing is cached there.
- * Must be imported before anything that fetches.
+ * The runtime imports it first, before the engine itself is fetched.
  */
 declare const __CD_ASSET_VERSIONS__: Record<string, string>;
 
 const VERSIONS: Record<string, string> = typeof __CD_ASSET_VERSIONS__ === "object" ? __CD_ASSET_VERSIONS__ : {};
 const CACHE = "cd-assets-v1";
-const base = new URL(".", document.baseURI);
+const base = typeof document === "undefined" ? null : new URL(".", document.baseURI);
 
-function versioned(input: RequestInfo | URL): string | null {
+function versioned(base: URL, input: RequestInfo | URL): string | null {
   const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   const url = new URL(href, document.baseURI);
   if (url.origin !== base.origin || !url.pathname.startsWith(base.pathname)) return null;
@@ -20,13 +20,13 @@ function versioned(input: RequestInfo | URL): string | null {
   return v ? `${url.origin}${url.pathname}?cdv=${v}` : null;
 }
 
-function install(): void {
-  if (!Object.keys(VERSIONS).length || typeof caches === "undefined") return;
+function install(base: URL | null): void {
+  if (!base || !Object.keys(VERSIONS).length || typeof caches === "undefined") return;
   const network = window.fetch.bind(window);
   let open: Promise<Cache | null> | null = null;
   const cache = () => (open ??= caches.open(CACHE).catch(() => null));
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const key = (init?.method ?? (input instanceof Request ? input.method : "GET")) === "GET" ? versioned(input) : null;
+    const key = (init?.method ?? (input instanceof Request ? input.method : "GET")) === "GET" ? versioned(base, input) : null;
     const store = key ? await cache() : null;
     if (!key || !store) return network(input, init);
     const hit = await store.match(key).catch(() => undefined);
@@ -48,5 +48,7 @@ function install(): void {
 
 // Ask the browser not to clear saved progress and cached files when space runs low.
 // Browsers decide on their own; most grant it silently to pages the player keeps using.
-try { navigator.storage?.persist?.().catch(() => {}); } catch { /* not offered here */ }
-try { install(); } catch { /* the network still works */ }
+if (base) {
+  try { navigator.storage?.persist?.().catch(() => {}); } catch { /* not offered here */ }
+  try { install(base); } catch { /* the network still works */ }
+}
