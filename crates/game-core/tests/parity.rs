@@ -35,8 +35,9 @@ fn assert_same(a: &Value, b: &Value, path: &str) {
         _ => assert_eq!(a, b, "{path}"),
     }
 }
-/// The Kulak grip left the sniper rifle and the LCU-2 laser joined it (31.10.2026). The oracle froze
-/// the old sniper rail, so cases that build on it (the Kulak on a sniper, the sniper's rail list) are skipped.
+/// The Kulak grip left the sniper rifle for the pistol and the LCU-2 laser joined the sniper (31.10.2026).
+/// The oracle froze the old rails, so cases that build on them (the Kulak on a sniper, the sniper's and
+/// the pistol's rail lists) are skipped.
 fn frozen_sniper_rail(method: &str, args: &Value) -> bool {
     fn kulak_on_sniper(v: &Value) -> bool {
         match v {
@@ -51,14 +52,17 @@ fn frozen_sniper_rail(method: &str, args: &Value) -> bool {
             _ => false,
         }
     }
-    let sniper_rail = args[1] == "rail"
-        && (args[0] == "sniper"
-            || args[0]["weapon1"]["item"]
-                .as_str()
-                .is_some_and(|i| i.starts_with("sniper")));
+    let rail_of = |class: &str| {
+        args[1] == "rail"
+            && (args[0] == class
+                || args[0]["weapon1"]["item"]
+                    .as_str()
+                    .is_some_and(|i| i.starts_with(class)))
+    };
+    let changed_rail = rail_of("sniper") || rail_of("pistol");
     kulak_on_sniper(args)
-        || (sniper_rail && matches!(method, "modsFor" | "client.weaponModsForSlot"))
-        || (sniper_rail && method == "client.equipWeaponMod" && args[2] == "rail-kulak")
+        || (changed_rail && matches!(method, "modsFor" | "client.weaponModsForSlot"))
+        || (rail_of("sniper") && method == "client.equipWeaponMod" && args[2] == "rail-kulak")
 }
 fn oracle() -> Value {
     serde_json::from_str(include_str!("oracle.json")).unwrap()

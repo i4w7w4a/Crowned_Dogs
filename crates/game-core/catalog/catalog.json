@@ -1083,6 +1083,7 @@
       "kind": "mod",
       "slot": "rail",
       "fits": [
+        "pistol",
         "shotgun",
         "rifle"
       ],
