@@ -77,7 +77,8 @@ pub fn backdrop(args: &Value) -> Result<Value, String> {
 }
 pub fn coverage(args: &Value) -> Result<Value, String> {
     let loadout = &args["loadout"];
-    let real = args["hasRifleModel"] == true && args["weapon"] == "rifle";
+    let real = args["gunModel"] == true;
+    let meshes = args["modMeshes"].as_array().cloned().unwrap_or_default();
     let mut missing: Vec<Value> = ["head", "body", "suit", "boots", "knife", "grenade"]
         .iter()
         .filter_map(|key| loadout.get(key).cloned())
@@ -94,7 +95,7 @@ pub fn coverage(args: &Value) -> Result<Value, String> {
         missing.extend(
             mods.values()
                 .filter(|id| {
-                    !real || !["optic-sokol", "muzzle-tishina"].contains(&id.as_str().unwrap_or(""))
+                    !real || !meshes.contains(&json!(id.as_str().unwrap_or("").replace('-', "_")))
                 })
                 .cloned(),
         );
@@ -112,7 +113,7 @@ pub fn coverage(args: &Value) -> Result<Value, String> {
         }
     }
     Ok(
-        json!({"exact":false,"description":"3D: комплект A и Варяг · остальные предметы пока показаны условно","missingItemIds":unique}),
+        json!({"exact":false,"description":"3D: комплект A и стволы · остальные предметы пока показаны условно","missingItemIds":unique}),
     )
 }
 

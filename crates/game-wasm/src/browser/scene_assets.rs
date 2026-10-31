@@ -81,19 +81,27 @@ pub fn load_model(host: JsValue, url: String) -> Promise {
     })
 }
 
+/// Real gun models by held class (pistol, shotgun, rifle, sniper); a class without one keeps its placeholder boxes.
+pub(super) const GUN_MODELS: &[(&str, &str)] = &[("rifle", "varyag")];
 #[wasm_bindgen(js_name = sceneLoadGuns)]
 pub fn load_guns(host: JsValue) -> Promise {
     future_to_promise(async move {
         let guns = Object::new();
-        if let Ok(model) = await_value(invoke(
-            &get(&host, "loadModel"),
-            &["models/varyag.json".into()],
-        ))
-        .await
-        {
-            let gun = get(&model, "scene");
-            prepare_varyag(&gun);
-            set(&guns, "rifle", &gun);
+        let loads: Vec<_> = GUN_MODELS
+            .iter()
+            .map(|(_, model)| {
+                await_value(invoke(
+                    &get(&host, "loadModel"),
+                    &[format!("models/{model}.json").into()],
+                ))
+            })
+            .collect();
+        for ((held, _), load) in GUN_MODELS.iter().zip(loads) {
+            if let Ok(model) = load.await {
+                let gun = get(&model, "scene");
+                prepare_varyag(&gun);
+                set(&guns, held, &gun);
+            }
         }
         Ok(guns.into())
     })
@@ -287,12 +295,7 @@ impl RustSceneHand {
                 if get(&data, "factory").as_bool() != Some(false) {
                     continue;
                 }
-                let item = string(&get(&mods, &string(&get(&data, "slot"))));
-                let name = match item.as_str() {
-                    "optic-sokol" => "optic_sokol",
-                    "muzzle-tishina" => "muzzle_tishina",
-                    _ => "",
-                };
+                let name = string(&get(&mods, &string(&get(&data, "slot")))).replace('-', "_");
                 let visible = !name.is_empty() && name == string(&get(node, "name"));
                 set(node, "visible", &visible.into());
                 let replacing = string(&get(&data, "replaces"));

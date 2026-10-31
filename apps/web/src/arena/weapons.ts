@@ -3,8 +3,6 @@ import { sceneLoadGuns, sceneGripOf, RustSceneHand } from "../../../../packages/
 import { loadModel } from "./load-model.ts";
 export type Held = "pistol" | "rifle" | "shotgun" | "sniper" | "knife" | "grenade";
 export type Guns = Partial<Record<Held, THREE.Object3D>>;
-export const MODELLED_GUNS: readonly string[] = ["rifle-varyag"];
-export const MOD_MESHES: Record<string, string> = { "optic-sokol": "optic_sokol", "muzzle-tishina": "muzzle_tishina" };
 const host = { THREE, loadModel };
 export function loadGuns(): Promise<Guns> { return sceneLoadGuns(host); }
 export function gripOf(scene: THREE.Object3D, side: "l" | "r" = "r"): THREE.Matrix4 | null { return sceneGripOf(host, scene, side); }

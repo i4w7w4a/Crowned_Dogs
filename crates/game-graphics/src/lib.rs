@@ -69,11 +69,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
                 let selected = loadout["weapon1"]["mods"][node["slot"].as_str().unwrap_or("")]
                     .as_str()
                     .unwrap_or("");
-                let mesh = match selected {
-                    "optic-sokol" => "optic_sokol",
-                    "muzzle-tishina" => "muzzle_tishina",
-                    _ => "",
-                };
+                let mesh = selected.replace('-', "_");
                 let visible = !mesh.is_empty() && node["name"] == mesh;
                 if visible {
                     if let Some(name) = node["replaces"].as_str() {

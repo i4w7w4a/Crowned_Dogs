@@ -237,9 +237,7 @@ fn model(s: &JsValue, url: String) -> Promise {
                 ("textures", array(&textures(&root))),
             ]);
             if !yes(&state, "disposed") {
-                if url == format!("{}preview/varyag.json", string(&h, "base")) {
-                    call(&h, "prepareVaryag", &[root.clone()]);
-                }
+                call(&h, "prepareVaryag", &[root.clone()]);
                 let tiers = make(&h, "TextureTiers", &[array(&[root.clone()]), text(&url)]);
                 let anisotropy = number(&state, "quality.anisotropy").min(
                     call(
@@ -352,19 +350,14 @@ fn show(s: JsValue, id: String, name: String, loadout: JsValue) -> Promise {
             );
             call(&offset, "add", &[root.clone()]);
             set(&s, "displayed", &root);
-            let rifle = id == "rifle-varyag";
+            let rifle = exists(&call(&root, "getObjectByName", &[text("socket_muzzle")]));
             if rifle {
+                // Mods show only on the gun they were fitted to.
+                let fitted = exists(&loadout) && string(&loadout, "weapon1.item") == id;
                 call(
                     &h,
                     "fitVaryag",
-                    &[
-                        root.clone(),
-                        if exists(&loadout) {
-                            loadout
-                        } else {
-                            JsValue::NULL
-                        },
-                    ],
+                    &[root.clone(), if fitted { loadout } else { JsValue::NULL }],
                 );
             }
             call(&get(&s, "scene"), "updateMatrixWorld", &[flag(true)]);

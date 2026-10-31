@@ -3,7 +3,24 @@ use crate::{core, loadout, num, text, truth};
 use serde_json::{json, Value};
 const SLOTS: [&str; 5] = ["optic", "muzzle", "rail", "mag", "stock"];
 fn models() -> Value {
-    json!({"head-k6":"tripo-helmet","body-plita2":"tripo-vest","suit-field":"tripo-suit-male","rifle-varyag":"varyag"})
+    json!({"head-k6":"tripo-helmet","body-plita2":"tripo-vest","suit-field":"tripo-suit-male",
+        "rifle-varyag":"varyag"})
+}
+/// Mods with a mesh inside their gun's model. The mesh node is the id with `_` for `-`.
+const MOD_MESHES: [&str; 4] = [
+    "optic-sokol",
+    "muzzle-tishina",
+    "mag-rifle-twin",
+    "mag-rifle-ap",
+];
+fn modelled_class(class: &Value) -> bool {
+    game_core::constants()["ITEMS"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|i| {
+            i["kind"] == "weapon" && i["weapon"] == *class && models().get(text(&i["id"])).is_some()
+        })
 }
 fn available(item: &Value) -> bool {
     match text(&item["kind"]) {
@@ -12,8 +29,8 @@ fn available(item: &Value) -> bool {
             (truth(&item["isStock"])
                 && item["fits"]
                     .as_array()
-                    .is_some_and(|a| a.iter().any(|v| v == "rifle")))
-                || ["optic-sokol", "muzzle-tishina"].contains(&text(&item["id"]))
+                    .is_some_and(|a| a.iter().any(modelled_class)))
+                || MOD_MESHES.contains(&text(&item["id"]))
         }
         _ => models().get(text(&item["id"])).is_some(),
     }

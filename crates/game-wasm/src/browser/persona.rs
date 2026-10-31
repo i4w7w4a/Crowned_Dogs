@@ -135,7 +135,7 @@ impl RustPersonaViewer {
     }
     #[wasm_bindgen(getter,js_name=previewDescription)]
     pub fn preview_description(&self) -> String {
-        "3D: комплект A и Варяг · остальные предметы пока показаны условно".into()
+        "3D: комплект A и стволы · остальные предметы пока показаны условно".into()
     }
     pub fn load(&self) -> Promise {
         let s = &self.state;
@@ -218,7 +218,8 @@ impl RustPersonaViewer {
             &options(&[
                 ("loadout", loadout),
                 ("weapon", text(&weapon(s))),
-                ("hasRifleModel", flag(exists(&get(s, "varyag")))),
+                ("gunModel", flag(exists(&shown_gun(s)))),
+                ("modMeshes", mod_meshes(&shown_gun(s))),
             ]),
         )
     }
@@ -284,29 +285,8 @@ async fn load_models(s: &JsValue) -> Result<(), JsValue> {
     );
     call(&room, "dispose", &[]);
     call(&pmrem, "dispose", &[]);
-    let a = s.clone();
-    let gun = future_to_promise(async move {
-        let h = get(&a, "host");
-        if let Ok(p) = try_call(
-            &h,
-            "loadModel",
-            &[text(&format!("{}preview/varyag.json", string(&h, "base")))],
-        ) {
-            if let Ok(gltf) = wait(p).await {
-                let root = get(&gltf, "scene");
-                if yes(&a, "disposed") || !exists(&get(&a, "renderer")) {
-                    dispose(&root, &[], true);
-                } else {
-                    set(&a, "varyag", &root);
-                    set(&root, "userData.slot", &text("weapon1"));
-                    call(&h, "prepareVaryag", &[root.clone()]);
-                    call(&get(&a, "equipment"), "add", &[root.clone()]);
-                    tune(&a, &root);
-                }
-            }
-        }
-        Ok(JsValue::UNDEFINED)
-    });
+    set(s, "guns", &Object::new());
+    let gun = load_gun(s, weapon(s));
     let a = s.clone();
     let room = future_to_promise(async move {
         load_environment(&a).await;
@@ -346,7 +326,11 @@ async fn load_models(s: &JsValue) -> Result<(), JsValue> {
         if yes(&n, "isMesh") {
             // Blender object names; the loader may swap spaces for underscores.
             let name = string(&n, "name");
-            for (prefix, slot) in [("Бронежилет", "body"), ("Каска", "head"), ("Костюм", "suit")] {
+            for (prefix, slot) in [
+                ("Бронежилет", "body"),
+                ("Каска", "head"),
+                ("Костюм", "suit"),
+            ] {
                 if name.starts_with(prefix) {
                     set(&n, "userData.slot", &text(slot));
                 }
@@ -610,27 +594,90 @@ fn weapon(s: &JsValue) -> String {
         "rifle".into()
     }
 }
+/// The real model of the shown weapon class, once loaded.
+fn shown_gun(s: &JsValue) -> JsValue {
+    get(&get(s, "guns"), &weapon(s))
+}
+fn mod_meshes(gun: &JsValue) -> JsValue {
+    let names = Array::new();
+    if exists(gun) {
+        for n in nodes(gun, false) {
+            if get(&n, "userData.factory").as_bool() == Some(false) {
+                names.push(&get(&n, "name"));
+            }
+        }
+    }
+    names.into()
+}
+/// Loads the class's gun once; until then the class shows its placeholder boxes.
+fn load_gun(s: &JsValue, class: String) -> Promise {
+    let guns = get(s, "guns");
+    let Some(&(_, model)) = super::scene_assets::GUN_MODELS
+        .iter()
+        .find(|(c, _)| *c == class)
+    else {
+        return Promise::resolve(&JsValue::UNDEFINED);
+    };
+    if !exists(&guns) || !get(&guns, &class).is_undefined() {
+        return Promise::resolve(&JsValue::UNDEFINED);
+    }
+    set(&guns, &class, &JsValue::NULL);
+    let a = s.clone();
+    future_to_promise(async move {
+        let h = get(&a, "host");
+        let url = format!("{}preview/{model}.json", string(&h, "base"));
+        if let Ok(p) = try_call(&h, "loadModel", &[text(&url)]) {
+            if let Ok(gltf) = wait(p).await {
+                let root = get(&gltf, "scene");
+                if yes(&a, "disposed") || !exists(&get(&a, "renderer")) {
+                    dispose(&root, &[], true);
+                } else {
+                    set(&root, "userData.slot", &text("weapon1"));
+                    set(&root, "visible", &flag(false));
+                    call(&h, "prepareVaryag", &[root.clone()]);
+                    call(&get(&a, "equipment"), "add", &[root.clone()]);
+                    tune(&a, &root);
+                    set(&get(&a, "guns"), &class, &root);
+                    if yes(&a, "ready") {
+                        apply_weapon(&a);
+                        render(&a);
+                    }
+                }
+            }
+        }
+        Ok(JsValue::UNDEFINED)
+    })
+}
 fn apply_weapon(s: &JsValue) {
     if !exists(&get(s, "figure")) {
         return;
     }
     let h = get(s, "host");
     let weapon = weapon(s);
-    let varyag = get(s, "varyag");
-    let real = weapon == "rifle" && exists(&varyag);
+    let gun = shown_gun(s);
+    let real = exists(&gun);
+    if !real {
+        let _ = load_gun(s, weapon.clone());
+    }
     method_if(
         &get(s, "hand"),
         "hold",
         &[if real { JsValue::NULL } else { text(&weapon) }],
     );
-    if exists(&varyag) {
-        set(&varyag, "visible", &flag(real));
+    let guns = get(s, "guns");
+    for class in Object::keys(guns.unchecked_ref::<Object>()).iter() {
+        let other = get(&guns, &class.as_string().unwrap_or_default());
+        if exists(&other) {
+            set(&other, "visible", &flag(Object::is(&other, &gun)));
+        }
+    }
+    if real {
         let loadout = get(s, "loadout");
         call(
             &h,
             "fitVaryag",
             &[
-                varyag.clone(),
+                gun.clone(),
                 if exists(&loadout) {
                     loadout
                 } else {
@@ -639,7 +686,7 @@ fn apply_weapon(s: &JsValue) {
             ],
         );
     }
-    let mount = if real { varyag } else { get(s, "hand.mount") };
+    let mount = if real { gun } else { get(s, "hand.mount") };
     if !exists(&mount) {
         return;
     }
@@ -666,7 +713,7 @@ fn apply_weapon(s: &JsValue) {
         call(&old, "removeFromParent", &[]);
         dispose(&old, &[], true);
     }
-    let sling = if real {
+    let sling = if real && weapon == "rifle" {
         call(&h, "authoredWeaponFit", &[mount])
     } else {
         call(&h, "makeSling", &[mount, flag(weapon == "pistol")])
@@ -724,7 +771,7 @@ fn release_gpu(s: &JsValue) {
         let _ = wait(pending).await;
         dispose(&roots, &extra, true);
     });
-    for name in ["figure", "hand", "varyag", "tiers", "sling"] {
+    for name in ["figure", "hand", "guns", "tiers", "sling"] {
         set(s, name, &JsValue::NULL);
     }
     set(&get(s, "scene"), "environment", &JsValue::NULL);
@@ -765,7 +812,10 @@ fn glow_material(s: &JsValue) -> JsValue {
         &[options(&[
             ("vertexShader", text(GLOW_VERTEX)),
             ("fragmentShader", text(GLOW_FRAGMENT)),
-            ("uniforms", options(&[("uColor", options(&[("value", color)]))])),
+            (
+                "uniforms",
+                options(&[("uColor", options(&[("value", color)]))]),
+            ),
             ("transparent", flag(true)),
             ("depthWrite", flag(false)),
             ("depthFunc", get(&h, "THREE.LessEqualDepth")),
@@ -853,7 +903,11 @@ fn pick(s: &JsValue, x: f64, y: f64) -> String {
         set(s, "raycaster", &ray);
     }
     call(&ray, "setFromCamera", &[point, get(s, "camera")]);
-    let hits = call(&ray, "intersectObject", &[get(s, "stage.rotating"), flag(true)]);
+    let hits = call(
+        &ray,
+        "intersectObject",
+        &[get(s, "stage.rotating"), flag(true)],
+    );
     for hit in Array::from(&hits).iter() {
         let object = get(&hit, "object");
         if yes(&object, "userData.glow") || !yes(&object, "isMesh") {
@@ -885,7 +939,14 @@ fn hover(s: &JsValue, slot: &str) {
         &[
             text("persona-hover"),
             options(&[
-                ("detail", if slot.is_empty() { JsValue::NULL } else { text(slot) }),
+                (
+                    "detail",
+                    if slot.is_empty() {
+                        JsValue::NULL
+                    } else {
+                        text(slot)
+                    },
+                ),
                 ("bubbles", flag(true)),
             ]),
         ],
