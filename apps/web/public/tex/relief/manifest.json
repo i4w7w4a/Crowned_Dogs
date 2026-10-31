@@ -701,6 +701,54 @@
             "uvCoveredPixels": 124706
           }
         },
+        "M_Kulak": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/pustelga-M_Kulak.height.png",
+          "height16": "tex/relief/pustelga-M_Kulak.height16.png",
+          "mask": "tex/relief/pustelga-M_Kulak.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/pustelga-M_Kulak.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 284,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.836704549768062e-6,
+            "robustHeightHalfRangePixels": 12.949503898620604,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_Kulak",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 511,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 328,
+            "detrendedNormalSlopeRms": 0.7072233794615401,
+            "flatNormalMeanErrorDegrees": 16.401338431809968,
+            "integratedNormalMeanErrorDegrees": 9.36322122962576,
+            "interiorPixels": 58016,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 166003
+          }
+        },
         "M_LCU": {
           "depthMeters": 0.0015999999595806003,
           "detailDepthMeters": 0.0,

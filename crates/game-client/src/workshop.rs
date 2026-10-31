@@ -18,6 +18,7 @@ const MOD_MESHES: [(&str, &[&str]); 4] = [
             "muzzle-pb9",
             "rail-luch",
             "rail-lcu",
+            "rail-kulak",
             "mag-pistol-long",
             "mag-pistol-hp",
             "mag-pistol-ap",
