@@ -1066,6 +1066,7 @@
       "slot": "rail",
       "fits": [
         "pistol",
+        "shotgun",
         "sniper"
       ],
       "name": "Лазер ЛЦУ-2",
@@ -1084,7 +1085,6 @@
       "slot": "rail",
       "fits": [
         "pistol",
-        "shotgun",
         "rifle"
       ],
       "name": "Рукоять «Кулак»",
@@ -1878,7 +1878,7 @@
         "mods": {
           "optic": "optic-blik",
           "muzzle": "muzzle-choke",
-          "rail": "rail-kulak",
+          "rail": "rail-luch",
           "mag": "mag-shotgun-box",
           "stock": "stock-shotgun-otdacha"
         }

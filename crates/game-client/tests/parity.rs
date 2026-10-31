@@ -36,16 +36,17 @@ fn same(actual: &Value, expected: &Value, path: &str) {
     }
 }
 
-/// The Kulak grip left the sniper rifle for the pistol and the LCU-2 laser joined the sniper (31.10.2026).
-/// The oracle froze the old rails, so cases that build on them (the Kulak on a sniper, the sniper's and
-/// the pistol's rail lists) are skipped.
+/// The Kulak grip left the sniper rifle for the pistol and the LCU-2 laser joined the sniper (31.10.2026);
+/// then the Kulak left the pump shotgun for the LCU-2, and the veteran shotgun kit took the Luch instead.
+/// The oracle froze the old rails, so cases that build on them (the Kulak on a sniper or a shotgun, the
+/// changed rail lists) are skipped.
 fn frozen_sniper_rail(method: &str, args: &Value) -> bool {
     fn kulak_on_sniper(v: &Value) -> bool {
         match v {
             Value::Object(o) => {
                 (o.get("item")
                     .and_then(Value::as_str)
-                    .is_some_and(|i| i.starts_with("sniper"))
+                    .is_some_and(|i| i.starts_with("sniper") || i.starts_with("shotgun"))
                     && v["mods"]["rail"] == "rail-kulak")
                     || o.values().any(kulak_on_sniper)
             }
@@ -60,10 +61,12 @@ fn frozen_sniper_rail(method: &str, args: &Value) -> bool {
                     .as_str()
                     .is_some_and(|i| i.starts_with(class)))
     };
-    let changed_rail = rail_of("sniper") || rail_of("pistol");
+    let changed_rail = rail_of("sniper") || rail_of("pistol") || rail_of("shotgun");
     kulak_on_sniper(args)
         || (changed_rail && matches!(method, "modsFor" | "client.weaponModsForSlot"))
-        || (rail_of("sniper") && method == "client.equipWeaponMod" && args[2] == "rail-kulak")
+        || ((rail_of("sniper") || rail_of("shotgun"))
+            && method == "client.equipWeaponMod"
+            && args[2] == "rail-kulak")
 }
 #[test]
 fn client_behavior_matches_the_pre_migration_game() {
