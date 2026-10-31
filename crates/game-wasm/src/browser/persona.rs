@@ -62,6 +62,8 @@ impl RustPersonaViewer {
             "pointerup",
             "pointercancel",
             "lostpointercapture",
+            "pointerleave",
+            "contextmenu",
             "webglcontextlost",
             "webglcontextrestored",
         ] {
@@ -200,6 +202,11 @@ impl RustPersonaViewer {
     pub fn rotate(&self, delta: f64) {
         rotate(&self.state, delta);
     }
+    /// Glows the equipment worn in `slot`; an empty slot clears the glow.
+    pub fn highlight(&self, slot: &str) {
+        set(&self.state, "hover", &text(slot));
+        highlight(&self.state, slot);
+    }
     #[wasm_bindgen(js_name=updateLoadout)]
     pub fn update_loadout(&self, loadout: JsValue) -> JsValue {
         let s = &self.state;
@@ -291,6 +298,7 @@ async fn load_models(s: &JsValue) -> Result<(), JsValue> {
                     dispose(&root, &[], true);
                 } else {
                     set(&a, "varyag", &root);
+                    set(&root, "userData.slot", &text("weapon1"));
                     call(&h, "prepareVaryag", &[root.clone()]);
                     call(&get(&a, "equipment"), "add", &[root.clone()]);
                     tune(&a, &root);
@@ -336,6 +344,13 @@ async fn load_models(s: &JsValue) -> Result<(), JsValue> {
     set(&figure, "name", &text("Persona_Authored_In_Blender"));
     for n in nodes(&figure, false) {
         if yes(&n, "isMesh") {
+            // Blender object names; the loader may swap spaces for underscores.
+            let name = string(&n, "name");
+            for (prefix, slot) in [("Бронежилет", "body"), ("Каска", "head"), ("Костюм", "suit")] {
+                if name.starts_with(prefix) {
+                    set(&n, "userData.slot", &text(slot));
+                }
+            }
             set(&n, "frustumCulled", &flag(false));
             set(&n, "castShadow", &flag(true));
             set(&n, "receiveShadow", &flag(true));
@@ -464,6 +479,9 @@ fn anisotropy(s: &JsValue) -> f64 {
 fn tune(s: &JsValue, root: &JsValue) {
     let value = anisotropy(s);
     for m in materials(root) {
+        if yes(&m, "isShaderMaterial") {
+            continue;
+        }
         call(
             &get(s, "host"),
             "tuneFittingMaterial",
@@ -625,6 +643,7 @@ fn apply_weapon(s: &JsValue) {
     if !exists(&mount) {
         return;
     }
+    set(&mount, "userData.slot", &text("weapon1"));
     let pose = graphics(
         "graphics.equipmentPose",
         &options(&[("weapon", text(&weapon))]),
@@ -652,6 +671,7 @@ fn apply_weapon(s: &JsValue) {
     } else {
         call(&h, "makeSling", &[mount, flag(weapon == "pistol")])
     };
+    set(&sling, "userData.slot", &text("weapon1"));
     set(s, "sling", &sling);
     call(&get(s, "equipment"), "add", &[sling]);
     tune(s, &get(s, "equipment"));
@@ -715,35 +735,264 @@ fn release_gpu(s: &JsValue) {
     set(s, "renderer", &JsValue::NULL);
     set(s, "ready", &flag(false));
 }
+/// Fresnel rim drawn over the hovered equipment: cold light hugging the silhouette.
+const GLOW_VERTEX: &str = "varying vec3 vN; varying vec3 vV;
+void main() {
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vN = normalize(normalMatrix * normal);
+  vV = normalize(-mv.xyz);
+  gl_Position = projectionMatrix * mv;
+}";
+const GLOW_FRAGMENT: &str = "uniform vec3 uColor; varying vec3 vN; varying vec3 vV;
+void main() {
+  float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 3.0);
+  gl_FragColor = vec4(uColor * (0.07 + rim * 0.75), 1.0);
+}";
+/// Overlays live on layer 1: the camera draws them, the picking ray ignores them.
+const GLOW_LAYER: f64 = 1.0;
+/// A finger held still this long inspects instead of turning the stand.
+const HOLD_MS: f64 = 380.0;
+fn glow_material(s: &JsValue) -> JsValue {
+    let existing = get(s, "glowMaterial");
+    if exists(&existing) {
+        return existing;
+    }
+    let h = get(s, "host");
+    let color = make(&h, "THREE.Color", &[num(0xdfe9ee as f64)]);
+    let material = make(
+        &h,
+        "THREE.ShaderMaterial",
+        &[options(&[
+            ("vertexShader", text(GLOW_VERTEX)),
+            ("fragmentShader", text(GLOW_FRAGMENT)),
+            ("uniforms", options(&[("uColor", options(&[("value", color)]))])),
+            ("transparent", flag(true)),
+            ("depthWrite", flag(false)),
+            ("depthFunc", get(&h, "THREE.LessEqualDepth")),
+            ("blending", get(&h, "THREE.AdditiveBlending")),
+            ("polygonOffset", flag(true)),
+            ("polygonOffsetFactor", num(-1.0)),
+            ("polygonOffsetUnits", num(-1.0)),
+        ])],
+    );
+    set(s, "glowMaterial", &material);
+    call(&get(s, "camera.layers"), "enable", &[num(GLOW_LAYER)]);
+    material
+}
+/// The slot an object belongs to, or "" when it or a parent is hidden.
+fn owner(node: &JsValue) -> String {
+    let mut slot = String::new();
+    let mut o = node.clone();
+    while exists(&o) {
+        if get(&o, "visible") == JsValue::FALSE {
+            return String::new();
+        }
+        if slot.is_empty() {
+            slot = string(&o, "userData.slot");
+        }
+        o = get(&o, "parent");
+    }
+    slot
+}
+fn highlight(s: &JsValue, slot: &str) {
+    if yes(s, "disposed") || string(s, "glowing") == slot && exists(&get(s, "glows")) {
+        return;
+    }
+    set(s, "glowing", &text(slot));
+    let old = get(s, "glows");
+    if exists(&old) {
+        for overlay in Array::from(&old).iter() {
+            call(&overlay, "removeFromParent", &[]);
+        }
+    }
+    let glows = Array::new();
+    if !slot.is_empty() {
+        let h = get(s, "host");
+        let material = glow_material(s);
+        for n in nodes(&get(s, "stage.rotating"), true) {
+            if !yes(&n, "isMesh") || yes(&n, "isSkinnedMesh") || yes(&n, "userData.glow") {
+                continue;
+            }
+            if owner(&n) != slot {
+                continue;
+            }
+            let overlay = make(&h, "THREE.Mesh", &[get(&n, "geometry"), material.clone()]);
+            set(&overlay, "userData.glow", &flag(true));
+            set(&overlay, "renderOrder", &num(2.0));
+            set(&overlay, "frustumCulled", &flag(false));
+            call(&get(&overlay, "layers"), "set", &[num(GLOW_LAYER)]);
+            call(&n, "add", &[overlay.clone()]);
+            glows.push(&overlay);
+        }
+    }
+    set(s, "glows", &glows);
+    render(s);
+}
+/// The slot under a screen point: only the nearest surface counts, so the body blocks gear behind it.
+fn pick(s: &JsValue, x: f64, y: f64) -> String {
+    if !yes(s, "ready") {
+        return String::new();
+    }
+    let h = get(s, "host");
+    let rect = call(&get(s, "canvas"), "getBoundingClientRect", &[]);
+    let (w, hgt) = (number(&rect, "width"), number(&rect, "height"));
+    if w <= 0.0 || hgt <= 0.0 {
+        return String::new();
+    }
+    let point = make(
+        &h,
+        "THREE.Vector2",
+        &[
+            num((x - number(&rect, "left")) / w * 2.0 - 1.0),
+            num(1.0 - (y - number(&rect, "top")) / hgt * 2.0),
+        ],
+    );
+    let mut ray = get(s, "raycaster");
+    if !exists(&ray) {
+        ray = make(&h, "THREE.Raycaster", &[]);
+        set(s, "raycaster", &ray);
+    }
+    call(&ray, "setFromCamera", &[point, get(s, "camera")]);
+    let hits = call(&ray, "intersectObject", &[get(s, "stage.rotating"), flag(true)]);
+    for hit in Array::from(&hits).iter() {
+        let object = get(&hit, "object");
+        if yes(&object, "userData.glow") || !yes(&object, "isMesh") {
+            continue;
+        }
+        // Hidden parts (the rifle while another gun is held) must not catch the ray.
+        let mut o = object.clone();
+        let mut shown = true;
+        while exists(&o) {
+            shown &= get(&o, "visible") != JsValue::FALSE;
+            o = get(&o, "parent");
+        }
+        if shown {
+            return owner(&object);
+        }
+    }
+    String::new()
+}
+/// Glows the slot and tells the fitting screen so its button can open.
+fn hover(s: &JsValue, slot: &str) {
+    if string(s, "hover") == slot {
+        return;
+    }
+    set(s, "hover", &text(slot));
+    highlight(s, slot);
+    let event = make(
+        &global(),
+        "CustomEvent",
+        &[
+            text("persona-hover"),
+            options(&[
+                ("detail", if slot.is_empty() { JsValue::NULL } else { text(slot) }),
+                ("bubbles", flag(true)),
+            ]),
+        ],
+    );
+    call(&get(s, "canvas"), "dispatchEvent", &[event]);
+}
+fn clear_hold(s: &JsValue) {
+    let timer = get(s, "holdTimer");
+    if exists(&timer) {
+        call(&global(), "clearTimeout", &[timer]);
+        set(s, "holdTimer", &JsValue::NULL);
+    }
+}
 fn input(s: &JsValue, event: &str, e: &JsValue) {
     let canvas = get(s, "canvas");
+    let mouse = string(e, "pointerType") == "mouse";
     match event {
         "pointerdown" => {
             if !yes(s, "active") || number(e, "button") != 0.0 || !yes(e, "isPrimary") {
                 return;
             }
+            let (x, y) = (number(e, "clientX"), number(e, "clientY"));
             set(
                 s,
                 "drag",
-                &options(&[("id", get(e, "pointerId")), ("x", get(e, "clientX"))]),
+                &options(&[
+                    ("id", get(e, "pointerId")),
+                    ("x", num(x)),
+                    ("y", num(y)),
+                    ("startX", num(x)),
+                    ("startY", num(y)),
+                    ("hold", flag(false)),
+                ]),
             );
             call(&canvas, "setPointerCapture", &[get(e, "pointerId")]);
+            clear_hold(s);
+            if !mouse {
+                let a = s.clone();
+                let id = get(e, "pointerId");
+                let timer = call(
+                    &global(),
+                    "setTimeout",
+                    &[
+                        function(move |_| {
+                            set(&a, "holdTimer", &JsValue::NULL);
+                            if get(&a, "drag.id") != id {
+                                return;
+                            }
+                            set(&a, "drag.hold", &flag(true));
+                            let slot = pick(&a, number(&a, "drag.x"), number(&a, "drag.y"));
+                            hover(&a, &slot);
+                        }),
+                        num(HOLD_MS),
+                    ],
+                );
+                set(s, "holdTimer", &timer);
+            }
         }
         "pointermove" => {
+            let (x, y) = (number(e, "clientX"), number(e, "clientY"));
             if !exists(&get(s, "drag")) || get(s, "drag.id") != get(e, "pointerId") {
+                if mouse && yes(s, "active") {
+                    let slot = pick(s, x, y);
+                    hover(s, &slot);
+                }
                 return;
             }
-            rotate(s, (number(e, "clientX") - number(s, "drag.x")) * 0.009);
-            set(s, "drag.x", &get(e, "clientX"));
+            if yes(s, "drag.hold") {
+                // Holding: the finger scans the figure instead of turning it.
+                set(s, "drag.x", &num(x));
+                set(s, "drag.y", &num(y));
+                let slot = pick(s, x, y);
+                hover(s, &slot);
+                return;
+            }
+            if (x - number(s, "drag.startX")).hypot(y - number(s, "drag.startY")) > 8.0 {
+                clear_hold(s);
+            }
+            rotate(s, (x - number(s, "drag.x")) * 0.009);
+            set(s, "drag.x", &num(x));
+            set(s, "drag.y", &num(y));
+            if mouse {
+                let slot = pick(s, x, y);
+                hover(s, &slot);
+            }
         }
         "pointerup" | "pointercancel" | "lostpointercapture" => {
             if get(s, "drag.id") != get(e, "pointerId") {
                 return;
             }
+            clear_hold(s);
+            if !mouse {
+                hover(s, "");
+            }
             set(s, "drag", &JsValue::NULL);
             if call(&canvas, "hasPointerCapture", &[get(e, "pointerId")]).is_truthy() {
                 call(&canvas, "releasePointerCapture", &[get(e, "pointerId")]);
             }
+        }
+        "pointerleave" => {
+            if mouse && !exists(&get(s, "drag")) {
+                hover(s, "");
+            }
+        }
+        "contextmenu" => {
+            // A long press must inspect the gear, not open the browser menu.
+            call(e, "preventDefault", &[]);
         }
         "webglcontextlost" => {
             call(e, "preventDefault", &[]);

@@ -54,6 +54,9 @@ struct Base {
     frame_id: JsValue,
     drifts: Vec<Drift>,
     on_battle: JsValue,
+    /// Touch long-press on a slot button: pending timer, and whether it fired.
+    hold_timer: JsValue,
+    held: bool,
     disposed: bool,
 }
 impl Base {
@@ -206,16 +209,22 @@ impl Base {
                 "aria-label",
                 &format!("{}: {name}. Выбрать предмет", self.slot_name(&slot)),
             );
-            set(
-                &button,
-                "title",
-                &js(if exists(&item) {
-                    &name
-                } else {
-                    "Не экипировано"
-                }),
-            );
             toggle(&button, "cd-slot-empty", id.is_null());
+            let details = if exists(&item) {
+                let effects: Vec<String> = Array::from(&rust("describeItem", &[item.clone()]))
+                    .iter()
+                    .filter_map(|v| v.as_string())
+                    .collect();
+                if effects.is_empty() {
+                    text(&get(&item, "note"))
+                } else {
+                    effects.join(" · ")
+                }
+            } else {
+                "Не экипировано".into()
+            };
+            content(&query(&button, ".cd-slot-info strong"), &name);
+            content(&query(&button, ".cd-slot-info small"), &details);
         }
         let kit = call(&self.host, "compileKit", &[self.loadout.clone()]);
         let armor = get(&kit, "armor");
@@ -227,6 +236,21 @@ impl Base {
         );
         html(&query(&self.root, ".cd-stats"), &stats);
         call_optional(&self.viewer, "updateLoadout", &[self.loadout.clone()]);
+    }
+    /// Unfolds one slot card ("" folds them all); a hover on the button also glows the figure.
+    fn hot(&self, slot: &str, from_button: bool) {
+        for button in all(&self.root, "[data-slot]") {
+            toggle(&button, "cd-slot-hot", data(&button, "slot") == slot);
+        }
+        if from_button {
+            call_optional(&self.viewer, "highlight", &[js(slot)]);
+        }
+    }
+    fn cancel_hold(&mut self) {
+        if exists(&self.hold_timer) {
+            call(&global(), "clearTimeout", &[self.hold_timer.clone()]);
+            self.hold_timer = JsValue::NULL;
+        }
     }
     fn open_catalog(&mut self, slot: &str, weak: Weak<RefCell<Self>>) {
         if slot == "weapon1" {
@@ -606,7 +630,7 @@ fn initial(host: &JsValue) -> String {
             }
         ));
         for slot in slots {
-            columns.push_str(&format!("<button class=\"glass cd-slot\" type=\"button\" data-slot=\"{slot}\"><span class=\"cd-slot-art\"></span><span class=\"cd-slot-label\">{}</span></button>",text(&get(&names,slot))));
+            columns.push_str(&format!("<button class=\"glass cd-slot\" type=\"button\" data-slot=\"{slot}\"><span class=\"cd-slot-face\"><span class=\"cd-slot-art\"></span><span class=\"cd-slot-label\">{}</span></span><span class=\"cd-slot-info\" aria-hidden=\"true\"><strong></strong><small></small></span></button>",text(&get(&names,slot))));
         }
         columns.push_str("</div>");
     }
@@ -684,6 +708,8 @@ impl BrowserBase {
             frame_id: JsValue::NULL,
             drifts: vec![],
             on_battle,
+            hold_timer: JsValue::NULL,
+            held: false,
             disposed: false,
         }));
         bind(&state);
@@ -756,10 +782,17 @@ fn bind(state: &Rc<RefCell<Base>>) {
         (state.borrow().catalog.clone(), "click", "item"),
         (canvas.clone(), "keydown", "rotate"),
         (canvas.clone(), "persona-preview-error", "previewError"),
+        (canvas.clone(), "persona-hover", "personaHover"),
         (canvas, "webglcontextrestored", "restored"),
     ];
     for button in all(&root, "[data-slot]") {
-        actions.push((button, "click", "slot"));
+        actions.push((button.clone(), "click", "slot"));
+        actions.push((button.clone(), "pointerenter", "slotEnter"));
+        actions.push((button.clone(), "pointerleave", "slotLeave"));
+        actions.push((button.clone(), "pointerdown", "slotDown"));
+        actions.push((button.clone(), "pointerup", "slotUp"));
+        actions.push((button.clone(), "pointercancel", "slotUp"));
+        actions.push((button, "contextmenu", "slotMenu"));
     }
     for (target, event, action) in actions {
         let target_copy = target.clone();
@@ -784,7 +817,56 @@ fn bind(state: &Rc<RefCell<Base>>) {
                     let slot = s.selected.clone();
                     s.open_catalog(&slot, weak.clone());
                 }
-                "slot" => s.open_catalog(&data(&target_copy, "slot"), weak.clone()),
+                "slot" => {
+                    // The click that ends a long press only folds the card.
+                    if s.held {
+                        s.held = false;
+                        return;
+                    }
+                    s.hot("", true);
+                    s.open_catalog(&data(&target_copy, "slot"), weak.clone());
+                }
+                "personaHover" => {
+                    let slot = get(&event, "detail").as_string().unwrap_or_default();
+                    s.hot(&slot, false);
+                }
+                "slotEnter" | "slotLeave" | "slotDown" | "slotUp" => {
+                    let mouse = text(&get(&event, "pointerType")) == "mouse";
+                    let slot = data(&target_copy, "slot");
+                    match (action, mouse) {
+                        ("slotEnter", true) => s.hot(&slot, true),
+                        ("slotLeave", true) => s.hot("", true),
+                        ("slotDown", false) => {
+                            s.held = false;
+                            s.cancel_hold();
+                            let weak = weak.clone();
+                            let fire = Closure::once_into_js(move || {
+                                let Some(state) = weak.upgrade() else {
+                                    return;
+                                };
+                                let Ok(mut s) = state.try_borrow_mut() else {
+                                    return;
+                                };
+                                s.hold_timer = JsValue::NULL;
+                                if !s.disposed {
+                                    s.held = true;
+                                    s.hot(&slot, true);
+                                }
+                            });
+                            s.hold_timer = call(&global(), "setTimeout", &[fire, number(380.0)]);
+                        }
+                        ("slotUp" | "slotLeave", false) => {
+                            s.cancel_hold();
+                            if s.held {
+                                s.hot("", true);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                "slotMenu" => {
+                    call(&event, "preventDefault", &[]);
+                }
                 "close" => {
                     call(&s.dialog, "close", &[]);
                 }

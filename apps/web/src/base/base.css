@@ -41,7 +41,20 @@ body { margin: 0; }
 .cd-slot-column { position: absolute; top: 7%; bottom: 16%; z-index: 3; display: flex; flex-direction: column; justify-content: space-between; width: 64px; pointer-events: none; }
 .cd-slot-column-0 { left: var(--cd-edge); }
 .cd-slot-column-1 { right: var(--cd-edge); }
-.cd-slot { width: 64px; height: 68px; flex: 0 0 68px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px; pointer-events: auto; }
+.cd-slot-column-0 { align-items: flex-start; }
+.cd-slot-column-1 { align-items: flex-end; }
+/* A slot is its face (icon + label); hovering, or holding a finger on it or on the worn gear, unfolds a card toward the figure. */
+.cd-slot { min-width: 64px; height: 68px; flex: 0 0 68px; border-radius: 12px; display: flex; align-items: center; padding: 8px; pointer-events: auto; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.cd-slot-column-1 .cd-slot { flex-direction: row-reverse; }
+.cd-slot-face { width: 48px; flex: 0 0 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
+.cd-slot-info { display: flex; flex-direction: column; justify-content: center; gap: 3px; max-width: 0; opacity: 0; overflow: hidden; text-align: left; transition: max-width .24s cubic-bezier(.2,.8,.2,1), opacity .14s, padding .24s cubic-bezier(.2,.8,.2,1); }
+.cd-slot-column-1 .cd-slot-info { text-align: right; }
+.cd-slot-info strong { display: block; max-width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; color: #f2f3f3; }
+.cd-slot-info small { width: 132px; font-size: 10px; line-height: 1.3; color: var(--cd-secondary); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cd-slot.cd-slot-hot { z-index: 1; --rim: linear-gradient(140deg, rgba(255,255,255,.98), rgba(255,255,255,.42) 26%, rgba(255,255,255,.22) 54%, rgba(255,255,255,.78)); box-shadow: inset 0 1px 1px rgba(255,255,255,.3), inset 0 0 16px rgba(255,255,255,.2), 0 0 22px rgba(214,226,232,.2), 0 6px 18px rgba(0,0,0,.2); }
+.cd-slot-hot .cd-slot-info { max-width: 144px; opacity: 1; padding: 0 6px 0 4px; transition: max-width .26s cubic-bezier(.2,.8,.2,1), opacity .2s .06s, padding .26s cubic-bezier(.2,.8,.2,1); }
+.cd-slot-column-1 .cd-slot-hot .cd-slot-info { padding: 0 4px 0 6px; }
+.cd-slot-hot .cd-slot-art, .cd-slot-hot .cd-slot-label { color: #fff; }
 .cd-slot-art { width: 34px; height: 34px; display: grid; place-items: center; }
 .cd-slot-art svg { display: block; width: 100%; height: 100%; }
 .cd-slot-label { font-size: 9px; letter-spacing: .01em; white-space: nowrap; }
@@ -83,7 +96,7 @@ body { margin: 0; }
 .cd-equipped-check svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .cd-dialog .cd-catalog-error { font-size: 11px; color: #e5bd9d; margin: 0 0 12px; }
 @media (min-width: 700px) { .cd-shell { height: min(calc(100dvh - 32px), 960px); margin-top: 16px; border-radius: 22px; } }
-@media (max-height: 720px) { .cd-home-title { margin-top: 20px; } .cd-home-title > p:last-child { font-size: 10px; max-width: none; } .cd-current-kit { padding: 9px 0 12px; } .cd-slot { width: 60px; height: 60px; flex-basis: 60px; padding: 7px; gap: 3px; } .cd-slot-column { width: 60px; top: 4%; bottom: 17%; } .cd-slot-art { width: 30px; height: 30px; } .cd-slot-label { font-size: 8px; } .cd-primary { min-height: 48px; font-size: 15px; } .cd-dialog-header { padding-top: 16px; } }
+@media (max-height: 720px) { .cd-home-title { margin-top: 20px; } .cd-home-title > p:last-child { font-size: 10px; max-width: none; } .cd-current-kit { padding: 9px 0 12px; } .cd-slot { min-width: 60px; height: 60px; flex-basis: 60px; padding: 7px; } .cd-slot-face { width: 46px; flex-basis: 46px; gap: 3px; } .cd-slot-column { width: 60px; top: 4%; bottom: 17%; } .cd-slot-art { width: 30px; height: 30px; } .cd-slot-label { font-size: 8px; } .cd-primary { min-height: 48px; font-size: 15px; } .cd-dialog-header { padding-top: 16px; } }
 @media (prefers-reduced-motion: reduce) { .cd-shell *, .cd-shell *::before, .cd-shell *::after { transition: none !important; } }
 @media (max-height: 480px) { .cd-select-options.sheet.glass { grid-template-columns: repeat(4, 1fr); } .cd-select-options [role="option"] { padding: 8px; font-size: 10px; } }
 
