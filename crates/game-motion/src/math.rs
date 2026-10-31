@@ -12,8 +12,12 @@ pub fn compute(kind: &str, v: &[f64]) -> Result<Vec<f64>, String> {
         "settle" => 8,
         "armTriangles" => 3,
         "viewmodel" => 14,
-        "viewmodelTransforms" => 59,
-        "placeHand" => 41,
+        "viewmodelTransforms" => 42,
+        "placeHand" => 49,
+        "squareShoulders" => 23,
+        "support" => 34,
+        "supportArm" => 37,
+        "wristPole" => 17,
         "collapse" => 15,
         "holdOut" => 15,
         "flash" => 3,
@@ -270,43 +274,88 @@ pub fn compute(kind: &str, v: &[f64]) -> Result<Vec<f64>, String> {
                 (r * scale.z).extend(0.0),
                 p.extend(1.0),
             );
-            let right = gun * matrix(v, 26).inverse();
-            let mut out = right.to_cols_array().to_vec();
-            let stance = v[42] as usize;
-            let (at, along, across) = if stance == 0 {
-                (
-                    DVec3::new(-0.01, -0.03, -0.035),
-                    DVec3::new(0.55, -0.45, 0.7),
-                    DVec3::new(0.5, 0.85, 0.0),
-                )
-            } else {
-                (
-                    DVec3::new(if stance == 2 { 0.24 } else { 0.2 }, 0.0, -0.005),
-                    DVec3::new(0.35, 0.35, 0.87),
-                    DVec3::X,
-                )
-            };
-            let along = along.normalize();
-            let across = normalized(across - along * across.dot(along));
-            let support = DMat4::from_cols(
-                along.extend(0.0),
-                across.extend(0.0),
-                along.cross(across).extend(0.0),
-                at.extend(1.0),
-            );
-            out.extend((gun * support * matrix(v, 43).inverse()).to_cols_array());
-            out
+            (gun * matrix(v, 26).inverse()).to_cols_array().to_vec()
         }
         "placeHand" => {
             let (_, q, to) = matrix(v, 0).to_scale_rotation_translation();
             let w = v[35];
             let target = vec(v, 16).lerp(to, w);
             let camera = matrix(v, 19);
-            let pole = camera.transform_vector3(DVec3::new(0.3 * v[36], -0.8, 0.05)) + target;
+            // The elbow bends between where a straight wrist puts it and straight down the screen:
+            // the first alone swings the forearms across the view, the second alone kinks the wrists.
+            let shoulder = vec(v, 41);
+            let axis = normalized(target - shoulder);
+            let middle = (shoulder + target) * 0.5;
+            let flat = |d: DVec3| normalized(d - axis * d.dot(axis));
+            let elbow = target - normalized(q * vec(v, 44)) * v[47];
+            let down = camera.transform_vector3(DVec3::new(0.3 * v[36], -0.8, 0.05));
+            let bend = normalized(flat(elbow - middle) * (1.0 - v[48]) + flat(down) * v[48]);
             let mut out = target.to_array().to_vec();
-            appendv(&mut out, pole);
+            appendv(&mut out, middle + bend * 0.3);
             appendq(&mut out, q);
             out
+        }
+        "squareShoulders" => {
+            // Turns the chest so the shoulder line runs along the camera's right, `v[22]` of the way.
+            let mut line = vec(v, 3) - vec(v, 0);
+            line.y = 0.0;
+            let line = normalized(line);
+            let mut right = matrix(v, 6).transform_vector3(DVec3::X);
+            right.y = 0.0;
+            let right = normalized(right);
+            let angle = line.cross(right).y.atan2(line.dot(right)) * v[22];
+            let mut out = line.to_array().to_vec();
+            appendv(&mut out, DQuat::from_rotation_y(angle) * line);
+            out
+        }
+        "support" => {
+            let (at, along, across, fingers, thumb) = support(v[32] as usize, v[33] != 0.0);
+            let along = normalized(along);
+            let across = normalized(across - along * across.dot(along));
+            let frame = DMat4::from_cols(
+                along.extend(0.0),
+                across.extend(0.0),
+                along.cross(across).extend(0.0),
+                at.extend(1.0),
+            );
+            let mut out = (matrix(v, 0) * frame * matrix(v, 16).inverse())
+                .to_cols_array()
+                .to_vec();
+            out.extend([fingers, thumb]);
+            out
+        }
+        "supportArm" => {
+            let (_, q, target) = matrix(v, 0).to_scale_rotation_translation();
+            let w = v[16];
+            let (clavicle, upper, lower, hand) = (vec(v, 17), vec(v, 20), vec(v, 23), vec(v, 26));
+            // An arm that would lock straight brings its shoulder forward, as a real one does.
+            let from = normalized(upper - clavicle);
+            let toward = normalized(target - clavicle);
+            let need = upper.distance(target) - (upper.distance(lower) + lower.distance(hand)) * 0.94;
+            let axis = from.cross(toward);
+            let to = if need > 0.0 && axis.length_squared() > 1e-12 {
+                let angle = (need / clavicle.distance(upper))
+                    .min(0.6)
+                    .min(from.angle_between(toward));
+                DQuat::from_axis_angle(axis.normalize(), angle * w) * from
+            } else {
+                from
+            };
+            let turn = quat(v, 33);
+            let pole = target + turn * DVec3::X * 0.35 - DVec3::Y * 0.6 - turn * DVec3::Z * 0.1;
+            let mut out = from.to_array().to_vec();
+            appendv(&mut out, to);
+            appendv(&mut out, hand.lerp(target, w));
+            appendv(&mut out, lower.lerp(pole, w));
+            appendq(&mut out, quat(v, 29).slerp(q, w));
+            out
+        }
+        "wristPole" => {
+            // A pole that puts the elbow where the forearm runs straight into the hand.
+            let (shoulder, lower, hand) = (vec(v, 0), vec(v, 3), vec(v, 6));
+            let elbow = hand - normalized(quat(v, 9) * vec(v, 13)) * lower.distance(hand);
+            let pole = elbow + (elbow - (shoulder + hand) * 0.5);
+            lower.lerp(pole, v[16]).to_array().to_vec()
         }
         "collapse" => {
             let t = v[0];
@@ -431,4 +480,30 @@ pub fn compute(kind: &str, v: &[f64]) -> Result<Vec<f64>, String> {
         }
         _ => unreachable!(),
     })
+}
+
+/// Where the support hand holds each gun, in the gun's mount (x along the bore, y up): the palm
+/// centre, the hand's long and across axes, then how far its fingers and its thumb close.
+/// Tuned on close-ups (Art, 2026-11-01): a two-hand wrap on the pistol, the hand far out on the
+/// pump and the forends, and the vertical foregrip on the pistol and the rifle when fitted.
+fn support(stance: usize, foregrip: bool) -> (DVec3, DVec3, DVec3, f64, f64) {
+    // Under a barrel or a pump: the fingers wrap across it, tilted `th` and swept forward `ph`.
+    let barrel = |at: [f64; 3], th: f64, ph: f64| {
+        let along = DVec3::new(ph.sin(), -ph.cos() * th.sin(), ph.cos() * th.cos());
+        (DVec3::from(at), along, DVec3::new(0.0, th.cos(), th.sin()).cross(along))
+    };
+    // Round an upright handle (the foregrip, or the pistol hand's front).
+    let handle = |at: [f64; 3], th: f64, ph: f64| {
+        let turn = DQuat::from_rotation_y(th) * DQuat::from_rotation_z(ph);
+        (DVec3::from(at), turn * DVec3::X, turn * DVec3::Y)
+    };
+    let ((at, along, across), fingers, thumb) = match (stance, foregrip) {
+        (0, false) => (handle([0.0231, -0.0414, -0.0757], -0.179, 0.179), 0.74, -1.0),
+        (0, true) => (handle([0.1025, -0.046, -0.0291], 0.069, 0.638), 1.29, 1.09),
+        (1, true) => (handle([0.3151, -0.022, -0.0266], 0.082, 0.624), 1.3, 0.74),
+        (2, _) => (barrel([0.43, -0.014, -0.0391], 0.253, 0.462), 0.82, -0.55),
+        (3, _) => (barrel([0.40, 0.0375, -0.0363], 0.331, 0.448), 0.82, -0.84),
+        _ => (barrel([0.275, 0.0514, -0.0378], 0.26, 0.427), 0.72, -0.76),
+    };
+    (at, along, across, fingers, thumb)
 }

@@ -205,6 +205,54 @@ impl RustGrip {
     }
 }
 
+/// Runs `measure` with the model in the skin's bind pose, then puts every bone back.
+/// Grips and palms must be measured there: a clip's curled fingers would skew them.
+pub(super) fn at_bind<T>(three: &JsValue, model: &JsValue, measure: impl FnOnce() -> T) -> T {
+    let _keep = ScratchPose::new(three, model);
+    let hand = find(model, &["hand_l"]);
+    let skeleton = descendants(model)
+        .into_iter()
+        .filter(|o| boolean(&get(o, "isSkinnedMesh")))
+        .map(|o| get(&o, "skeleton"))
+        .find(|s| values(&get(s, "bones")).contains(&hand));
+    if let Some(skeleton) = skeleton {
+        call(&skeleton, "pose", &[]);
+        // `pose` also restores the export's root scale; the figure is built at 1.
+        for bone in values(&get(&skeleton, "bones")) {
+            if !boolean(&get(&get(&bone, "parent"), "isBone")) {
+                call(&get(&bone, "scale"), "setScalar", &[1.into()]);
+            }
+        }
+        update(model);
+    }
+    measure()
+}
+/// The support hand's cup, its fingers closed `fingers` times and its thumb `thumb` times as far.
+pub(super) fn cupped(fingers: f64, thumb: f64) -> JsValue {
+    let cup = [
+        ("thumb", [10., 20., 10.]),
+        ("index", [45., 55., 35.]),
+        ("middle", [50., 60., 35.]),
+        ("ring", [52., 60., 35.]),
+        ("pinky", [55., 60., 35.]),
+    ];
+    let pairs = cup.map(|(finger, angles)| {
+        let k = if finger == "thumb" { thumb } else { fingers };
+        (finger, array(&angles.map(|a| (a * k).into())).into())
+    });
+    object(&pairs)
+}
+/// The forearm's line in the hand bone's own frame, measured at the current pose.
+pub(super) fn forearm(three: &JsValue, lower: &JsValue, hand: &JsValue) -> JsValue {
+    let line = world_position(three, hand);
+    call(&line, "sub", &[world_position(three, lower)]);
+    call(&line, "normalize", &[]);
+    let q = world_quat(three, hand);
+    call(&q, "invert", &[]);
+    call(&line, "applyQuaternion", &[q]);
+    line
+}
+
 /// Scratch mixers own temporary animation state and always restore it on scope exit.
 pub(super) struct ScratchPose {
     model: JsValue,

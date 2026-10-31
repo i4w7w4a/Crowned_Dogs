@@ -1,4 +1,5 @@
-//! Pistol reach correction and shot effects (flash, smoke, tracer, bursts), independent of the renderer loop.
+//! Two-hand holds (pistol reach, the support hand on the gun) and shot effects (flash, smoke,
+//! tracer, bursts), independent of the renderer loop.
 use super::{bridge::*, kinematics::*};
 use wasm_bindgen::prelude::*;
 
@@ -7,33 +8,56 @@ struct Arm {
     lower: JsValue,
     hand: JsValue,
     out: f64,
+    /// The forearm's line in the hand's frame at bind: a wrist lined up with it is straight.
+    forearm: JsValue,
+}
+/// The left hand's grip on the gun: its clavicle, finger curls and palm frame, all from bind.
+struct Support {
+    clavicle: JsValue,
+    grip: RustGrip,
+    palm: JsValue,
 }
 #[wasm_bindgen]
 pub struct RustHoldOut {
     three: JsValue,
+    model: JsValue,
     arms: Vec<Arm>,
+    support: Option<Support>,
 }
 #[wasm_bindgen]
 impl RustHoldOut {
     #[wasm_bindgen(constructor)]
     pub fn new(three: JsValue, model: &JsValue) -> Self {
         let mut arms = vec![];
-        for (side, out) in [("l", 1.), ("r", -1.)] {
-            let bone = |name: &str| find(model, &[&format!("{name}_{side}")]);
-            let arm = Arm {
-                upper: bone("upperarm"),
-                lower: bone("lowerarm"),
-                hand: bone("hand"),
-                out,
-            };
-            if [&arm.upper, &arm.lower, &arm.hand]
-                .iter()
-                .all(|o| present(o))
-            {
-                arms.push(arm);
+        let support = at_bind(&three, model, || {
+            for (side, out) in [("l", 1.), ("r", -1.)] {
+                let bone = |name: &str| find(model, &[&format!("{name}_{side}")]);
+                let (upper, lower, hand) = (bone("upperarm"), bone("lowerarm"), bone("hand"));
+                if [&upper, &lower, &hand].iter().all(|o| present(o)) {
+                    arms.push(Arm {
+                        forearm: forearm(&three, &lower, &hand),
+                        upper,
+                        lower,
+                        hand,
+                        out,
+                    });
+                }
             }
+            let host = object(&[("THREE", three.clone())]);
+            let palm = super::scene_assets::grip_of(host, model.clone(), "l".into());
+            let clavicle = find(model, &["clavicle_l"]);
+            (present(&palm) && present(&clavicle)).then(|| Support {
+                clavicle,
+                grip: RustGrip::new(&three, model, "l"),
+                palm,
+            })
+        });
+        Self {
+            three,
+            model: model.clone(),
+            arms,
+            support,
         }
-        Self { three, arms }
     }
     pub fn apply(&self, group: &JsValue, weight: f64) {
         if weight < 0.01 || self.arms.len() < 2 {
@@ -58,6 +82,62 @@ impl RustHoldOut {
             );
             rig_set_world_quat(&self.three, &arm.hand, &keep);
         }
+    }
+    /// Puts the left hand on the gun that `hand` shows (a wrap round the pistol hand, the pump,
+    /// the forend or the foregrip) and, on the pistol, lines the right forearm up with its wrist.
+    /// `weight` is how far the body holds the gun up.
+    pub fn support(&self, hand: &JsValue, weight: f64) {
+        let held = string(&get(hand, "held"));
+        let stance = ["pistol", "rifle", "shotgun", "sniper"]
+            .iter()
+            .position(|s| *s == held);
+        let (Some(stance), Some(support)) = (stance, self.support.as_ref()) else {
+            return;
+        };
+        if weight < 0.01 || self.arms.len() < 2 {
+            return;
+        }
+        let three = &self.three;
+        if stance == 0 {
+            let arm = &self.arms[1];
+            let keep = world_quat(three, &arm.hand);
+            let mut input = vec![];
+            for bone in [&arm.upper, &arm.lower, &arm.hand] {
+                input.extend(components(&world_position(three, bone)));
+            }
+            input.extend(components(&keep));
+            input.extend(components(&arm.forearm));
+            input.push(weight);
+            let pole = math("wristPole", &input);
+            let at = world_position(three, &arm.hand);
+            rig_reach(three, &arm.upper, &arm.lower, &arm.hand, &at, &vector(three, &pole));
+            rig_set_world_quat(three, &arm.hand, &keep);
+        }
+        let mount = get(hand, "mount");
+        call(&mount, "updateWorldMatrix", &[true.into(), false.into()]);
+        let mut input = numbers(&get(&get(&mount, "matrixWorld"), "elements"));
+        input.extend(numbers(&get(&support.palm, "elements")));
+        input.extend([stance as f64, f64::from(boolean(&get(hand, "foregrip")))]);
+        let grip = math("support", &input);
+        let arm = &self.arms[0];
+        let mut input = grip[..16].to_vec();
+        input.push(weight);
+        for bone in [&support.clavicle, &arm.upper, &arm.lower, &arm.hand] {
+            input.extend(components(&world_position(three, bone)));
+        }
+        input.extend(components(&world_quat(three, &arm.hand)));
+        input.extend(components(&world_quat(three, &self.model)));
+        let pose = math("supportArm", &input);
+        if pose[..3] != pose[3..6] {
+            let (from, to) = (vector(three, &pose[..3]), vector(three, &pose[3..6]));
+            rig_turn(three, &support.clavicle, &from, &to);
+        }
+        let (target, pole) = (vector(three, &pose[6..9]), vector(three, &pose[9..12]));
+        rig_reach(three, &arm.upper, &arm.lower, &arm.hand, &target, &pole);
+        let rotation = quaternion(three);
+        upload(&rotation, &pose[12..16]);
+        rig_set_world_quat(three, &arm.hand, &rotation);
+        support.grip.close(&cupped(grip[16], grip[17]), weight);
     }
 }
 

@@ -17,5 +17,7 @@ export class Hand {
   fit(mods: Partial<Record<string, string>> = {}): void { if (!this.disposed) this.controller.fit(mods); }
   hold(what: Held | null): void { if (!this.disposed) this.controller.hold(what); }
   muzzle(out: THREE.Vector3): boolean { return !this.disposed && this.controller.muzzle(out); }
+  get held(): Held | null { return this.disposed ? null : (this.controller.held as Held | null) ?? null; }
+  get foregrip(): boolean { return !this.disposed && this.controller.foregrip; }
   dispose(): void { if (!this.disposed) { this.disposed = true; this.controller.free(); } }
 }

@@ -305,6 +305,19 @@ impl RustMotion {
             .map(|action| num(&call(action, "getEffectiveWeight", &[])))
             .unwrap_or(0.)
     }
+    /// How much of the body holds a gun up in both hands, ready or firing (0..1).
+    #[wasm_bindgen(getter, js_name = gunReady)]
+    pub fn gun_ready(&self) -> f64 {
+        let s = self.state.borrow();
+        let held = ["ready_", "fire_"].iter().flat_map(|clip| {
+            ["pistol", "rifle", "shotgun"].map(|gun| format!("{clip}{gun}"))
+        });
+        held.filter_map(|name| s.layers[0].get(&name))
+            .filter(|action| boolean(&call(action, "isRunning", &[])))
+            .map(|action| num(&call(action, "getEffectiveWeight", &[])))
+            .sum::<f64>()
+            .min(1.)
+    }
     pub fn arm(&self, stance: &str) {
         send(&self.state, "arm", json!({"stance": stance}));
     }

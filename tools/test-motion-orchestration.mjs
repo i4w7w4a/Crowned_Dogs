@@ -72,7 +72,6 @@ const oldMotion = await original("motion.ts");
 const oldFall = await original("fall.ts", { ...oldIK, aim: oldIK.turn });
 const oldHold = await original("hold.ts", oldIK);
 const oldRig = await original("rig.ts");
-const oldView = await original("viewmodel.ts", { ...oldIK, gripOf: () => new THREE.Matrix4() });
 const oldDust = await original("dust.ts");
 
 function constraints(useRust) {
@@ -143,22 +142,42 @@ function collapse(useRust) {
 }
 equal(collapse(true), collapse(false), "collapse/floor contact");
 
-function firstPerson(useRust) {
+function finite(r, path) {
+  for (const [name, values] of Object.entries(state(r))) assert.ok(values.every(Number.isFinite), `${path}: ${name}`);
+}
+// The grips were redrawn on purpose (Art, 2026-11-01: a straight pistol wrist, the support hand on the pump,
+// the forend or the foregrip), so first person and the support hand no longer match browser90; they must stay sane.
+function firstPerson() {
   const r = rig(), mount = new THREE.Group(); mount.position.set(.02, .01, -.03); mount.scale.setScalar(.9); r.bones.hand_r.add(mount);
-  const hand = { mount }, camera = new THREE.PerspectiveCamera(50, 9/16, .1, 50); camera.position.set(0, 1.7, 0); camera.updateMatrixWorld(true);
-  const view = useRust ? new RustViewmodel(THREE, r.model, hand, new THREE.Matrix4()) : new oldView.Viewmodel(r.model, hand);
-  const pose = new oldMotion.Pose(r.model), output = [];
-  for (const stance of ["pistol", "rifle", "shotgun", "sniper"]) {
+  const hand = { mount, foregrip: false }, camera = new THREE.PerspectiveCamera(50, 9/16, .1, 50); camera.position.set(0, 1.7, 0); camera.updateMatrixWorld(true);
+  const view = new RustViewmodel(THREE, r.model, hand, new THREE.Matrix4());
+  const pose = new oldMotion.Pose(r.model);
+  for (const [stance, foregrip] of [["pistol", false], ["pistol", true], ["rifle", false], ["rifle", true], ["shotgun", false], ["sniper", false]]) {
+    hand.foregrip = foregrip;
     for (let frame = 0; frame < 12; frame++) {
       pose.restore(); if (frame === 4) view.shot();
       view.update(.04, frame < 10, frame > 2 && frame < 8, stance, camera, new THREE.Vector3(.1, 1.5, -6));
-      output.push([state(r), mount.position.toArray()]);
+      finite(r, `first person ${stance}`);
     }
   }
   view.off(); equal(mount.position.toArray(), [.02,.01,-.03], "viewmodel off restores mount");
-  if (useRust) view.free(); return output;
+  view.free();
 }
-equal(firstPerson(true), firstPerson(false), "first person");
+firstPerson();
+
+function support() {
+  const r = rig(), b = r.bones, clavicle = new THREE.Bone(), mount = new THREE.Group();
+  clavicle.name = "clavicle_l"; clavicle.position.set(.05, .1, 0); b.spine_03.add(clavicle); clavicle.attach(b.upperarm_l);
+  mount.position.set(.02, .01, -.03); b.hand_r.add(mount); r.group.updateMatrixWorld(true);
+  const hold = new RustHoldOut(THREE, r.model), before = state(r);
+  hold.support({ held: "rifle", mount, foregrip: false }, 0); equal(state(r), before, "support waits for a raised gun");
+  hold.support({ held: "knife", mount, foregrip: false }, 1); equal(state(r), before, "a knife takes no support hand");
+  for (const [held, foregrip] of [["pistol", false], ["pistol", true], ["rifle", false], ["rifle", true], ["shotgun", false], ["sniper", false]]) {
+    hold.support({ held, mount, foregrip }, 1); finite(r, `support ${held}`);
+  }
+  hold.free();
+}
+support();
 
 function meshMask(useRust) {
   const r = rig(), bounds = new THREE.Box3(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 2, 1));
@@ -220,4 +239,4 @@ function flash(useRust) {
   } finally { Math.random = random; }
 }
 equal(flash(true), flash(false), "muzzle-flash lifetime");
-console.log("Motion orchestration: 8 Three.js parity and lifecycle suites passed (silent).");
+console.log("Motion orchestration: 9 Three.js parity, grip and lifecycle suites passed (silent).");

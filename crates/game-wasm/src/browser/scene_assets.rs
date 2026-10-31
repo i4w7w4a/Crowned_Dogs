@@ -176,6 +176,8 @@ pub struct RustSceneHand {
     mount: JsValue,
     items: Vec<(String, JsValue)>,
     shown: Option<String>,
+    /// The guns that wear the vertical foregrip now; the support hand holds it instead of the forend.
+    foregrip: HashSet<String>,
     muzzles: HashMap<String, JsValue>,
     /// The mount's rest turn in the hand, and how far a round's kick still lifts the muzzle (0..1).
     rest: JsValue,
@@ -285,6 +287,7 @@ impl RustSceneHand {
             mount,
             items,
             shown: None,
+            foregrip: HashSet::new(),
             muzzles: HashMap::new(),
             rest,
             recoil: 0.,
@@ -296,9 +299,20 @@ impl RustSceneHand {
     pub fn mount(&self) -> JsValue {
         self.mount.clone()
     }
+    /// What the hand shows now ("pistol", "rifle", ... or null).
+    #[wasm_bindgen(getter)]
+    pub fn held(&self) -> JsValue {
+        self.shown.as_deref().map(JsValue::from).unwrap_or(JsValue::NULL)
+    }
+    /// True when the gun in the hand wears the vertical foregrip.
+    #[wasm_bindgen(getter)]
+    pub fn foregrip(&self) -> bool {
+        self.shown.as_ref().is_some_and(|held| self.foregrip.contains(held))
+    }
     pub fn fit(&mut self, mods: JsValue) {
         self.muzzles.clear();
-        for (_, group) in &self.items {
+        self.foregrip.clear();
+        for (held, group) in &self.items {
             let mut replaced = HashSet::new();
             let all = nodes(group);
             for node in &all {
@@ -312,6 +326,9 @@ impl RustSceneHand {
                 let replacing = string(&get(&data, "replaces"));
                 if visible && !replacing.is_empty() {
                     replaced.insert(replacing);
+                }
+                if visible && name == "rail_kulak" {
+                    self.foregrip.insert(held.clone());
                 }
             }
             for node in all {

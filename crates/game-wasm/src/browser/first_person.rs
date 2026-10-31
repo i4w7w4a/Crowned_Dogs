@@ -11,6 +11,9 @@ pub struct RustViewmodel {
     left: RustGrip,
     palm: JsValue,
     arms: Option<[[JsValue; 3]; 2]>,
+    /// Each forearm's line in its hand's frame at bind (left, right): a wrist on it is straight.
+    forearms: [JsValue; 2],
+    spine: JsValue,
     weight: f64,
     aiming: f64,
     since: f64,
@@ -20,17 +23,13 @@ pub struct RustViewmodel {
     at: [f64; 3],
     placed: bool,
     trigger: JsValue,
-    cup: JsValue,
     pistol_right: JsValue,
-    pistol_left: JsValue,
 }
 #[wasm_bindgen]
 impl RustViewmodel {
     #[wasm_bindgen(constructor)]
     pub fn new(three: JsValue, model: &JsValue, hand: JsValue, palm: JsValue) -> Self {
         let base = clone_value(&get(&get(&hand, "mount"), "position"));
-        let right = RustGrip::new(&three, model, "r");
-        let left = RustGrip::new(&three, model, "l");
         let arms = ["l", "r"].map(|side| {
             ["upperarm", "lowerarm", "hand"].map(|name| find(model, &[&format!("{name}_{side}")]))
         });
@@ -39,6 +38,20 @@ impl RustViewmodel {
         } else {
             None
         };
+        let (right, left, palm, forearms) = at_bind(&three, model, || {
+            let host = object(&[("THREE", three.clone())]);
+            let bind = super::scene_assets::grip_of(host, model.clone(), "l".into());
+            let forearms = match &arms {
+                Some(arms) => arms.clone().map(|[_, lower, hand]| forearm(&three, &lower, &hand)),
+                None => [JsValue::NULL, JsValue::NULL],
+            };
+            (
+                RustGrip::new(&three, model, "r"),
+                RustGrip::new(&three, model, "l"),
+                if present(&bind) { bind } else { palm },
+                forearms,
+            )
+        });
         let trigger = serde_json::json!({"thumb":[15,35,25],"index":[5,10,5],"middle":[75,85,45],"ring":[78,85,45],"pinky":[80,85,45]});
         let mut pistol_right = trigger.clone();
         pistol_right["thumb"] = serde_json::json!([-25, -10, 0]);
@@ -50,6 +63,8 @@ impl RustViewmodel {
             left,
             palm,
             arms,
+            forearms,
+            spine: find(model, &["spine_03"]),
             weight: 0.,
             aiming: 0.,
             since: -1.,
@@ -60,12 +75,6 @@ impl RustViewmodel {
             placed: false,
             trigger: json(&trigger),
             pistol_right: json(&pistol_right),
-            cup: json(
-                &serde_json::json!({"thumb":[10,20,10],"index":[45,55,35],"middle":[50,60,35],"ring":[52,60,35],"pinky":[55,60,35]}),
-            ),
-            pistol_left: json(
-                &serde_json::json!({"thumb":[-25,-10,0],"index":[65,75,40],"middle":[68,78,40],"ring":[70,80,40],"pinky":[72,80,40]}),
-            ),
         }
     }
     pub fn shot(&mut self) {
@@ -124,8 +133,21 @@ impl RustViewmodel {
             return;
         }
         call(camera, "updateMatrixWorld", &[]);
+        let view = numbers(&get(&get(camera, "matrixWorld"), "elements"));
+        // The body stands turned, left shoulder forward; squared to the camera, the elbows
+        // no longer fold and the wrists stay straight. The camera is already placed.
+        if present(&self.spine) {
+            let [left, right] = self.arms.as_ref().unwrap();
+            let mut input = components(&world_position(&self.three, &left[0]));
+            input.extend(components(&world_position(&self.three, &right[0])));
+            input.extend(&view);
+            input.push(self.weight);
+            let turn = math("squareShoulders", &input);
+            let (from, to) = (vector(&self.three, &turn[..3]), vector(&self.three, &turn[3..]));
+            rig_turn(&self.three, &self.spine, &from, &to);
+        }
         call(&mount, "updateMatrix", &[]);
-        let mut input = numbers(&get(&get(camera, "matrixWorld"), "elements"));
+        let mut input = view;
         input.extend(components(aim));
         input.extend(&frame[10..14]);
         input.extend(components(&call(
@@ -134,25 +156,26 @@ impl RustViewmodel {
             &[vector(&self.three, &[])],
         )));
         input.extend(numbers(&get(&get(&mount, "matrix"), "elements")));
-        input.push(stance_index);
-        let palm = if present(&self.palm) {
-            self.palm.clone()
-        } else {
-            make(&self.three, "Matrix4", &[])
-        };
-        input.extend(numbers(&get(&palm, "elements")));
-        let matrices = math("viewmodelTransforms", &input);
-        self.place(1, &matrices[..16], camera);
+        self.place(1, &math("viewmodelTransforms", &input), camera);
         if present(&self.palm) {
-            self.place(0, &matrices[16..32], camera);
+            // The left hand goes where the gun really is once the right arm has reached.
+            call(&mount, "updateWorldMatrix", &[true.into(), false.into()]);
+            let mut input = numbers(&get(&get(&mount, "matrixWorld"), "elements"));
+            input.extend(numbers(&get(&self.palm, "elements")));
+            let foregrip = boolean(&get(&self.hand, "foregrip"));
+            // An unknown gun is held like the rifle.
+            let held = if stance_index < 0. { 1. } else { stance_index };
+            input.extend([held, f64::from(foregrip)]);
+            let grip = math("support", &input);
+            self.place(0, &grip[..16], camera);
+            self.left.close(&cupped(grip[16], grip[17]), self.weight);
         }
-        let (right, left) = if stance == "pistol" {
-            (&self.pistol_right, &self.pistol_left)
+        let right = if stance == "pistol" {
+            &self.pistol_right
         } else {
-            (&self.trigger, &self.cup)
+            &self.trigger
         };
         self.right.close(right, self.weight);
-        self.left.close(left, self.weight);
     }
     pub fn off(&mut self) {
         self.weight = 0.;
@@ -168,6 +191,11 @@ impl RustViewmodel {
         input.extend(numbers(&get(&get(camera, "matrixWorld"), "elements")));
         input.extend([self.weight, if side == 1 { 1. } else { -1. }]);
         input.extend(components(&world_quat(&self.three, hand)));
+        input.extend(components(&world_position(&self.three, upper)));
+        input.extend(components(&self.forearms[side]));
+        let forearm = world_position(&self.three, lower);
+        input.push(num(&call(&forearm, "distanceTo", &[world_position(&self.three, hand)])));
+        input.push(0.5);
         let pose = math("placeHand", &input);
         rig_reach(
             &self.three,

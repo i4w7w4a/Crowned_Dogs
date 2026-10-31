@@ -1410,6 +1410,13 @@ impl ArenaState {
                     "apply",
                     &[f.group.clone(), get(&f.motion, "pistolReady")],
                 );
+                if present(&f.hand) {
+                    call(
+                        &f.hold_out,
+                        "support",
+                        &[f.hand.clone(), get(&f.motion, "gunReady")],
+                    );
+                }
                 call(&f.feet, "update", &[n(dt), get(&f.motion, "planted")]);
             }
             reactions(&self.host, f, dt);
