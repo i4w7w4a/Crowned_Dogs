@@ -22,6 +22,7 @@ struct Weapon {
     on_change: JsValue,
     listeners: Vec<Listener>,
     sockets: Option<Closure<dyn FnMut(JsValue)>>,
+    parts: Option<Closure<dyn FnMut(JsValue, f64, f64)>>,
     serial: u32,
     disposed: bool,
 }
@@ -80,6 +81,14 @@ impl Weapon {
         hidden(&model, !real);
         if real {
             if !exists(&self.viewer) {
+                let hover = weak.clone();
+                let parts = Closure::wrap(Box::new(move |slot: JsValue, x: f64, y: f64| {
+                    if let Some(state) = hover.upgrade() {
+                        if let Ok(state) = state.try_borrow() {
+                            state.part_tip(&slot, x, y);
+                        }
+                    }
+                }) as Box<dyn FnMut(JsValue, f64, f64)>);
                 let callback = Closure::wrap(Box::new(move |points: JsValue| {
                     if let Some(state) = weak.upgrade() {
                         if let Ok(state) = state.try_borrow() {
@@ -90,9 +99,11 @@ impl Weapon {
                 let options = Object::new();
                 set(&options, "workbench", &flag(true));
                 set(&options, "onSockets", callback.as_ref());
+                set(&options, "onPart", parts.as_ref());
                 self.viewer =
                     construct(&self.host, "ItemViewer", &[model, options.into()]).unwrap_throw();
                 self.sockets = Some(callback);
+                self.parts = Some(parts);
             }
             call(
                 &self.viewer,
@@ -330,6 +341,35 @@ impl Weapon {
         style(&self.tip, "left", &format!("{}px", x.clamp(8.0, (vw - w - 8.0).max(8.0))));
         style(&self.tip, "top", &format!("{}px", y.clamp(8.0, (vh - h - 8.0).max(8.0))));
     }
+    /// Floats the card of the part under the cursor on the 3D gun beside the cursor (null slot hides it).
+    fn part_tip(&self, slot: &JsValue, x: f64, y: f64) {
+        if boolean(&self.sheet, "open") || !exists(&self.loadout) {
+            return;
+        }
+        let open = invoke(&self.tip, "matches", &[js(":popover-open")])
+            .is_ok_and(|v| v.is_truthy());
+        let Some(slot) = slot.as_string() else {
+            if open {
+                let _ = invoke(&self.tip, "hidePopover", &[]);
+            }
+            return;
+        };
+        let Ok(card) = try_rust("client.workshop.part", &[self.loadout.clone(), js(&slot)]) else {
+            return;
+        };
+        html(&self.tip, &text(&card));
+        if !open {
+            let _ = invoke(&self.tip, "showPopover", &[]);
+        }
+        let vw = num(&global(), "innerWidth");
+        let vh = num(&global(), "innerHeight");
+        let w = num(&self.tip, "offsetWidth");
+        let h = num(&self.tip, "offsetHeight");
+        let left = if x + 18.0 + w > vw - 8.0 { x - w - 18.0 } else { x + 18.0 };
+        let top = if y + 18.0 + h > vh - 8.0 { y - h - 18.0 } else { y + 18.0 };
+        style(&self.tip, "left", &format!("{}px", left.clamp(8.0, (vw - w - 8.0).max(8.0))));
+        style(&self.tip, "top", &format!("{}px", top.clamp(8.0, (vh - h - 8.0).max(8.0))));
+    }
     fn show_error(&self, err: JsValue) {
         let old = query(&self.body, ".cw-sheet-error");
         if exists(&old) {
@@ -401,6 +441,7 @@ impl BrowserWeapon {
             on_change,
             listeners: vec![],
             sockets: None,
+            parts: None,
             serial: 0,
             disposed: false,
         }));

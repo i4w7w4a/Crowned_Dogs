@@ -133,3 +133,9 @@ body { margin: 0; }
 .cd-tunnel-label { position: absolute; top: calc(100% + 6px); font-size: 12px; font-weight: 500; white-space: nowrap; padding: 6px 12px; border-radius: 10px; color: #fff; }
 .cd-tunnel:active .cd-tunnel-ring { background: rgba(255,255,255,.25); }
 @keyframes cd-tunnel-pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.45); } 70%, 100% { box-shadow: 0 0 0 14px rgba(255,255,255,0); } }
+
+/* Card for the worn item under the cursor on the figure; lives in the top layer as a popover. */
+.cd-tip.glass { position: fixed; inset: auto; margin: 0; border: 0; color-scheme: dark; width: 240px; padding: 12px 14px; border-radius: 14px; display: grid; gap: 6px; font-size: 11px; line-height: 1.4; color: var(--cd-secondary); pointer-events: none; }
+.cd-tip:not(:popover-open) { display: none; }
+.cd-tip b { font-size: 13px; font-weight: 600; color: #f2f3f3; }
+.cd-tip em { font-style: normal; color: #dce8e7; }

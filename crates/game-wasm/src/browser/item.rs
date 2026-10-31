@@ -67,6 +67,7 @@ impl RustItemViewer {
             "pointerdown",
             "pointermove",
             "pointerup",
+            "pointerleave",
             "pointercancel",
             "lostpointercapture",
             "keydown",
@@ -323,16 +324,15 @@ fn show(s: JsValue, id: String, name: String, loadout: JsValue) -> Promise {
             &format!("{name}. Объёмная модель, вращение перетаскиванием или стрелками.{hint}"),
         );
         set(&get(&s, "element"), "dataset.item", &text(&id));
+        let spec = spec.as_string().unwrap_or_default();
+        let (file, only) = spec.split_once('#').unwrap_or((&spec, ""));
+        let (file, only) = (file.to_string(), only.to_string());
         let result = async {
             init(&s)?;
             let entry = wait(
                 model(
                     &s,
-                    format!(
-                        "{}preview/{}.json",
-                        string(&s, "host.base"),
-                        spec.as_string().unwrap_or_default()
-                    ),
+                    format!("{}preview/{file}.json", string(&s, "host.base")),
                 )
                 .into(),
             )
@@ -342,6 +342,16 @@ fn show(s: JsValue, id: String, name: String, loadout: JsValue) -> Promise {
             }
             let h = get(&s, "host");
             let root = get(&entry, "root");
+            if !only.is_empty() {
+                // A garment cut out of the dressed Persona: the body and other gear stay hidden.
+                for n in nodes(&root, false) {
+                    if yes(&n, "isMesh") {
+                        let keep = string(&n, "name").starts_with(&only)
+                            || string(&n, "parent.name").starts_with(&only);
+                        set(&n, "visible", &flag(keep));
+                    }
+                }
+            }
             let offset = get(&s, "offset");
             let pivot = get(&s, "pivot");
             call(&offset, "clear", &[]);
@@ -539,6 +549,58 @@ fn turn(s: &JsValue, h: f64, v: f64) {
         );
     }
 }
+/// The mod slot of the visible gun part under the pointer, or null.
+fn part(s: &JsValue, e: &JsValue) -> JsValue {
+    let root = get(s, "displayed");
+    let rect = call(&get(s, "canvas"), "getBoundingClientRect", &[]);
+    let (w, h) = (number(&rect, "width"), number(&rect, "height"));
+    if !exists(&root) || w == 0.0 || h == 0.0 {
+        return JsValue::NULL;
+    }
+    let host = get(s, "host");
+    if !exists(&get(s, "ray")) {
+        set(s, "ray", &make(&host, "THREE.Raycaster", &[]));
+    }
+    let ray = get(s, "ray");
+    let ndc = make(
+        &host,
+        "THREE.Vector2",
+        &[
+            num((number(e, "clientX") - number(&rect, "left")) / w * 2.0 - 1.0),
+            num(1.0 - (number(e, "clientY") - number(&rect, "top")) / h * 2.0),
+        ],
+    );
+    call(&ray, "setFromCamera", &[ndc, get(s, "camera")]);
+    // Three.js also hits hidden meshes, so the first hit whose whole chain is visible wins.
+    'hits: for hit in Array::from(&call(&ray, "intersectObject", &[root.clone(), flag(true)])).iter() {
+        let mut node = get(&hit, "object");
+        let mut slot = JsValue::NULL;
+        while exists(&node) {
+            if !yes(&node, "visible") {
+                continue 'hits;
+            }
+            if slot.is_null() && get(&node, "userData.slot").is_string() {
+                slot = get(&node, "userData.slot");
+            }
+            if node == root {
+                break;
+            }
+            node = get(&node, "parent");
+        }
+        return slot;
+    }
+    JsValue::NULL
+}
+fn point(s: &JsValue, slot: JsValue, e: &JsValue) {
+    let callback = get(s, "config.onPart");
+    if exists(&callback) {
+        invoke(
+            &callback,
+            &JsValue::UNDEFINED,
+            &[slot, get(e, "clientX"), get(e, "clientY")],
+        );
+    }
+}
 fn input(s: &JsValue, event: &str, e: &JsValue) {
     let canvas = get(s, "canvas");
     match event {
@@ -556,9 +618,17 @@ fn input(s: &JsValue, event: &str, e: &JsValue) {
                 ]),
             );
             call(&canvas, "setPointerCapture", &[get(e, "pointerId")]);
+            point(s, JsValue::NULL, e);
         }
+        "pointerleave" => point(s, JsValue::NULL, e),
         "pointermove" => {
-            if !exists(&get(s, "drag")) || get(s, "drag.id") != get(e, "pointerId") {
+            if !exists(&get(s, "drag")) {
+                if string(e, "pointerType") == "mouse" {
+                    point(s, part(s, e), e);
+                }
+                return;
+            }
+            if get(s, "drag.id") != get(e, "pointerId") {
                 return;
             }
             turn(

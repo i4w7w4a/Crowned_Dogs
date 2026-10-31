@@ -2,8 +2,9 @@
 use crate::{core, loadout, num, text, truth};
 use serde_json::{json, Value};
 const SLOTS: [&str; 5] = ["optic", "muzzle", "rail", "mag", "stock"];
+/// Item id to preview model. `file#Prefix` shows only that file's meshes named with the prefix.
 fn models() -> Value {
-    json!({"head-k6":"tripo-helmet","body-plita2":"tripo-vest","suit-field":"tripo-suit-male",
+    json!({"head-k6":"tripo-helmet","body-plita2":"tripo-vest","suit-field":"persona-authored#Костюм",
         "pistol-pustelga":"pustelga","shotgun-taran":"taran","rifle-varyag":"varyag","sniper-berkut":"berkut"})
 }
 /// Mods with a mesh inside their gun's model. The mesh node is the id with `_` for `-`.
@@ -171,8 +172,20 @@ fn options(choices: &Value, kind: &str) -> String {
 }
 /// Hidden card content the workshop shows beside a hovered or focused option.
 fn tip(choice: &Value) -> String {
-    let item = &choice["item"];
-    let lines = choice["lines"]
+    format!(
+        r#"<span class="cw-option-tip" hidden>{}</span>"#,
+        card(&choice["item"], &choice["lines"])
+    )
+}
+/// Card for the part that sits in a slot now, shown when the cursor rests on it on the 3D gun.
+fn part(kit: &Value, slot: &str) -> Result<String, String> {
+    let id = loadout::dispatch("client.effectiveWeaponModId", json!([kit, slot]))?;
+    let item = core("getItem", json!([id]))?;
+    let lines = core("describeItem", json!([item])).unwrap_or(json!([]));
+    Ok(card(&item, &lines))
+}
+fn card(item: &Value, lines: &Value) -> String {
+    let lines = lines
         .as_array()
         .into_iter()
         .flatten()
@@ -180,7 +193,7 @@ fn tip(choice: &Value) -> String {
         .collect::<String>();
     let note = text(&item["note"]);
     format!(
-        r#"<span class="cw-option-tip" hidden><b>{}</b>{}{lines}</span>"#,
+        r#"<b>{}</b>{}{lines}"#,
         escape(text(&item["name"])),
         if note.is_empty() {
             String::new()
@@ -260,6 +273,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
         "client.workshop.options" => json!(options(&args[0], text(&args[1]))),
         "client.workshop.links" => json!(links(&args[0], num(&args[1]), num(&args[2]))),
         "client.workshop.stats" => json!(stats(&args[0])?),
+        "client.workshop.part" => json!(part(&args[0], text(&args[1]))?),
         "client.workshop.fallback" => {
             let box_ = &args[0];
             let (x, y, w, h) = (num(&box_[0]), num(&box_[1]), num(&box_[2]), num(&box_[3]));

@@ -57,6 +57,9 @@ struct Base {
     /// Touch long-press on a slot button: pending timer, and whether it fired.
     hold_timer: JsValue,
     held: bool,
+    /// Floating description card for gear under the cursor on the figure, and the last pointer spot.
+    tip: JsValue,
+    pointer: (f64, f64, bool),
     disposed: bool,
 }
 impl Base {
@@ -236,6 +239,65 @@ impl Base {
         );
         html(&query(&self.root, ".cd-stats"), &stats);
         call_optional(&self.viewer, "updateLoadout", &[self.loadout.clone()]);
+    }
+    /// Shows the worn item's name, note and effects beside the pointer ("" hides the card).
+    fn show_tip(&self, slot: &str) {
+        let open = invoke(&self.tip, "matches", &[js(":popover-open")]).is_ok_and(|v| v.is_truthy());
+        let item = if slot.is_empty() {
+            JsValue::NULL
+        } else {
+            self.item(&self.equipped(slot))
+        };
+        if !exists(&item) {
+            if open {
+                let _ = invoke(&self.tip, "hidePopover", &[]);
+            }
+            return;
+        }
+        if text(&get(&get(&self.tip, "dataset"), "slot")) != slot || !open {
+            set(&get(&self.tip, "dataset"), "slot", &js(slot));
+            html(&self.tip, "");
+            let add = |tag: &str, value: String| {
+                if !value.is_empty() {
+                    let el = create(tag, "");
+                    content(&el, &value);
+                    call(&self.tip, "append", &[el]);
+                }
+            };
+            add("b", text(&get(&item, "name")));
+            add("span", text(&get(&item, "note")));
+            for line in Array::from(&rust("describeItem", &[item.clone()])).iter() {
+                add("em", line.as_string().unwrap_or_default());
+            }
+        }
+        if !open {
+            let _ = invoke(&self.tip, "showPopover", &[]);
+        }
+        self.place_tip();
+    }
+    /// Mouse: below-right of the cursor; finger: above it, so the hand does not cover the card.
+    fn place_tip(&self) {
+        if !invoke(&self.tip, "matches", &[js(":popover-open")]).is_ok_and(|v| v.is_truthy()) {
+            return;
+        }
+        let (x, y, mouse) = self.pointer;
+        let vw = num(&global(), "innerWidth");
+        let vh = num(&global(), "innerHeight");
+        let w = num(&self.tip, "offsetWidth");
+        let h = num(&self.tip, "offsetHeight");
+        let (mut left, mut top) = if mouse {
+            (x + 18.0, y + 18.0)
+        } else {
+            (x - w / 2.0, y - h - 36.0)
+        };
+        if left + w > vw - 8.0 {
+            left = x - w - 18.0;
+        }
+        if top + h > vh - 8.0 {
+            top = y - h - 18.0;
+        }
+        style(&self.tip, "left", &format!("{}px", left.clamp(8.0, (vw - w - 8.0).max(8.0))));
+        style(&self.tip, "top", &format!("{}px", top.clamp(8.0, (vh - h - 8.0).max(8.0))));
     }
     /// Unfolds one slot card ("" folds them all); a hover on the button also glows the figure.
     fn hot(&self, slot: &str, from_button: bool) {
@@ -729,6 +791,11 @@ impl BrowserBase {
         let status = query(&root, ".cd-model-status");
         let scroll = BrowserScroll::new(query(&root, ".cd-dialog-content"))?;
         let loadout = call(&host, "loadLocalLoadout", &[]);
+        let tip = create("div", "cd-tip glass");
+        attr(&tip, "role", "tooltip");
+        // Top layer: screen transitions transform the root, which would trap a fixed card.
+        attr(&tip, "popover", "manual");
+        call(&root, "append", &[tip.clone()]);
         let state = Rc::new(RefCell::new(Base {
             host,
             root: root.clone(),
@@ -767,6 +834,8 @@ impl BrowserBase {
             on_battle,
             hold_timer: JsValue::NULL,
             held: false,
+            tip: tip.clone(),
+            pointer: (0.0, 0.0, true),
             disposed: false,
         }));
         bind(&state);
@@ -844,6 +913,9 @@ fn bind(state: &Rc<RefCell<Base>>) {
         (canvas.clone(), "keydown", "rotate"),
         (canvas.clone(), "persona-preview-error", "previewError"),
         (canvas.clone(), "persona-hover", "personaHover"),
+        (canvas.clone(), "pointermove", "tipMove"),
+        (canvas.clone(), "pointerdown", "tipMove"),
+        (canvas.clone(), "pointerleave", "tipHide"),
         (canvas, "webglcontextrestored", "restored"),
     ];
     for button in all(&root, "[data-slot]") {
@@ -887,8 +959,18 @@ fn bind(state: &Rc<RefCell<Base>>) {
                     s.hot("", true);
                     s.open_catalog(&data(&target_copy, "slot"), weak.clone());
                 }
+                "tipMove" => {
+                    s.pointer = (
+                        num(&event, "clientX"),
+                        num(&event, "clientY"),
+                        text(&get(&event, "pointerType")) == "mouse",
+                    );
+                    s.place_tip();
+                }
+                "tipHide" => s.show_tip(""),
                 "personaHover" => {
                     let slot = get(&event, "detail").as_string().unwrap_or_default();
+                    s.show_tip(&slot);
                     s.hot(&slot, false);
                 }
                 "slotEnter" | "slotLeave" | "slotDown" | "slotUp" => {

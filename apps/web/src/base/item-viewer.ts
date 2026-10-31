@@ -11,7 +11,8 @@ import { ITEM_MODELS } from "./model-catalog.ts";
 import "./item-viewer.css";
 export { ITEM_MODELS } from "./model-catalog.ts";
 
-type ViewerOptions = { workbench?: boolean; onSockets?: (points: Partial<Record<ModSlot, [number, number]>>) => void };
+type ViewerOptions = { workbench?: boolean; onSockets?: (points: Partial<Record<ModSlot, [number, number]>>) => void;
+  onPart?: (slot: ModSlot | null, x: number, y: number) => void };
 const host = { THREE, RoomEnvironment, MOD_SLOTS, loadModel, QUALITY, startQuality, TextureTiers,
   tune, fitVaryag, prepareVaryag, ITEM_MODELS, base: import.meta.env.BASE_URL };
 
