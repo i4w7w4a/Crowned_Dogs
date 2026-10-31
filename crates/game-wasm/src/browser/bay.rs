@@ -90,14 +90,17 @@ vec3 cdTap( sampler2D photo, vec2 uv, float bias ) {
   return texture2D( photo, at, bias ).rgb;
 }
 vec3 cdLook( sampler2D photo, vec2 uv, float spread ) {
-  vec3 c = cdTap( photo, uv, cdBlur );
+  vec3 c = cdTap( photo, uv, 0.0 );
   if ( cdBlur > 0.01 ) {
-    // Out of focus behind a close-up: a ring of taps, wider as the lens opens.
+    // A little out of focus behind a close-up: a ring of taps, wider as the lens opens. The
+    // centre keeps the picture's full resolution, so the hall stays crisp, only softer; the
+    // ring reads a softer level, or every highlight would turn into a ring of dots.
     float r = cdBlur * spread;
-    c *= 0.2;
+    float soft = cdBlur * 5.0;
+    c *= 0.36;
     for ( int i = 0; i < 8; i++ ) {
       float a = float( i ) * 0.7854 + 0.39;
-      c += cdTap( photo, uv + vec2( cos( a ), sin( a ) * 0.667 ) * r, cdBlur ) * 0.1;
+      c += cdTap( photo, uv + vec2( cos( a ), sin( a ) * 0.667 ) * r, soft ) * 0.08;
     }
   }
   return c;
@@ -333,9 +336,15 @@ pub fn build(s: &JsValue, anisotropy: f64) {
     let bay = make(&h, "THREE.Group", &[]);
     set(&bay, "name", &text("Creation_Bay"));
 
-    // The hall, one mesh, painted by both projectors.
-    let photo = texture(&h, &format!("{base}img/base/persona-bay.webp"), true, anisotropy);
-    let close = texture(&h, &format!("{base}img/base/persona-bay-close.webp"), true, anisotropy);
+    // The hall, one mesh, painted by both projectors. The face view magnifies the pictures about
+    // three times, so every device but the weakest gets them doubled (Lanczos and a light
+    // unsharp mask, from the 1024×1536 originals).
+    let tier = if number(s, "quality.textures") >= 1024.0 { ".2048" } else { "" };
+    let picture = |name: &str| {
+        texture(&h, &format!("{base}img/base/{name}{tier}.webp"), true, anisotropy)
+    };
+    let photo = picture("persona-bay");
+    let close = picture("persona-bay-close");
     let (mut positions, mut indices) = (Vec::new(), Vec::new());
     let back = |p: [f64; 3]| [p[0], p[1], p[2] + BACK];
     for (lo, hi) in HALL.iter().chain(std::iter::once(&CASES)) {
@@ -721,7 +730,7 @@ pub fn tick(s: &JsValue, time: f64, focus: f64, buffer_height: f64) {
         }
     }
     let hall = get(&get(&parts, "hall"), "uniforms");
-    set(&get(&hall, "cdBlur"), "value", &num(focus * 2.6));
+    set(&get(&hall, "cdBlur"), "value", &num(focus * 0.8));
     set(&get(&hall, "cdShade"), "value", &num(1.0 - 0.24 * focus));
     // The lamps' blooms give way to the close shot, whose lamps stand a little elsewhere.
     let close = number(&hall, "cdMix.value");
