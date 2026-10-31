@@ -7,23 +7,67 @@ fn models() -> Value {
     json!({"head-k6":"tripo-helmet","body-plita2":"tripo-vest","suit-field":"persona-authored#Костюм",
         "pistol-pustelga":"pustelga","shotgun-taran":"taran","rifle-varyag":"varyag","sniper-berkut":"berkut"})
 }
-/// Mods with a mesh inside their gun's model. The mesh node is the id with `_` for `-`.
-const MOD_MESHES: [&str; 14] = [
-    "optic-sokol",
-    "optic-znoy",
-    "optic-gran",
-    "optic-blik",
-    "muzzle-tishina",
-    "muzzle-klyk",
-    "rail-koster",
-    "rail-kulak",
-    "rail-luch",
-    "mag-rifle-twin",
-    "mag-rifle-ap",
-    "mag-rifle-drum",
-    "stock-rifle-opora",
-    "stock-rifle-tesno",
+/// Mods with a mesh inside each gun class's model. The mesh node is the id with `_` for `-`.
+const MOD_MESHES: [(&str, &[&str]); 4] = [
+    (
+        "pistol",
+        &[
+            "optic-tritium",
+            "muzzle-klyk",
+            "rail-luch",
+            "mag-pistol-long",
+            "mag-pistol-hp",
+            "mag-pistol-ap",
+            "stock-pistol-hvat",
+        ],
+    ),
+    (
+        "shotgun",
+        &[
+            "optic-blik",
+            "optic-gran",
+            "muzzle-choke",
+            "rail-kulak",
+            "rail-luch",
+            "mag-shotgun-slug",
+            "mag-shotgun-buck",
+        ],
+    ),
+    (
+        "rifle",
+        &[
+            "optic-sokol",
+            "optic-znoy",
+            "optic-gran",
+            "optic-blik",
+            "muzzle-tishina",
+            "muzzle-klyk",
+            "rail-koster",
+            "rail-kulak",
+            "rail-luch",
+            "mag-rifle-twin",
+            "mag-rifle-ap",
+            "mag-rifle-drum",
+            "stock-rifle-opora",
+            "stock-rifle-tesno",
+        ],
+    ),
+    (
+        "sniper",
+        &[
+            "optic-znoy",
+            "optic-blik-b",
+            "muzzle-tishina-s",
+            "mag-sniper-10",
+            "mag-sniper-ap",
+        ],
+    ),
 ];
+fn meshed(id: &str, class: &str) -> bool {
+    MOD_MESHES
+        .iter()
+        .any(|(c, ids)| (class.is_empty() || *c == class) && ids.contains(&id))
+}
 fn modelled_class(class: &Value) -> bool {
     game_core::constants()["ITEMS"]
         .as_array()
@@ -33,7 +77,8 @@ fn modelled_class(class: &Value) -> bool {
             i["kind"] == "weapon" && i["weapon"] == *class && models().get(text(&i["id"])).is_some()
         })
 }
-fn available(item: &Value) -> bool {
+/// Whether the item can be picked; for a mod, on a gun of `class` (empty: on any gun).
+fn available(item: &Value, class: &str) -> bool {
     match text(&item["kind"]) {
         "knife" | "grenade" | "boots" => true,
         "mod" => {
@@ -41,7 +86,7 @@ fn available(item: &Value) -> bool {
                 && item["fits"]
                     .as_array()
                     .is_some_and(|a| a.iter().any(modelled_class)))
-                || MOD_MESHES.contains(&text(&item["id"]))
+                || meshed(text(&item["id"]), class)
         }
         _ => models().get(text(&item["id"])).is_some(),
     }
@@ -142,6 +187,11 @@ fn initial(base: &str, back: &str) -> String {
     )
 }
 fn choices(kit: &Value, slot: &str) -> Result<Value, String> {
+    let class = if slot == "weapon1" {
+        Value::Null
+    } else {
+        weapon(kit)?["weapon"].clone()
+    };
     let (items, selected) = if slot == "weapon1" {
         (
             loadout::dispatch("client.itemsForSlot", json!([slot]))?,
@@ -157,7 +207,7 @@ fn choices(kit: &Value, slot: &str) -> Result<Value, String> {
         .as_array()
         .unwrap()
         .iter()
-        .filter(|i| available(i))
+        .filter(|i| available(i, text(&class)))
         .map(|item| {
             let lines = core("describeItem", json!([item])).unwrap_or(json!([]));
             json!({"item":item,"selected":item["id"]==selected,"lines":lines})
@@ -262,7 +312,7 @@ fn stats(kit: &Value) -> Result<String, String> {
 pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
     Ok(match method {
         "client.models.catalog" => models(),
-        "client.models.available" => json!(available(&args[0])),
+        "client.models.available" => json!(available(&args[0], "")),
         "client.workshop.initial" => json!(initial(text(&args[0]), text(&args[1]))),
         "client.workshop.model" => return model(&args[0]),
         "client.workshop.slotName" => json!(slot_name(
@@ -314,10 +364,32 @@ mod tests {
     #[test]
     fn only_modelled_and_explicit_exceptions_are_offered() {
         for i in game_core::constants()["ITEMS"].as_array().unwrap() {
-            if available(i) {
+            if available(i, "") {
                 assert!(
                     models().get(text(&i["id"])).is_some()
                         || ["knife", "grenade", "boots", "mod"].contains(&text(&i["kind"]))
+                );
+            }
+        }
+    }
+    #[test]
+    fn mods_are_offered_only_where_their_gun_has_the_mesh() {
+        let luch = json!({"id":"rail-luch","kind":"mod","fits":["pistol","shotgun","rifle"]});
+        assert!(available(&luch, "rifle") && available(&luch, "pistol"));
+        let upor = json!({"id":"rail-upor","kind":"mod","fits":["sniper"]});
+        assert!(!available(&upor, "sniper") && !available(&upor, ""));
+        for (class, ids) in MOD_MESHES {
+            for id in ids {
+                let item = game_core::constants()["ITEMS"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|i| i["id"] == *id)
+                    .cloned();
+                let item = item.unwrap_or_else(|| panic!("{id} is not in the catalogue"));
+                assert!(
+                    item["fits"].as_array().unwrap().iter().any(|c| c == class),
+                    "{id} does not fit {class}"
                 );
             }
         }
