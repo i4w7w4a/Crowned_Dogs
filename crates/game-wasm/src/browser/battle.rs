@@ -1472,9 +1472,20 @@ fn prepare_arena(s: &JsValue) -> Promise {
     if !present(&a) {
         return Promise::reject(&js_sys::Error::new("3D не запустилось на этом устройстве"));
     }
+    let sex = string(&get(&super::platform::current_look(), "sex"));
     if flag(&a, "ready") {
+        let loaded = string(&get(s, "arenaSex"));
+        if !loaded.is_empty() && loaded != sex {
+            // The loaded figures belong to the other sex; a fresh page loads the right pair.
+            call(&get(&global(), "location"), "reload", &[]);
+            return Promise::new(&mut |_, _| {});
+        }
+        if get(&a, "applyLook").is_function() {
+            call(&a, "applyLook", &[]);
+        }
         return Promise::resolve(&JsValue::UNDEFINED);
     }
+    set(s, "arenaSex", &sex.clone().into());
     let existing = get(s, "arenaLoading");
     if present(&existing) {
         return existing.unchecked_into();
@@ -1483,13 +1494,19 @@ fn prepare_arena(s: &JsValue) -> Promise {
     let promise = future_to_promise(async move {
         let s = &state;
         let bindings = get(s, "host");
+        // The foe is always the other sex, so the two figures never share materials.
+        let (mine, theirs) = if sex == "female" {
+            (get(&bindings, "foeModel"), get(&bindings, "myModel"))
+        } else {
+            (get(&bindings, "myModel"), get(&bindings, "foeModel"))
+        };
         let result = async {
             let loading = try_call(
                 &a,
                 "load",
                 &[
-                    get(&bindings, "myModel"),
-                    get(&bindings, "foeModel"),
+                    mine,
+                    theirs,
                     get(&match_(s), "distance"),
                 ],
             )?;

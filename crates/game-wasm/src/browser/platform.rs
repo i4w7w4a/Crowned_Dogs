@@ -42,6 +42,33 @@ pub fn save_local_loadout(loadout: JsValue, supplied: JsValue) -> bool {
     try_call(&storage, "setItem", &[LOADOUT_KEY.into(), raw.into()]).is_ok()
 }
 
+const LOOK_KEY: &str = "crowned-dogs:persona:v1";
+/// The created Persona, or null before the player has made one.
+#[wasm_bindgen]
+pub fn load_local_look() -> JsValue {
+    rust("client.look.load", &[store_get(LOOK_KEY)])
+}
+#[wasm_bindgen]
+pub fn save_local_look(look: JsValue) -> bool {
+    let saved = rust("client.look.save", &[look]);
+    let Some(raw) = present(&saved)
+        .then(|| js_sys::JSON::stringify(&saved).ok().and_then(|raw| raw.as_string()))
+        .flatten()
+    else {
+        return false;
+    };
+    try_call(&storage(), "setItem", &[LOOK_KEY.into(), raw.into()]).is_ok()
+}
+/// The look the game paints: the saved one, or the default male Persona.
+pub fn current_look() -> JsValue {
+    let look = load_local_look();
+    if present(&look) {
+        look
+    } else {
+        rust("client.look.normalize", &[js_sys::Object::new().into()])
+    }
+}
+
 /// Five prepared equipment sets. The active one is mirrored into `LOADOUT_KEY`.
 pub const KITS: usize = 5;
 const ACTIVE_KIT_KEY: &str = "crowned-dogs:kit:v1";

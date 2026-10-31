@@ -799,14 +799,16 @@ pub fn tune(host: JsValue, material: JsValue, quality: JsValue, extra: JsValue, 
     } else {
         JsValue::UNDEFINED
     };
+    let look = super::look::hook(&material);
     let key = format!(
-        "cd-{taps}-{}-{}",
+        "cd-{taps}-{}-{}-{}",
         if present(&extra) {
             extra_key
         } else {
             String::new()
         },
-        string(&get(&relief, "key"))
+        string(&get(&relief, "key")),
+        string(&get(&look, "key"))
     );
     let compile=Closure::wrap(Box::new(move|shader:JsValue|{
         let chunk=string(&get(&three(&host,"ShaderChunk"),"shadowmap_pars_fragment"));
@@ -814,6 +816,8 @@ pub fn tune(host: JsValue, material: JsValue, quality: JsValue, extra: JsValue, 
         let mut fragment=string(&get(&shader,"fragmentShader")).replacen("#include <shadowmap_pars_fragment>",&chunk,1);
         if standard{fragment=fragment.replacen("#include <lights_physical_fragment>",&string(&get(&snippets,"specular")),1);}
         set(&shader,"fragmentShader",&fragment.into());
+        // The look hook appends to map_fragment, so it runs before relief inlines that chunk.
+        if present(&look){invoke(&get(&look,"compile"),&[shader.clone()]);}
         if present(&extra){invoke(&extra,&[shader.clone()]);}if present(&relief){invoke(&get(&relief,"compile"),&[shader]);}
     })as Box<dyn FnMut(JsValue)>).into_js_value();
     set(&material, "onBeforeCompile", &compile);

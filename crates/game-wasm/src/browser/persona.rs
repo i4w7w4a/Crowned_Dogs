@@ -54,6 +54,7 @@ impl RustPersonaViewer {
                 Promise::resolve(&JsValue::UNDEFINED).into(),
             ),
             ("previousTouchAction", get(&canvas, "style.touchAction")),
+            ("look", super::platform::current_look()),
         ]);
         set(&canvas, "style.touchAction", &text("pan-y"));
         for event in [
@@ -207,6 +208,40 @@ impl RustPersonaViewer {
         set(&self.state, "hover", &text(slot));
         highlight(&self.state, slot);
     }
+    /// Shows the player's look; a different sex swaps the figure on the stand.
+    #[wasm_bindgen(js_name=setLook)]
+    pub fn set_look(&self, look: JsValue) {
+        let s = &self.state;
+        set(s, "look", &look);
+        let figure = get(s, "figure");
+        if !exists(&figure) {
+            return;
+        }
+        if string(s, "figureSex") == string(s, "look.sex") {
+            super::look::apply(figure, look);
+            render(s);
+            return;
+        }
+        if yes(s, "figureLoading") {
+            // The load in flight rechecks the sex when it lands.
+            return;
+        }
+        let a = s.clone();
+        spawn_local(async move {
+            if load_figure(&a).await.is_ok() && !yes(&a, "disposed") {
+                apply_weapon(&a);
+                tune(&a, &get(&a, "scene"));
+                render(&a);
+            }
+        });
+    }
+    /// Bare mode hides helmet, vest and gun, for choosing the look.
+    #[wasm_bindgen(js_name=setBare)]
+    pub fn set_bare(&self, bare: bool) {
+        set(&self.state, "bare", &flag(bare));
+        dress_figure(&self.state);
+        render(&self.state);
+    }
     #[wasm_bindgen(js_name=updateLoadout)]
     pub fn update_loadout(&self, loadout: JsValue) -> JsValue {
         let s = &self.state;
@@ -292,15 +327,7 @@ async fn load_models(s: &JsValue) -> Result<(), JsValue> {
         load_environment(&a).await;
         Ok(JsValue::UNDEFINED)
     });
-    let url = format!("{}preview/persona-authored.json", string(&h, "base"));
-    let gltf = wait(try_call(&h, "loadModel", &[text(&url)])?).await?;
-    let figure = get(&gltf, "scene");
-    if yes(s, "disposed") {
-        dispose(&figure, &[], true);
-        return Ok(());
-    }
-    set(s, "figure", &figure);
-    // This export includes the user's exact mesh, static pose, and platform height.
+    // A stand-in right hand: the authored pose has no rig, so the held gun hangs off this.
     let stand_ins = make(&h, "THREE.Group", &[]);
     let anchor = make(&h, "THREE.Group", &[]);
     set(&anchor, "name", &text("hand_r"));
@@ -321,6 +348,99 @@ async fn load_models(s: &JsValue) -> Result<(), JsValue> {
     );
     set(s, "hand", &hand);
     call(&get(s, "equipment"), "add", &[get(&hand, "mount")]);
+    load_figure(s).await?;
+    if yes(s, "disposed") {
+        return Ok(());
+    }
+    wait(Promise::all(&array(&[gun.into(), room.into()])).into()).await?;
+    if yes(s, "disposed") {
+        return Ok(());
+    }
+    apply_weapon(s);
+    tune(s, &get(s, "scene"));
+    set(s, "ready", &flag(true));
+    resize(s, number(s, "width"), number(s, "height"));
+    render(s);
+    Ok(())
+}
+/// Loads the Persona of the look's sex onto the stand, replacing the one already there.
+async fn load_figure(s: &JsValue) -> Result<(), JsValue> {
+    // One load at a time: quick taps on the sex switch must not race two figures in.
+    set(s, "figureLoading", &flag(true));
+    let done = load_latest(s).await;
+    set(s, "figureLoading", &flag(false));
+    done
+}
+async fn load_latest(s: &JsValue) -> Result<(), JsValue> {
+    loop {
+        let sex = string(s, "look.sex");
+        if exists(&get(s, "figure")) && string(s, "figureSex") == sex {
+            super::look::apply(get(s, "figure"), get(s, "look"));
+            return Ok(());
+        }
+        if install_figure(s, &sex).await? || yes(s, "disposed") {
+            return Ok(());
+        }
+    }
+}
+/// Loads and installs the `sex` figure; false when the look changed sex meanwhile.
+async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
+    let h = get(s, "host");
+    let sex = sex.to_string();
+    let female = sex == "female";
+    let url = if female {
+        format!("{}models/persona-female.json", string(&h, "base"))
+    } else {
+        format!("{}preview/persona-authored.json", string(&h, "base"))
+    };
+    let gltf = wait(try_call(&h, "loadModel", &[text(&url)])?).await?;
+    let figure = get(&gltf, "scene");
+    if yes(s, "disposed") || string(s, "look.sex") != sex {
+        dispose(&figure, &[], true);
+        return Ok(yes(s, "disposed"));
+    }
+    let old = get(s, "figure");
+    if exists(&old) {
+        call(&old, "removeFromParent", &[]);
+        let extra = Array::from(&get(s, "originalTextures")).iter().collect::<Vec<_>>();
+        let pending = get(s, "texturesPending");
+        spawn_local(async move {
+            let _ = wait(pending).await;
+            dispose(&old, &extra, true);
+        });
+    }
+    set(s, "figure", &figure);
+    set(s, "figureSex", &text(&sex));
+    if female {
+        // The female figure is the rigged game model: hold the first idle frame and
+        // stand it on the platform at a height matching the authored male.
+        let clip = call(
+            &get(&h, "THREE.AnimationClip"),
+            "findByName",
+            &[get(&gltf, "animations"), text("idle")],
+        );
+        if exists(&clip) {
+            let mixer = make(&h, "THREE.AnimationMixer", &[figure.clone()]);
+            call(&call(&mixer, "clipAction", &[clip]), "play", &[]);
+            call(&mixer, "update", &[num(0.0)]);
+        }
+        call(&figure, "updateMatrixWorld", &[flag(true)]);
+        let box3 = make(&h, "THREE.Box3", &[]);
+        call(&box3, "setFromObject", &[figure.clone(), flag(true)]);
+        let low = number(&box3, "min.y");
+        let k = FEMALE_HEIGHT / (number(&box3, "max.y") - low).max(0.1);
+        call(&get(&figure, "scale"), "setScalar", &[num(k)]);
+        let centre = call(&box3, "getCenter", &[make(&h, "THREE.Vector3", &[])]);
+        call(
+            &get(&figure, "position"),
+            "set",
+            &[
+                num(-number(&centre, "x") * k),
+                num(number(&h, "PLATFORM_TOP") - low * k),
+                num(-number(&centre, "z") * k),
+            ],
+        );
+    }
     set(&figure, "name", &text("Persona_Authored_In_Blender"));
     for n in nodes(&figure, false) {
         if yes(&n, "isMesh") {
@@ -330,6 +450,9 @@ async fn load_models(s: &JsValue) -> Result<(), JsValue> {
                 ("Бронежилет", "body"),
                 ("Каска", "head"),
                 ("Костюм", "suit"),
+                ("Vest", "body"),
+                ("Helmet", "head"),
+                ("Suit", "suit"),
             ] {
                 if name.starts_with(prefix) {
                     set(&n, "userData.slot", &text(slot));
@@ -345,22 +468,37 @@ async fn load_models(s: &JsValue) -> Result<(), JsValue> {
     set(
         s,
         "tiers",
-        &make(&h, "TextureTiers", &[array(&[figure]), text(&url)]),
+        &make(&h, "TextureTiers", &[array(&[figure.clone()]), text(&url)]),
     );
+    dress_figure(s);
+    super::look::apply(figure, get(s, "look"));
     wait(update_textures(s).into()).await?;
-    if yes(s, "disposed") {
-        return Ok(());
+    Ok(true)
+}
+/// Female height on the stand; the authored male stands 1.8 m.
+const FEMALE_HEIGHT: f64 = 1.72;
+/// Shows the worn kit, or only the suit while the look is being chosen.
+fn dress_figure(s: &JsValue) {
+    let figure = get(s, "figure");
+    if !exists(&figure) {
+        return;
     }
-    wait(Promise::all(&array(&[gun.into(), room.into()])).into()).await?;
-    if yes(s, "disposed") {
-        return Ok(());
+    let bare = yes(s, "bare");
+    if string(s, "figureSex") == "female" {
+        super::scene_assets::dress(
+            get(s, "host"),
+            figure.clone(),
+            options(&[("suit", flag(true)), ("body", flag(!bare)), ("head", flag(!bare))]),
+        );
+    } else {
+        for n in nodes(&figure, false) {
+            let slot = string(&n, "userData.slot");
+            if slot == "head" || slot == "body" {
+                set(&n, "visible", &flag(!bare));
+            }
+        }
     }
-    apply_weapon(s);
-    tune(s, &get(s, "scene"));
-    set(s, "ready", &flag(true));
-    resize(s, number(s, "width"), number(s, "height"));
-    render(s);
-    Ok(())
+    set(&get(s, "equipment"), "visible", &flag(!bare));
 }
 async fn load_environment(s: &JsValue) {
     let h = get(s, "host");
@@ -713,7 +851,7 @@ fn apply_weapon(s: &JsValue) {
         call(&old, "removeFromParent", &[]);
         dispose(&old, &[], true);
     }
-    let sling = if real && weapon == "rifle" {
+    let sling = if real && weapon == "rifle" && string(s, "figureSex") != "female" {
         call(&h, "authoredWeaponFit", &[mount])
     } else {
         call(&h, "makeSling", &[mount, flag(weapon == "pistol")])

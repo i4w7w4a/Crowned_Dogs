@@ -16,6 +16,8 @@ pub mod icons;
 pub mod item;
 pub mod kinematics;
 pub mod lens;
+pub mod creation;
+pub mod look;
 pub mod maw;
 pub mod music;
 pub mod particles;

@@ -139,3 +139,37 @@ body { margin: 0; }
 .cd-tip:not(:popover-open) { display: none; }
 .cd-tip b { font-size: 13px; font-weight: 600; color: #f2f3f3; }
 .cd-tip em { font-style: normal; color: #dce8e7; }
+
+/* Operator line on the base: callsign and tag; tapping it reopens the look. */
+button.cd-operator { width: 100%; border: 0; border-bottom: 1px solid #e1e6dd2b; background: none; padding: 0 0 12px; color: inherit; font: inherit; cursor: pointer; }
+.cd-operator-id { display: flex; align-items: baseline; gap: 10px; }
+.cd-callsign { font-size: 13px; font-weight: 600; letter-spacing: .04em; color: #f2f3f3; }
+.cd-callsign:empty { display: none; }
+
+/* Persona creation: the stand stays, the fitting controls give way to the contract and the choices. */
+.cd-creating .cd-slot-column, .cd-creating .cd-fit-footer, .cd-creating .cd-kit-picker { display: none; }
+.cd-first .cd-back { visibility: hidden; }
+.cd-contract { position: absolute; inset: 0; z-index: 6; display: flex; align-items: flex-end; padding: max(var(--cd-edge), env(safe-area-inset-top)) var(--cd-edge) max(var(--cd-edge), env(safe-area-inset-bottom)); background: linear-gradient(180deg, transparent 30%, #05080acc 70%); }
+.cd-contract[hidden], .cd-create[hidden] { display: none; }
+.cd-contract-card.sheet.glass { flex-direction: column; gap: 12px; padding: 22px 18px 18px; border-radius: 24px; }
+.cd-contract-card h2 { font: 500 30px/1 var(--display); letter-spacing: .1em; margin: 0; }
+.cd-contract-card p:not(.cd-overline) { margin: 0; font-size: 13px; line-height: 1.55; color: var(--cd-secondary); }
+.cd-create { position: relative; z-index: 4; flex: 0 1 auto; min-height: 0; max-height: 58%; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; margin: 0 calc(-1 * var(--cd-edge)) calc(-1 * max(var(--cd-edge), env(safe-area-inset-bottom))); padding: 14px var(--cd-edge) max(var(--cd-edge), env(safe-area-inset-bottom)); border-radius: 24px 24px 0 0; background: rgba(0,0,0,.6); -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4); }
+.cd-create-name { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; }
+.cd-create-name .cd-overline { grid-column: 1 / -1; }
+.cd-callsign-input.glass { height: 44px; padding: 0 14px; border: 0; font: 500 15px var(--body); letter-spacing: .03em; color: #fff; outline: none; }
+.cd-callsign-input::placeholder { color: #aebbc580; }
+.cd-callsign-input:focus-visible { box-shadow: inset 0 1px 1px rgba(255,255,255,.3), inset 0 0 16px rgba(255,255,255,.2); }
+.cd-create-options { display: grid; gap: 9px; }
+.cd-create-row { display: grid; gap: 5px; }
+.cd-create-seg { display: flex; gap: 6px; }
+.cd-create-seg button { flex: 1 1 0; min-height: 36px; padding: 0 10px; border: 0; font-size: 12px; color: var(--cd-secondary); }
+.cd-create-seg button[aria-pressed="true"] { color: #fff; }
+.cd-create-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.cd-swatch { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: var(--swatch); box-shadow: inset 0 0 0 1px #ffffff2e, 0 2px 6px #0006; cursor: pointer; transition: box-shadow .16s; }
+.cd-swatch[aria-pressed="true"] { box-shadow: inset 0 0 0 1px #ffffff2e, 0 0 0 2px #0b0d0e, 0 0 0 4px #f2f3f3; }
+.cd-create-error { margin: 0; font-size: 11px; color: #e5bd9d; }
+.cd-create-error[hidden] { display: none; }
+.cd-create .cd-primary { flex: 0 0 auto; }
+.cd-create-done { position: sticky; bottom: 0; flex: none; }
+@media (max-height: 720px) { .cd-create { gap: 8px; padding-top: 10px; } .cd-create-seg button { min-height: 32px; } .cd-swatch { width: 28px; height: 28px; } }

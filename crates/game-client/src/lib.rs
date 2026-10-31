@@ -8,6 +8,7 @@ mod dsp;
 mod duel;
 mod lens;
 mod loadout;
+mod look;
 mod server;
 mod server_view;
 mod words;
@@ -60,6 +61,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
         _ if method.starts_with("client.duel.") || method == "client.moveCommand" => {
             duel::dispatch(method, args)
         }
+        _ if method.starts_with("client.look.") => look::dispatch(method, args),
         _ if method.starts_with("client.") => loadout::dispatch(method, args),
         _ if method.starts_with("audio.") => audio::dispatch(method, args),
         _ if method.starts_with("words.") => words::dispatch(method, args),

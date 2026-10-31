@@ -132,6 +132,7 @@ fn view_hash() -> JsValue {
     match string(&get(&get(&global(), "location"), "hash")).as_str() {
         "#weapon" => "weapon".into(),
         "#fitting" => "fitting".into(),
+        "#persona" => "persona".into(),
         _ => "base".into(),
     }
 }

@@ -12,7 +12,7 @@ import { gameAudio } from "../audio/arena-audio.ts";
 import { backArrow } from "./navigation-icons.ts";
 import { ItemViewer, ITEM_MODELS } from "./item-viewer.ts";
 import { availableInFitting } from "./model-catalog.ts";
-export type BaseView = "base" | "fitting" | "weapon";
+export type BaseView = "base" | "fitting" | "weapon" | "persona";
 export class BaseScreen extends BrowserBase {
   constructor(root: HTMLElement, onBattle: (loadout: Loadout) => Promise<void>) {
     super(root, onBattle, {

@@ -1,5 +1,5 @@
 //! Base and fitting-room navigation, catalogue interaction and asynchronous viewer lifecycle.
-use super::{dom_support::*, platform, scroll::BrowserScroll};
+use super::{creation, dom_support::*, platform, scroll::BrowserScroll};
 use js_sys::{Array, Promise};
 use std::{
     cell::RefCell,
@@ -60,6 +60,9 @@ struct Base {
     /// Floating description card for gear under the cursor on the figure, and the last pointer spot.
     tip: JsValue,
     pointer: (f64, f64, bool),
+    /// The look being edited on the creation panel, and the one saved on this device (null before the first).
+    look: JsValue,
+    saved: JsValue,
     disposed: bool,
 }
 impl Base {
@@ -85,28 +88,112 @@ impl Base {
         self.show(view, weak);
     }
     fn show(&mut self, view: &str, weak: Weak<RefCell<Self>>) {
+        // No Persona yet: the contract and the creation panel come before anything else.
+        let view = if exists(&self.saved) { view } else { "persona" };
         self.reset_home();
         call(&get(&self.host, "gameAudio"), "screen", &[js(view)]);
         if boolean(&self.dialog, "open") {
             call(&self.dialog, "close", &[]);
         }
-        self.view = view.into();
+        let was = std::mem::replace(&mut self.view, view.into());
         hidden(&self.home, view != "base");
-        hidden(&self.fitting, view != "fitting");
+        hidden(&self.fitting, !self.staged());
+        toggle(&self.fitting, "cd-creating", view == "persona");
+        if view == "persona" {
+            self.open_create();
+        } else {
+            hidden(&query(&self.fitting, ".cd-contract"), true);
+            hidden(&query(&self.fitting, ".cd-create"), true);
+        }
+        if view != "persona" && was == "persona" {
+            // Leaving without «Готово» drops the unsaved choices.
+            self.look = self.saved.clone();
+            call_optional(&self.viewer, "setLook", &[self.look.clone()]);
+        }
+        call_optional(&self.viewer, "setBare", &[flag(view == "persona")]);
         if view == "weapon" {
             call(&self.workshop, "show", &[self.loadout.clone()]);
         } else {
             call(&self.workshop, "hide", &[]);
         }
-        if view == "fitting" {
+        if self.staged() {
             self.ensure_viewer(weak);
             self.resize();
         }
         call_optional(
             &self.viewer,
             "setActive",
-            &[flag(self.active && view == "fitting")],
+            &[flag(self.active && self.staged())],
         );
+    }
+    /// Views that show the Persona on its stand.
+    fn staged(&self) -> bool {
+        self.view == "fitting" || self.view == "persona"
+    }
+    fn open_create(&mut self) {
+        let signed = !text(&get(&self.look, "tag")).is_empty();
+        toggle(&self.fitting, "cd-first", !exists(&self.saved));
+        hidden(&query(&self.fitting, ".cd-contract"), signed);
+        hidden(&query(&self.fitting, ".cd-create"), !signed);
+        hidden(&query(&self.fitting, ".cd-create-error"), true);
+        set(
+            &query(&self.fitting, ".cd-callsign-input"),
+            "value",
+            &get(&self.look, "callsign"),
+        );
+        self.render_create();
+        if !signed {
+            call(&self.host, "liquidGlass", &[query(&self.fitting, ".cd-contract")]);
+        }
+    }
+    fn render_create(&self) {
+        let options = query(&self.fitting, ".cd-create-options");
+        html(&options, &creation::markup(&self.look));
+        content(
+            &query(&self.fitting, ".cd-create-tag"),
+            &text(&get(&self.look, "tag")),
+        );
+        call(&self.host, "liquidGlass", &[query(&self.fitting, ".cd-create")]);
+    }
+    fn pick_look(&mut self, key: &str, value: &str) {
+        let typed = get(&query(&self.fitting, ".cd-callsign-input"), "value");
+        self.look = creation::pick(&self.look, key, value);
+        set(&self.look, "callsign", &typed);
+        self.render_create();
+        call_optional(&self.viewer, "setLook", &[self.look.clone()]);
+    }
+    fn sign(&mut self) {
+        set(&self.look, "tag", &creation::issue_tag());
+        self.open_create();
+        focus(&query(&self.fitting, ".cd-callsign-input"));
+    }
+    fn finish_create(&mut self, weak: Weak<RefCell<Self>>) {
+        let input = query(&self.fitting, ".cd-callsign-input");
+        let error = query(&self.fitting, ".cd-create-error");
+        let name = rust("client.look.callsign", &[get(&input, "value")]);
+        if !boolean(&name, "ok") {
+            content(&error, &text(&get(&name, "error")));
+            hidden(&error, false);
+            focus(&input);
+            return;
+        }
+        set(&self.look, "callsign", &get(&name, "callsign"));
+        if !platform::save_local_look(self.look.clone()) {
+            content(&error, "Не удалось сохранить Персону на этом устройстве.");
+            hidden(&error, false);
+            return;
+        }
+        self.saved = platform::load_local_look();
+        self.look = self.saved.clone();
+        self.refresh_operator();
+        self.navigate("base", weak);
+    }
+    fn refresh_operator(&self) {
+        content(
+            &query(&self.home, ".cd-callsign"),
+            &text(&get(&self.saved, "callsign")),
+        );
+        content(&query(&self.home, ".cd-tag"), &text(&get(&self.saved, "tag")));
     }
     fn active(&mut self, active: bool) {
         if !active {
@@ -127,7 +214,7 @@ impl Base {
         call_optional(
             &self.viewer,
             "setActive",
-            &[flag(active && self.view == "fitting")],
+            &[flag(active && self.staged())],
         );
         if active {
             self.resize();
@@ -148,6 +235,8 @@ impl Base {
         let result =
             construct(&self.host, "PersonaViewer", &[self.canvas.clone()]).and_then(|viewer| {
                 self.viewer = viewer;
+                call(&self.viewer, "setLook", &[self.look.clone()]);
+                call(&self.viewer, "setBare", &[flag(self.view == "persona")]);
                 call(&self.viewer, "updateLoadout", &[self.loadout.clone()]);
                 self.resize();
                 invoke(&self.viewer, "load", &[])
@@ -170,7 +259,7 @@ impl Base {
                     call_optional(
                         &state.viewer,
                         "setActive",
-                        &[flag(state.active && state.view == "fitting")],
+                        &[flag(state.active && state.staged())],
                     );
                 } else {
                     content(
@@ -791,6 +880,12 @@ impl BrowserBase {
         let status = query(&root, ".cd-model-status");
         let scroll = BrowserScroll::new(query(&root, ".cd-dialog-content"))?;
         let loadout = call(&host, "loadLocalLoadout", &[]);
+        let saved = platform::load_local_look();
+        let look = if exists(&saved) {
+            saved.clone()
+        } else {
+            platform::current_look()
+        };
         let tip = create("div", "cd-tip glass");
         attr(&tip, "role", "tooltip");
         // Top layer: screen transitions transform the root, which would trap a fixed card.
@@ -836,6 +931,8 @@ impl BrowserBase {
             held: false,
             tip: tip.clone(),
             pointer: (0.0, 0.0, true),
+            look,
+            saved,
             disposed: false,
         }));
         bind(&state);
@@ -872,6 +969,7 @@ impl BrowserBase {
         state.borrow_mut().frame = Some(frame);
         state.borrow_mut().frame_id = id;
         state.borrow().refresh();
+        state.borrow().refresh_operator();
         call(&state.borrow().host, "liquidGlass", &[root]);
         Ok(Self { state })
     }
@@ -896,6 +994,11 @@ fn bind(state: &Rc<RefCell<Base>>) {
     let picker = query(&root, ".cd-slot-picker");
     let mut actions = vec![
         (query(&root, ".cd-to-fitting"), "click", "fitting"),
+        (query(&root, ".cd-operator"), "click", "persona"),
+        (query(&root, ".cd-sign"), "click", "sign"),
+        (query(&root, ".cd-create-options"), "click", "look"),
+        (query(&root, ".cd-create-done"), "click", "createDone"),
+        (query(&root, ".cd-callsign-input"), "keydown", "callsignKeys"),
         (query(&root, ".cd-back"), "click", "base"),
         (query(&root, ".cd-enter"), "click", "battle"),
         (query(&root, ".cd-open-catalog"), "click", "catalog"),
@@ -945,7 +1048,22 @@ fn bind(state: &Rc<RefCell<Base>>) {
                 return;
             }
             match action {
-                "base" | "fitting" => s.navigate(action, weak.clone()),
+                "base" | "fitting" | "persona" => s.navigate(action, weak.clone()),
+                "sign" => s.sign(),
+                "look" => {
+                    let choice = closest(&event, "[data-look]");
+                    if exists(&choice) {
+                        s.pick_look(&data(&choice, "look"), &data(&choice, "value"));
+                    }
+                }
+                "createDone" => s.finish_create(weak.clone()),
+                "callsignKeys" => {
+                    hidden(&query(&s.fitting, ".cd-create-error"), true);
+                    if text(&get(&event, "key")) == "Enter" {
+                        call(&event, "preventDefault", &[]);
+                        s.finish_create(weak.clone());
+                    }
+                }
                 "catalog" => {
                     let slot = s.selected.clone();
                     s.open_catalog(&slot, weak.clone());
@@ -968,6 +1086,7 @@ fn bind(state: &Rc<RefCell<Base>>) {
                     s.place_tip();
                 }
                 "tipHide" => s.show_tip(""),
+                "personaHover" if s.view == "persona" => {}
                 "personaHover" => {
                     let slot = get(&event, "detail").as_string().unwrap_or_default();
                     s.show_tip(&slot);

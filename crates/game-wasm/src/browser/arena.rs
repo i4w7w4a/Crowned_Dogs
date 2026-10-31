@@ -607,6 +607,7 @@ impl RustArena {
             s.enemy = Some(s.make_figure(&foe, 0x77756f, 0.42, 0.4, 0, -1., false));
             s.me = Some(s.make_figure(&mine, 0x8a8780, 0.85, 0., 0x0a0908, 1., true));
             let me = s.me.as_ref().unwrap();
+            super::look::apply(me.model.clone(), super::platform::current_look());
             set(&me.blob, "visible", &(!s.fp).into());
             s.arms_only = sdk(&s.host, "armsOnly", &[s.me.as_ref().unwrap().model.clone()]);
             invoke(&s.arms_only, &[s.fp.into()]);
@@ -648,6 +649,13 @@ impl RustArena {
     }
     pub fn resume(&self) {
         self.state.borrow_mut().resume();
+    }
+    /// Repaints the player's figure after the look was edited between battles.
+    #[wasm_bindgen(js_name=applyLook)]
+    pub fn apply_look(&self) {
+        if let Some(me) = self.state.borrow().me.as_ref() {
+            super::look::apply(me.model.clone(), super::platform::current_look());
+        }
     }
     /// Compiles every shader of the scene ahead of the first frame.
     pub fn warm(&self) -> Promise {
