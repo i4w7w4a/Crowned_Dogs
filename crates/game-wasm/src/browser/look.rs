@@ -54,38 +54,46 @@ fn tint(material: &JsValue, factor: [f64; 3]) {
 }
 
 fn head_hook(material: &JsValue, paint: &JsValue) {
-    let areas = values(&get(paint, "eyeAreas"));
-    let area = |i: usize| array(&areas[i * 4..i * 4 + 4]).into();
+    let spots = values(&get(paint, "eyeSpots"));
+    let area = |i: usize| array(&spots[i * 4..i * 4 + 4]).into();
     let mut uniforms = get(&get(material, "userData"), "cdLook");
     if !present(&uniforms) {
         uniforms = object(&[
             ("cdEyeA", object(&[("value", area(0))])),
             ("cdEyeB", object(&[("value", area(1))])),
             ("cdIris", object(&[("value", get(paint, "iris"))])),
-            ("cdIrisOn", object(&[("value", 0.0.into())])),
         ]);
         set(&get(material, "userData"), "cdLook", &uniforms);
         let shared = uniforms.clone();
         let compile = Closure::<dyn FnMut(JsValue)>::new(move |shader: JsValue| {
             let own = get(&shader, "uniforms");
-            for key in ["cdEyeA", "cdEyeB", "cdIris", "cdIrisOn"] {
+            for key in ["cdEyeA", "cdEyeB", "cdIris"] {
                 set(&own, key, &get(&shared, key));
             }
+            let vertex = string(&get(&shader, "vertexShader"))
+                .replacen("#include <common>", "#include <common>\nvarying vec3 cdLocal;", 1)
+                .replacen("#include <begin_vertex>", "#include <begin_vertex>\ncdLocal = position;", 1);
+            set(&shader, "vertexShader", &vertex.into());
             let fragment = string(&get(&shader, "fragmentShader"))
                 .replacen(
                     "#include <common>",
-                    "#include <common>\nuniform vec4 cdEyeA;\nuniform vec4 cdEyeB;\nuniform vec3 cdIris;\nuniform float cdIrisOn;",
+                    "#include <common>\nvarying vec3 cdLocal;\nuniform vec4 cdEyeA;\nuniform vec4 cdEyeB;\nuniform vec3 cdIris;\nvec3 cdGlow = vec3( 0.0 );",
                     1,
                 )
                 .replacen(
                     "#include <map_fragment>",
                     concat!("#include <map_fragment>\n", include_str!("shaders/look-eyes.glsl")),
                     1,
+                )
+                .replacen(
+                    "#include <emissivemap_fragment>",
+                    "#include <emissivemap_fragment>\ntotalEmissiveRadiance += cdGlow;",
+                    1,
                 );
             set(&shader, "fragmentShader", &fragment.into());
         })
         .into_js_value();
-        let hook = object(&[("key", "look1".into()), ("compile", compile.clone())]);
+        let hook = object(&[("key", "look3".into()), ("compile", compile.clone())]);
         HOOKS.with(|h| h.set(material.unchecked_ref(), &hook));
         // Until the next tune, the hook runs on its own; tune then chains it with the rest.
         set(material, "onBeforeCompile", &compile);
@@ -94,8 +102,6 @@ fn head_hook(material: &JsValue, paint: &JsValue) {
     set(&get(&uniforms, "cdEyeA"), "value", &area(0));
     set(&get(&uniforms, "cdEyeB"), "value", &area(1));
     set(&get(&uniforms, "cdIris"), "value", &get(paint, "iris"));
-    let on = if boolean(&get(paint, "recolorEyes")) { 1.0 } else { 0.0 };
-    set(&get(&uniforms, "cdIrisOn"), "value", &on.into());
 }
 
 /// Paints `look` onto `model`. Safe to call again after every change.

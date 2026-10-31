@@ -17,14 +17,14 @@ const SKINS: [Choice; 6] = [
     ("brown", "Тёмная", 0x9c7458),
     ("deep", "Очень тёмная", 0x6e4c38),
 ];
-/// Iris colours; grey is the scan's own eye.
+/// Eye glow colours. The ids are the old iris list's, so saved looks still load.
 const EYES: [Choice; 6] = [
-    ("grey", "Серые", 0x8c9092),
-    ("blue", "Голубые", 0x4f7396),
-    ("green", "Зелёные", 0x5b7a4c),
-    ("hazel", "Ореховые", 0x7a5a34),
-    ("brown", "Карие", 0x4a3020),
-    ("dark", "Тёмные", 0x241a14),
+    ("grey", "Лёд", 0x8fd6ff),
+    ("blue", "Синие", 0x3f8cff),
+    ("green", "Зелёные", 0x4dff88),
+    ("hazel", "Янтарные", 0xffb43a),
+    ("brown", "Красные", 0xff3d2e),
+    ("dark", "Фиолетовые", 0xa35cff),
 ];
 /// (sex, id, name, hair cap, hair cards). The male scan has its buzz cut baked into the head.
 const HAIRS: [(&str, &str, &str, bool, bool); 4] = [
@@ -52,10 +52,11 @@ const SUITS: [Choice; 6] = [
 /// Average sRGB of the baked hair cards and suit textures; picks are scaled against them.
 const HAIR_BASE: [f64; 3] = [0.406, 0.304, 0.229];
 const SUIT_BASE: [f64; 3] = [0.322, 0.295, 0.270];
-/// Eye areas in each head texture's UV space (x0, y0, x1, y1), from the 1024 px scans.
-const EYE_AREAS: [(&str, [f64; 8]); 2] = [
-    ("male", [185., 405., 235., 465., 260., 585., 330., 630.]),
-    ("female", [470., 685., 520., 725., 615., 680., 665., 720.]),
+/// Each head's two irises in its mesh's own space (x, y, z, radius). The scans' UV atlases scatter
+/// an eye over several islands, so the eyes are found by position, not by texture area.
+const EYE_SPOTS: [(&str, [f64; 8]); 2] = [
+    ("male", [-0.037, 1.7935, 0.086, 0.006, 0.0292, 1.793, 0.0858, 0.006]),
+    ("female", [-0.283, 0.092, 0.623, 0.05, 0.266, 0.103, 0.622, 0.05]),
 ];
 pub const CALLSIGN_MAX: usize = 16;
 
@@ -182,11 +183,7 @@ pub fn paint(look: &Value) -> Value {
         .unwrap_or(HAIRS[0]);
     let hair_color = find(&HAIR_COLORS, text(&look["hairColor"])).unwrap_or(HAIR_COLORS[2]);
     let eyes = find(&EYES, text(&look["eyes"])).unwrap_or(EYES[0]);
-    let areas = EYE_AREAS
-        .iter()
-        .find(|a| a.0 == sex)
-        .map(|a| a.1.map(|v| v / 1024.))
-        .unwrap_or([0.; 8]);
+    let spots = EYE_SPOTS.iter().find(|a| a.0 == sex).map(|a| a.1).unwrap_or([0.; 8]);
     let cap = lin(srgb(hair_color.2)).map(|v| v * 0.75);
     json!({
         "sex": sex,
@@ -198,8 +195,7 @@ pub fn paint(look: &Value) -> Value {
         "cap": hair.3,
         "cards": hair.4,
         "iris": round(lin(srgb(eyes.2))),
-        "recolorEyes": eyes.0 != "grey",
-        "eyeAreas": json!(areas),
+        "eyeSpots": json!(spots),
     })
 }
 
@@ -307,7 +303,7 @@ mod tests {
         assert_eq!(p["hairCards"], json!([1.0, 1.0, 1.0]));
         assert_eq!(p["suit"], json!([1.0, 1.0, 1.0]));
         assert_eq!(p["skin"], json!([1.0, 1.0, 1.0]));
-        assert_eq!(p["recolorEyes"], false);
+        assert_eq!(p["iris"], json!(round(lin(srgb(EYES[0].2)))));
         assert_eq!(p["cards"], true);
         assert_eq!(paint(&finished("male"))["model"], "persona-male");
     }
