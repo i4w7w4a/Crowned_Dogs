@@ -19,7 +19,7 @@ test("every sound points at files that were built", () => {
 
 test("no built file is left without a sound", () => {
   const used = new Set(Object.values(SOUNDS).flatMap((d) => d.files));
-  for (const dir of ["sfx", "amb"]) {
+  for (const dir of ["sfx", "amb", "voice"]) {
     for (const name of readdirSync(join(ASSETS, dir))) {
       assert.ok(used.has(`${dir}/${name}`), `${dir}/${name} is not used`);
     }

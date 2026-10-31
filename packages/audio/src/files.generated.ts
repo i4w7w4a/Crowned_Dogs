@@ -116,4 +116,10 @@ export const FILES: Record<string, FileInfo> = {
   "sfx/ui-tick-urgent.mp3": { seconds: 0.095, trimDb: 0.0 },
   "sfx/ui-turn.mp3": { seconds: 0.885, trimDb: 0.0 },
   "sfx/ui-victory.mp3": { seconds: 1.355, trimDb: 0.0 },
+  "voice/sedoy-1.mp3": { seconds: 5.365, trimDb: 0.0 },
+  "voice/sedoy-2.mp3": { seconds: 6.572, trimDb: 0.0 },
+  "voice/sedoy-3.mp3": { seconds: 7.826, trimDb: 0.0 },
+  "voice/sedoy-4.mp3": { seconds: 8.245, trimDb: 0.0 },
+  "voice/sedoy-5.mp3": { seconds: 5.543, trimDb: 0.0 },
+  "voice/sedoy-6.mp3": { seconds: 6.354, trimDb: 0.0 },
 };

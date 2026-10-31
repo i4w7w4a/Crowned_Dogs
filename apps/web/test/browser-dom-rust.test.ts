@@ -234,7 +234,7 @@ test("base waits for its camera journey, ignores repeated clicks and cancels nav
     base=new BrowserBase(root,async()=>{battles++;},{
       baseUrl:"/",backArrow:"",GEAR_SLOT_NAMES:{},GEAR_SLOTS:[],ITEM_BY_ID:new Map(),
       loadLocalLoadout:()=>({weapon1:{item:"rifle-ak"}}),compileKit:()=>({armor:{head:0,body:0,legs:0}}),
-      WeaponScreen:Workshop,DepthBackdrop:Depth,HomeStage:Home,liquidGlass(){},gameAudio:{screen(){}},
+      WeaponScreen:Workshop,DepthBackdrop:Depth,HomeStage:Home,liquidGlass(){},gameAudio:{screen(){},voice(){},stopVoice(){}},
     });
     await new Promise(resolve=>setImmediate(resolve));
     const enter=root.querySelector(".cd-enter");const now=performance.now();

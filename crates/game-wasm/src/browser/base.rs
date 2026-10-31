@@ -112,6 +112,7 @@ impl Base {
         } else {
             hidden(&query(&self.fitting, ".cd-briefing"), true);
             hidden(&query(&self.fitting, ".cd-create"), true);
+            call_optional(&get(&self.host, "gameAudio"), "stopVoice", &[]);
         }
         if view != "persona" && was == "persona" {
             // Leaving without «Готово» drops the unsaved choices.
@@ -155,6 +156,7 @@ impl Base {
         if briefing {
             self.render_briefing();
         } else {
+            call_optional(&get(&self.host, "gameAudio"), "stopVoice", &[]);
             attr(&query(&self.fitting, ".cd-create-options"), "data-step", "");
             let face = creation::STEPS[self.step].2;
             self.set_focus(if face { "face" } else { "body" });
@@ -167,6 +169,12 @@ impl Base {
         html(
             &query(&self.fitting, ".cd-briefing-line"),
             &creation::spoken(&line.replace("{tag}", &tag)),
+        );
+        // Sedoy reads the line aloud: voice.sedoy.1..6, see tools/audio/build_voice.py.
+        call_optional(
+            &get(&self.host, "gameAudio"),
+            "voice",
+            &[js(&format!("voice.sedoy.{}", self.brief + 1))],
         );
         content(&query(&self.fitting, ".cd-briefing-next"), button);
         let contract = query(&self.fitting, ".cd-contract");

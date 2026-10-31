@@ -5,10 +5,10 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 
 // The sound package keeps its files in packages/audio/assets. The game serves them
-// next to the page (sfx/, amb/, music/), in dev and in the build alike, so the built
+// next to the page (sfx/, amb/, music/, voice/), in dev and in the build alike, so the built
 // folder is laid out like the arena artifact.
 const AUDIO = fileURLToPath(new URL("../../packages/audio/assets", import.meta.url));
-const AUDIO_DIRS = ["sfx", "amb", "music"];
+const AUDIO_DIRS = ["sfx", "amb", "music", "voice"];
 
 function audioAssets(): Plugin {
   return {

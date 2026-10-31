@@ -49,6 +49,8 @@ pub struct BrowserArenaAudio {
     room: String,
     levels: JsValue,
     silent: bool,
+    /// An instructor line asked for before the first tap built the audio; it plays on unlock.
+    voice: Option<String>,
 }
 #[wasm_bindgen]
 impl BrowserArenaAudio {
@@ -101,6 +103,7 @@ impl BrowserArenaAudio {
             room: "hall".into(),
             levels: levels.into(),
             silent,
+            voice: None,
         }
     }
     #[wasm_bindgen(getter)]
@@ -153,6 +156,9 @@ impl BrowserArenaAudio {
         call(&self.audio, "setAmbience", &[self.ambience.clone()]);
         call(&self.audio, "setRoom", &[js(&self.room)]);
         quiet(call(&self.audio, "preload", &[self.preloads.clone()]));
+        if let Some(id) = self.voice.take() {
+            call(&self.audio, "play", &[js(&id), JsValue::UNDEFINED]);
+        }
         if self.mode == "menu" {
             call(&music, "enterMenu", &[]);
         } else {
@@ -279,6 +285,19 @@ impl BrowserArenaAudio {
     }
     pub fn play(&self, id: &str, options: JsValue) {
         call_optional(&self.audio, "play", &[js(id), options]);
+    }
+    /// The instructor speaks; a newer line or stopVoice cuts the one on air.
+    pub fn voice(&mut self, id: &str) {
+        if exists(&self.audio) {
+            self.play(id, JsValue::UNDEFINED);
+        } else {
+            self.voice = Some(id.into());
+        }
+    }
+    #[wasm_bindgen(js_name=stopVoice)]
+    pub fn stop_voice(&mut self) {
+        self.voice = None;
+        call_optional(&self.audio, "stopVoice", &[]);
     }
     pub fn toggle(&mut self) {
         self.enabled = !self.enabled;

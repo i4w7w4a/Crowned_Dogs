@@ -255,6 +255,10 @@ struct Audio {
     hall_return: JsValue,
     callbacks: Vec<Closure<dyn FnMut(JsValue, JsValue)>>,
     keep_alive: JsValue,
+    /// The instructor line on air. A newer line or stopVoice cuts it; `voice_turn` drops a
+    /// line that is still decoding when a newer one was asked for.
+    voice: JsValue,
+    voice_turn: u32,
 }
 impl Audio {
     fn random(&self) -> f64 {
@@ -296,9 +300,13 @@ impl Audio {
         promise
     }
     fn play(state: &Rc<RefCell<Self>>, id: &str, options: JsValue) {
-        let (file, when) = {
+        let (file, when, voice, turn) = {
             let mut s = state.borrow_mut();
             let definition = get(&s.sounds, id);
+            let voice = boolean(&definition, "voice");
+            if voice {
+                s.voice_turn += 1;
+            }
             let files = Array::from(&get(&definition, "files"));
             let random = if files.length() > 1 { s.random() } else { 0.0 };
             let previous = s
@@ -316,6 +324,8 @@ impl Audio {
             (
                 text(&files.get(index)),
                 time(&s.ctx) + num(&options, "delay"),
+                voice,
+                s.voice_turn,
             )
         };
         let promise = Self::buffer(state, &file);
@@ -328,7 +338,10 @@ impl Audio {
             let Some(state) = weak.upgrade() else {
                 return;
             };
-            let s = state.borrow();
+            let mut s = state.borrow_mut();
+            if voice && s.voice_turn != turn {
+                return;
+            }
             let definition = get(&s.sounds, &id);
             let source = call(&s.ctx, "createBufferSource", &[]);
             set(&source, "buffer", &buffer);
@@ -383,13 +396,29 @@ impl Audio {
             call(&source, "connect", &[head]);
             let at = when.max(time(&s.ctx));
             call(&source, "start", &[number(at)]);
+            if voice {
+                s.cut_voice();
+                s.voice = source;
+            }
             let duck = num(&definition, "duckDb");
             if duck != 0.0 {
-                s.duck(duck, at);
+                // A voice line keeps the music down until it ends.
+                let hold = if voice { num(&buffer, "duration") } else { 0.0 };
+                s.duck(duck, at, hold);
             }
         });
     }
-    fn duck(&self, db: f64, at: f64) {
+    fn cut_voice(&mut self) {
+        let voice = std::mem::replace(&mut self.voice, JsValue::NULL);
+        if exists(&voice) {
+            let _ = invoke(&voice, "stop", &[]);
+            let gain = get(&self.duck, "gain");
+            let now = time(&self.ctx);
+            call(&gain, "cancelScheduledValues", &[number(now)]);
+            call(&gain, "setTargetAtTime", &[number(1.0), number(now), number(0.4)]);
+        }
+    }
+    fn duck(&self, db: f64, at: f64, hold: f64) {
         let gain = get(&self.duck, "gain");
         call(&gain, "cancelScheduledValues", &[number(at)]);
         call(
@@ -404,7 +433,7 @@ impl Audio {
         call(
             &gain,
             "setTargetAtTime",
-            &[number(1.0), number(at + 0.25), number(0.4)],
+            &[number(1.0), number(at + hold.max(0.25)), number(0.4)],
         );
     }
     fn deck_play(state: &Rc<RefCell<Self>>, channel: &str, track: &str) {
@@ -625,6 +654,8 @@ impl BrowserGameAudio {
             hall_return,
             callbacks: vec![],
             keep_alive: JsValue::NULL,
+            voice: JsValue::NULL,
+            voice_turn: 0,
         }));
         let deck = Object::new();
         for method in ["play", "pause", "resume", "stop", "cue"] {
@@ -719,6 +750,12 @@ impl BrowserGameAudio {
     }
     pub fn play(&self, id: &str, options: JsValue) {
         Audio::play(&self.state, id, options);
+    }
+    #[wasm_bindgen(js_name=stopVoice)]
+    pub fn stop_voice(&self) {
+        let mut s = self.state.borrow_mut();
+        s.voice_turn += 1;
+        s.cut_voice();
     }
     #[wasm_bindgen(js_name=playCues)]
     pub fn play_cues(&self, cues: JsValue, start_in: f64) {

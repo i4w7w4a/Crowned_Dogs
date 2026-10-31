@@ -194,6 +194,11 @@ def write_files_ts(report):
             trim = max(-4.0, min(4.0, round(mid - report[p][key], 1))) if len(paths) > 1 else 0.0
             extra = ", loop: true" if report[p]["loop"] else ""
             lines.append(f'  "{p}": {{ seconds: {report[p]["seconds"]}, trimDb: {trim}{extra} }},')
+    # The instructor's lines come from build_voice.py; keep them when the effects are rebuilt.
+    voice = ASSETS / "voice-sources.json"
+    if voice.exists():
+        for p, info in sorted(json.loads(voice.read_text(encoding="utf-8")).items()):
+            lines.append(f'  "{p}": {{ seconds: {info["seconds"]}, trimDb: 0.0 }},')
     lines += ["};", ""]
     (ROOT / "packages" / "audio" / "src" / "files.generated.ts").write_text("\n".join(lines))
 
