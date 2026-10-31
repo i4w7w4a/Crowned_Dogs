@@ -111,19 +111,31 @@ function arms() {
   const hand = new Hand(model, gripOf(model)!, new THREE.MeshStandardMaterial());
   return { model, hand };
 }
-test("Rust first-person recoil and support-arm placement preserve all four weapon stances", () => {
+// The grips were redrawn on purpose (Art, 2026-11-01: a straight pistol wrist, the support hand further along the
+// pump and the forend, the elbows re-aimed), so the arms and the pistol stance no longer match the frozen reference.
+// The long guns' right hand still must exactly, and the gun with its recoil to a millimetre once the blend out of the
+// new pistol pose has settled; the support hand must stay on the gun, further out than it was.
+test("Rust first-person recoil and support-arm placement keep all four weapon stances on the gun", () => {
+  const at = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3());
   for (const stance of ["pistol", "rifle", "shotgun", "sniper"] as const) {
-    const a = arms(), b = arms(), rust = new Viewmodel(a.model, a.hand), old = new ReferenceViewmodel(b.model, b.hand);
+    const a = arms(), b = arms(), c = arms(), rust = new Viewmodel(a.model, a.hand), old = new ReferenceViewmodel(b.model, b.hand), calm = new Viewmodel(c.model, c.hand);
     const camera = new THREE.PerspectiveCamera(); camera.position.set(.08, 1.65, .3); camera.lookAt(.1, 1.4, -5); camera.updateMatrixWorld(true);
     const target = new THREE.Vector3(.1, 1.4, -5);
     for (let frame = 0; frame < 90; frame++) {
       if (frame === 20) { rust.shot(); old.shot(); }
-      rust.update(1/60, true, frame >= 5 && frame < 70, stance, camera, target);
-      old.update(1/60, true, frame >= 5 && frame < 70, stance, camera, target);
-      a.model.updateMatrixWorld(true); b.model.updateMatrixWorld(true);
-      close(a.hand.mount.getWorldPosition(new THREE.Vector3()).toArray(), b.hand.mount.getWorldPosition(new THREE.Vector3()).toArray(), `${stance} frame ${frame} grip`, 1e-6);
-      for (const name of ["hand_l", "hand_r", "lowerarm_l", "lowerarm_r"]) {
-        close(a.model.getObjectByName(name)!.getWorldPosition(new THREE.Vector3()).toArray(), b.model.getObjectByName(name)!.getWorldPosition(new THREE.Vector3()).toArray(), `${stance} frame ${frame} ${name}`, 1e-6);
+      for (const view of [rust, old, calm]) view.update(1/60, true, frame >= 5 && frame < 70, stance, camera, target);
+      a.model.updateMatrixWorld(true); b.model.updateMatrixWorld(true); c.model.updateMatrixWorld(true);
+      const gun = at(a.hand.mount), oldGun = at(b.hand.mount), support = at(a.model.getObjectByName("hand_l")!);
+      for (const name of ["hand_l", "hand_r", "lowerarm_l", "lowerarm_r"]) assert.ok(at(a.model.getObjectByName(name)!).toArray().every(Number.isFinite), `${stance} frame ${frame} ${name}`);
+      if (stance !== "pistol") {
+        close(at(a.model.getObjectByName("hand_r")!).toArray(), at(b.model.getObjectByName("hand_r")!).toArray(), `${stance} frame ${frame} hand_r`, 1e-6);
+        if (frame >= 15) close(gun.toArray(), oldGun.toArray(), `${stance} frame ${frame} grip`, 1e-3);
+      }
+      if (frame === 21) assert.ok(gun.distanceTo(at(c.hand.mount)) > .01, `${stance} shot kicks the gun`);
+      if (frame >= 10 && frame < 70) {
+        const reach = support.distanceTo(gun), oldReach = at(b.model.getObjectByName("hand_l")!).distanceTo(oldGun);
+        if (stance === "pistol") assert.ok(reach < .15, `${stance} frame ${frame} support hand cups the pistol: ${reach}`);
+        else assert.ok(reach > oldReach + .05 && reach < .6, `${stance} frame ${frame} support hand further along the gun: ${reach} vs ${oldReach}`);
       }
     }
   }
