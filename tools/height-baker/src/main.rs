@@ -529,15 +529,25 @@ fn run() -> Result<()> {
     let out = root.join("apps/web/public/tex/relief");
     fs::create_dir_all(&out)?;
     let mut models = serde_json::Map::new();
+    // Guns are exported in metres (None); the Tripo armour is normalised to about one unit.
     for (model, depth, eligible, physical) in [
-        ("varyag", 0.00035, true, 0.790000066),
-        ("tripo-helmet", 0.00030, true, 0.30),
-        ("tripo-vest", 0.00070, true, 0.60),
-        ("tripo-suit-male", 0.00060, false, 1.55),
+        ("varyag", 0.00035, true, None),
+        ("pustelga", 0.00035, true, None),
+        ("taran", 0.00035, true, None),
+        ("berkut", 0.00035, true, None),
+        ("tripo-helmet", 0.00030, true, Some(0.30)),
+        ("tripo-vest", 0.00070, true, Some(0.60)),
+        ("tripo-suit-male", 0.00060, false, Some(1.55)),
     ] {
         let glb = Gltf::load(&root.join(format!("apps/web/public/preview/{model}.json")))?;
+        let estimated = physical.is_some();
+        let physical = physical.unwrap_or(glb.max_dimension());
         let mut materials = serde_json::Map::new();
         for mi in 0..glb.doc["materials"].as_array().unwrap().len() {
+            // Plain parts (the twin-magazine clamp) have no normal map to integrate.
+            if glb.doc["materials"][mi]["normalTexture"].is_null() {
+                continue;
+            }
             let item = bake(&glb, model, mi, &out, depth, eligible)?;
             materials.insert(
                 glb.doc["materials"][mi]["name"]
@@ -547,7 +557,7 @@ fn run() -> Result<()> {
                 item,
             );
         }
-        models.insert(model.to_owned(),json!({"source":format!("preview/{model}.json"),"sourceMaxDimension":glb.max_dimension(),"intendedMaxDimensionMeters":physical,"unitsPerMeter":glb.max_dimension()/physical,"physicalDimensionEstimated":model!="varyag","materials":materials}));
+        models.insert(model.to_owned(),json!({"source":format!("preview/{model}.json"),"sourceMaxDimension":glb.max_dimension(),"intendedMaxDimensionMeters":physical,"unitsPerMeter":glb.max_dimension()/physical,"physicalDimensionEstimated":estimated,"materials":materials}));
     }
     // Fitted copies may share atlas coordinates, but do not assume that from names.
     // Validate their actual UV coverage and decoded normal pixels before aliasing.

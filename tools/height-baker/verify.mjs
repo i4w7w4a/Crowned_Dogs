@@ -24,4 +24,5 @@ const hashes = Object.fromEntries([...paths].sort().map(path => [path, createHas
 const record = resolve(root, 'tools/height-baker/checksums.json');
 if (process.argv.includes('--record')) writeFileSync(record, JSON.stringify(hashes, null, 2) + '\n');
 else assert.deepEqual(hashes, JSON.parse(readFileSync(record, 'utf8')));
-console.log(`${paths.size} sources/maps/manifest verified; 6 unique material sets, dimensions and PNG bit depth match.`);
+const sets = new Set(Object.values(manifest.models).flatMap(model => Object.values(model.materials).map(m => m.relief))).size;
+console.log(`${paths.size} sources/maps/manifest verified; ${sets} unique material sets, dimensions and PNG bit depth match.`);

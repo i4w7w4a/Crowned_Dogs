@@ -53,6 +53,9 @@ pub fn run(root: &Path) -> Result<()> {
     let mut manifest: Value = serde_json::from_slice(&fs::read(&path)?)?;
     for (model, recovered, range, authored) in [
         ("varyag", 0.0016, 0.0016, false),
+        ("pustelga", 0.0016, 0.0016, false),
+        ("taran", 0.0016, 0.0016, false),
+        ("berkut", 0.0016, 0.0016, false),
         ("tripo-helmet", 0.0011, 0.0011, false),
         ("tripo-vest", 0.0007, 0.0024, true),
     ] {

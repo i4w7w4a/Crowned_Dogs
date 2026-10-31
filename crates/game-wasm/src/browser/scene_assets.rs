@@ -521,7 +521,17 @@ async fn install_relief_async(host: JsValue, root: JsValue, url: String) -> Resu
         .strip_suffix(".json")
         .or_else(|| filename.strip_suffix(".glb"))
         .unwrap_or("");
-    if !["varyag", "tripo-helmet", "tripo-vest", "persona-authored"].contains(&name) {
+    if ![
+        "varyag",
+        "pustelga",
+        "taran",
+        "berkut",
+        "tripo-helmet",
+        "tripo-vest",
+        "persona-authored",
+    ]
+    .contains(&name)
+    {
         return Ok(());
     }
     let base = string(&get(&host, "baseUrl"));
