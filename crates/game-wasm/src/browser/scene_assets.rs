@@ -177,6 +177,9 @@ pub struct RustSceneHand {
     items: Vec<(String, JsValue)>,
     shown: Option<String>,
     muzzles: HashMap<String, JsValue>,
+    /// The mount's rest turn in the hand, and how far a round's kick still lifts the muzzle (0..1).
+    rest: JsValue,
+    recoil: f64,
 }
 #[wasm_bindgen]
 impl RustSceneHand {
@@ -276,12 +279,15 @@ impl RustSceneHand {
             call(&mount, "add", &[group.clone()]);
             items.push((held.to_owned(), group));
         }
+        let rest = call(&get(&mount, "quaternion"), "clone", &[]);
         let mut hand = Self {
             host,
             mount,
             items,
             shown: None,
             muzzles: HashMap::new(),
+            rest,
+            recoil: 0.,
         };
         hand.fit(Object::new().into());
         hand
@@ -328,6 +334,32 @@ impl RustSceneHand {
                 &(Some(held) == self.shown.as_ref()).into(),
             );
         }
+    }
+    /// One round's recoil: the muzzle jumps up, then `settle` brings it back.
+    pub fn kick(&mut self) {
+        self.recoil = 1.;
+        self.lift();
+    }
+    pub fn settle(&mut self, dt: f64) {
+        if self.recoil > 0. {
+            self.recoil = (self.recoil - dt * 11.).max(0.);
+            self.lift();
+        }
+    }
+    fn lift(&self) {
+        // The gun points along +x in the mount, so a turn about z raises the muzzle around the grip.
+        let turn = make(&self.host, "Quaternion", &[]);
+        call(
+            &turn,
+            "setFromAxisAngle",
+            &[
+                make(&self.host, "Vector3", &[0.into(), 0.into(), 1.into()]),
+                (0.07 * self.recoil).into(),
+            ],
+        );
+        let q = get(&self.mount, "quaternion");
+        call(&q, "copy", &[self.rest.clone()]);
+        call(&q, "multiply", &[turn]);
     }
     pub fn muzzle(&mut self, out: JsValue) -> bool {
         let Some(what) = self.shown.as_ref() else {

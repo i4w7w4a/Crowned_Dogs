@@ -142,12 +142,15 @@ impl Script {
                 at
             }
             weapon => {
-                self.add(
-                    format!("shot.{weapon}.{}", if ours { "near" } else { "far" }),
-                    t,
-                    side,
-                    0.0,
-                );
+                let rounds = if weapon == "rifle" { 4 } else { 1 };
+                for round in 0..rounds {
+                    self.add(
+                        format!("shot.{weapon}.{}", if ours { "near" } else { "far" }),
+                        t + 0.09 * round as f64,
+                        side,
+                        if round == 0 { 0.0 } else { -2.0 },
+                    );
+                }
                 if ours && weapon != "shotgun" {
                     self.add("casing", t + 0.55, side, 0.0);
                 }

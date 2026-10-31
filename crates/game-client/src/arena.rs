@@ -31,7 +31,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
                     v["tilt"] = t[3].clone();
                 }
             }
-            json!({"views":views,"muzzle":{"pistol":0.16,"rifle":0.24,"shotgun":0.3,"sniper":0.28}})
+            json!({"views":views,"muzzle":{"size":{"pistol":0.26,"rifle":0.34,"shotgun":0.46,"sniper":0.42},"rounds":{"rifle":4}}})
         }
         "client.arena.calibrate" => {
             let f = &args[0];

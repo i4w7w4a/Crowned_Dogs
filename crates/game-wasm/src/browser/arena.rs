@@ -1042,7 +1042,9 @@ impl ArenaState {
                 n(if near { NEAR } else { 0. }),
             ],
         );
-        call(&self.scene, "add", &[get(&flash, "sprite")]);
+        for part in js_sys::Array::from(&get(&flash, "parts")).iter() {
+            call(&self.scene, "add", &[part]);
+        }
         Figure {
             group,
             tilt,
@@ -1386,15 +1388,24 @@ impl ArenaState {
             if kind == "knife" || kind == "grenade" || !present(&f.hand) {
                 continue;
             }
+            let target = if is_me {
+                self.enemy.as_ref().unwrap()
+            } else {
+                self.me.as_ref().unwrap()
+            };
+            zone_world(target, "body", &self.aim, &self.tmp_b);
+            let rounds = self.muzzle["rounds"][&kind].as_u64().unwrap_or(1) as u32;
             call(
                 &f.flash,
                 "fire",
-                &[f.hand.clone(), json(&self.muzzle[&kind])],
+                &[
+                    f.hand.clone(),
+                    json(&self.muzzle["size"][&kind]),
+                    n(rounds as f64),
+                    self.aim.clone(),
+                ],
             );
             self.flash_of = Some(is_me);
-            if is_me && present(&self.viewmodel) {
-                call(&self.viewmodel, "shot", &[]);
-            }
         }
         set(
             &self.wide_k,
@@ -1439,6 +1450,9 @@ impl ArenaState {
             "update",
             &[n(dt)],
         )));
+        if boolean(&get(&me.flash, "fired")) && present(&self.viewmodel) {
+            call(&self.viewmodel, "shot", &[]);
+        }
         if let Some(is_me) = self.flash_of {
             if lit > 0. {
                 let f = if is_me { me } else { enemy };
@@ -1448,7 +1462,7 @@ impl ArenaState {
                 );
             }
         }
-        set(&self.muzzle_light, "intensity", &n(6. * lit));
+        set(&self.muzzle_light, "intensity", &n(9. * lit));
         if self.spark_life > 0. {
             let q = math(
                 "spark",

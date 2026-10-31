@@ -46,6 +46,20 @@ fn client_behavior_matches_the_pre_migration_game() {
                 cue.remove("wetDb");
                 cue.remove("cutHz");
             }
+            // The rifle's burst rounds came later too: keep only the first report of each burst.
+            let mut first: Vec<(Value, Value, f64)> = vec![];
+            actual.as_array_mut().unwrap().retain(|cue| {
+                let id = cue["sound"].clone();
+                let t = cue["at"].as_f64().unwrap_or(0.0);
+                let repeat = id.as_str().is_some_and(|id| id.starts_with("shot.rifle"))
+                    && first.iter().any(|(i, s, at)| {
+                        *i == id && *s == cue["pan"] && t > *at && t - at < 0.3
+                    });
+                if !repeat {
+                    first.push((id, cue["pan"].clone(), t));
+                }
+                !repeat
+            });
         }
         same(&actual, &case["value"], &format!("case {index} {method}"));
     }
