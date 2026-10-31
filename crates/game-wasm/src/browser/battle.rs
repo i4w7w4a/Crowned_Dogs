@@ -764,7 +764,13 @@ fn play_turn(s: &JsValue, r: JsValue) {
     stop_timer(s);
     set(s, "busy", &true.into());
     audio(s, "play", &["ui.confirm".into()]);
-    audio(s, "turn", &[r.clone(), match_(s)]);
+    // Where each fighter stands for the ear; an arena without it keeps the fixed stereo places.
+    let ears = if get(&get(s, "arena"), "ears").is_function() {
+        arena(s, "ears", &[])
+    } else {
+        JsValue::UNDEFINED
+    };
+    audio(s, "turn", &[r.clone(), match_(s), ears]);
     arm_both(s);
     let moves = get(&r, "moves");
     arena(

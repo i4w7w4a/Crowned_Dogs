@@ -774,6 +774,25 @@ impl RustArena {
     pub fn reset(&self, distance: f64) {
         self.state.borrow_mut().reset(distance);
     }
+    /// Where each fighter sounds from: [our pan, enemy pan], from the camera's left-right angle to them.
+    pub fn ears(&self) -> JsValue {
+        let s = self.state.borrow();
+        if !s.ready {
+            return JsValue::UNDEFINED;
+        }
+        let inverse = get(&s.camera, "matrixWorldInverse");
+        let mut out = [0.0; 2];
+        for (slot, figure) in [s.me.as_ref(), s.enemy.as_ref()].into_iter().enumerate() {
+            let Some(figure) = figure else { continue };
+            call(&figure.group, "getWorldPosition", &[s.tmp_a.clone()]);
+            call(&s.tmp_a, "applyMatrix4", &[inverse.clone()]);
+            let (x, z) = (p(&s.tmp_a, "x"), p(&s.tmp_a, "z"));
+            let reach = (x * x + z * z).sqrt().max(0.001);
+            out[slot] = (x / reach * 0.9).clamp(-0.85, 0.85);
+        }
+        // A plain array: it goes through JSON to the cue policy, where a typed array would become an object.
+        js_sys::Array::of2(&n(out[0]), &n(out[1])).into()
+    }
     #[wasm_bindgen(js_name=zoneOnScreen)]
     pub fn zone_on_screen(&self, zone: String) -> JsValue {
         let s = self.state.borrow();

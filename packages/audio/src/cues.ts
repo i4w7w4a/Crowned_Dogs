@@ -2,11 +2,13 @@
 import { callRust } from "../../runtime/src/index.ts";
 import type { Side, TurnReport, WeaponId, Zone } from "@crowned-dogs/core";
 import type { SoundId } from "./bank.ts";
-export interface Cue { sound: SoundId; at: number; gainDb: number; pan: number }
+export interface Cue { sound: SoundId; at: number; gainDb: number; pan: number; wetDb: number; cutHz?: number }
 export interface TurnSoundContext {
   viewer: Side;
   armor?: [Partial<Record<Zone, number>>, Partial<Record<Zone, number>>];
   weapons?: [WeaponId, WeaponId];
+  /** Stereo place of each side as the arena camera sees it; fixed defaults without it. */
+  pan?: [number, number];
 }
 export const TIMING = callRust<{ TIMING: {
   move: number; ourAttack: number; enemyAttack: number; stepGap: number; dashStepGap: number;

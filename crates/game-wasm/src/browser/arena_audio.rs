@@ -45,6 +45,8 @@ pub struct BrowserArenaAudio {
     list: JsValue,
     spot: (f64, f64),
     ambience: JsValue,
+    /// Reverb preset of the current fight map.
+    room: String,
     levels: JsValue,
     silent: bool,
 }
@@ -96,6 +98,7 @@ impl BrowserArenaAudio {
             list,
             spot: (-0.55, 0.0),
             ambience: args(&[js("amb.base")]).into(),
+            room: "hall".into(),
             levels: levels.into(),
             silent,
         }
@@ -148,6 +151,7 @@ impl BrowserArenaAudio {
             &[number(self.spot.0), number(self.spot.1)],
         );
         call(&self.audio, "setAmbience", &[self.ambience.clone()]);
+        call(&self.audio, "setRoom", &[js(&self.room)]);
         quiet(call(&self.audio, "preload", &[self.preloads.clone()]));
         if self.mode == "menu" {
             call(&music, "enterMenu", &[]);
@@ -161,11 +165,10 @@ impl BrowserArenaAudio {
     #[wasm_bindgen(js_name=setPlace)]
     pub fn set_place(&mut self, m: JsValue) {
         let config = get(&m, "config");
-        let bed = if text(&get(&config, "mapId")) == "blocks" {
-            "amb.blocks"
-        } else {
-            "amb.hall"
-        };
+        let blocks = text(&get(&config, "mapId")) == "blocks";
+        let bed = if blocks { "amb.blocks" } else { "amb.hall" };
+        self.room = if blocks { "blocks" } else { "hall" }.into();
+        call_optional(&self.audio, "setRoom", &[js(&self.room)]);
         let ids = Array::new();
         ids.push(&js(bed));
         let layer = match text(&get(&config, "weather")).as_str() {
@@ -248,7 +251,8 @@ impl BrowserArenaAudio {
         call_optional(&get(&self.audio, "music"), "enterMenu", &[]);
         self.amb_level();
     }
-    pub fn turn(&self, report: JsValue, m: JsValue) {
+    /// `ears` is the arena's [our pan, enemy pan] seen from the camera, or undefined before it loads.
+    pub fn turn(&self, report: JsValue, m: JsValue, ears: JsValue) {
         if !exists(&self.audio) {
             return;
         }
@@ -267,6 +271,9 @@ impl BrowserArenaAudio {
             "weapons",
             &args(&[get(&a, "weapon"), get(&b, "weapon")]),
         );
+        if ears.is_object() {
+            set(&options, "pan", &ears);
+        }
         let cues = call(&self.host, "cuesForTurn", &[report, options.into()]);
         call(&self.audio, "playCues", &[cues, number(0.0)]);
     }

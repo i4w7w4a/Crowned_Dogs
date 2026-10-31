@@ -12,7 +12,7 @@ fn connect(from: &JsValue, to: &JsValue) {
 fn samples(kind: &str, rate: u32, seconds: f64, seed: u32) -> Float32Array {
     Float32Array::from(crate::audio_samples(kind, rate, seconds, seed).as_slice())
 }
-fn buffer(ctx: &JsValue, kind: &str, seconds: f64) -> JsValue {
+pub(super) fn buffer(ctx: &JsValue, kind: &str, seconds: f64) -> JsValue {
     let rate = num(&get(ctx, "sampleRate")) as u32;
     let data = samples(
         kind,

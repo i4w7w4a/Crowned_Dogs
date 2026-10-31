@@ -250,6 +250,9 @@ struct Audio {
     music: JsValue,
     radio: JsValue,
     channels: HashMap<String, Channel>,
+    /// Shared room reverb: cues send into `hall`, its tail returns through `hall_return` to the sfx bus.
+    hall: JsValue,
+    hall_return: JsValue,
     callbacks: Vec<Closure<dyn FnMut(JsValue, JsValue)>>,
     keep_alive: JsValue,
 }
@@ -351,8 +354,13 @@ impl Audio {
             );
             let out = s.buses.get(&text(&get(&definition, "bus"))).unwrap();
             let g = gain(&s.ctx, num(&levels, "gainDb"), out);
+            let wet = get(&options, "wetDb");
+            if wet.as_f64().is_some() && exists(&s.hall) {
+                let send = gain(&s.ctx, num(&options, "wetDb"), &s.hall);
+                call(&g, "connect", &[send]);
+            }
             let pan = num(&options, "pan");
-            let head = if pan != 0.0 {
+            let mut head = if pan != 0.0 {
                 let panner = call(&s.ctx, "createStereoPanner", &[]);
                 set(&get(&panner, "pan"), "value", &number(pan));
                 call(&panner, "connect", &[g]);
@@ -360,6 +368,18 @@ impl Audio {
             } else {
                 g
             };
+            let cut = num(&options, "cutHz");
+            let filter = if cut > 0.0 {
+                invoke(&s.ctx, "createBiquadFilter", &[]).unwrap_or(JsValue::NULL)
+            } else {
+                JsValue::NULL
+            };
+            if exists(&filter) {
+                set(&filter, "type", &js("lowpass"));
+                set(&get(&filter, "frequency"), "value", &number(cut));
+                call(&filter, "connect", &[head]);
+                head = filter;
+            }
             call(&source, "connect", &[head]);
             let at = when.max(time(&s.ctx));
             call(&source, "start", &[number(at)]);
@@ -558,6 +578,15 @@ impl BrowserGameAudio {
                 ),
             );
         }
+        // Optional: a context without convolution (old engines, test fakes) just plays dry.
+        let hall = invoke(&ctx, "createConvolver", &[]).unwrap_or(JsValue::NULL);
+        let hall_return = if exists(&hall) {
+            let level = gain(&ctx, -60.0, buses.get("sfx").unwrap());
+            call(&hall, "connect", &[level.clone()]);
+            level
+        } else {
+            JsValue::NULL
+        };
         let radio = call(&host, "createRadio", &[ctx.clone()]);
         let music_bus = buses.get("music").unwrap();
         call(&get(&radio, "output"), "connect", &[music_bus.clone()]);
@@ -592,6 +621,8 @@ impl BrowserGameAudio {
             music: JsValue::NULL,
             radio,
             channels,
+            hall,
+            hall_return,
             callbacks: vec![],
             keep_alive: JsValue::NULL,
         }));
@@ -695,7 +726,9 @@ impl BrowserGameAudio {
             let options = Object::new();
             set(&options, "delay", &number(start_in + num(&cue, "at")));
             set(&options, "gainDb", &get(&cue, "gainDb"));
-            set(&options, "pan", &get(&cue, "pan"));
+            for key in ["pan", "wetDb", "cutHz"] {
+                set(&options, key, &get(&cue, key));
+            }
             Audio::play(&self.state, &text(&get(&cue, "sound")), options.into());
         }
     }
@@ -751,6 +784,29 @@ impl BrowserGameAudio {
                 rust("audio.dsp.volume", &[number(channel.base), number(value)]),
                 number(time(&s.ctx)),
                 number(0.05),
+            ],
+        );
+    }
+    /// Picks the fight room ("hall", "blocks" or "off"): reverb length and how loud its tail returns.
+    #[wasm_bindgen(js_name=setRoom)]
+    pub fn set_room(&self, room: &str) {
+        let s = self.state.borrow();
+        if !exists(&s.hall) {
+            return;
+        }
+        let preset = rust("audio.dsp.room", &[js(room)]);
+        set(
+            &s.hall,
+            "buffer",
+            &super::radio::buffer(&s.ctx, "room", num(&preset, "seconds")),
+        );
+        call(
+            &get(&s.hall_return, "gain"),
+            "setTargetAtTime",
+            &[
+                rust("audio.dsp.dbToGain", &[get(&preset, "returnDb")]),
+                number(time(&s.ctx)),
+                number(0.2),
             ],
         );
     }

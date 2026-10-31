@@ -61,6 +61,12 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
         "audio.dsp.radio" => {
             json!({"lowCutHz":380,"presenceHz":1600,"presenceDb":5,"highCutHz":3400,"drive":2.2,"hissDb":-50,"roomSeconds":0.6,"roomDb":-9})
         }
+        // Reverb tail and return level of the fight room: the salt hall rings, the blocks are open air.
+        "audio.dsp.room" => match text(&args[0]) {
+            "blocks" => json!({"seconds":1.1,"returnDb":-8}),
+            "off" => json!({"seconds":0.3,"returnDb":-60}),
+            _ => json!({"seconds":2.6,"returnDb":-2}),
+        },
         "audio.dsp.radioTrim" => json!(1.0 / (1.0 + num(&args[0]) * 0.35)),
         "audio.dsp.radioPlace" => {
             let far = num(&args[0]);

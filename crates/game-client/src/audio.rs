@@ -21,11 +21,22 @@ struct Script {
     cues: Vec<Value>,
     viewer: usize,
     far: f64,
+    /// Stereo place of each side, measured from the camera when the arena is up.
+    pan: [f64; 2],
+    /// Low-pass for the far side: distant shots lose their top end in the air.
+    cut: f64,
 }
 impl Script {
     fn add(&mut self, sound: impl Into<String>, at: f64, side: usize, extra: f64) {
         let round = |v: f64| (v * 1000.0 + 0.5).floor() / 1000.0;
-        self.cues.push(json!({"sound":sound.into(),"at":round(at),"gainDb":round(if side==self.viewer{extra}else{self.far+extra}),"pan":if side==self.viewer{-0.3}else{0.15}}));
+        let ours = side == self.viewer;
+        let mut cue = json!({"sound":sound.into(),"at":round(at),"gainDb":round(if ours{extra}else{self.far+extra}),"pan":round(self.pan[side]),
+            // send into the hall: our own sounds stay mostly dry, the enemy's get wetter with distance
+            "wetDb":round(if ours{-15.0}else{-10.0-self.far*0.5})});
+        if !ours {
+            cue["cutHz"] = json!(self.cut.round());
+        }
+        self.cues.push(cue);
     }
     fn steps(&mut self, n: usize, gap: f64, side: usize) {
         for i in 0..n {
@@ -159,11 +170,22 @@ impl Script {
 fn cues_for_turn(report: &Value, ctx: &Value) -> Value {
     let me = ctx["viewer"].as_u64().unwrap_or(0) as usize;
     let sides = [me, 1 - me];
-    let far = -6.0f64.min(0.0f64.max(num(&report["distanceAfter"]) - 1.0) * 0.6);
+    let gap = 0.0f64.max(num(&report["distanceAfter"]) - 1.0);
+    let far = -6.0f64.min(gap * 0.6);
+    let mut pan = [0.0; 2];
+    for side in sides {
+        pan[side] = match ctx["pan"][side].as_f64() {
+            Some(p) => p.clamp(-0.85, 0.85),
+            None if side == me => -0.3,
+            None => 0.15,
+        };
+    }
     let mut s = Script {
         cues: vec![],
         viewer: me,
         far,
+        pan,
+        cut: 16000.0 / (1.0 + gap * 0.15),
     };
     for side in sides {
         s.movement(&report["actions"][side], side);
