@@ -34,6 +34,7 @@ const MOD_MESHES: [(&str, &[&str]); 4] = [
             "muzzle-choke",
             "muzzle-vata",
             "rail-luch",
+            "rail-lcu",
             "mag-shotgun-box",
             "mag-shotgun-slug",
             "mag-shotgun-buck",

@@ -1037,54 +1037,6 @@
             "uvCoveredPixels": 610972
           }
         },
-        "M_StockPistolHvat": {
-          "depthMeters": 0.0015999999595806003,
-          "detailDepthMeters": 0.0,
-          "detailProfileVersion": 1,
-          "eligible": true,
-          "fabricDepthMeters": 0.0,
-          "fabricPeriodMeters": 0.0,
-          "height": "tex/relief/pustelga-M_StockPistolHvat.height.png",
-          "height16": "tex/relief/pustelga-M_StockPistolHvat.height16.png",
-          "mask": "tex/relief/pustelga-M_StockPistolHvat.mask.png",
-          "maximumDepthMeters": 0.0015999999595806003,
-          "midpoint": 0.5019607843137255,
-          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
-          "relief": "tex/relief/pustelga-M_StockPistolHvat.relief.png",
-          "resolution": [
-            1024,
-            1024
-          ],
-          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
-          "seamFadePixels": 6,
-          "solver": {
-            "iterations": 234,
-            "maxSlope": 2.0,
-            "meanIslandSlopeRemoved": true,
-            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
-            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.976279202032165e-6,
-            "robustHeightHalfRangePixels": 0.5718210935592651,
-            "screeningLambda": 0.0024999999441206455
-          },
-          "sourceDepthMeters": 0.00015878079284448177,
-          "sourceMaterial": "M_StockPistolHvat",
-          "sourceResolution": [
-            1024,
-            1024
-          ],
-          "uvIslands": 217,
-          "uvSet": 0,
-          "validation": {
-            "clippedInteriorPixels": 221,
-            "detrendedNormalSlopeRms": 0.027219564875567905,
-            "flatNormalMeanErrorDegrees": 0.7469710279467028,
-            "integratedNormalMeanErrorDegrees": 0.5546783356472381,
-            "interiorPixels": 41223,
-            "sourceNormalsAreNotGuaranteedIntegrable": true,
-            "uvCoveredPixels": 78465
-          }
-        },
         "M_UporP": {
           "depthMeters": 0.0015999999595806003,
           "detailDepthMeters": 0.0,
@@ -1140,7 +1092,7 @@
       "unitsPerMeter": 1.0
     },
     "taran": {
-      "intendedMaxDimensionMeters": 1.308251142501831,
+      "intendedMaxDimensionMeters": 1.308250069618225,
       "materials": {
         "M_Blik": {
           "depthMeters": 0.0015999999595806003,
@@ -1216,8 +1168,8 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.547713049619568e-6,
-            "robustHeightHalfRangePixels": 5.20682430267334,
+            "relativeResidual": 9.53369306175427e-6,
+            "robustHeightHalfRangePixels": 5.243068218231201,
             "screeningLambda": 0.0024999999441206455
           },
           "sourceDepthMeters": 0.0003499999875202775,
@@ -1230,9 +1182,9 @@
           "uvSet": 0,
           "validation": {
             "clippedInteriorPixels": 144,
-            "detrendedNormalSlopeRms": 0.5241838895580387,
-            "flatNormalMeanErrorDegrees": 16.348445439091172,
-            "integratedNormalMeanErrorDegrees": 10.474525789456957,
+            "detrendedNormalSlopeRms": 0.523980602097792,
+            "flatNormalMeanErrorDegrees": 16.31232065267871,
+            "integratedNormalMeanErrorDegrees": 10.475231806556677,
             "interiorPixels": 23866,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
             "uvCoveredPixels": 145713
@@ -1264,8 +1216,8 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.897187610820388e-6,
-            "robustHeightHalfRangePixels": 12.009986877441406,
+            "relativeResidual": 9.828485955229571e-6,
+            "robustHeightHalfRangePixels": 11.998491287231444,
             "screeningLambda": 0.0024999999441206455
           },
           "sourceDepthMeters": 0.0003499999875202775,
@@ -1278,9 +1230,9 @@
           "uvSet": 0,
           "validation": {
             "clippedInteriorPixels": 166,
-            "detrendedNormalSlopeRms": 0.6147954923275741,
-            "flatNormalMeanErrorDegrees": 15.064049619703002,
-            "integratedNormalMeanErrorDegrees": 8.27725136910767,
+            "detrendedNormalSlopeRms": 0.6150269283806541,
+            "flatNormalMeanErrorDegrees": 15.10967683319713,
+            "integratedNormalMeanErrorDegrees": 8.329157521939049,
             "interiorPixels": 23795,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
             "uvCoveredPixels": 151592
@@ -1334,20 +1286,20 @@
             "uvCoveredPixels": 139978
           }
         },
-        "M_Kulak": {
+        "M_Lcu": {
           "depthMeters": 0.0015999999595806003,
           "detailDepthMeters": 0.0,
           "detailProfileVersion": 1,
           "eligible": true,
           "fabricDepthMeters": 0.0,
           "fabricPeriodMeters": 0.0,
-          "height": "tex/relief/taran-M_Kulak.height.png",
-          "height16": "tex/relief/taran-M_Kulak.height16.png",
-          "mask": "tex/relief/taran-M_Kulak.mask.png",
+          "height": "tex/relief/taran-M_Lcu.height.png",
+          "height16": "tex/relief/taran-M_Lcu.height16.png",
+          "mask": "tex/relief/taran-M_Lcu.mask.png",
           "maximumDepthMeters": 0.0015999999595806003,
           "midpoint": 0.5019607843137255,
           "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
-          "relief": "tex/relief/taran-M_Kulak.relief.png",
+          "relief": "tex/relief/taran-M_Lcu.relief.png",
           "resolution": [
             512,
             512
@@ -1355,31 +1307,31 @@
           "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
           "seamFadePixels": 6,
           "solver": {
-            "iterations": 283,
+            "iterations": 256,
             "maxSlope": 2.0,
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.91109987299102e-6,
-            "robustHeightHalfRangePixels": 14.260584831237791,
+            "relativeResidual": 9.720213781039868e-6,
+            "robustHeightHalfRangePixels": 5.047128200531006,
             "screeningLambda": 0.0024999999441206455
           },
           "sourceDepthMeters": 0.0003499999875202775,
-          "sourceMaterial": "M_Kulak",
+          "sourceMaterial": "M_Lcu",
           "sourceResolution": [
             512,
             512
           ],
-          "uvIslands": 515,
+          "uvIslands": 461,
           "uvSet": 0,
           "validation": {
-            "clippedInteriorPixels": 328,
-            "detrendedNormalSlopeRms": 0.7009636270278943,
-            "flatNormalMeanErrorDegrees": 16.00756142112778,
-            "integratedNormalMeanErrorDegrees": 9.408425401195778,
-            "interiorPixels": 58010,
+            "clippedInteriorPixels": 230,
+            "detrendedNormalSlopeRms": 0.337802275796792,
+            "flatNormalMeanErrorDegrees": 8.639196075518424,
+            "integratedNormalMeanErrorDegrees": 4.551473902924066,
+            "interiorPixels": 40684,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
-            "uvCoveredPixels": 165973
+            "uvCoveredPixels": 124417
           }
         },
         "M_Luch": {
@@ -1403,13 +1355,13 @@
           "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
           "seamFadePixels": 6,
           "solver": {
-            "iterations": 261,
+            "iterations": 260,
             "maxSlope": 2.0,
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.553452402962712e-6,
-            "robustHeightHalfRangePixels": 5.112634181976318,
+            "relativeResidual": 9.8757060626336e-6,
+            "robustHeightHalfRangePixels": 5.443035125732422,
             "screeningLambda": 0.0024999999441206455
           },
           "sourceDepthMeters": 0.0003499999875202775,
@@ -1422,12 +1374,12 @@
           "uvSet": 0,
           "validation": {
             "clippedInteriorPixels": 140,
-            "detrendedNormalSlopeRms": 0.39923283892305855,
-            "flatNormalMeanErrorDegrees": 11.706201406246777,
-            "integratedNormalMeanErrorDegrees": 6.268138314588672,
+            "detrendedNormalSlopeRms": 0.3993927061548388,
+            "flatNormalMeanErrorDegrees": 11.719977925966484,
+            "integratedNormalMeanErrorDegrees": 6.278885622830137,
             "interiorPixels": 22764,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
-            "uvCoveredPixels": 123759
+            "uvCoveredPixels": 123760
           }
         },
         "M_Otdacha": {
@@ -1456,8 +1408,8 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.78718299495517e-6,
-            "robustHeightHalfRangePixels": 3.3846099376678467,
+            "relativeResidual": 9.755170339267704e-6,
+            "robustHeightHalfRangePixels": 3.404141902923584,
             "screeningLambda": 0.0024999999441206455
           },
           "sourceDepthMeters": 0.0003499999875202775,
@@ -1470,9 +1422,9 @@
           "uvSet": 0,
           "validation": {
             "clippedInteriorPixels": 143,
-            "detrendedNormalSlopeRms": 0.1920221681796799,
-            "flatNormalMeanErrorDegrees": 7.892253843306237,
-            "integratedNormalMeanErrorDegrees": 4.279228646385078,
+            "detrendedNormalSlopeRms": 0.19312807590102188,
+            "flatNormalMeanErrorDegrees": 7.900042387460434,
+            "integratedNormalMeanErrorDegrees": 4.278283443065571,
             "interiorPixels": 24031,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
             "uvCoveredPixels": 125996
@@ -1504,8 +1456,8 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.888159392926076e-6,
-            "robustHeightHalfRangePixels": 10.956372261047363,
+            "relativeResidual": 9.826251995066827e-6,
+            "robustHeightHalfRangePixels": 10.982998847961426,
             "screeningLambda": 0.0024999999441206455
           },
           "sourceDepthMeters": 0.0003499999875202775,
@@ -1517,13 +1469,13 @@
           "uvIslands": 1184,
           "uvSet": 0,
           "validation": {
-            "clippedInteriorPixels": 1282,
-            "detrendedNormalSlopeRms": 0.4432673076195492,
-            "flatNormalMeanErrorDegrees": 7.999394261656529,
-            "integratedNormalMeanErrorDegrees": 5.638599991744742,
-            "interiorPixels": 220915,
+            "clippedInteriorPixels": 1284,
+            "detrendedNormalSlopeRms": 0.4428129407180528,
+            "flatNormalMeanErrorDegrees": 7.758721341954728,
+            "integratedNormalMeanErrorDegrees": 5.525466175837099,
+            "interiorPixels": 221350,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
-            "uvCoveredPixels": 685051
+            "uvCoveredPixels": 684829
           }
         },
         "M_Vata": {
@@ -1552,8 +1504,8 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.841670139280205e-6,
-            "robustHeightHalfRangePixels": 3.3793036937713623,
+            "relativeResidual": 9.79448587409232e-6,
+            "robustHeightHalfRangePixels": 3.349452257156372,
             "screeningLambda": 0.0024999999441206455
           },
           "sourceDepthMeters": 0.0003499999875202775,
@@ -1566,9 +1518,9 @@
           "uvSet": 0,
           "validation": {
             "clippedInteriorPixels": 153,
-            "detrendedNormalSlopeRms": 0.2485911265931056,
-            "flatNormalMeanErrorDegrees": 10.73950021343177,
-            "integratedNormalMeanErrorDegrees": 6.54658030334863,
+            "detrendedNormalSlopeRms": 0.24861851584056557,
+            "flatNormalMeanErrorDegrees": 10.767561337732689,
+            "integratedNormalMeanErrorDegrees": 6.550303272709475,
             "interiorPixels": 24811,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
             "uvCoveredPixels": 107233
@@ -1577,7 +1529,7 @@
       },
       "physicalDimensionEstimated": false,
       "source": "preview/taran.json",
-      "sourceMaxDimension": 1.308251142501831,
+      "sourceMaxDimension": 1.308250069618225,
       "unitsPerMeter": 1.0
     },
     "tripo-helmet": {
