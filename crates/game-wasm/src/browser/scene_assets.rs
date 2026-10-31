@@ -800,15 +800,20 @@ pub fn tune(host: JsValue, material: JsValue, quality: JsValue, extra: JsValue, 
         JsValue::UNDEFINED
     };
     let look = super::look::hook(&material);
+    // Materials without a look keep the key they had before looks existed.
+    let look_key = if present(&look) {
+        format!("-{}", string(&get(&look, "key")))
+    } else {
+        String::new()
+    };
     let key = format!(
-        "cd-{taps}-{}-{}-{}",
+        "cd-{taps}-{}-{}{look_key}",
         if present(&extra) {
             extra_key
         } else {
             String::new()
         },
-        string(&get(&relief, "key")),
-        string(&get(&look, "key"))
+        string(&get(&relief, "key"))
     );
     let compile=Closure::wrap(Box::new(move|shader:JsValue|{
         let chunk=string(&get(&three(&host,"ShaderChunk"),"shadowmap_pars_fragment"));
