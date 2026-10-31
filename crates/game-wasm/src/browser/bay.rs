@@ -1,15 +1,19 @@
 //! The creation bay. The persona-bay picture is projected back from the camera that took it onto
 //! a rough box of the hall, so the creation camera can really move through it: seen from the
 //! projector it is the picture itself, closer in the columns slide past the back wall. A podium
-//! stands over the floor ring; cold rim light, a light shaft and slow dust keep the bay alive.
+//! stands over the floor ring; cold rim light, a light shaft, glowing lamps and slow dust keep the
+//! bay alive. Up close a second, nearer shot of the bay hangs behind the face, so the close-up
+//! never looks past the edges of the first picture.
 use super::view_utils::*;
 use js_sys::{Array, Float32Array, Uint16Array};
 use wasm_bindgen::prelude::*;
 
 /// Where the picture was taken from: 0.74 m over the floor, 3.83 m in front of the ring's
 /// centre, tilted 2.9° up, focal length 1460 px on the 1024×1536 picture. Measured from its
-/// vanishing point and the ellipse of the floor ring, taken as 1.68 m across.
-pub const EYE: [f64; 3] = [0.0, 0.74, 3.83];
+/// vanishing point and the ellipse of the floor ring, taken as 1.68 m across. The whole hall
+/// stands `BACK` nearer than that, which sets the podium a little back on the painted ring.
+pub const EYE: [f64; 3] = [0.0, 0.74, 3.83 + BACK];
+const BACK: f64 = 0.08;
 pub const TILT: f64 = 2.9;
 const FOCAL: f64 = 1460.0;
 const PICTURE: [f64; 2] = [1024.0, 1536.0];
@@ -36,6 +40,28 @@ const HALL: [([f64; 3], [f64; 3]); 9] = [
     ([-2.6, 0.0, -5.2], [-1.95, 0.72, -2.5]),
 ];
 const CASES: ([f64; 3], [f64; 3]) = ([1.95, 0.0, -5.2], [2.6, 0.72, -2.5]);
+/// Lamps of the picture, as (pixel x, pixel y, the wall they hang on: axis and place, glow
+/// size in metres, colour): the top bar, the columns' tubes, the far wall lights, the tanks.
+const LAMPS: [(f64, f64, usize, f64, f64, u32); 13] = [
+    (512.0, 248.0, 2, -4.05, 1.5, 0xe8f2ff),
+    (283.0, 330.0, 2, -4.05, 0.9, 0xe6f0ff),
+    (745.0, 330.0, 2, -4.05, 0.9, 0xe6f0ff),
+    (282.0, 465.0, 2, -4.05, 0.45, 0x9fe9ff),
+    (742.0, 465.0, 2, -4.05, 0.45, 0x9fe9ff),
+    (282.0, 548.0, 2, -4.05, 0.45, 0x9fe9ff),
+    (742.0, 548.0, 2, -4.05, 0.45, 0x9fe9ff),
+    (282.0, 860.0, 2, -4.05, 0.4, 0x9fe9ff),
+    (742.0, 860.0, 2, -4.05, 0.4, 0x9fe9ff),
+    (45.0, 275.0, 0, -2.6, 1.0, 0xeef4ff),
+    (978.0, 275.0, 0, 2.6, 1.0, 0xeef4ff),
+    (90.0, 690.0, 0, -2.6, 0.8, 0x8fe6ff),
+    (935.0, 690.0, 0, 2.6, 0.8, 0x8fe6ff),
+];
+/// The close-up shot: picture rows its visible height spans, the row on the camera's axis, and
+/// how far behind the face camera it hangs (behind the Persona, clear of the floor).
+const CLOSE_SPAN: f64 = 900.0;
+const CLOSE_AXIS: f64 = 620.0;
+const CLOSE_DISTANCE: f64 = 2.5;
 
 const PROJECT_VERTEX: &str = "uniform mat4 cdProjector;
 varying vec4 cdClip;
@@ -143,6 +169,39 @@ void main() {
   float a = 0.62 * ( 1.0 - smoothstep( cdInner, 1.0, r ) );
   gl_FragColor = vec4( 0.0, 0.0, 0.0, a );
 }";
+const LAMP_VERTEX: &str = "uniform float cdSize;
+varying vec2 cdUv;
+void main() {
+  cdUv = uv;
+  vec4 mv = modelViewMatrix * vec4( 0.0, 0.0, 0.0, 1.0 );
+  mv.xy += position.xy * cdSize;
+  gl_Position = projectionMatrix * mv;
+}";
+const LAMP_FRAGMENT: &str = "uniform vec3 cdColor;
+uniform float cdStrength;
+uniform float cdTime;
+uniform float cdPhase;
+varying vec2 cdUv;
+void main() {
+  // A soft bloom round a lamp of the picture, breathing with the hall and now and then flickering.
+  float r = length( cdUv - 0.5 ) * 2.0;
+  float a = ( exp( -r * r * 9.0 ) * 0.7 + exp( -r * 3.2 ) * 0.3 ) * ( 1.0 - smoothstep( 0.75, 1.0, r ) );
+  float flicker = step( 0.985, fract( cdTime * 0.37 + cdPhase * 0.13 ) ) * sin( cdTime * 90.0 );
+  a *= cdStrength * ( 0.85 + 0.15 * sin( cdTime * 1.3 + cdPhase ) + 0.2 * flicker );
+  gl_FragColor = vec4( cdColor * a, 1.0 );
+}";
+const CLOSE_FRAGMENT: &str = "uniform sampler2D cdPhoto;
+uniform float cdAlpha;
+uniform float cdTime;
+varying vec2 cdUv;
+void main() {
+  vec3 c = texture2D( cdPhoto, cdUv, 0.5 ).rgb;
+  float hot = smoothstep( 0.42, 0.9, dot( c, vec3( 0.3, 0.6, 0.1 ) ) );
+  c *= ( 1.0 + hot * 0.1 * sin( cdTime * 1.3 + cdUv.x * 5.0 ) ) * 0.84;
+  float edge = smoothstep( 0.0, 0.06, cdUv.x ) * smoothstep( 0.0, 0.06, 1.0 - cdUv.x );
+  gl_FragColor = vec4( c, cdAlpha * edge );
+  #include <colorspace_fragment>
+}";
 const UV_VERTEX: &str = "varying vec2 cdUv;
 void main() {
   cdUv = uv;
@@ -161,6 +220,14 @@ fn projector(h: &JsValue) -> JsValue {
     set(&camera, "rotation.x", &num(TILT.to_radians()));
     call(&camera, "updateMatrixWorld", &[flag(true)]);
     camera
+}
+/// Where a pixel of the picture lands on the wall `axis` = `place` (axis 0 for x, 2 for z).
+fn on_picture(px: f64, py: f64, axis: usize, place: f64) -> [f64; 3] {
+    let t = TILT.to_radians();
+    let (x, y) = ((px - PICTURE[0] / 2.0) / FOCAL, (PICTURE[1] / 2.0 - py) / FOCAL);
+    let dir = [x, y * t.cos() + t.sin(), y * t.sin() - t.cos()];
+    let k = (place - EYE[axis]) / dir[axis];
+    [0, 1, 2].map(|i| EYE[i] + dir[i] * k)
 }
 /// The camera's orientation when it stands where the picture was taken.
 pub fn eye_rotation(h: &JsValue) -> JsValue {
@@ -259,8 +326,9 @@ pub fn build(s: &JsValue, anisotropy: f64) {
         &[get(&eye, "projectionMatrix"), get(&eye, "matrixWorldInverse")],
     );
     let (mut positions, mut indices) = (Vec::new(), Vec::new());
+    let back = |p: [f64; 3]| [p[0], p[1], p[2] + BACK];
     for (lo, hi) in HALL.iter().chain(std::iter::once(&CASES)) {
-        add_box(&mut positions, &mut indices, *lo, *hi);
+        add_box(&mut positions, &mut indices, back(*lo), back(*hi));
     }
     let geometry = make(&h, "THREE.BufferGeometry", &[]);
     call(
@@ -312,7 +380,7 @@ pub fn build(s: &JsValue, anisotropy: f64) {
             ("cdColor", make(&h, "THREE.Color", &[num(0.62), num(0.86), num(1.0)])),
             ("cdInner", num(PODIUM / 1.6)),
             ("cdOuter", num(1.0)),
-            ("cdStrength", num(0.5)),
+            ("cdStrength", num(0.85)),
         ],
         &additive(&h),
     );
@@ -330,7 +398,7 @@ pub fn build(s: &JsValue, anisotropy: f64) {
         &h,
         SHAFT_VERTEX,
         SHAFT_FRAGMENT,
-        &[("cdTime", num(0.0)), ("cdStrength", num(0.055))],
+        &[("cdTime", num(0.0)), ("cdStrength", num(0.15))],
         &extra,
     );
     let beam = make(&h, "THREE.Mesh", &[cone, shaft.clone()]);
@@ -339,7 +407,7 @@ pub fn build(s: &JsValue, anisotropy: f64) {
     call(&bay, "add", &[beam]);
 
     // Dust in the light.
-    let count = 320;
+    let count = 560;
     let mut points = Vec::with_capacity(count * 3);
     let mut seeds = Vec::with_capacity(count * 4);
     let mut seed = 0x2545_f491_u32;
@@ -352,7 +420,7 @@ pub fn build(s: &JsValue, anisotropy: f64) {
     for _ in 0..count {
         let (a, r) = (random() * std::f32::consts::TAU, random().sqrt() * 2.2);
         points.extend_from_slice(&[a.cos() * r, random() * 4.2, a.sin() * r * 0.9 - 0.2]);
-        seeds.extend_from_slice(&[random() * 6.3, random(), 0.004 + random() * 0.007, 0.25 + random() * 0.75]);
+        seeds.extend_from_slice(&[random() * 6.3, random(), 0.006 + random() * 0.012, 0.35 + random() * 0.65]);
     }
     let cloud = make(&h, "THREE.BufferGeometry", &[]);
     call(
@@ -383,6 +451,58 @@ pub fn build(s: &JsValue, anisotropy: f64) {
     set(&motes, "renderOrder", &num(4.0));
     call(&bay, "add", &[motes]);
 
+    // Blooms on the picture's lamps: the light seems to hang in the air in front of them.
+    let lamps = Array::new();
+    let quad = make(&h, "THREE.PlaneGeometry", &[num(1.0), num(1.0)]);
+    for (i, (px, py, axis, place, size, color)) in LAMPS.iter().enumerate() {
+        let place = if *axis == 2 { place + BACK } else { *place };
+        let at = on_picture(*px, *py, *axis, place);
+        let glow = shader(
+            &h,
+            LAMP_VERTEX,
+            LAMP_FRAGMENT,
+            &[
+                ("cdColor", make(&h, "THREE.Color", &[num(*color as f64)])),
+                ("cdSize", num(*size)),
+                ("cdStrength", num(0.0)),
+                ("cdTime", num(0.0)),
+                ("cdPhase", num(i as f64 * 1.7)),
+            ],
+            &additive(&h),
+        );
+        let mesh = make(&h, "THREE.Mesh", &[quad.clone(), glow.clone()]);
+        // A little in front of its wall, so the wall never cuts it.
+        let toward = [0, 1, 2].map(|k| at[k] + (EYE[k] - at[k]) * 0.04);
+        call(&get(&mesh, "position"), "fromArray", &[floats(&toward)]);
+        set(&mesh, "frustumCulled", &flag(false));
+        set(&mesh, "renderOrder", &num(3.0));
+        call(&bay, "add", &[mesh]);
+        lamps.push(&glow);
+    }
+
+    // The close-up shot, hung behind the face by `place_close`.
+    let close = shader(
+        &h,
+        UV_VERTEX,
+        CLOSE_FRAGMENT,
+        &[
+            (
+                "cdPhoto",
+                texture(&h, &format!("{base}img/base/persona-bay-close.webp"), true, anisotropy),
+            ),
+            ("cdAlpha", num(0.0)),
+            ("cdTime", num(0.0)),
+        ],
+        &[("transparent", flag(true)), ("toneMapped", flag(false))],
+    );
+    let plate = make(&h, "THREE.Mesh", &[quad, close.clone()]);
+    set(&plate, "name", &text("Bay_Close"));
+    set(&plate, "visible", &flag(false));
+    set(&plate, "frustumCulled", &flag(false));
+    // Before the hair and the bay's lights, so they blend over it and not over the hall.
+    set(&plate, "renderOrder", &num(-1.0));
+    call(&bay, "add", &[plate.clone()]);
+
     // The bay's own light on the Persona: a cold top light from the shaft, rims from the
     // columns' tubes behind, a cyan lift from the podium's ring.
     let spot = make(
@@ -394,8 +514,8 @@ pub fn build(s: &JsValue, anisotropy: f64) {
     call(&get(&spot, "target.position"), "set", &[num(0.0), num(top + 0.9), num(0.0)]);
     call(&bay, "add", &[spot.clone(), get(&spot, "target")]);
     for (color, power, pos) in [
-        (0xa9d4ec, 2.3, [-2.1, 2.6, -3.4]),
-        (0xc9e2f0, 1.7, [2.3, 2.2, -3.1]),
+        (0xa9d4ec, 3.6, [-2.1, 2.6, -3.4]),
+        (0xc9e2f0, 2.7, [2.3, 2.2, -3.1]),
     ] {
         let light = make(&h, "THREE.DirectionalLight", &[num(color as f64), num(power)]);
         call(&get(&light, "position"), "fromArray", &[floats(&pos)]);
@@ -422,6 +542,9 @@ pub fn build(s: &JsValue, anisotropy: f64) {
             ("shaft", shaft),
             ("dust", dust),
             ("lift", lift),
+            ("lamps", lamps.into()),
+            ("close", close),
+            ("plate", plate),
         ]),
     );
     build_podium(s, &h, &base, top, anisotropy);
@@ -565,6 +688,36 @@ pub fn show(s: &JsValue, on: bool) {
     }
 }
 
+/// Hangs the close-up shot square in front of the face camera (`face`, turned by `turn`, half
+/// its visible height `tangent`), filling the frame; it shows as the camera comes in (`k` 0..1).
+pub fn place_close(s: &JsValue, face: [f64; 3], turn: &JsValue, tangent: f64, k: f64) {
+    let plate = get(s, "bayParts.plate");
+    if !exists(&plate) {
+        return;
+    }
+    let h = get(s, "host");
+    let alpha = ((k - 0.45) / 0.55).clamp(0.0, 1.0);
+    let alpha = alpha * alpha * (3.0 - 2.0 * alpha);
+    set(&get(&get(s, "bayParts.close"), "uniforms.cdAlpha"), "value", &num(alpha));
+    set(&plate, "visible", &flag(alpha > 0.0));
+    if alpha <= 0.0 {
+        return;
+    }
+    // Metres per picture pixel at the plate's distance.
+    let m = 2.0 * CLOSE_DISTANCE * tangent / CLOSE_SPAN;
+    let axis = |x: f64, y: f64, z: f64| {
+        let v = make(&h, "THREE.Vector3", &[num(x), num(y), num(z)]);
+        call(&v, "applyQuaternion", &[turn.clone()]);
+        [number(&v, "x"), number(&v, "y"), number(&v, "z")]
+    };
+    let (ahead, up) = (axis(0.0, 0.0, -1.0), axis(0.0, 1.0, 0.0));
+    let drop = (PICTURE[1] / 2.0 - CLOSE_AXIS) * m;
+    let at = [0, 1, 2].map(|i| face[i] + ahead[i] * CLOSE_DISTANCE - up[i] * drop);
+    call(&get(&plate, "position"), "fromArray", &[floats(&at)]);
+    call(&get(&plate, "quaternion"), "copy", &[turn.clone()]);
+    call(&get(&plate, "scale"), "set", &[num(PICTURE[0] * m), num(PICTURE[1] * m), num(1.0)]);
+}
+
 /// Moves the bay on: time for the shaders, the lens's blur and dimming as the camera closes on
 /// the face (`focus` 0 body, 1 face), the dust's scale for the drawing buffer.
 pub fn tick(s: &JsValue, time: f64, focus: f64, buffer_height: f64) {
@@ -573,7 +726,7 @@ pub fn tick(s: &JsValue, time: f64, focus: f64, buffer_height: f64) {
         return;
     }
     let t = num(time % 3600.0);
-    for name in ["hall", "spill", "shaft", "dust"] {
+    for name in ["hall", "spill", "shaft", "dust", "close"] {
         let u = get(&get(&parts, name), "uniforms");
         if exists(&get(&u, "cdTime")) {
             set(&get(&u, "cdTime"), "value", &t);
@@ -582,6 +735,13 @@ pub fn tick(s: &JsValue, time: f64, focus: f64, buffer_height: f64) {
     let hall = get(&get(&parts, "hall"), "uniforms");
     set(&get(&hall, "cdBlur"), "value", &num(focus * 2.6));
     set(&get(&hall, "cdShade"), "value", &num(1.0 - 0.24 * focus));
+    // The lamps' blooms give way to the close-up shot, which has its own lamps.
+    let close = number(&get(&get(&parts, "close"), "uniforms"), "cdAlpha.value");
+    for glow in Array::from(&get(&parts, "lamps")).iter() {
+        let u = get(&glow, "uniforms");
+        set(&get(&u, "cdTime"), "value", &t);
+        set(&get(&u, "cdStrength"), "value", &num(0.55 * (1.0 - close)));
+    }
     set(
         &get(&get(&get(&parts, "dust"), "uniforms"), "cdScale"),
         "value",
