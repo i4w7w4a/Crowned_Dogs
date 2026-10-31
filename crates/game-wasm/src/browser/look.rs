@@ -113,6 +113,15 @@ fn hair_hook(material: &JsValue) {
     if present(&hook(material)) {
         return;
     }
+    // The strips' tips touch the edge of their texture. Repeating it filtered the far edge's dense
+    // roots into each tip, which lay grey dashes across the nape.
+    let map = get(material, "map");
+    if present(&map) {
+        for key in ["wrapS", "wrapT"] {
+            set(&map, key, &1001.into()); // THREE.ClampToEdgeWrapping
+        }
+        set(&map, "needsUpdate", &true.into());
+    }
     let compile = Closure::<dyn FnMut(JsValue)>::new(move |shader: JsValue| {
         let fragment = string(&get(&shader, "fragmentShader")).replacen(
             "#include <normal_fragment_begin>",

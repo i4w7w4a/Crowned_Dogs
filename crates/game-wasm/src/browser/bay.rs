@@ -2,8 +2,9 @@
 //! a rough box of the hall, so the creation camera can really move through it: seen from the
 //! projector it is the picture itself, closer in the columns slide past the back wall. A podium
 //! stands over the floor ring; cold rim light, a light shaft, glowing lamps and slow dust keep the
-//! bay alive. Up close a second, nearer shot of the bay hangs behind the face, so the close-up
-//! never looks past the edges of the first picture.
+//! bay alive. A second, nearer shot of the bay is projected onto the same boxes from its own
+//! camera, fitted to the first picture, and takes over as the camera closes on the face: the
+//! hall gains detail in place instead of one picture giving way to another.
 use super::view_utils::*;
 use js_sys::{Array, Float32Array, Uint16Array};
 use wasm_bindgen::prelude::*;
@@ -57,40 +58,61 @@ const LAMPS: [(f64, f64, usize, f64, f64, u32); 13] = [
     (90.0, 690.0, 0, -2.6, 0.8, 0x8fe6ff),
     (935.0, 690.0, 0, 2.6, 0.8, 0x8fe6ff),
 ];
-/// The close-up shot: picture rows its visible height spans, the row on the camera's axis, and
-/// how far behind the face camera it hangs (behind the Persona, clear of the floor).
-const CLOSE_SPAN: f64 = 900.0;
-const CLOSE_AXIS: f64 = 620.0;
-const CLOSE_DISTANCE: f64 = 2.5;
+/// Where the close shot was taken from, fitted to the first picture through the hall's boxes
+/// (SIFT matches and the floor ring): 0.94 m up, 2.66 m in front of the ring, level within a
+/// fifth of a degree, focal length 1633 px on the same 1024×1536 frame.
+const CLOSE_EYE: [f64; 3] = [0.0, 0.937, 2.657 + BACK];
+const CLOSE_TILT: f64 = 0.122;
+const CLOSE_ROLL: f64 = 0.119;
+const CLOSE_FOCAL: f64 = 1633.0;
 
 const PROJECT_VERTEX: &str = "uniform mat4 cdProjector;
+uniform mat4 cdNearProjector;
 varying vec4 cdClip;
+varying vec4 cdNearClip;
 void main() {
   vec4 world = modelMatrix * vec4( position, 1.0 );
   cdClip = cdProjector * world;
+  cdNearClip = cdNearProjector * world;
   gl_Position = projectionMatrix * viewMatrix * world;
 }";
 const PROJECT_FRAGMENT: &str = "uniform sampler2D cdPhoto;
+uniform sampler2D cdClose;
 uniform float cdBlur;
 uniform float cdShade;
 uniform float cdTime;
+uniform float cdMix;
 varying vec4 cdClip;
-vec3 cdTap( vec2 uv, float bias ) {
-  // Past its edges the picture mirrors back into itself.
+varying vec4 cdNearClip;
+vec3 cdTap( sampler2D photo, vec2 uv, float bias ) {
+  // Past its edges a picture mirrors back into itself.
   vec2 at = 1.0 - abs( 1.0 - mod( uv, 2.0 ) );
-  return texture2D( cdPhoto, at, bias ).rgb;
+  return texture2D( photo, at, bias ).rgb;
 }
-void main() {
-  vec2 uv = cdClip.xy / max( cdClip.w, 1e-4 ) * 0.5 + 0.5;
-  vec3 c = cdTap( uv, cdBlur );
+vec3 cdLook( sampler2D photo, vec2 uv, float spread ) {
+  vec3 c = cdTap( photo, uv, cdBlur );
   if ( cdBlur > 0.01 ) {
     // Out of focus behind a close-up: a ring of taps, wider as the lens opens.
-    float r = cdBlur * 0.0035;
+    float r = cdBlur * spread;
     c *= 0.2;
     for ( int i = 0; i < 8; i++ ) {
       float a = float( i ) * 0.7854 + 0.39;
-      c += cdTap( uv + vec2( cos( a ), sin( a ) * 0.667 ) * r, cdBlur ) * 0.1;
+      c += cdTap( photo, uv + vec2( cos( a ), sin( a ) * 0.667 ) * r, cdBlur ) * 0.1;
     }
+  }
+  return c;
+}
+void main() {
+  vec2 uv = cdClip.xy / max( cdClip.w, 1e-4 ) * 0.5 + 0.5;
+  vec3 c = cdLook( cdPhoto, uv, 0.0035 );
+  if ( cdMix > 0.0 ) {
+    // The close shot through its own frame, its tone matched to the first picture; its pixels
+    // lie 1.27 times denser on the walls, so the same blur reaches as many of them further.
+    vec2 near = cdNearClip.xy / max( cdNearClip.w, 1e-4 ) * 0.5 + 0.5;
+    float inside = smoothstep( 0.0, 0.05, near.x ) * smoothstep( 0.0, 0.05, 1.0 - near.x )
+      * smoothstep( 0.0, 0.04, near.y ) * smoothstep( 0.0, 0.04, 1.0 - near.y ) * step( 0.0, cdNearClip.w );
+    vec3 close = cdLook( cdClose, near, 0.0035 * 1.27 ) * vec3( 1.0, 1.04, 1.054 );
+    c = mix( c, close, cdMix * inside );
   }
   // The bay's lamps breathe a little and now and then flicker.
   float hot = smoothstep( 0.42, 0.9, dot( c, vec3( 0.3, 0.6, 0.1 ) ) );
@@ -190,36 +212,31 @@ void main() {
   a *= cdStrength * ( 0.85 + 0.15 * sin( cdTime * 1.3 + cdPhase ) + 0.2 * flicker );
   gl_FragColor = vec4( cdColor * a, 1.0 );
 }";
-const CLOSE_FRAGMENT: &str = "uniform sampler2D cdPhoto;
-uniform float cdAlpha;
-uniform float cdTime;
-varying vec2 cdUv;
-void main() {
-  vec3 c = texture2D( cdPhoto, cdUv, 0.5 ).rgb;
-  float hot = smoothstep( 0.42, 0.9, dot( c, vec3( 0.3, 0.6, 0.1 ) ) );
-  c *= ( 1.0 + hot * 0.1 * sin( cdTime * 1.3 + cdUv.x * 5.0 ) ) * 0.84;
-  float edge = smoothstep( 0.0, 0.06, cdUv.x ) * smoothstep( 0.0, 0.06, 1.0 - cdUv.x );
-  gl_FragColor = vec4( c, cdAlpha * edge );
-  #include <colorspace_fragment>
-}";
 const UV_VERTEX: &str = "varying vec2 cdUv;
 void main() {
   cdUv = uv;
   gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
 }";
 
-/// The projector: the camera that took the picture.
-fn projector(h: &JsValue) -> JsValue {
-    let fov = 2.0 * (PICTURE[1] / 2.0 / FOCAL).atan().to_degrees();
+/// A projector: the camera that took a picture, as the matrix from the world to its frame.
+fn projector(h: &JsValue, eye: [f64; 3], tilt: f64, roll: f64, focal: f64) -> JsValue {
+    let fov = 2.0 * (PICTURE[1] / 2.0 / focal).atan().to_degrees();
     let camera = make(
         h,
         "THREE.PerspectiveCamera",
         &[num(fov), num(PICTURE[0] / PICTURE[1]), num(0.05), num(60.0)],
     );
-    call(&get(&camera, "position"), "fromArray", &[floats(&EYE)]);
-    set(&camera, "rotation.x", &num(TILT.to_radians()));
+    call(&get(&camera, "position"), "fromArray", &[floats(&eye)]);
+    set(&camera, "rotation.x", &num(tilt.to_radians()));
+    set(&camera, "rotation.z", &num(roll.to_radians()));
     call(&camera, "updateMatrixWorld", &[flag(true)]);
-    camera
+    let matrix = make(h, "THREE.Matrix4", &[]);
+    call(
+        &matrix,
+        "multiplyMatrices",
+        &[get(&camera, "projectionMatrix"), get(&camera, "matrixWorldInverse")],
+    );
+    matrix
 }
 /// Where a pixel of the picture lands on the wall `axis` = `place` (axis 0 for x, 2 for z).
 fn on_picture(px: f64, py: f64, axis: usize, place: f64) -> [f64; 3] {
@@ -316,15 +333,9 @@ pub fn build(s: &JsValue, anisotropy: f64) {
     let bay = make(&h, "THREE.Group", &[]);
     set(&bay, "name", &text("Creation_Bay"));
 
-    // The hall, one mesh, painted by the projector.
+    // The hall, one mesh, painted by both projectors.
     let photo = texture(&h, &format!("{base}img/base/persona-bay.webp"), true, anisotropy);
-    let eye = projector(&h);
-    let matrix = make(&h, "THREE.Matrix4", &[]);
-    call(
-        &matrix,
-        "multiplyMatrices",
-        &[get(&eye, "projectionMatrix"), get(&eye, "matrixWorldInverse")],
-    );
+    let close = texture(&h, &format!("{base}img/base/persona-bay-close.webp"), true, anisotropy);
     let (mut positions, mut indices) = (Vec::new(), Vec::new());
     let back = |p: [f64; 3]| [p[0], p[1], p[2] + BACK];
     for (lo, hi) in HALL.iter().chain(std::iter::once(&CASES)) {
@@ -350,10 +361,13 @@ pub fn build(s: &JsValue, anisotropy: f64) {
         PROJECT_FRAGMENT,
         &[
             ("cdPhoto", photo),
-            ("cdProjector", matrix),
+            ("cdClose", close),
+            ("cdProjector", projector(&h, EYE, TILT, 0.0, FOCAL)),
+            ("cdNearProjector", projector(&h, CLOSE_EYE, CLOSE_TILT, CLOSE_ROLL, CLOSE_FOCAL)),
             ("cdBlur", num(0.0)),
             ("cdShade", num(1.0)),
             ("cdTime", num(0.0)),
+            ("cdMix", num(0.0)),
         ],
         &[("side", get(&h, "THREE.DoubleSide")), ("toneMapped", flag(false))],
     );
@@ -385,6 +399,24 @@ pub fn build(s: &JsValue, anisotropy: f64) {
         &additive(&h),
     );
     call(&bay, "add", &[disc(&h, 1.6, 0.004, spill.clone())]);
+    // The hall is painted, not lit, so the key light's shadows of the podium and the Persona
+    // fall on a catcher laid over the floor.
+    let catcher = make(
+        &h,
+        "THREE.ShadowMaterial",
+        &[options(&[
+            ("color", make(&h, "THREE.Color", &[num(0x05080a as f64)])),
+            ("opacity", num(0.55)),
+            ("depthWrite", flag(false)),
+            ("polygonOffset", flag(true)),
+            ("polygonOffsetFactor", num(-1.0)),
+            ("polygonOffsetUnits", num(-4.0)),
+        ])],
+    );
+    let floor = disc(&h, 3.0, 0.003, catcher);
+    set(&floor, "name", &text("Bay_Shadows"));
+    set(&floor, "receiveShadow", &flag(true));
+    call(&bay, "add", &[floor]);
 
     // A light shaft from a lamp over the podium, out of the picture.
     let cone = make(
@@ -480,29 +512,6 @@ pub fn build(s: &JsValue, anisotropy: f64) {
         lamps.push(&glow);
     }
 
-    // The close-up shot, hung behind the face by `place_close`.
-    let close = shader(
-        &h,
-        UV_VERTEX,
-        CLOSE_FRAGMENT,
-        &[
-            (
-                "cdPhoto",
-                texture(&h, &format!("{base}img/base/persona-bay-close.webp"), true, anisotropy),
-            ),
-            ("cdAlpha", num(0.0)),
-            ("cdTime", num(0.0)),
-        ],
-        &[("transparent", flag(true)), ("toneMapped", flag(false))],
-    );
-    let plate = make(&h, "THREE.Mesh", &[quad, close.clone()]);
-    set(&plate, "name", &text("Bay_Close"));
-    set(&plate, "visible", &flag(false));
-    set(&plate, "frustumCulled", &flag(false));
-    // Before the hair and the bay's lights, so they blend over it and not over the hall.
-    set(&plate, "renderOrder", &num(-1.0));
-    call(&bay, "add", &[plate.clone()]);
-
     // The bay's own light on the Persona: a cold top light from the shaft, rims from the
     // columns' tubes behind, a cyan lift from the podium's ring.
     let spot = make(
@@ -543,8 +552,6 @@ pub fn build(s: &JsValue, anisotropy: f64) {
             ("dust", dust),
             ("lift", lift),
             ("lamps", lamps.into()),
-            ("close", close),
-            ("plate", plate),
         ]),
     );
     build_podium(s, &h, &base, top, anisotropy);
@@ -688,34 +695,15 @@ pub fn show(s: &JsValue, on: bool) {
     }
 }
 
-/// Hangs the close-up shot square in front of the face camera (`face`, turned by `turn`, half
-/// its visible height `tangent`), filling the frame; it shows as the camera comes in (`k` 0..1).
-pub fn place_close(s: &JsValue, face: [f64; 3], turn: &JsValue, tangent: f64, k: f64) {
-    let plate = get(s, "bayParts.plate");
-    if !exists(&plate) {
+/// Brings the close shot in as the camera closes on the face (`k` 0 body, 1 face), mostly while
+/// the camera moves fastest.
+pub fn close_in(s: &JsValue, k: f64) {
+    let hall = get(s, "bayParts.hall");
+    if !exists(&hall) {
         return;
     }
-    let h = get(s, "host");
-    let alpha = ((k - 0.45) / 0.55).clamp(0.0, 1.0);
-    let alpha = alpha * alpha * (3.0 - 2.0 * alpha);
-    set(&get(&get(s, "bayParts.close"), "uniforms.cdAlpha"), "value", &num(alpha));
-    set(&plate, "visible", &flag(alpha > 0.0));
-    if alpha <= 0.0 {
-        return;
-    }
-    // Metres per picture pixel at the plate's distance.
-    let m = 2.0 * CLOSE_DISTANCE * tangent / CLOSE_SPAN;
-    let axis = |x: f64, y: f64, z: f64| {
-        let v = make(&h, "THREE.Vector3", &[num(x), num(y), num(z)]);
-        call(&v, "applyQuaternion", &[turn.clone()]);
-        [number(&v, "x"), number(&v, "y"), number(&v, "z")]
-    };
-    let (ahead, up) = (axis(0.0, 0.0, -1.0), axis(0.0, 1.0, 0.0));
-    let drop = (PICTURE[1] / 2.0 - CLOSE_AXIS) * m;
-    let at = [0, 1, 2].map(|i| face[i] + ahead[i] * CLOSE_DISTANCE - up[i] * drop);
-    call(&get(&plate, "position"), "fromArray", &[floats(&at)]);
-    call(&get(&plate, "quaternion"), "copy", &[turn.clone()]);
-    call(&get(&plate, "scale"), "set", &[num(PICTURE[0] * m), num(PICTURE[1] * m), num(1.0)]);
+    let x = ((k - 0.15) / 0.7).clamp(0.0, 1.0);
+    set(&get(&hall, "uniforms.cdMix"), "value", &num(x * x * (3.0 - 2.0 * x)));
 }
 
 /// Moves the bay on: time for the shaders, the lens's blur and dimming as the camera closes on
@@ -726,7 +714,7 @@ pub fn tick(s: &JsValue, time: f64, focus: f64, buffer_height: f64) {
         return;
     }
     let t = num(time % 3600.0);
-    for name in ["hall", "spill", "shaft", "dust", "close"] {
+    for name in ["hall", "spill", "shaft", "dust"] {
         let u = get(&get(&parts, name), "uniforms");
         if exists(&get(&u, "cdTime")) {
             set(&get(&u, "cdTime"), "value", &t);
@@ -735,8 +723,8 @@ pub fn tick(s: &JsValue, time: f64, focus: f64, buffer_height: f64) {
     let hall = get(&get(&parts, "hall"), "uniforms");
     set(&get(&hall, "cdBlur"), "value", &num(focus * 2.6));
     set(&get(&hall, "cdShade"), "value", &num(1.0 - 0.24 * focus));
-    // The lamps' blooms give way to the close-up shot, which has its own lamps.
-    let close = number(&get(&get(&parts, "close"), "uniforms"), "cdAlpha.value");
+    // The lamps' blooms give way to the close shot, whose lamps stand a little elsewhere.
+    let close = number(&hall, "cdMix.value");
     for glow in Array::from(&get(&parts, "lamps")).iter() {
         let u = get(&glow, "uniforms");
         set(&get(&u, "cdTime"), "value", &t);

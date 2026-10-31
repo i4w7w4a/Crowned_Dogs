@@ -822,7 +822,7 @@ fn creation_view(s: &JsValue) {
     let turn = call(&make(&h, "THREE.Quaternion", &[]), "setFromRotationMatrix", &[look]);
     let t = number(s, "focusT").clamp(0.0, 1.0);
     let k = t * t * (3.0 - 2.0 * t);
-    super::bay::place_close(s, face, &turn, tangent, k);
+    super::bay::close_in(s, k);
     let body = super::bay::EYE;
     let at = [0, 1, 2].map(|i| body[i] + (face[i] - body[i]) * k);
     call(&get(&camera, "position"), "fromArray", &[floats(&at)]);

@@ -36,10 +36,9 @@ const EYES: [Choice; 14] = [
     ("blue", "Синие", 0x00a3ff),
 ];
 /// (sex, id, name, hair cap, hair cards). The male scan has its buzz cut baked into the head.
-const HAIRS: [(&str, &str, &str, bool, bool); 4] = [
+const HAIRS: [(&str, &str, &str, bool, bool); 3] = [
     ("male", "buzz", "Ёжик", false, false),
     ("female", "long", "Длинные", true, true),
-    ("female", "short", "Короткие", true, false),
     ("female", "shaved", "Под ноль", false, false),
 ];
 const HAIR_COLORS: [Choice; 6] = [
@@ -291,7 +290,7 @@ mod tests {
     #[test]
     fn switching_persona_drops_picks_the_other_one_lacks() {
         let mut look = finished("female");
-        look["hair"] = json!("short");
+        look["hair"] = json!("shaved");
         look["sex"] = json!("male");
         let fixed = normalize(&look);
         assert_eq!(fixed["hair"], "buzz");
