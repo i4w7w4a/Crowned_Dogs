@@ -142,7 +142,7 @@ test("Rust battle never activates after cancellation during arena load or overla
     assert.equal(h.calls.some(c => c.name === "arena.resume" || c.name === "audio.newFight"), false);
     const overlay = deferred(), next = new AbortController();
     const second = h.battle!.start(starterLoadout("rifle"), () => {}, () => overlay.promise, next.signal);
-    await settle(); assert.equal(h.element("app").hidden, true);
+    await settle(); assert.equal([...h.clock.tasks.values()].some(t => t.interval), false, "turn clock waits for the loader");
     next.abort(); const rejectedAgain = assert.rejects(second, { name: "AbortError" }); overlay.resolve(); await rejectedAgain;
     assert.equal(h.element("app").hidden, true);
     assert.equal([...h.clock.tasks.values()].some(t => t.interval), false);

@@ -571,7 +571,7 @@
     "ui": -3,
     "amb": -2,
     "music": 0,
-    "fightMusic": -15.5,
+    "fightMusic": -21.5,
     "radioMusic": -17,
     "distanceDbPerStep": 0.6,
     "distanceDbMax": 6

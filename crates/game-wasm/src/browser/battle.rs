@@ -282,22 +282,31 @@ impl RustBattle {
             abort_check(&signal)?;
             JsFuture::from(prepare_arena(&s)).await?;
             abort_check(&signal)?;
+            // The fight is drawn under the loader first; the loader lifts and the clock starts after that.
+            set(&s, "fitted", &selected);
+            set(&s, "exit", &on_exit);
+            set(&s, "active", &true.into());
+            hide(&id("app"), false);
+            restart(&s, false);
+            stop_timer(&s);
+            layout(&s);
+            arena(&s, "resume", &[]);
+            let fight = number(&s, "fightNo");
+            settle(&get(&s, "arena"), "drawn", 5000.).await;
+            settle(&get(&s, "arena"), "drawn", 5000.).await;
             if present(&before_enter) {
                 JsFuture::from(Promise::resolve(&apply(
                     &before_enter,
                     &JsValue::UNDEFINED,
                     &[],
                 )?))
-                .await?;
+                .await
+                .inspect_err(|_| undo_enter(&s))?;
             }
-            abort_check(&signal)?;
-            set(&s, "fitted", &selected);
-            set(&s, "exit", &on_exit);
-            set(&s, "active", &true.into());
-            hide(&id("app"), false);
-            restart(&s, false);
-            layout(&s);
-            arena(&s, "resume", &[]);
+            abort_check(&signal).inspect_err(|_| undo_enter(&s))?;
+            if flag(&s, "active") && number(&s, "fightNo") == fight {
+                start_timer(&s);
+            }
             audio(&s, "unlock", &[]);
             let state = s.clone();
             let timeout = once(1500., move || watch_speed(&state));
@@ -307,6 +316,27 @@ impl RustBattle {
     }
 }
 
+/// Rolls back a fight that was drawn under the loader but never shown.
+fn undo_enter(s: &JsValue) {
+    set(s, "active", &false.into());
+    stop_timer(s);
+    arena(s, "pause", &[]);
+    audio(s, "finish", &[JsValue::NULL]);
+    hide(&id("app"), true);
+}
+/// Awaits an optional arena promise (`warm`, `drawn`), giving up after `ms`.
+async fn settle(arena: &JsValue, method: &str, ms: f64) {
+    if !get(arena, method).is_function() {
+        return;
+    }
+    let Ok(p) = try_call(arena, method, &[]) else {
+        return;
+    };
+    let timeout = Promise::new(&mut |resolve, _| {
+        call(&global(), "setTimeout", &[resolve.into(), ms.into()]);
+    });
+    let _ = JsFuture::from(Promise::race(&array(&[Promise::resolve(&p).into(), timeout.into()]))).await;
+}
 fn abort_check(signal: &JsValue) -> Result<(), JsValue> {
     if present(signal) {
         try_call(signal, "throwIfAborted", &[])?;
@@ -1479,6 +1509,7 @@ fn prepare_arena(s: &JsValue) -> Promise {
                 call(&global(), "setTimeout", &[resolve.into(), 25000.into()]);
             });
             JsFuture::from(Promise::race(&array(&[all.into(), timeout.into()]))).await?;
+            settle(&a, "warm", 15000.).await;
             hide(&id("status"), true);
             layout(s);
             render(s);

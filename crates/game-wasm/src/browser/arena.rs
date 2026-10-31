@@ -238,6 +238,8 @@ struct ArenaState {
     tiers: Vec<JsValue>,
     textures_done: Promise,
     on_frame: JsValue,
+    /// Resolvers waiting for the next frame that reaches the screen.
+    drawn: Vec<JsValue>,
     animation: Option<Closure<dyn FnMut(f64)>>,
     widen: Closure<dyn FnMut(JsValue)>,
     mirror_shader: Closure<dyn FnMut(JsValue)>,
@@ -517,6 +519,7 @@ impl RustArena {
             tiers: vec![],
             textures_done: Promise::resolve(&JsValue::UNDEFINED),
             on_frame: JsValue::NULL,
+            drawn: vec![],
             animation: None,
             widen,
             mirror_shader,
@@ -530,14 +533,17 @@ impl RustArena {
             let Some(state) = weak.upgrade() else {
                 return;
             };
-            let callback = {
+            let (callback, drawn) = {
                 let mut s = state.borrow_mut();
                 if !s.running || !s.ready {
                     return;
                 }
                 s.tick(time);
-                s.on_frame.clone()
+                (s.on_frame.clone(), std::mem::take(&mut s.drawn))
             };
+            for resolve in drawn {
+                invoke(&resolve, &[]);
+            }
             // DOM ring placement may synchronously call zoneOnScreen, so release the frame borrow first.
             if present(&callback) {
                 invoke(&callback, &[]);
@@ -642,6 +648,27 @@ impl RustArena {
     }
     pub fn resume(&self) {
         self.state.borrow_mut().resume();
+    }
+    /// Compiles every shader of the scene ahead of the first frame.
+    pub fn warm(&self) -> Promise {
+        let s = self.state.borrow();
+        if !get(&s.renderer, "compileAsync").is_function() {
+            return Promise::resolve(&JsValue::UNDEFINED);
+        }
+        match try_call(&s.renderer, "compileAsync", &[s.scene.clone(), s.camera.clone()]) {
+            Ok(p) => future_to_promise(async move {
+                let _ = JsFuture::from(Promise::resolve(&p)).await;
+                Ok(JsValue::UNDEFINED)
+            }),
+            Err(_) => Promise::resolve(&JsValue::UNDEFINED),
+        }
+    }
+    /// Resolves once the running loop has put the next frame on screen.
+    pub fn drawn(&self) -> Promise {
+        let state = self.state.clone();
+        Promise::new(&mut |resolve, _| {
+            state.borrow_mut().drawn.push(resolve.into());
+        })
     }
     pub fn pause(&self) {
         let mut s = self.state.borrow_mut();
