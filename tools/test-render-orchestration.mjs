@@ -218,12 +218,14 @@ async function exerciseArena(useRust) {
   arena.arm("me", "rifle", { sight: "a" }); arena.arm("enemy", "pistol", {});
   arena.setFirstPerson(true); arena.move(5, 1, 1); arena.attack("me", "rifle", .1); arena.attack("enemy", "pistol", .1);
   for (let i = 0; i < 8; i++) h.renderers[0].loop(1000 + i * 16.7);
-  arena.hit("enemy", "head", "blocked"); arena.hit("me", "body", "hit");
+  // A blocked hit shows the «Зонт» dome, not the frozen arena's body spark, so the enemy takes a plain one.
+  arena.hit("enemy", "head", "hit"); arena.hit("me", "body", "blocked");
   for (let i = 0; i < 3; i++) h.renderers[0].loop(1200 + i * 16.7);
   arena.fall("enemy"); h.renderers[0].loop(1300);
   const screen = ["head", "body", "groin", "legs"].map(zone => Array.from(arena.zoneOnScreen(zone)));
   const renderer = h.renderers[0];
-  const snapshot = renderer.scene.children.map(o => ({
+  // The «Зонт» dome and its sparks came after the frozen arena.
+  const snapshot = renderer.scene.children.filter(o => o.name !== "shield").map(o => ({
     type: o.type, position: o.position.toArray(), rotation: o.rotation.toArray(), scale: o.scale.toArray(), visible: o.visible,
     // The muzzle light burns at 9x the flash now, not the frozen arena's 6x.
     intensity: !useRust && o.color?.getHex?.() === 0xffb36b ? o.intensity * 1.5 : o.intensity, color: o.color?.toArray(),

@@ -968,7 +968,8 @@ fn strike(s: &JsValue, r: &JsValue, side: usize) {
                 "",
             );
         } else {
-            if ours && blocked {
+            // The 3D dome shows a blocked hit; the flat ring stays for a fight without the arena.
+            if ours && blocked && !present(&get(s, "arena")) {
                 let el = call(&document(), "createElement", &["div".into()]);
                 set(&el, "className", &"ripple".into());
                 style(&el, "left", &format!("{x}px"));
@@ -999,6 +1000,8 @@ fn strike(s: &JsValue, r: &JsValue, side: usize) {
                     if ours { "enemy" } else { "me" }.into(),
                     zone.into(),
                     kind.into(),
+                    word(&a, "weapon").into(),
+                    flag(&a, "shieldBroken").into(),
                 ],
             );
         }

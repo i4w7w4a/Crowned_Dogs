@@ -1,5 +1,5 @@
 //! Arena ownership and frame orchestration. Three.js objects are opaque renderer handles.
-use super::bridge::*;
+use super::{bridge::*, shield_fx::ShieldFx};
 use js_sys::{Float64Array, Promise};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
@@ -183,6 +183,9 @@ struct ArenaState {
     me_key: JsValue,
     bounce: JsValue,
     spark: JsValue,
+    /// The «Зонт» domes that show a blocked hit: the enemy's in the far pass, mine in the near one.
+    enemy_shield: ShieldFx,
+    my_shield: ShieldFx,
     muzzle_light: JsValue,
     catcher: JsValue,
     dust: JsValue,
@@ -440,6 +443,14 @@ impl RustArena {
         let wide_y = object(&[("value", n(0.))]);
         let wk = wide_k.clone();
         let wy = wide_y.clone();
+        let enemy_shield = ShieldFx::new(
+            &three,
+            &scene,
+            0.,
+            &object(&[("value", n(1.))]),
+            &object(&[("value", n(0.))]),
+        );
+        let my_shield = ShieldFx::new(&three, &scene, NEAR, &wide_k, &wide_y);
         let widen = Closure::<dyn FnMut(JsValue)>::new(move |shader| {
             set(&get(&shader, "uniforms"), "wideK", &wk);
             set(&get(&shader, "uniforms"), "wideY", &wy);
@@ -464,6 +475,8 @@ impl RustArena {
             me_key,
             bounce,
             spark,
+            enemy_shield,
+            my_shield,
             muzzle_light,
             catcher,
             dust,
@@ -783,8 +796,22 @@ impl RustArena {
         };
         call(&f.motion, "attack", &[kind.into(), n(in_seconds)]);
     }
-    pub fn hit(&self, who: String, zone: String, kind: String) {
-        self.state.borrow_mut().hit(&who, &zone, &kind);
+    /// `weapon` and `broken` (the shield gave way) shape the dome when the hit is blocked.
+    pub fn hit(
+        &self,
+        who: String,
+        zone: String,
+        kind: String,
+        weapon: Option<String>,
+        broken: Option<bool>,
+    ) {
+        self.state.borrow_mut().hit(
+            &who,
+            &zone,
+            &kind,
+            weapon.as_deref().unwrap_or("pistol"),
+            broken.unwrap_or(false),
+        );
     }
     pub fn fall(&self, who: String) {
         let mut s = self.state.borrow_mut();
@@ -894,6 +921,8 @@ impl ArenaState {
         for tier in &self.tiers {
             let _ = try_call(tier, "dispose", &[]);
         }
+        self.enemy_shield.dispose();
+        self.my_shield.dispose();
         let _ = try_call(&self.renderer, "dispose", &[]);
     }
     fn make_figure(
@@ -1486,6 +1515,9 @@ impl ArenaState {
             call(&get(&self.spark, "scale"), "setScalar", &[n(q[2])]);
             set(&self.spark, "visible", &(q[3] != 0.).into());
         }
+        let aspect = p(&self.camera, "aspect");
+        self.enemy_shield.update(dt, aspect);
+        self.my_shield.update(dt, aspect);
         if p(&self.quality, "dust") != 0. {
             call(
                 &self.lens,
@@ -1584,6 +1616,9 @@ impl ArenaState {
         set(&self.scene, "environment", &environment);
         set(&self.hemi, "intensity", &n(if env { 0.22 } else { 0.6 }));
         call(&self.dust, "setCount", &[get(&q, "dust")]);
+        let id = string(&get(&q, "id"));
+        self.enemy_shield.set_quality(&id);
+        self.my_shield.set_quality(&id);
         let mut mats = vec![get(&self.catcher, "material")];
         if let Some(enemy) = &self.enemy {
             for mesh in meshes(&enemy.model) {
@@ -1830,6 +1865,8 @@ impl ArenaState {
         self.dist = distance;
         self.spark_life = 0.;
         set(&self.spark, "visible", &false.into());
+        self.enemy_shield.stop();
+        self.my_shield.stop();
         for f in [self.enemy.as_ref().unwrap(), self.me.as_ref().unwrap()] {
             call(&f.flash, "stop", &[]);
         }
@@ -1865,9 +1902,12 @@ impl ArenaState {
             }
         }
     }
-    fn hit(&mut self, who: &str, zone: &str, kind: &str) {
+    fn hit(&mut self, who: &str, zone: &str, kind: &str, weapon: &str, broken: bool) {
         if !self.ready {
             return;
+        }
+        if kind == "blocked" {
+            self.shield(who, zone, weapon, broken);
         }
         let f = if who == "enemy" {
             self.enemy.as_mut().unwrap()
@@ -1879,7 +1919,7 @@ impl ArenaState {
         for (i, z) in ZONES.iter().enumerate() {
             f.kick[i] = hit["kick"][z].as_f64().unwrap();
         }
-        if who != "enemy" {
+        if who != "enemy" || kind == "blocked" {
             return;
         }
         zone_world(
@@ -1900,6 +1940,49 @@ impl ArenaState {
         self.spark_max = hit["life"].as_f64().unwrap();
         self.spark_life = self.spark_max;
         set(&self.spark, "visible", &true.into());
+    }
+}
+
+impl ArenaState {
+    /// The dome lights up round whoever was hit; the shot comes from the camera when
+    /// I fire (that is where the player sees it from) and from the enemy's chest when they do.
+    fn shield(&mut self, who: &str, zone: &str, weapon: &str, broken: bool) {
+        let mine = who != "enemy";
+        let (target, shooter) = if mine {
+            (self.me.as_ref().unwrap(), self.enemy.as_ref().unwrap())
+        } else {
+            (self.enemy.as_ref().unwrap(), self.me.as_ref().unwrap())
+        };
+        // Last frame's matrices, read as they are: updating them here would move the camera
+        // and the figures out of step with the frame that is drawn next.
+        let placed = |object: &JsValue| {
+            call(&self.tmp_a, "setFromMatrixPosition", &[get(object, "matrixWorld")]);
+            xyz(&self.tmp_a)
+        };
+        let top = placed(&get(&target.bones, "top"));
+        let hips = placed(&get(&target.bones, "hips"));
+        let floor = placed(&target.group)[1];
+        let from = if mine {
+            zone_world(shooter, "body", &self.tmp_a, &self.tmp_b);
+            xyz(&self.tmp_a)
+        } else {
+            placed(&self.camera)
+        };
+        zone_world(target, zone, &self.tmp_a, &self.tmp_b);
+        let to = xyz(&self.tmp_a);
+        let fx = if mine {
+            &mut self.my_shield
+        } else {
+            &mut self.enemy_shield
+        };
+        fx.fire(
+            [hips[0], floor, hips[2]],
+            (top[1] - floor).max(1.2),
+            from,
+            to,
+            weapon,
+            broken,
+        );
     }
 }
 

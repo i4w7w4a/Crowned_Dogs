@@ -31,6 +31,7 @@ pub mod scene_stage;
 pub mod scroll;
 pub mod server_bot;
 pub mod server_runtime;
+pub mod shield_fx;
 pub mod sound_settings;
 pub mod textures;
 pub mod view_utils;
