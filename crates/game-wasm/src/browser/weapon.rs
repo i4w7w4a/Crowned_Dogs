@@ -359,6 +359,7 @@ impl BrowserWeapon {
         for (target, kind, action) in [
             (query(&element, ".cw-back"), "click", "back"),
             (query(&element, ".cw-info"), "click", "stats"),
+            (query(&element, ".cw-reset"), "click", "reset"),
             (query(&element, ".cw-change"), "click", "weapons"),
             (query(&element, ".cw-close"), "click", "close"),
             (query(&element, ".cw-sockets"), "click", "sockets"),
@@ -385,6 +386,9 @@ impl BrowserWeapon {
                 }
                 match action {
                     "stats" => s.stats(),
+                    "reset" => {
+                        call_optional(&s.viewer, "resetView", &[]);
+                    }
                     "weapons" => s.choices("weapon1"),
                     "close" => {
                         call(&s.sheet, "close", &[]);

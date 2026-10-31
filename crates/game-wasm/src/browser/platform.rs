@@ -27,17 +27,55 @@ pub fn load_local_loadout(supplied: JsValue) -> JsValue {
 #[wasm_bindgen]
 pub fn save_local_loadout(loadout: JsValue, supplied: JsValue) -> bool {
     let saved = rust("client.save", &[loadout]);
-    let storage = if supplied.is_undefined() {
-        storage()
-    } else {
-        supplied
-    };
+    let mirror = supplied.is_undefined();
+    let storage = if mirror { storage() } else { supplied };
     if !present(&saved) || !present(&storage) {
         return false;
     }
-    js_sys::JSON::stringify(&saved)
-        .ok()
-        .is_some_and(|raw| try_call(&storage, "setItem", &[LOADOUT_KEY.into(), raw.into()]).is_ok())
+    let Some(raw) = js_sys::JSON::stringify(&saved).ok().and_then(|raw| raw.as_string()) else {
+        return false;
+    };
+    // The live loadout key stays what battle reads; each save also lands in the active kit's own slot.
+    if mirror {
+        store_set(&kit_key(active_kit()), &raw);
+    }
+    try_call(&storage, "setItem", &[LOADOUT_KEY.into(), raw.into()]).is_ok()
+}
+
+/// Five prepared equipment sets. The active one is mirrored into `LOADOUT_KEY`.
+pub const KITS: usize = 5;
+const ACTIVE_KIT_KEY: &str = "crowned-dogs:kit:v1";
+fn kit_key(index: usize) -> String {
+    format!("{LOADOUT_KEY}:kit{index}")
+}
+pub fn active_kit() -> usize {
+    store_get(ACTIVE_KIT_KEY)
+        .as_string()
+        .and_then(|raw| raw.parse::<usize>().ok())
+        .filter(|index| *index < KITS)
+        .unwrap_or(0)
+}
+/// The loadout stored in one kit; an untouched kit starts as the starter loadout.
+pub fn kit_loadout(index: usize) -> JsValue {
+    if index == active_kit() {
+        return load_local_loadout(JsValue::UNDEFINED);
+    }
+    rust("client.load", &[store_get(&kit_key(index))])
+}
+/// Makes another kit active and returns its loadout.
+pub fn switch_kit(index: usize) -> JsValue {
+    let index = index.min(KITS - 1);
+    let current = active_kit();
+    if index == current {
+        return load_local_loadout(JsValue::UNDEFINED);
+    }
+    if let Some(raw) = store_get(LOADOUT_KEY).as_string() {
+        store_set(&kit_key(current), &raw);
+    }
+    let loadout = kit_loadout(index);
+    store_set(ACTIVE_KIT_KEY, &index.to_string());
+    save_local_loadout(loadout.clone(), JsValue::UNDEFINED);
+    loadout
 }
 fn default_number(value: JsValue, default: f64) -> JsValue {
     if present(&value) {

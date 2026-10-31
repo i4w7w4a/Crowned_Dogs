@@ -31,7 +31,19 @@ body { margin: 0; }
 .cd-home-message { margin: 0; text-align: center; font-size: 12px; color: #e8bd91; }
 .cd-fitting { display: flex; flex-direction: column; padding: max(var(--cd-edge), env(safe-area-inset-top)) var(--cd-edge) max(var(--cd-edge), env(safe-area-inset-bottom)); }
 .cd-fit-shade { position: absolute; inset: 0; z-index: -2; pointer-events: none; background: linear-gradient(180deg, #03060870, transparent 22%, transparent 76%, #060a0d70); }
-.cd-fit-header { display: flex; align-items: center; min-height: 44px; flex: 0 0 44px; }
+.cd-fit-header { display: flex; align-items: center; min-height: 44px; flex: 0 0 44px; position: relative; z-index: 5; }
+/* Kit picker: five prepared equipment sets, top right, level with «Назад». */
+.cd-kit-picker { position: relative; margin-left: auto; }
+.cd-kit-trigger { height: 44px; padding: 0 10px 0 14px; display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.cd-kit-trigger strong { min-width: 9px; font-size: 15px; font-weight: 600; }
+.cd-kit-trigger svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+.cd-kit-trigger[aria-expanded="true"] svg { transform: rotate(180deg); }
+.cd-kit-options.sheet.glass { position: absolute; right: 0; top: calc(100% + 8px); width: 196px; max-height: none; display: grid; gap: 4px; padding: 6px; border-radius: 16px; animation: none; }
+.cd-kit-options.sheet.glass[hidden] { display: none; }
+.cd-kit-options [role="option"] { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-height: 44px; padding: 7px 12px; border-radius: 10px; text-align: left; }
+.cd-kit-options strong { font-size: 12px; font-weight: 600; color: #f2f3f3; }
+.cd-kit-options small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--cd-secondary); }
+.cd-kit-options [aria-selected="true"] { --rim: linear-gradient(140deg, rgba(255,255,255,.98), rgba(255,255,255,.42) 26%, rgba(255,255,255,.22) 54%, rgba(255,255,255,.78)); box-shadow: inset 0 1px 1px rgba(255,255,255,.3), inset 0 0 14px rgba(255,255,255,.16); }
 .cd-back, .cw-back { width: 90px; height: 44px; padding: 0 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; }
 .cd-back-arrow { display: block; width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .cd-model-stage { position: relative; flex: 1 1 auto; min-height: 190px; margin: 0 calc(-1 * var(--cd-edge)); }

@@ -1,5 +1,5 @@
 //! Base and fitting-room navigation, catalogue interaction and asynchronous viewer lifecycle.
-use super::{dom_support::*, scroll::BrowserScroll};
+use super::{dom_support::*, platform, scroll::BrowserScroll};
 use js_sys::{Array, Promise};
 use std::{
     cell::RefCell,
@@ -368,6 +368,53 @@ impl Base {
             ));
         }
     }
+    /// Opens or closes the list of five prepared kits; each option names its main weapon.
+    fn kits(&self, open: bool) {
+        let options = query(&self.root, ".cd-kit-options");
+        hidden(&options, !open);
+        attr(
+            &query(&self.root, ".cd-kit-trigger"),
+            "aria-expanded",
+            &open.to_string(),
+        );
+        let active = platform::active_kit();
+        content(
+            &query(&self.root, ".cd-kit-current"),
+            &(active + 1).to_string(),
+        );
+        if !open {
+            return;
+        }
+        for option in all(&options, "[data-kit]") {
+            let index = data(&option, "kit").parse().unwrap_or(0);
+            attr(&option, "aria-selected", &(index == active).to_string());
+            let loadout = if index == active {
+                self.loadout.clone()
+            } else {
+                platform::kit_loadout(index)
+            };
+            let weapon = self.item(&rust("client.equippedItemId", &[loadout, js("weapon1")]));
+            content(
+                &query(&option, "small"),
+                &if exists(&weapon) {
+                    text(&get(&weapon, "name"))
+                } else {
+                    "Без оружия".into()
+                },
+            );
+        }
+        call(&self.host, "liquidGlass", &[options.clone()]);
+        focus(&query(&options, &format!("[data-kit=\"{active}\"]")));
+    }
+    fn pick_kit(&mut self, index: usize) {
+        if index != platform::active_kit() {
+            self.loadout = platform::switch_kit(index);
+            hidden(&query(&self.root, ".cd-save-status"), true);
+            self.refresh();
+        }
+        self.kits(false);
+        focus(&query(&self.root, ".cd-kit-trigger"));
+    }
     fn picker_key(&self, event: JsValue) {
         let key = text(&get(&event, "key"));
         let options = query(&self.root, ".cd-select-options");
@@ -639,7 +686,13 @@ fn initial(host: &JsValue) -> String {
         let slot = text(&slot);
         options.push_str(&format!("<button class=\"glass\" type=\"button\" role=\"option\" data-category=\"{slot}\" aria-selected=\"false\">{}</button>",text(&get(&names,&slot))));
     }
+    let mut kits = String::new();
+    for index in 0..platform::KITS {
+        kits.push_str(&format!("<button class=\"glass\" type=\"button\" role=\"option\" data-kit=\"{index}\" aria-selected=\"false\"><strong>Набор {}</strong><small></small></button>", index + 1));
+    }
     include_str!("base.html")
+        .replace("{{KIT}}", &(platform::active_kit() + 1).to_string())
+        .replace("{{KITS}}", &kits)
         .replace("{{BASE}}", &text(&get(host, "baseUrl")))
         .replace("{{BACK}}", &text(&get(host, "backArrow")))
         .replace("{{COLUMNS}}", &columns)
@@ -777,6 +830,10 @@ fn bind(state: &Rc<RefCell<Base>>) {
         (dialog.clone(), "click", "dialog"),
         (dialog, "close", "closed"),
         (query(&root, ".cd-select-trigger"), "click", "picker"),
+        (query(&root, ".cd-kit-trigger"), "click", "kits"),
+        (query(&root, ".cd-kit-options"), "click", "kit"),
+        (query(&root, ".cd-kit-picker"), "keydown", "kitKeys"),
+        (state.borrow().fitting.clone(), "click", "kitOutside"),
         (picker.clone(), "click", "category"),
         (picker, "keydown", "keys"),
         (state.borrow().catalog.clone(), "click", "item"),
@@ -887,6 +944,43 @@ fn bind(state: &Rc<RefCell<Base>>) {
                     }
                 }
                 "picker" => s.picker(boolean(&query(&s.root, ".cd-select-options"), "hidden")),
+                "kits" => s.kits(boolean(&query(&s.root, ".cd-kit-options"), "hidden")),
+                "kit" => {
+                    let option = closest(&event, "[data-kit]");
+                    if exists(&option) {
+                        s.pick_kit(data(&option, "kit").parse().unwrap_or(0));
+                    }
+                }
+                "kitKeys" => {
+                    let options = query(&s.root, ".cd-kit-options");
+                    let key = text(&get(&event, "key"));
+                    let open = !boolean(&options, "hidden");
+                    if key == "Escape" && open {
+                        call(&event, "preventDefault", &[]);
+                        call(&event, "stopPropagation", &[]);
+                        s.kits(false);
+                        focus(&query(&s.root, ".cd-kit-trigger"));
+                    } else if open && (key == "ArrowDown" || key == "ArrowUp") {
+                        call(&event, "preventDefault", &[]);
+                        let items = all(&options, "[data-kit]");
+                        let active = get(&document(), "activeElement");
+                        let at = items.iter().position(|item| *item == active).unwrap_or(0);
+                        let next = if key == "ArrowDown" {
+                            (at + 1) % items.len()
+                        } else {
+                            (at + items.len() - 1) % items.len()
+                        };
+                        focus(&items[next]);
+                    }
+                }
+                "kitOutside" => {
+                    let picker = query(&s.root, ".cd-kit-picker");
+                    if !boolean(&query(&s.root, ".cd-kit-options"), "hidden")
+                        && call(&picker, "contains", &[get(&event, "target")]).as_bool() != Some(true)
+                    {
+                        s.kits(false);
+                    }
+                }
                 "category" => {
                     let option = closest(&event, "[data-category]");
                     if exists(&option) {

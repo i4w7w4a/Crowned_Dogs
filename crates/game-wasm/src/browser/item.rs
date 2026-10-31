@@ -131,6 +131,15 @@ impl RustItemViewer {
             set(&self.state, "drag", &JsValue::NULL);
         }
     }
+    /// Turns the model back to the pose it opened with.
+    #[wasm_bindgen(js_name=resetView)]
+    pub fn reset_view(&self) {
+        let s = &self.state;
+        if exists(&get(s, "home")) {
+            call(&get(s, "pivot.quaternion"), "copy", &[get(s, "home")]);
+            render(s);
+        }
+    }
     pub fn hide(&self) {
         let s = &self.state;
         set(s, "serial", &num(number(s, "serial") + 1.0));
@@ -400,6 +409,8 @@ fn show(s: JsValue, id: String, name: String, loadout: JsValue) -> Promise {
                         }),
                     ],
                 );
+                // The opening pose, for "reset view"; fitted mods do not change it.
+                set(&s, "home", &call(&get(&pivot, "quaternion"), "clone", &[]));
             }
             set(&get(&s, "status"), "textContent", &text(""));
             set(&get(&s, "canvas"), "hidden", &flag(false));

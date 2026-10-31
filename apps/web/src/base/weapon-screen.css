@@ -59,3 +59,7 @@
 .cw-sheet-error { color: #e5c4b0; font-size: 12px; }
 @media (max-height: 650px) { .cw-title { margin-top: 16px; } }
 @media (prefers-reduced-motion: reduce) { .cw-sheet[open] { animation: none; } }
+/* Small "reset view" button: puts the 3D gun back to its opening pose; fitted mods stay. */
+.cw-reset { position: absolute; z-index: 3; top: 8px; right: 8px; width: 38px; height: 38px; border-radius: 12px; }
+.cw-reset svg { width: 20px; height: 20px; stroke-linecap: round; stroke-linejoin: round; }
+.cw-stage:not(.cw-stage-3d) .cw-reset { display: none; }
