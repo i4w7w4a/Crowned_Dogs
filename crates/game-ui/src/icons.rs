@@ -288,6 +288,97 @@ fn item(id: &str, stock: &Value) -> Result<Value, String> {
     }
     Ok(Value::Null)
 }
+/// Corner box of the body after turning it by `angle` degrees about the origin.
+fn turned_bounds(shape: &Value, angle: f64) -> [f64; 4] {
+    let (sin, cos) = angle.to_radians().sin_cos();
+    let [mut x0, mut y0, mut x1, mut y1] = [
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    // A centre and its half extents after the turn.
+    let mut add = |x: f64, y: f64, hw: f64, hh: f64| {
+        let (cx, cy) = (x * cos - y * sin, x * sin + y * cos);
+        x0 = x0.min(cx - hw);
+        y0 = y0.min(cy - hh);
+        x1 = x1.max(cx + hw);
+        y1 = y1.max(cy + hh);
+    };
+    for p in list(&shape["body"]) {
+        let n = |field: &str| number(&p[field]);
+        match string(&p["k"]) {
+            "rect" => {
+                for (x, y) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)] {
+                    add(n("x") + x * n("w"), n("y") + y * n("h"), 0.0, 0.0);
+                }
+            }
+            "circle" => add(n("cx"), n("cy"), n("r"), n("r")),
+            "ellipse" => {
+                let (rx, ry) = (n("rx"), n("ry"));
+                add(
+                    n("cx"),
+                    n("cy"),
+                    (rx * cos).hypot(ry * sin),
+                    (rx * sin).hypot(ry * cos),
+                );
+            }
+            "poly" | "line" => {
+                for pair in list(&p["pts"]).chunks_exact(2) {
+                    add(number(&pair[0]), number(&pair[1]), 0.0, 0.0);
+                }
+            }
+            _ => {}
+        }
+    }
+    [x0, y0, x1 - x0, y1 - y0]
+}
+/// Slot art for the base screen and the fitting room: worn items as drawn, weapons with
+/// their factory parts. Long guns and knives lean to fill a square slot. A gun shrinks to a
+/// few dozen pixels there, so its hairline cuts are dropped and the rest are widened.
+/// `None` for ids without gear art (mods, paints, unknown ids).
+pub fn gear_svg(id: &str, mask: &str) -> Option<String> {
+    let (shape, angle) = if let Some(wear) = catalog()["wear"].get(id) {
+        (wear.clone(), if id.starts_with("knife-") { -40.0 } else { 0.0 })
+    } else {
+        if !catalog()["parts"][id].is_null() {
+            return None;
+        }
+        let weapon = ["rifle", "shotgun", "sniper", "pistol"]
+            .into_iter()
+            .find(|w| id == *w || id.starts_with(&format!("{w}-")))?;
+        let parts = ["optic", "muzzle", "rail", "mag", "stock"]
+            .map(|slot| json!([slot, format!("{weapon}-{slot}-stock")]));
+        let mut shape = compose(weapon, &json!(parts)).ok()?;
+        let cuts = list(&shape["cuts"])
+            .iter()
+            .filter(|p| p["k"] != "line" || default_number(&p["w"], CUT) >= 2.4)
+            .map(|p| {
+                let mut p = p.clone();
+                if p["k"] == "line" {
+                    p["w"] = json!(round(default_number(&p["w"], CUT) * 1.5));
+                }
+                p
+            })
+            .collect::<Vec<_>>();
+        shape["cuts"] = json!(cuts);
+        (shape, if weapon == "pistol" { 0.0 } else { -30.0 })
+    };
+    let [x, y, w, h] = turned_bounds(&shape, angle);
+    let side = w.max(h) * 1.1;
+    let viewbox = [x + w / 2.0 - side / 2.0, y + h / 2.0 - side / 2.0, side, side]
+        .map(|v| round(v).to_string())
+        .join(" ");
+    let art = markup(&shape, mask);
+    let art = if angle == 0.0 {
+        art
+    } else {
+        format!("<g transform=\"rotate({angle})\">{art}</g>")
+    };
+    Some(format!(
+        "<svg class=\"cd-equipment-icon\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{viewbox}\" fill=\"currentColor\" aria-hidden=\"true\" focusable=\"false\">{art}</svg>"
+    ))
+}
 pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
     Ok(match method {
         "icons.catalog" => catalog().clone(),
@@ -341,7 +432,8 @@ mod tests {
             ["muzzle", "rifle-muzzle-stock"]
         ]);
         let composed = compose("pistol", &parts).unwrap();
-        assert_eq!(composed["body"][0]["x"], 35.0);
+        let first = json!({"body":[composed["body"][0].clone()]});
+        assert_eq!(bounds(&first)[0], 35.0);
         assert_eq!(
             composed["body"].as_array().unwrap().last(),
             catalog()["weapons"]["pistol"]["body"]["body"]
@@ -349,5 +441,20 @@ mod tests {
                 .unwrap()
                 .last()
         );
+    }
+    #[test]
+    fn gear_art_for_every_worn_item_and_weapon() {
+        for id in catalog()["wear"].as_object().unwrap().keys() {
+            let art = gear_svg(id, "m").unwrap();
+            assert!(art.starts_with("<svg class=\"cd-equipment-icon\""), "{id}");
+            assert_eq!(art.contains("rotate("), id.starts_with("knife-"), "{id}");
+        }
+        for id in ["rifle-ak", "shotgun", "sniper-x", "pistol-pm"] {
+            let art = gear_svg(id, "m").unwrap();
+            assert_eq!(art.contains("rotate(-30)"), !id.starts_with("pistol"), "{id}");
+        }
+        assert_ne!(gear_svg("suit-ten", "m"), gear_svg("suit-solonchak", "m"));
+        assert_eq!(gear_svg("rifle-optic-stock", "m"), None);
+        assert_eq!(gear_svg("unknown", "m"), None);
     }
 }

@@ -134,24 +134,24 @@ pub fn step_markup(look: &JsValue, step: usize) -> String {
     }
 }
 
-/// Line icons for the steps, the camera, the buttons and the choices, drawn on a 24 grid like
-/// the combat icons.
+/// Icons for the steps, the camera, the buttons and the choices, on a 24 grid like the combat
+/// icons: things are solid silhouettes with cut-outs, actions and signs stay thin lines.
 fn icon_paths(id: &str) -> &'static str {
     match id {
-        "body" => "<circle cx=\"12\" cy=\"4.8\" r=\"2.3\"/><path d=\"M7.6 21v-6.4L6 9.6c0-1.1.8-2 1.9-2h8.2c1.1 0 1.9.9 1.9 2l-1.6 5V21M12 13.6V21\"/>",
-        "next" => "<path d=\"M14 5l7 7-7 7M21 12H3\"/>",
+        "body" => "<g fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\"><path d=\"M9.2 4.4a2.8 2.8 0 1 0 5.6 0a2.8 2.8 0 1 0-5.6 0z\"/><path d=\"M7.5 8.1h9c1.4 0 2.4 1.2 2.1 2.6l-1.3 5.2h-1.8v6.1h-2.6v-6h-1.8v6H8.5v-6.1H6.7l-1.3-5.2c-.3-1.4.7-2.6 2.1-2.6z\"/></g>",
+        "next" => "<path d=\"M14 5.5l6.5 6.5-6.5 6.5M20 12H3.5\"/>",
         "save" => "<path d=\"M4.5 12.5l5 5 10-11\"/>",
         "male" => "<circle cx=\"10\" cy=\"14\" r=\"5.5\"/><path d=\"M14 10l6-6M15 4h5v5\"/>",
         "female" => "<circle cx=\"12\" cy=\"9\" r=\"5.5\"/><path d=\"M12 14.5V21M9 18h6\"/>",
-        "long" => "<path d=\"M6 21c-1.2-4-1.4-9 .3-12.3C7.6 6 9.6 4.5 12 4.5s4.4 1.5 5.7 4.2C19.4 12 19.2 17 18 21\"/><path d=\"M9 10.6c.3 3.2 1.3 5.6 3 6.6 1.7-1 2.7-3.4 3-6.6\"/>",
-        "shaved" | "buzz" => "<path d=\"M7 12.5c0-4.3 2.2-7 5-7s5 2.7 5 7-2.2 7-5 7-5-2.7-5-7z\"/><path d=\"M8.6 8.3h.01M10.3 6.9h.01M12 6.5h.01M13.7 6.9h.01M15.4 8.3h.01\"/>",
-        "sex" => "<circle cx=\"9\" cy=\"7.5\" r=\"3\"/><path d=\"M3.5 20v-1a5.5 5.5 0 0 1 11 0v1\"/><circle cx=\"17\" cy=\"9\" r=\"2.4\"/><path d=\"M15.6 14a4.6 4.6 0 0 1 5.9 4.4V20\"/>",
-        "face" => "<path d=\"M12 3.2c-3.8 0-6.3 2.9-6.3 7 0 4.9 2.9 10.6 6.3 10.6s6.3-5.7 6.3-10.6c0-4.1-2.5-7-6.3-7z\"/><path d=\"M9.4 10.8h.01M14.6 10.8h.01M10.1 15.6c1.2.7 2.6.7 3.8 0\"/>",
-        "skin" => "<path d=\"M12 3.5c3.1 3.9 6 7.3 6 10.7a6 6 0 0 1-12 0c0-3.4 2.9-6.8 6-10.7z\"/><path d=\"M9.2 14.6a2.9 2.9 0 0 0 2.8 2.8\"/>",
-        "eyes" => "<path d=\"M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z\"/><circle cx=\"12\" cy=\"12\" r=\"3.1\"/><path d=\"M12 12h.01\"/>",
-        "hair" => "<path d=\"M5.5 20.5c-.6-7.2 1.4-13.6 6.5-15.6 5.1 2 7.1 8.4 6.5 15.6\"/><path d=\"M12 4.9c-1.6 3.2-2.4 6.6-2.2 10.4M12 4.9c2.6 2.4 3.6 5.6 3.4 9.4\"/>",
-        "suit" => "<path d=\"M8.3 3.8L12 6.6l3.7-2.8 4.8 2.7-1.8 4.8-2.1-.9V21H7.4V10.4l-2.1.9-1.8-4.8z\"/><path d=\"M12 6.6V21\"/>",
-        _ => "<rect x=\"6.2\" y=\"3.5\" width=\"11.6\" height=\"17\" rx=\"4\"/><path d=\"M12 6.8h.01M9.2 12h5.6M9.2 15.4h3.8\"/>",
+        "long" => "<g fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\"><path d=\"M5.6 21c-1.4-4.4-1.5-9.6.4-12.8C7.4 5.6 9.5 4 12 4s4.6 1.6 6 4.2c1.9 3.2 1.8 8.4.4 12.8zM12 8.6c-1.8 0-3 1.5-3 3.8 0 2.6 1.4 5.1 3 5.1s3-2.5 3-5.1c0-2.3-1.2-3.8-3-3.8z\"/></g>",
+        "shaved" | "buzz" => "<g fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\"><path d=\"M7 12.5c0-4.3 2.2-7.2 5-7.2s5 2.9 5 7.2-2.2 7.2-5 7.2-5-2.9-5-7.2zM8.3 9.4a.8 .8 0 1 0 1.6 0a.8 .8 0 1 0-1.6 0zM9.8 7.9a.8 .8 0 1 0 1.6 0a.8 .8 0 1 0-1.6 0zM11.2 7.4a.8 .8 0 1 0 1.6 0a.8 .8 0 1 0-1.6 0zM12.6 7.9a.8 .8 0 1 0 1.6 0a.8 .8 0 1 0-1.6 0zM14.1 9.4a.8 .8 0 1 0 1.6 0a.8 .8 0 1 0-1.6 0z\"/></g>",
+        "sex" => "<g fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\"><path d=\"M5.8 7.3a3.2 3.2 0 1 0 6.4 0a3.2 3.2 0 1 0-6.4 0z\"/><path d=\"M3.2 20.5v-1.3a5.8 5.8 0 0 1 11.6 0v1.3z\"/><path d=\"M14.7 8.8a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z\"/><path d=\"M15.9 20.5v-1.3c0-1.7-.5-3.2-1.4-4.4a4.7 4.7 0 0 1 7 4.1v1.6z\"/></g>",
+        "face" => "<g fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\"><path d=\"M12 3.2c-3.8 0-6.3 2.9-6.3 7 0 4.9 2.9 10.6 6.3 10.6s6.3-5.7 6.3-10.6c0-4.1-2.5-7-6.3-7zM8.45 10.9a1.05 1.05 0 1 0 2.1 0a1.05 1.05 0 1 0-2.1 0zM13.45 10.9a1.05 1.05 0 1 0 2.1 0a1.05 1.05 0 1 0-2.1 0zM10 15.1c1.3.8 2.7.8 4 0l.6 1c-1.7 1.1-3.5 1.1-5.2 0z\"/></g>",
+        "skin" => "<g fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\"><path d=\"M12 3.3c3.1 3.9 6.2 7.4 6.2 10.9a6.2 6.2 0 0 1-12.4 0c0-3.5 3.1-7 6.2-10.9zM8.8 14.4a3.2 3.2 0 0 0 3.2 3.2v-1.5a1.7 1.7 0 0 1-1.7-1.7z\"/></g>",
+        "eyes" => "<g fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\"><path d=\"M2.3 12S6 5.6 12 5.6 21.7 12 21.7 12 18 18.4 12 18.4 2.3 12 2.3 12zM8.4 12a3.6 3.6 0 1 0 7.2 0a3.6 3.6 0 1 0-7.2 0zM10.1 12a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0-3.8 0z\"/></g>",
+        "hair" => "<g fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\"><path d=\"M4.9 20.8c-.7-7.4 1.5-14 7.1-16.4 5.6 2.4 7.8 9 7.1 16.4h-3c.4-4.4-.6-8.2-4.1-10.9-3.5 2.7-4.5 6.5-4.1 10.9z\"/></g>",
+        "suit" => "<g fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\"><path d=\"M8.3 3.6L12 6.4l3.7-2.8 5 2.8-1.9 5-2-.8V21H7.2V10.6l-2 .8-1.9-5zM11.4 7.9h1.2V21h-1.2z\"/></g>",
+        _ => "<g fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\"><path d=\"M8.6 3.5h6.8l2.4 2.4v12.2l-2.4 2.4H8.6l-2.4-2.4V5.9zM9.2 11.3h5.6v1.4H9.2zM9.2 14.7h3.8v1.4H9.2zM11.3 6.1h1.4v1.4h-1.4z\"/></g>",
     }
 }
 

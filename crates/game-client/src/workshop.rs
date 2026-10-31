@@ -195,7 +195,7 @@ fn initial(base: &str, back: &str) -> String {
         r#"<img class="cw-room" src="{}img/base/fitting-room.webp" alt="" draggable="false">
 <header class="cw-header"><button class="cw-back glass" type="button" aria-label="Назад к снаряжению">{back}<span>Назад</span></button><span>Оружие</span><button class="cw-info cw-icon glass" type="button" aria-label="Характеристики оружия"><span aria-hidden="true">i</span></button></header>
 <div class="cw-title"><p class="cw-class"></p><h1 class="cw-name"></h1></div>
-<div class="cw-stage"><div class="cw-model" hidden></div><svg class="cw-gun" viewBox="0 0 360 360" role="img" aria-label="Оружие с установленными модификациями"></svg><svg class="cw-links" hidden aria-hidden="true"></svg><div class="cw-sockets">{buttons}</div><button class="cw-reset cw-icon glass" type="button" aria-label="Вернуть вид оружия" title="Вернуть вид"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 3.5v3.7h3.7"/></svg></button></div>
+<div class="cw-stage"><div class="cw-model" hidden></div><svg class="cw-gun" viewBox="0 0 360 360" role="img" aria-label="Оружие с установленными модификациями"></svg><svg class="cw-links" hidden aria-hidden="true"></svg><div class="cw-sockets">{buttons}</div><button class="cw-reset cw-icon glass" type="button" aria-label="Вернуть вид оружия" title="Вернуть вид"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 14.5A6.8 6.8 0 1 0 7.4 7.6L5.3 9.7"/><path d="M5.1 4.6v5.2h5.2"/></svg></button></div>
 <footer class="cw-footer"><button class="cw-change glass" type="button">Сменить оружие</button><p class="cw-error" role="status" hidden></p></footer>
 <dialog class="cw-sheet sheet glass" aria-labelledby="cw-sheet-title"><header class="cw-sheet-header"><h2 id="cw-sheet-title"></h2><button class="cw-close cw-icon glass" type="button" aria-label="Закрыть панель">×</button></header><div class="cw-sheet-body"></div></dialog>"#,
         escape(base)
@@ -230,7 +230,7 @@ fn choices(kit: &Value, slot: &str) -> Result<Value, String> {
         .collect::<Vec<_>>()))
 }
 fn options(choices: &Value, kind: &str) -> String {
-    let check = r#"<span class="cd-equipped-check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>"#;
+    let check = r#"<span class="cd-equipped-check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.5 12.5l5 5 10-11"/></svg></span>"#;
     let kind = if kind == "weapon" { "weapon" } else { "mod" };
     let body=choices.as_array().into_iter().flatten().map(|c|format!(r#"<button class="cw-option glass" type="button" data-{kind}="{}" aria-pressed="{}"><span class="cw-part-icon">{}</span><strong>{}</strong>{}{}</button>"#,escape(text(&c["item"]["id"])),truth(&c["selected"]),text(&c["icon"]),escape(text(&c["item"]["name"])),if truth(&c["selected"]){check}else{""},tip(c))).collect::<Vec<_>>().join("");
     format!(r#"<div class="cw-options">{body}</div>"#)

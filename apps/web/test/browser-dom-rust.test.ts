@@ -2,16 +2,31 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { getEventListeners } from "node:events";
 import { BrowserBase, BrowserScroll, BrowserWeapon, equipment_icon, equipment_item_icon } from "../../../packages/runtime/src/index.ts";
-import { equipmentIcon as originalIcon, equipmentItemIcon as originalItemIcon } from "../../../crates/game-wasm/reference/browser/equipment-icons.ts";
 import type { GearSlot } from "@crowned-dogs/core";
 
-test("Rust equipment selection preserves all original vector variants and unknown-item behavior", () => {
+test("Rust equipment slots draw each item, fall back per slot and keep unknown items blank", () => {
   const ids = ["", "head-cap", "head-sfera", "head-marevo", "head-filin", "head-sych", "body-light", "body-plita4", "body-bastion", "suit-leshy", "suit-ryvok", "suit-ten", "suit-solonchak", "boots-sprint", "boots-saper", "boots-hodok", "knife-kogot", "knife-shtyk", "knife-zhalo", "knife-iskra", "grenade-emp", "grenade-smoke", "grenade-grad", "rifle-ak", "pistol-pm", "sniper-svd", "shotgun-12", "unknown-item"];
   const slots: GearSlot[] = ["head", "body", "suit", "boots", "knife", "grenade", "weapon1", "weapon2"];
+  const art = (svg: string) => svg.replace(/gear-\d+/g, "gear");
+  const masks = new Set<string>();
   for (const id of ids) {
-    for (const slot of slots) assert.equal(equipment_icon(slot, id), originalIcon(slot, id), `${slot}: ${id}`);
-    assert.equal(equipment_item_icon(id), originalItemIcon(id), id);
+    for (const slot of slots) {
+      const icon = equipment_icon(slot, id);
+      assert.match(icon, /^<svg class="cd-equipment-icon" [^>]*viewBox="[-\d. ]+"[^>]*aria-hidden="true"/, `${slot}: ${id}`);
+      for (const [, mask] of icon.matchAll(/mask id="([^"]+)"/g)) {
+        assert.ok(!masks.has(mask!), `${slot}: ${id} has its own mask`);
+        masks.add(mask!);
+      }
+      const fits = id.startsWith(`${slot}-`) || (slot.startsWith("weapon") && /^(pistol|rifle|shotgun|sniper)-/.test(id));
+      if (!fits) assert.equal(art(icon), art(equipment_icon(slot, "")), `${slot}: ${id} falls back`);
+    }
+    const prefix = id.split("-")[0]!;
+    if (id === "unknown-item" || id === "") assert.equal(equipment_item_icon(id), "", id);
+    else assert.equal(art(equipment_item_icon(id)), art(equipment_icon(/^(pistol|rifle|shotgun|sniper)$/.test(prefix) ? "weapon1" : prefix as GearSlot, id)), id);
   }
+  assert.notEqual(art(equipment_icon("weapon2", "")), art(equipment_icon("weapon1", "")), "the second slot shows a pistol");
+  const worn = ids.filter((id) => /^(head|body|suit|boots|knife|grenade)-/.test(id)).map((id) => art(equipment_item_icon(id)));
+  assert.equal(new Set(worn).size, worn.length, "every worn item has its own drawing");
 });
 
 class Element extends EventTarget {

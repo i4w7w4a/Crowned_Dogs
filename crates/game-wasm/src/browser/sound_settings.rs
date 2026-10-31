@@ -97,7 +97,7 @@ impl Settings {
 #[wasm_bindgen]
 pub fn mount_sound_settings(host: JsValue) {
     SETTINGS.with(|holder|{if holder.borrow().is_some(){return;}
-        let button=create("button","glass cd-settings");set(&button,"type",&js("button"));attr(&button,"aria-label","Настройки звука");html(&button,"<svg class=\"cd-set-ico\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2.2\"/><circle cx=\"10\" cy=\"17\" r=\"2.2\"/></svg>");
+        let button=create("button","glass cd-settings");set(&button,"type",&js("button"));attr(&button,"aria-label","Настройки звука");html(&button,"<svg class=\"cd-set-ico\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7h16M4 17h16\"/><circle fill=\"currentColor\" stroke=\"none\" cx=\"15.5\" cy=\"7\" r=\"2.6\"/><circle fill=\"currentColor\" stroke=\"none\" cx=\"8.5\" cy=\"17\" r=\"2.6\"/></svg>");
         let dialog=create("dialog","cd-dialog sheet glass cd-sound");html(&dialog,include_str!("sound-settings.html"));call(&get(&document(),"body"),"append",&[button.clone(),dialog.clone()]);
         let state=Rc::new(RefCell::new(Settings{host,dialog:dialog.clone(),listeners:vec![]}));
         for (target,event,action) in [(button,"click","open"),(query(&dialog,".cd-sound-toggle:not(.cd-restart)"),"click","toggle"),(query(&dialog,".cd-restart"),"click","restart"),(query(&dialog,".cd-dialog-close"),"click","close"),(dialog.clone(),"click","click"),(dialog,"input","volume")] {

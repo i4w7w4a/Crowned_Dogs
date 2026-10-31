@@ -1,73 +1,40 @@
-//! Equipment variant selection. The original authored SVG artwork is a data asset.
-use std::sync::LazyLock;
+//! Equipment slot art, drawn from the silhouette catalog in game-ui.
+use std::sync::atomic::{AtomicU32, Ordering};
 use wasm_bindgen::prelude::*;
-static ART: LazyLock<serde_json::Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("equipment-art.json")).expect("equipment artwork")
-});
-fn variant<'a>(slot: &'a str, id: &str) -> &'a str {
-    match slot {
-        "weapon1" | "weapon2" => {
-            if id.starts_with("pistol-") {
-                "pistol"
-            } else if id.starts_with("shotgun-") {
-                "shotgun"
-            } else if id.starts_with("sniper-") {
-                "sniper"
-            } else if id.starts_with("rifle-") {
-                "rifle"
-            } else if slot == "weapon2" {
-                "pistol"
-            } else {
-                "rifle"
-            }
-        }
-        "head" => match id {
-            "head-cap" => "cap",
-            "head-sfera" => "visor",
-            "head-marevo" => "thermalHelmet",
-            "head-filin" => "heavyHelmet",
-            "head-sych" => "nightHelmet",
-            _ => "helmet",
-        },
-        "body" => match id {
-            "body-light" => "lightVest",
-            "body-plita4" => "heavyVest",
-            "body-bastion" => "assaultVest",
-            _ => "vest",
-        },
-        "suit" => match id {
-            "suit-leshy" => "cloak",
-            "suit-ryvok" => "assaultSuit",
-            "suit-ten" | "suit-solonchak" => "thermalSuit",
-            _ => "suit",
-        },
-        "boots" => match id {
-            "boots-sprint" => "lightBoot",
-            "boots-saper" | "boots-hodok" => "armoredBoot",
-            _ => "boot",
-        },
-        "knife" => match id {
-            "knife-kogot" => "curvedKnife",
-            "knife-shtyk" => "bayonet",
-            "knife-zhalo" => "heavyKnife",
-            "knife-iskra" => "thermalKnife",
-            _ => "knife",
-        },
-        "grenade" => match id {
-            "grenade-emp" => "emp",
-            "grenade-smoke" => "smoke",
-            "grenade-grad" => "heavyGrenade",
-            _ => "grenade",
-        },
-        _ => "",
-    }
+/// Every icon gets its own cut mask id: one page shows the same item in several places.
+static SERIAL: AtomicU32 = AtomicU32::new(0);
+/// What an empty slot shows.
+fn fallback(slot: &str) -> Option<&'static str> {
+    Some(match slot {
+        "head" => "head-k6",
+        "body" => "body-plita2",
+        "suit" => "suit-field",
+        "boots" => "boots-bertsy",
+        "knife" => "knife-std",
+        "grenade" => "grenade-rg1",
+        "weapon1" => "rifle",
+        "weapon2" => "pistol",
+        _ => return None,
+    })
+}
+/// The item a slot draws: the worn item when it belongs in the slot, else the slot's default.
+fn gear_id<'a>(slot: &str, id: &'a str) -> Option<&'a str> {
+    let kind = id.split_once('-').map_or("", |(kind, _)| kind);
+    let fits = match slot {
+        "weapon1" | "weapon2" => matches!(kind, "pistol" | "rifle" | "shotgun" | "sniper"),
+        _ => !kind.is_empty() && kind == slot,
+    };
+    if fits { Some(id) } else { fallback(slot) }
 }
 #[wasm_bindgen]
 pub fn equipment_icon(slot: &str, id: Option<String>) -> String {
-    ART[variant(slot, id.as_deref().unwrap_or(""))]
-        .as_str()
-        .unwrap_or("")
-        .to_owned()
+    let Some(item) = gear_id(slot, id.as_deref().unwrap_or("")) else {
+        return String::new();
+    };
+    let mask = format!("gear-{}", SERIAL.fetch_add(1, Ordering::Relaxed));
+    game_ui::icons::gear_svg(item, &mask)
+        .or_else(|| game_ui::icons::gear_svg(fallback(slot)?, &mask))
+        .unwrap_or_default()
 }
 #[wasm_bindgen]
 pub fn equipment_item_icon(id: &str) -> String {
@@ -85,28 +52,29 @@ pub fn fitting_room_icon() -> String {
 }
 #[wasm_bindgen]
 pub fn navigation_back_arrow() -> String {
-    "<svg class=\"cd-back-arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m10 5-7 7 7 7M3 12h18\"/></svg>".into()
+    "<svg class=\"cd-back-arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M10 5.5 3.5 12l6.5 6.5M4 12h16.5\"/></svg>".into()
 }
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn absent_secondary_weapon_uses_pistol() {
-        assert_eq!(variant("weapon2", ""), "pistol");
-        assert_eq!(variant("weapon1", ""), "rifle");
-        assert_eq!(variant("weapon2", "rifle-ak"), "rifle");
+        assert_eq!(gear_id("weapon2", ""), Some("pistol"));
+        assert_eq!(gear_id("weapon1", ""), Some("rifle"));
+        assert_eq!(gear_id("weapon2", "rifle-ak"), Some("rifle-ak"));
+        assert_eq!(gear_id("head", "body-light"), Some("head-k6"));
+        assert_eq!(gear_id("pocket", "head-cap"), None);
     }
     #[test]
-    fn shared_variants_and_unknown_items() {
-        assert_eq!(
-            equipment_item_icon("suit-ten"),
-            equipment_item_icon("suit-solonchak")
-        );
-        assert_eq!(
-            equipment_item_icon("boots-saper"),
-            equipment_item_icon("boots-hodok")
+    fn own_art_per_item_and_unknown_items() {
+        assert_ne!(
+            game_ui::icons::gear_svg("suit-ten", "m"),
+            game_ui::icons::gear_svg("suit-solonchak", "m")
         );
         assert_eq!(equipment_item_icon("unknown-1"), "");
         assert!(equipment_item_icon("head-cap").contains("currentColor"));
+        // A helmet nobody drew yet still shows a helmet.
+        assert!(equipment_item_icon("head-new").contains("cd-equipment-icon"));
+        assert_ne!(equipment_item_icon("head-cap"), equipment_item_icon("head-cap"));
     }
 }
