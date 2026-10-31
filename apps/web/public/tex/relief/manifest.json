@@ -603,7 +603,7 @@
       "unitsPerMeter": 1.0
     },
     "pustelga": {
-      "intendedMaxDimensionMeters": 0.447289764881134,
+      "intendedMaxDimensionMeters": 0.36644187569618225,
       "materials": {
         "M_KP1": {
           "depthMeters": 0.0015999999595806003,
@@ -1106,13 +1106,13 @@
           "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
           "seamFadePixels": 6,
           "solver": {
-            "iterations": 285,
+            "iterations": 271,
             "maxSlope": 2.0,
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.788594144404604e-6,
-            "robustHeightHalfRangePixels": 4.496001720428467,
+            "relativeResidual": 9.71045080440559e-6,
+            "robustHeightHalfRangePixels": 3.872269868850708,
             "screeningLambda": 0.0024999999441206455
           },
           "sourceDepthMeters": 0.0003499999875202775,
@@ -1121,22 +1121,22 @@
             512,
             512
           ],
-          "uvIslands": 600,
+          "uvIslands": 183,
           "uvSet": 0,
           "validation": {
-            "clippedInteriorPixels": 391,
-            "detrendedNormalSlopeRms": 0.2543932670831615,
-            "flatNormalMeanErrorDegrees": 9.816776350962252,
-            "integratedNormalMeanErrorDegrees": 5.984152511638918,
-            "interiorPixels": 72256,
+            "clippedInteriorPixels": 110,
+            "detrendedNormalSlopeRms": 0.31895652656816514,
+            "flatNormalMeanErrorDegrees": 7.877458546278755,
+            "integratedNormalMeanErrorDegrees": 3.8088391077077066,
+            "interiorPixels": 18639,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
-            "uvCoveredPixels": 164145
+            "uvCoveredPixels": 95195
           }
         }
       },
       "physicalDimensionEstimated": false,
       "source": "preview/pustelga.json",
-      "sourceMaxDimension": 0.447289764881134,
+      "sourceMaxDimension": 0.36644187569618225,
       "unitsPerMeter": 1.0
     },
     "taran": {
