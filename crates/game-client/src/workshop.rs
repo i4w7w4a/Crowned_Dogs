@@ -13,12 +13,16 @@ const MOD_MESHES: [(&str, &[&str]); 4] = [
         "pistol",
         &[
             "optic-tritium",
+            "optic-kp1",
             "muzzle-klyk",
+            "muzzle-pb9",
             "rail-luch",
+            "rail-lcu",
             "mag-pistol-long",
             "mag-pistol-hp",
             "mag-pistol-ap",
             "stock-pistol-hvat",
+            "stock-pistol-upor",
         ],
     ),
     (
@@ -27,10 +31,14 @@ const MOD_MESHES: [(&str, &[&str]); 4] = [
             "optic-blik",
             "optic-gran",
             "muzzle-choke",
+            "muzzle-vata",
             "rail-kulak",
             "rail-luch",
+            "mag-shotgun-box",
             "mag-shotgun-slug",
             "mag-shotgun-buck",
+            "stock-shotgun-fold",
+            "stock-shotgun-otdacha",
         ],
     ),
     (
@@ -56,10 +64,16 @@ const MOD_MESHES: [(&str, &[&str]); 4] = [
         "sniper",
         &[
             "optic-znoy",
+            "optic-oryol",
             "optic-blik-b",
             "muzzle-tishina-s",
+            "muzzle-molot",
+            "rail-lcu",
+            "rail-upor",
             "mag-sniper-10",
             "mag-sniper-ap",
+            "stock-sniper-izgotovka",
+            "stock-sniper-opora",
         ],
     ),
 ];
@@ -376,8 +390,10 @@ mod tests {
     fn mods_are_offered_only_where_their_gun_has_the_mesh() {
         let luch = json!({"id":"rail-luch","kind":"mod","fits":["pistol","shotgun","rifle"]});
         assert!(available(&luch, "rifle") && available(&luch, "pistol"));
-        let upor = json!({"id":"rail-upor","kind":"mod","fits":["sniper"]});
-        assert!(!available(&upor, "sniper") && !available(&upor, ""));
+        let luch_s = json!({"id":"rail-luch","kind":"mod","fits":["sniper"]});
+        assert!(!available(&luch_s, "sniper"));
+        let none = json!({"id":"rail-none","kind":"mod","fits":["sniper"]});
+        assert!(!available(&none, ""));
         for (class, ids) in MOD_MESHES {
             for id in ids {
                 let item = game_core::constants()["ITEMS"]

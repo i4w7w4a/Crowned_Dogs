@@ -2,7 +2,7 @@
   "method": "Normal-derived bounded microrelief, per UV island. Not an authored high-poly displacement bake.",
   "models": {
     "berkut": {
-      "intendedMaxDimensionMeters": 1.093004584312439,
+      "intendedMaxDimensionMeters": 1.176245093345642,
       "materials": {
         "M_Berkut": {
           "depthMeters": 0.0015999999595806003,
@@ -30,8 +30,8 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.75022668064094e-6,
-            "robustHeightHalfRangePixels": 4.84414529800415,
+            "relativeResidual": 9.750238002891433e-6,
+            "robustHeightHalfRangePixels": 4.844143867492676,
             "screeningLambda": 0.0024999999441206455
           },
           "sourceDepthMeters": 0.0003499999875202775,
@@ -46,7 +46,7 @@
             "clippedInteriorPixels": 600,
             "detrendedNormalSlopeRms": 0.30909974990982086,
             "flatNormalMeanErrorDegrees": 6.741630678044008,
-            "integratedNormalMeanErrorDegrees": 4.2079620484397715,
+            "integratedNormalMeanErrorDegrees": 4.207962035135126,
             "interiorPixels": 99391,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
             "uvCoveredPixels": 491035
@@ -100,6 +100,102 @@
             "uvCoveredPixels": 139683
           }
         },
+        "M_Izgotovka": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/berkut-M_Izgotovka.height.png",
+          "height16": "tex/relief/berkut-M_Izgotovka.height16.png",
+          "mask": "tex/relief/berkut-M_Izgotovka.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/berkut-M_Izgotovka.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 271,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.809000705581188e-6,
+            "robustHeightHalfRangePixels": 9.698534965515137,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_Izgotovka",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 698,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 406,
+            "detrendedNormalSlopeRms": 0.3588125692911066,
+            "flatNormalMeanErrorDegrees": 7.272439007066784,
+            "integratedNormalMeanErrorDegrees": 4.366919200284789,
+            "interiorPixels": 73882,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 164773
+          }
+        },
+        "M_LCU": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/berkut-M_LCU.height.png",
+          "height16": "tex/relief/berkut-M_LCU.height16.png",
+          "mask": "tex/relief/berkut-M_LCU.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/berkut-M_LCU.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 256,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.717905302318692e-6,
+            "robustHeightHalfRangePixels": 5.100698471069336,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_LCU",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 461,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 230,
+            "detrendedNormalSlopeRms": 0.33713211467725246,
+            "flatNormalMeanErrorDegrees": 8.63267267883741,
+            "integratedNormalMeanErrorDegrees": 4.528725907500948,
+            "interiorPixels": 40684,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 124418
+          }
+        },
         "M_MagSniperAp": {
           "depthMeters": 0.0015999999595806003,
           "detailDepthMeters": 0.0,
@@ -148,6 +244,150 @@
             "uvCoveredPixels": 39209
           }
         },
+        "M_Molot": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/berkut-M_Molot.height.png",
+          "height16": "tex/relief/berkut-M_Molot.height16.png",
+          "mask": "tex/relief/berkut-M_Molot.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/berkut-M_Molot.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 266,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.894454270968248e-6,
+            "robustHeightHalfRangePixels": 4.6883673667907715,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_Molot",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 451,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 213,
+            "detrendedNormalSlopeRms": 0.4527353276086236,
+            "flatNormalMeanErrorDegrees": 14.958049785568246,
+            "integratedNormalMeanErrorDegrees": 7.599442742290527,
+            "interiorPixels": 36404,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 124304
+          }
+        },
+        "M_OporaS": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/berkut-M_OporaS.height.png",
+          "height16": "tex/relief/berkut-M_OporaS.height16.png",
+          "mask": "tex/relief/berkut-M_OporaS.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/berkut-M_OporaS.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 267,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.996428282081378e-6,
+            "robustHeightHalfRangePixels": 5.548798561096191,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_OporaS",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 1022,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 86,
+            "detrendedNormalSlopeRms": 0.3861155264741809,
+            "flatNormalMeanErrorDegrees": 14.945675391800089,
+            "integratedNormalMeanErrorDegrees": 8.191841503402049,
+            "interiorPixels": 13026,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 114538
+          }
+        },
+        "M_Oryol": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/berkut-M_Oryol.height.png",
+          "height16": "tex/relief/berkut-M_Oryol.height16.png",
+          "mask": "tex/relief/berkut-M_Oryol.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/berkut-M_Oryol.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 263,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.742847388526142e-6,
+            "robustHeightHalfRangePixels": 3.599163055419922,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_Oryol",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 1002,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 139,
+            "detrendedNormalSlopeRms": 0.22943507065797095,
+            "flatNormalMeanErrorDegrees": 7.578388255331965,
+            "integratedNormalMeanErrorDegrees": 3.955818437616358,
+            "interiorPixels": 22310,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 126943
+          }
+        },
         "M_TishinaS": {
           "depthMeters": 0.0015999999595806003,
           "detailDepthMeters": 0.0,
@@ -194,6 +434,54 @@
             "interiorPixels": 20380,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
             "uvCoveredPixels": 88721
+          }
+        },
+        "M_Upor": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/berkut-M_Upor.height.png",
+          "height16": "tex/relief/berkut-M_Upor.height16.png",
+          "mask": "tex/relief/berkut-M_Upor.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/berkut-M_Upor.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 251,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.912948796173438e-6,
+            "robustHeightHalfRangePixels": 4.8516340255737305,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_Upor",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 1127,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 52,
+            "detrendedNormalSlopeRms": 0.3914355484023011,
+            "flatNormalMeanErrorDegrees": 11.173447650813952,
+            "integratedNormalMeanErrorDegrees": 6.718654035484694,
+            "interiorPixels": 7703,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 106147
           }
         },
         "M_Znoy": {
@@ -247,7 +535,7 @@
       },
       "physicalDimensionEstimated": false,
       "source": "preview/berkut.json",
-      "sourceMaxDimension": 1.093004584312439,
+      "sourceMaxDimension": 1.176245093345642,
       "unitsPerMeter": 1.0
     },
     "persona-authored": {
@@ -315,8 +603,56 @@
       "unitsPerMeter": 1.0
     },
     "pustelga": {
-      "intendedMaxDimensionMeters": 0.20297807455062863,
+      "intendedMaxDimensionMeters": 0.447289764881134,
       "materials": {
+        "M_KP1": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/pustelga-M_KP1.height.png",
+          "height16": "tex/relief/pustelga-M_KP1.height16.png",
+          "mask": "tex/relief/pustelga-M_KP1.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/pustelga-M_KP1.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 273,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.876167214219808e-6,
+            "robustHeightHalfRangePixels": 4.382241725921631,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_KP1",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 500,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 223,
+            "detrendedNormalSlopeRms": 0.41318359070677246,
+            "flatNormalMeanErrorDegrees": 14.598966752025316,
+            "integratedNormalMeanErrorDegrees": 6.7865683126376615,
+            "interiorPixels": 38366,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 139751
+          }
+        },
         "M_Klyk": {
           "depthMeters": 0.0015999999595806003,
           "detailDepthMeters": 0.0,
@@ -363,6 +699,54 @@
             "interiorPixels": 26121,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
             "uvCoveredPixels": 124706
+          }
+        },
+        "M_LCU": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/pustelga-M_LCU.height.png",
+          "height16": "tex/relief/pustelga-M_LCU.height16.png",
+          "mask": "tex/relief/pustelga-M_LCU.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/pustelga-M_LCU.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 256,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.658662489251184e-6,
+            "robustHeightHalfRangePixels": 5.042022228240967,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_LCU",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 461,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 230,
+            "detrendedNormalSlopeRms": 0.33801380667997444,
+            "flatNormalMeanErrorDegrees": 8.646879186837394,
+            "integratedNormalMeanErrorDegrees": 4.55628668803307,
+            "interiorPixels": 40684,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 124418
           }
         },
         "M_Luch": {
@@ -509,6 +893,54 @@
             "uvCoveredPixels": 27050
           }
         },
+        "M_PB9": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/pustelga-M_PB9.height.png",
+          "height16": "tex/relief/pustelga-M_PB9.height16.png",
+          "mask": "tex/relief/pustelga-M_PB9.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/pustelga-M_PB9.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 282,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.626573320050052e-6,
+            "robustHeightHalfRangePixels": 5.853638648986816,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_PB9",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 608,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 191,
+            "detrendedNormalSlopeRms": 0.3130203561060707,
+            "flatNormalMeanErrorDegrees": 12.111879836897543,
+            "integratedNormalMeanErrorDegrees": 8.172181004760372,
+            "interiorPixels": 33607,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 101049
+          }
+        },
         "M_Pustelga": {
           "depthMeters": 0.0015999999595806003,
           "detailDepthMeters": 0.0,
@@ -604,11 +1036,59 @@
             "sourceNormalsAreNotGuaranteedIntegrable": true,
             "uvCoveredPixels": 78465
           }
+        },
+        "M_UporP": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/pustelga-M_UporP.height.png",
+          "height16": "tex/relief/pustelga-M_UporP.height16.png",
+          "mask": "tex/relief/pustelga-M_UporP.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/pustelga-M_UporP.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 285,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.788594144404604e-6,
+            "robustHeightHalfRangePixels": 4.496001720428467,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_UporP",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 600,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 391,
+            "detrendedNormalSlopeRms": 0.2543932670831615,
+            "flatNormalMeanErrorDegrees": 9.816776350962252,
+            "integratedNormalMeanErrorDegrees": 5.984152511638918,
+            "interiorPixels": 72256,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 164145
+          }
         }
       },
       "physicalDimensionEstimated": false,
       "source": "preview/pustelga.json",
-      "sourceMaxDimension": 0.20297807455062863,
+      "sourceMaxDimension": 0.447289764881134,
       "unitsPerMeter": 1.0
     },
     "taran": {
@@ -660,6 +1140,102 @@
             "interiorPixels": 45738,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
             "uvCoveredPixels": 151277
+          }
+        },
+        "M_Box": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/taran-M_Box.height.png",
+          "height16": "tex/relief/taran-M_Box.height16.png",
+          "mask": "tex/relief/taran-M_Box.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/taran-M_Box.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 267,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.547713049619568e-6,
+            "robustHeightHalfRangePixels": 5.20682430267334,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_Box",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 1576,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 144,
+            "detrendedNormalSlopeRms": 0.5241838895580387,
+            "flatNormalMeanErrorDegrees": 16.348445439091172,
+            "integratedNormalMeanErrorDegrees": 10.474525789456957,
+            "interiorPixels": 23866,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 145713
+          }
+        },
+        "M_Fold": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/taran-M_Fold.height.png",
+          "height16": "tex/relief/taran-M_Fold.height16.png",
+          "mask": "tex/relief/taran-M_Fold.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/taran-M_Fold.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 268,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.897187610820388e-6,
+            "robustHeightHalfRangePixels": 12.009986877441406,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_Fold",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 987,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 166,
+            "detrendedNormalSlopeRms": 0.6147954923275741,
+            "flatNormalMeanErrorDegrees": 15.064049619703002,
+            "integratedNormalMeanErrorDegrees": 8.27725136910767,
+            "interiorPixels": 23795,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 151592
           }
         },
         "M_Gran": {
@@ -806,6 +1382,54 @@
             "uvCoveredPixels": 123759
           }
         },
+        "M_Otdacha": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/taran-M_Otdacha.height.png",
+          "height16": "tex/relief/taran-M_Otdacha.height16.png",
+          "mask": "tex/relief/taran-M_Otdacha.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/taran-M_Otdacha.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 257,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.78718299495517e-6,
+            "robustHeightHalfRangePixels": 3.3846099376678467,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_Otdacha",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 899,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 143,
+            "detrendedNormalSlopeRms": 0.1920221681796799,
+            "flatNormalMeanErrorDegrees": 7.892253843306237,
+            "integratedNormalMeanErrorDegrees": 4.279228646385078,
+            "interiorPixels": 24031,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 125996
+          }
+        },
         "M_Taran": {
           "depthMeters": 0.0015999999595806003,
           "detailDepthMeters": 0.0,
@@ -832,8 +1456,8 @@
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.888882210767214e-6,
-            "robustHeightHalfRangePixels": 10.958762168884276,
+            "relativeResidual": 9.888159392926076e-6,
+            "robustHeightHalfRangePixels": 10.956372261047363,
             "screeningLambda": 0.0024999999441206455
           },
           "sourceDepthMeters": 0.0003499999875202775,
@@ -846,12 +1470,60 @@
           "uvSet": 0,
           "validation": {
             "clippedInteriorPixels": 1282,
-            "detrendedNormalSlopeRms": 0.4432670228703853,
-            "flatNormalMeanErrorDegrees": 7.999397532301089,
-            "integratedNormalMeanErrorDegrees": 5.638593989261439,
+            "detrendedNormalSlopeRms": 0.4432673076195492,
+            "flatNormalMeanErrorDegrees": 7.999394261656529,
+            "integratedNormalMeanErrorDegrees": 5.638599991744742,
             "interiorPixels": 220915,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
             "uvCoveredPixels": 685051
+          }
+        },
+        "M_Vata": {
+          "depthMeters": 0.0015999999595806003,
+          "detailDepthMeters": 0.0,
+          "detailProfileVersion": 1,
+          "eligible": true,
+          "fabricDepthMeters": 0.0,
+          "fabricPeriodMeters": 0.0,
+          "height": "tex/relief/taran-M_Vata.height.png",
+          "height16": "tex/relief/taran-M_Vata.height16.png",
+          "mask": "tex/relief/taran-M_Vata.mask.png",
+          "maximumDepthMeters": 0.0015999999595806003,
+          "midpoint": 0.5019607843137255,
+          "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
+          "relief": "tex/relief/taran-M_Vata.relief.png",
+          "resolution": [
+            512,
+            512
+          ],
+          "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
+          "seamFadePixels": 6,
+          "solver": {
+            "iterations": 258,
+            "maxSlope": 2.0,
+            "meanIslandSlopeRemoved": true,
+            "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
+            "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
+            "relativeResidual": 9.841670139280205e-6,
+            "robustHeightHalfRangePixels": 3.3793036937713623,
+            "screeningLambda": 0.0024999999441206455
+          },
+          "sourceDepthMeters": 0.0003499999875202775,
+          "sourceMaterial": "M_Vata",
+          "sourceResolution": [
+            512,
+            512
+          ],
+          "uvIslands": 759,
+          "uvSet": 0,
+          "validation": {
+            "clippedInteriorPixels": 153,
+            "detrendedNormalSlopeRms": 0.2485911265931056,
+            "flatNormalMeanErrorDegrees": 10.73950021343177,
+            "integratedNormalMeanErrorDegrees": 6.54658030334863,
+            "interiorPixels": 24811,
+            "sourceNormalsAreNotGuaranteedIntegrable": true,
+            "uvCoveredPixels": 107233
           }
         }
       },
