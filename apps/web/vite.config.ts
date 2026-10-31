@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { cpSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -53,11 +54,36 @@ function figureModels(): Plugin {
   };
 }
 
+// The build tells src/asset-cache.ts a content hash for every big file it serves, so the
+// browser keeps each file until that file changes. The dev server gets none and caches nothing.
+const PUBLIC = fileURLToPath(new URL("./public", import.meta.url));
+const WASM = fileURLToPath(new URL("../../packages/runtime/wasm/game_wasm_bg.wasm", import.meta.url));
+const hash = (file: string) => createHash("sha1").update(readFileSync(file)).digest("hex").slice(0, 12);
+function filesUnder(root: string, dir = ""): string[] {
+  return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? filesUnder(root, join(dir, e.name)) : [join(dir, e.name).split(sep).join("/")]);
+}
+function assetVersions(): Plugin {
+  return {
+    name: "crowned-dogs-asset-versions",
+    config(_, { command }) {
+      const versions: Record<string, string> = {};
+      if (command === "build") {
+        for (const f of filesUnder(PUBLIC)) versions[f] = hash(join(PUBLIC, f));
+        for (const d of AUDIO_DIRS) for (const f of filesUnder(AUDIO, d)) versions[f] = hash(join(AUDIO, f));
+        for (const f of glbs()) versions[`models/${f.replace(/\.glb$/, ".json")}`] = hash(join(MODELS, f));
+        versions["assets/game_wasm_bg.wasm"] = hash(WASM);
+      }
+      return { define: { __CD_ASSET_VERSIONS__: JSON.stringify(versions) } };
+    },
+  };
+}
+
 // Relative paths, so the built game works from any folder or static host. Fixed file
 // names, so publishing a new build replaces the old files instead of piling up.
 export default defineConfig({
   base: "./",
-  plugins: [audioAssets(), figureModels()],
+  plugins: [audioAssets(), figureModels(), assetVersions()],
   build: {
     target: "es2022",
     chunkSizeWarningLimit: 900,

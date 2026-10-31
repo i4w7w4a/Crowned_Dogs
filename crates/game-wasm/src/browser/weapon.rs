@@ -175,6 +175,9 @@ impl Weapon {
         if !weapon {
             self.selected = Some(slot.into());
         }
+        // The open list remembers its socket: the sheet's late "close" event from the last
+        // pick may clear `selected` after a quick reopen.
+        set(&get(&self.body, "dataset"), "slot", &js(slot));
         let choices = rust("client.workshop.choices", &[self.loadout.clone(), js(slot)]);
         for choice in Array::from(&choices).iter() {
             let id = get(&get(&choice, "item"), "id");
@@ -258,7 +261,7 @@ impl Weapon {
                 "client.equipWeaponMod",
                 &[
                     self.loadout.clone(),
-                    js(self.selected.as_deref().unwrap_or("")),
+                    js(&data(&self.body, "slot")),
                     js(&data(&button, "mod")),
                 ],
             )
