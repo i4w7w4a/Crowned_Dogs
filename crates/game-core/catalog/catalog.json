@@ -1065,7 +1065,8 @@
       "kind": "mod",
       "slot": "rail",
       "fits": [
-        "pistol"
+        "pistol",
+        "sniper"
       ],
       "name": "Лазер ЛЦУ-2",
       "tier": 2,
@@ -1083,8 +1084,7 @@
       "slot": "rail",
       "fits": [
         "shotgun",
-        "rifle",
-        "sniper"
+        "rifle"
       ],
       "name": "Рукоять «Кулак»",
       "tier": 2,
@@ -1914,7 +1914,7 @@
         "item": "sniper-berkut",
         "mods": {
           "optic": "optic-oryol",
-          "rail": "rail-kulak",
+          "rail": "rail-upor",
           "mag": "mag-sniper-10",
           "stock": "stock-sniper-izgotovka"
         }

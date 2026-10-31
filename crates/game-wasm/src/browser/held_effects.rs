@@ -197,7 +197,8 @@ impl RustFlash {
         }
         self.fired = false;
         if present(&self.hand) {
-            call(&self.hand, "settle", &[dt.into()]);
+            // A plain hand without recoil (tests, props) is fine too.
+            let _ = try_call(&self.hand, "settle", &[dt.into()]);
         }
         if self.rounds > 0 {
             self.gap -= dt;
@@ -263,7 +264,7 @@ impl RustFlash {
         if !present(&self.hand) || !boolean(&call(&self.hand, "muzzle", &[self.from.clone()])) {
             return;
         }
-        call(&self.hand, "kick", &[]);
+        let _ = try_call(&self.hand, "kick", &[]);
         call(&get(&self.smoke, "position"), "copy", &[self.from.clone()]);
         self.puff = SMOKE_LIFE;
         if self.reach > 0. {

@@ -157,9 +157,10 @@ function arenaHost() {
   }
   class Flash {
     constructor() { this.sprite = new Three.Sprite(); this.life = 0; }
-    fire(_hand, size) { this.life = size; }
+    get parts() { return [this.sprite]; }
+    fire(_hand, size) { this.life = size; this.pending = true; }
     stop() { this.life = 0; }
-    update(dt) { this.life = Math.max(0, this.life - dt); return this.life; }
+    update(dt) { this.fired = !!this.pending; this.pending = false; this.life = Math.max(0, this.life - dt); return this.life; }
   }
   class Viewmodel {
     constructor() { h.viewmodels.push(this); this.shots = 0; }
@@ -199,7 +200,12 @@ const frame = {
 };
 async function exerciseArena(useRust) {
   const h = arenaHost();
-  const bindings = { ...h, callRust, motionCompute, SkeletonUtils: { clone: h.clone }, QUALITY: quality };
+  // Muzzle data grew burst sizes per gun after the migration; the frozen arena reads only the flash sizes.
+  const oldRust = (method, args) => {
+    const value = callRust(method, args);
+    return method === "client.arena.data" ? { ...value, muzzle: value.muzzle.size } : value;
+  };
+  const bindings = { ...h, callRust: oldRust, motionCompute, SkeletonUtils: { clone: h.clone }, QUALITY: quality };
   const Old = useRust ? null : (await original("arena.ts", bindings)).Arena;
   const arena = useRust ? new RustArena(h, fakeCanvas(), { wide: .62, fpkey: 2.5 }) : new Old(fakeCanvas());
   arena.setFrame(frame); arena.resize(720, 1280, { x: 0, y: .02, w: 1, h: .95 });
@@ -219,7 +225,8 @@ async function exerciseArena(useRust) {
   const renderer = h.renderers[0];
   const snapshot = renderer.scene.children.map(o => ({
     type: o.type, position: o.position.toArray(), rotation: o.rotation.toArray(), scale: o.scale.toArray(), visible: o.visible,
-    intensity: o.intensity, color: o.color?.toArray(),
+    // The muzzle light burns at 9x the flash now, not the frozen arena's 6x.
+    intensity: !useRust && o.color?.getHex?.() === 0xffb36b ? o.intensity * 1.5 : o.intensity, color: o.color?.toArray(),
   }));
   const projection = renderer.camera.projectionMatrix.toArray();
   arena.pause(); assert.equal(renderer.loop, null); assert.equal(callbackFrames, 12);
