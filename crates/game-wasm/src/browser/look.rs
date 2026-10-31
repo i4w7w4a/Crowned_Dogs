@@ -53,7 +53,8 @@ fn tint(material: &JsValue, factor: [f64; 3]) {
     );
 }
 
-fn head_hook(material: &JsValue, paint: &JsValue) {
+/// Sets up the eye shader on a head material; returns its uniforms.
+fn head_hook(material: &JsValue, paint: &JsValue) -> JsValue {
     let spots = values(&get(paint, "eyeSpots"));
     let area = |i: usize| array(&spots[i * 4..i * 4 + 4]).into();
     let mut uniforms = get(&get(material, "userData"), "cdLook");
@@ -62,12 +63,13 @@ fn head_hook(material: &JsValue, paint: &JsValue) {
             ("cdEyeA", object(&[("value", area(0))])),
             ("cdEyeB", object(&[("value", area(1))])),
             ("cdIris", object(&[("value", get(paint, "iris"))])),
+            ("cdTime", object(&[("value", 0.0.into())])),
         ]);
         set(&get(material, "userData"), "cdLook", &uniforms);
         let shared = uniforms.clone();
         let compile = Closure::<dyn FnMut(JsValue)>::new(move |shader: JsValue| {
             let own = get(&shader, "uniforms");
-            for key in ["cdEyeA", "cdEyeB", "cdIris"] {
+            for key in ["cdEyeA", "cdEyeB", "cdIris", "cdTime"] {
                 set(&own, key, &get(&shared, key));
             }
             let vertex = string(&get(&shader, "vertexShader"))
@@ -77,7 +79,7 @@ fn head_hook(material: &JsValue, paint: &JsValue) {
             let fragment = string(&get(&shader, "fragmentShader"))
                 .replacen(
                     "#include <common>",
-                    "#include <common>\nvarying vec3 cdLocal;\nuniform vec4 cdEyeA;\nuniform vec4 cdEyeB;\nuniform vec3 cdIris;\nvec3 cdGlow = vec3( 0.0 );",
+                    "#include <common>\nvarying vec3 cdLocal;\nuniform vec4 cdEyeA;\nuniform vec4 cdEyeB;\nuniform vec3 cdIris;\nuniform float cdTime;\nvec3 cdGlow = vec3( 0.0 );",
                     1,
                 )
                 .replacen(
@@ -93,7 +95,7 @@ fn head_hook(material: &JsValue, paint: &JsValue) {
             set(&shader, "fragmentShader", &fragment.into());
         })
         .into_js_value();
-        let hook = object(&[("key", "look3".into()), ("compile", compile.clone())]);
+        let hook = object(&[("key", "look4".into()), ("compile", compile.clone())]);
         HOOKS.with(|h| h.set(material.unchecked_ref(), &hook));
         // Until the next tune, the hook runs on its own; tune then chains it with the rest.
         set(material, "onBeforeCompile", &compile);
@@ -102,6 +104,22 @@ fn head_hook(material: &JsValue, paint: &JsValue) {
     set(&get(&uniforms, "cdEyeA"), "value", &area(0));
     set(&get(&uniforms, "cdEyeB"), "value", &area(1));
     set(&get(&uniforms, "cdIris"), "value", &get(paint, "iris"));
+    uniforms
+}
+
+/// Keeps the eye light breathing: the head's clock moves on every frame it is drawn.
+fn tick(node: &JsValue, uniforms: &JsValue) {
+    let data = get(node, "userData");
+    if present(&get(&data, "cdTick")) {
+        return;
+    }
+    let time = get(uniforms, "cdTime");
+    let update = Closure::<dyn FnMut()>::new(move || {
+        set(&time, "value", &(js_sys::Date::now() / 1000.0 % 3600.0).into());
+    })
+    .into_js_value();
+    set(&data, "cdTick", &update);
+    set(node, "onBeforeRender", &update);
 }
 
 /// Paints `look` onto `model`. Safe to call again after every change.
@@ -137,7 +155,8 @@ pub fn apply(model: JsValue, look: JsValue) {
         }
         if HEADS.contains(&name.as_str()) {
             tint(&material, skin);
-            head_hook(&material, &paint);
+            let uniforms = head_hook(&material, &paint);
+            tick(&node, &uniforms);
         } else if BODIES.contains(&name.as_str()) {
             tint(&material, skin);
         } else if name == "M_Suit" {

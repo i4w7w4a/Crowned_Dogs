@@ -17,14 +17,23 @@ const SKINS: [Choice; 6] = [
     ("brown", "Тёмная", 0x9c7458),
     ("deep", "Очень тёмная", 0x6e4c38),
 ];
-/// Eye glow colours. The ids are the old iris list's, so saved looks still load.
-const EYES: [Choice; 6] = [
-    ("grey", "Лёд", 0x8fd6ff),
-    ("blue", "Синие", 0x3f8cff),
-    ("green", "Зелёные", 0x4dff88),
-    ("hazel", "Янтарные", 0xffb43a),
-    ("brown", "Красные", 0xff3d2e),
-    ("dark", "Фиолетовые", 0xa35cff),
+/// Eye glow colours, in hue order, taken from neon palettes. The first six ids are the old iris
+/// list's, so saved looks still load.
+const EYES: [Choice; 14] = [
+    ("grey", "Лёд", 0xa8ecff),
+    ("cyan", "Циан", 0x0affef),
+    ("teal", "Бирюза", 0x00ffb4),
+    ("green", "Изумруд", 0x1dff87),
+    ("acid", "Кислота", 0x9dff14),
+    ("gold", "Золото", 0xffe14a),
+    ("hazel", "Янтарь", 0xffb703),
+    ("ember", "Угли", 0xff6a1f),
+    ("brown", "Алые", 0xff2a3d),
+    ("rose", "Розовые", 0xff2079),
+    ("magenta", "Маджента", 0xff2daa),
+    ("dark", "Фиолетовые", 0xb026ff),
+    ("indigo", "Индиго", 0x6a4dff),
+    ("blue", "Синие", 0x00a3ff),
 ];
 /// (sex, id, name, hair cap, hair cards). The male scan has its buzz cut baked into the head.
 const HAIRS: [(&str, &str, &str, bool, bool); 4] = [
