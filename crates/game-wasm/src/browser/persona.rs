@@ -213,6 +213,7 @@ impl RustPersonaViewer {
     pub fn set_look(&self, look: JsValue) {
         let s = &self.state;
         set(s, "look", &look);
+        set(s, "head", &JsValue::NULL);
         let figure = get(s, "figure");
         if !exists(&figure) {
             return;
@@ -240,7 +241,41 @@ impl RustPersonaViewer {
     pub fn set_bare(&self, bare: bool) {
         set(&self.state, "bare", &flag(bare));
         dress_figure(&self.state);
+        set(&self.state, "head", &JsValue::NULL);
         render(&self.state);
+    }
+    /// Creation mode: the stand and the bay hide, the Persona stands on the backdrop's floor
+    /// and the camera frames the body or the face (see `setFocus`).
+    #[wasm_bindgen(js_name=setCreating)]
+    pub fn set_creating(&self, on: bool) {
+        let s = &self.state;
+        if yes(s, "creating") == on {
+            return;
+        }
+        set(s, "creating", &flag(on));
+        show_stand(s);
+        if !on {
+            set(s, "focusT", &num(0.0));
+            set(s, "focusGoal", &num(0.0));
+        }
+        aim(s);
+        render(s);
+    }
+    /// "face" glides the camera to a head close-up, anything else back to the whole body.
+    #[wasm_bindgen(js_name=setFocus)]
+    pub fn set_focus(&self, focus: &str) {
+        let s = &self.state;
+        set(s, "focusGoal", &num(if focus == "face" { 1.0 } else { 0.0 }));
+        if !yes(s, "creating") || !yes(s, "ready") || !yes(s, "active") {
+            // Not on screen: jump straight there.
+            set(s, "focusT", &get(s, "focusGoal"));
+            aim(s);
+            return;
+        }
+        if !exists(&get(s, "focusFrame")) {
+            set(s, "focusLast", &num(now()));
+            focus_frame(s);
+        }
     }
     #[wasm_bindgen(js_name=updateLoadout)]
     pub fn update_loadout(&self, loadout: JsValue) -> JsValue {
@@ -266,6 +301,8 @@ impl RustPersonaViewer {
         set(s, "disposed", &flag(true));
         set(s, "active", &flag(false));
         cancel_frame(s);
+        call(&global(), "cancelAnimationFrame", &[get(s, "focusFrame")]);
+        set(s, "focusFrame", &JsValue::NULL);
         let canvas = get(s, "canvas");
         let id = get(s, "drag.id");
         if exists(&id) && call(&canvas, "hasPointerCapture", &[id.clone()]).is_truthy() {
@@ -411,6 +448,7 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     }
     set(s, "figure", &figure);
     set(s, "figureSex", &text(&sex));
+    set(s, "head", &JsValue::NULL);
     if female {
         // The female figure is the rigged game model: hold the first idle frame and
         // stand it on the platform at a height matching the authored male.
@@ -681,27 +719,165 @@ fn resize(s: &JsValue, width: f64, height: f64) {
     render(s);
 }
 fn aim(s: &JsValue) {
-    let fit = graphics(
-        "graphics.fittingAim",
-        &options(&[
-            ("distance", get(s, "distance")),
-            ("height", get(s, "height")),
-            ("fov", get(s, "camera.fov")),
-            ("x", get(s, "movedX")),
-            ("y", get(s, "movedY")),
-        ]),
-    );
-    call(
-        &get(s, "camera.position"),
-        "fromArray",
-        &[get(&fit, "position")],
-    );
+    let (position, target) = if yes(s, "creating") {
+        creation_view(s)
+    } else {
+        let fit = graphics(
+            "graphics.fittingAim",
+            &options(&[
+                ("distance", get(s, "distance")),
+                ("height", get(s, "height")),
+                ("fov", get(s, "camera.fov")),
+                ("x", get(s, "movedX")),
+                ("y", get(s, "movedY")),
+            ]),
+        );
+        let v = |key: &str| {
+            let c = components(&get(&fit, key));
+            [c[0], c[1], c[2]]
+        };
+        (v("position"), v("target"))
+    };
+    call(&get(s, "camera.position"), "fromArray", &[floats(&position)]);
     call(
         &get(s, "camera"),
         "lookAt",
-        &Array::from(&get(&fit, "target")).iter().collect::<Vec<_>>(),
+        &target.map(num),
     );
     call(&get(s, "camera"), "updateMatrixWorld", &[]);
+}
+fn now() -> f64 {
+    js_sys::Date::now()
+}
+/// One step of the glide between the body and the face.
+fn focus_frame(s: &JsValue) {
+    let a = s.clone();
+    let id = call(
+        &global(),
+        "requestAnimationFrame",
+        &[function(move |_| {
+            set(&a, "focusFrame", &JsValue::NULL);
+            if yes(&a, "disposed") {
+                return;
+            }
+            let time = now();
+            let dt = (time - number(&a, "focusLast")).clamp(0.0, 50.0);
+            set(&a, "focusLast", &num(time));
+            let (t, goal) = (number(&a, "focusT"), number(&a, "focusGoal"));
+            let step = dt / FOCUS_MS;
+            let next = if goal > t { (t + step).min(goal) } else { (t - step).max(goal) };
+            set(&a, "focusT", &num(next));
+            aim(&a);
+            render(&a);
+            if next != goal && yes(&a, "active") {
+                focus_frame(&a);
+            } else {
+                set(&a, "focusT", &num(goal));
+            }
+        })],
+    );
+    set(s, "focusFrame", &id);
+}
+/// How long the camera takes between the body and the face.
+const FOCUS_MS: f64 = 520.0;
+/// The creation camera: the whole Persona standing on the floor, the face close up, or between.
+fn creation_view(s: &JsValue) -> ([f64; 3], [f64; 3]) {
+    let tangent = (number(s, "camera.fov").to_radians() / 2.0).tan();
+    let aspect = (number(s, "width") / number(s, "height").max(1.0)).max(0.1);
+    let floor = number(&get(s, "host"), "PLATFORM_TOP");
+    // Crown to boots with a little air; the shoulders set the width on narrow screens.
+    let d = 1.02_f64.max(0.55 / aspect) / tangent;
+    let body = ([0.0, floor + 1.12, d], [0.0, floor + 0.95, 0.0]);
+    let h = head(s);
+    let d = 0.25_f64.max(0.17 / aspect) / tangent;
+    let face = ([h[0], h[1] + 0.015, h[2] + d], [h[0], h[1] - 0.035, h[2]]);
+    let t = number(s, "focusT").clamp(0.0, 1.0);
+    let k = t * t * (3.0 - 2.0 * t);
+    let mix = |a: [f64; 3], b: [f64; 3]| [0, 1, 2].map(|i| a[i] + (b[i] - a[i]) * k);
+    (mix(body.0, face.0), mix(body.1, face.1))
+}
+/// Centre of the head in world space. Measured once per figure and dress in the turntable's
+/// frame, so it follows the figure as it turns.
+fn head(s: &JsValue) -> [f64; 3] {
+    let h = get(s, "host");
+    let rotating = get(s, "stage.rotating");
+    call(&rotating, "updateMatrixWorld", &[flag(true)]);
+    if !exists(&get(s, "head")) {
+        let figure = get(s, "figure");
+        let local = if exists(&figure) {
+            measure_head(&h, &rotating, &figure)
+        } else {
+            [0.0, number(&h, "PLATFORM_TOP") + 1.66, 0.04]
+        };
+        set(s, "head", &floats(&local));
+    }
+    let c = components(&get(s, "head"));
+    let v = make(&h, "THREE.Vector3", &[num(c[0]), num(c[1]), num(c[2])]);
+    call(&rotating, "localToWorld", &[v.clone()]);
+    [number(&v, "x"), number(&v, "y"), number(&v, "z")]
+}
+/// Eye height a little under the crown; the face's depth from a ray shot at it from the front.
+fn measure_head(h: &JsValue, rotating: &JsValue, figure: &JsValue) -> [f64; 3] {
+    let top = crown(h, figure);
+    let eye = make(h, "THREE.Vector3", &[num(0.0), num(top - 0.115), num(0.0)]);
+    call(rotating, "worldToLocal", &[eye.clone()]);
+    let y = number(&eye, "y");
+    let origin = make(h, "THREE.Vector3", &[num(0.0), num(y), num(3.0)]);
+    call(rotating, "localToWorld", &[origin.clone()]);
+    let direction = make(h, "THREE.Vector3", &[num(0.0), num(0.0), num(-1.0)]);
+    call(&direction, "transformDirection", &[get(rotating, "matrixWorld")]);
+    let ray = make(h, "THREE.Raycaster", &[origin, direction, num(0.0), num(6.0)]);
+    let hits = call(&ray, "intersectObject", &[figure.clone(), flag(true)]);
+    for hit in Array::from(&hits).iter() {
+        let mut node = get(&hit, "object");
+        let mut seen = true;
+        while exists(&node) {
+            seen &= yes(&node, "visible");
+            node = get(&node, "parent");
+        }
+        if seen {
+            let point = get(&hit, "point");
+            call(rotating, "worldToLocal", &[point.clone()]);
+            // The skull's centre sits about a hand behind the face.
+            return [number(&point, "x"), y, number(&point, "z") - 0.09];
+        }
+    }
+    [0.0, y, 0.03]
+}
+/// Top of the visible figure as it stands. A skinned mesh's own box follows its bones; its
+/// geometry's box is the bind pose, which sits far lower on the rigged female.
+fn crown(h: &JsValue, figure: &JsValue) -> f64 {
+    let b = make(h, "THREE.Box3", &[]);
+    for n in nodes(figure, true) {
+        if !yes(&n, "isMesh") {
+            continue;
+        }
+        let local = if yes(&n, "isSkinnedMesh") {
+            call(&n, "computeBoundingBox", &[]);
+            get(&n, "boundingBox")
+        } else {
+            let g = get(&n, "geometry");
+            call(&g, "computeBoundingBox", &[]);
+            get(&g, "boundingBox")
+        };
+        if exists(&local) {
+            let world = call(&local, "clone", &[]);
+            call(&world, "applyMatrix4", &[get(&n, "matrixWorld")]);
+            call(&b, "union", &[world]);
+        }
+    }
+    number(&b, "max.y")
+}
+/// The turntable and the bay floor show only in the fitting room.
+fn show_stand(s: &JsValue) {
+    let on = !yes(s, "creating");
+    set(&get(s, "stage.fixed"), "visible", &flag(on));
+    let keep = [get(s, "figure"), get(s, "equipment"), get(s, "stage.feet")];
+    for child in Array::from(&get(s, "stage.rotating.children")).iter() {
+        if !keep.contains(&child) {
+            set(&child, "visible", &flag(on));
+        }
+    }
 }
 fn rotate(s: &JsValue, delta: f64) {
     if yes(s, "disposed") || !delta.is_finite() {
@@ -718,6 +894,10 @@ fn rotate(s: &JsValue, delta: f64) {
             ]),
         ),
     );
+    if yes(s, "creating") {
+        // The close-up keeps the head centred as it turns.
+        aim(s);
+    }
     render(s);
 }
 fn weapon(s: &JsValue) -> String {

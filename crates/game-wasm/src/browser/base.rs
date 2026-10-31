@@ -63,6 +63,10 @@ struct Base {
     /// The look being edited on the creation panel, and the one saved on this device (null before the first).
     look: JsValue,
     saved: JsValue,
+    /// Briefing line shown before the first Persona, the creation step, and the camera framing.
+    brief: usize,
+    step: usize,
+    focus: String,
     disposed: bool,
 }
 impl Base {
@@ -100,9 +104,12 @@ impl Base {
         hidden(&self.fitting, !self.staged());
         toggle(&self.fitting, "cd-creating", view == "persona");
         if view == "persona" {
+            if was != "persona" {
+                self.step = 0;
+            }
             self.open_create();
         } else {
-            hidden(&query(&self.fitting, ".cd-contract"), true);
+            hidden(&query(&self.fitting, ".cd-briefing"), true);
             hidden(&query(&self.fitting, ".cd-create"), true);
         }
         if view != "persona" && was == "persona" {
@@ -110,6 +117,7 @@ impl Base {
             self.look = self.saved.clone();
             call_optional(&self.viewer, "setLook", &[self.look.clone()]);
         }
+        call_optional(&self.viewer, "setCreating", &[flag(view == "persona")]);
         call_optional(&self.viewer, "setBare", &[flag(view == "persona")]);
         if view == "weapon" {
             call(&self.workshop, "show", &[self.loadout.clone()]);
@@ -130,55 +138,168 @@ impl Base {
     fn staged(&self) -> bool {
         self.view == "fitting" || self.view == "persona"
     }
+    /// The instructor's briefing until the contract is signed, then the creation steps.
     fn open_create(&mut self) {
-        let signed = !text(&get(&self.look, "tag")).is_empty();
-        toggle(&self.fitting, "cd-first", !exists(&self.saved));
-        hidden(&query(&self.fitting, ".cd-contract"), signed);
-        hidden(&query(&self.fitting, ".cd-create"), !signed);
+        let first = !exists(&self.saved);
+        toggle(&self.fitting, "cd-first", first);
+        if !first {
+            self.brief = creation::BRIEFING.len();
+        }
+        if first && text(&get(&self.look, "callsign")).is_empty() {
+            set(&self.look, "callsign", &js(creation::DEFAULT_CALLSIGN));
+        }
+        let briefing = self.brief < creation::BRIEFING.len();
+        hidden(&query(&self.fitting, ".cd-briefing"), !briefing);
+        hidden(&query(&self.fitting, ".cd-create"), briefing);
+        if briefing {
+            self.render_briefing();
+        } else {
+            let face = creation::STEPS[self.step].3;
+            self.set_focus(if face { "face" } else { "body" });
+            self.render_create();
+        }
+    }
+    fn render_briefing(&self) {
+        let (line, button) = creation::BRIEFING[self.brief];
+        let tag = text(&get(&self.look, "tag"));
+        html(
+            &query(&self.fitting, ".cd-briefing-line"),
+            &creation::spoken(&line.replace("{tag}", &tag)),
+        );
+        content(&query(&self.fitting, ".cd-briefing-next"), button);
+        let contract = query(&self.fitting, ".cd-contract");
+        hidden(
+            &contract,
+            self.brief < creation::SIGN_LINE || self.brief > creation::SIGN_LINE + 1,
+        );
+        toggle(&contract, "cd-signed", !tag.is_empty());
+        content(
+            &query(&contract, ".cd-contract-tag b"),
+            if tag.is_empty() { "K-···-···" } else { &tag },
+        );
+        hidden(
+            &query(&self.fitting, ".cd-briefing-skip"),
+            self.brief >= creation::SIGN_LINE,
+        );
+        let dots: String = (0..creation::BRIEFING.len())
+            .map(|i| format!("<i class=\"{}\"></i>", if i <= self.brief { "on" } else { "" }))
+            .collect();
+        html(&query(&self.fitting, ".cd-briefing-dots"), &dots);
+        call(&self.host, "liquidGlass", &[query(&self.fitting, ".cd-briefing")]);
+    }
+    fn brief_next(&mut self) {
+        if self.brief == creation::SIGN_LINE && text(&get(&self.look, "tag")).is_empty() {
+            set(&self.look, "tag", &creation::issue_tag());
+        }
+        self.brief += 1;
+        if self.brief >= creation::BRIEFING.len() {
+            self.step = 0;
+            self.open_create();
+        } else {
+            self.render_briefing();
+        }
+    }
+    fn brief_skip(&mut self) {
+        self.brief = self.brief.max(creation::SIGN_LINE);
+        self.render_briefing();
+    }
+    fn render_create(&self) {
+        let (id, _, line, _) = creation::STEPS[self.step];
+        let tabs = query(&self.fitting, ".cd-create-steps");
+        html(&tabs, &creation::tabs(self.step));
+        let options = query(&self.fitting, ".cd-create-options");
+        html(&options, &creation::step_markup(&self.look, self.step));
+        html(
+            &query(&self.fitting, ".cd-coach-line"),
+            &creation::spoken(line),
+        );
+        let naming = id == "callsign";
+        hidden(&query(&self.fitting, ".cd-create-name"), !naming);
+        hidden(&options, naming);
         hidden(&query(&self.fitting, ".cd-create-error"), true);
         set(
             &query(&self.fitting, ".cd-callsign-input"),
             "value",
             &get(&self.look, "callsign"),
         );
-        self.render_create();
-        if !signed {
-            call(&self.host, "liquidGlass", &[query(&self.fitting, ".cd-contract")]);
-        }
-    }
-    fn render_create(&self) {
-        let options = query(&self.fitting, ".cd-create-options");
-        html(&options, &creation::markup(&self.look));
         content(
             &query(&self.fitting, ".cd-create-tag"),
             &text(&get(&self.look, "tag")),
         );
+        let label = if exists(&self.saved) {
+            "Сохранить"
+        } else if self.step + 1 == creation::STEPS.len() {
+            "Готово"
+        } else {
+            "Дальше"
+        };
+        content(&query(&self.fitting, ".cd-create-next"), label);
         call(&self.host, "liquidGlass", &[query(&self.fitting, ".cd-create")]);
+        // Keep the current tab in view without scrolling anything else.
+        let tab = query(&tabs, "[aria-selected=\"true\"]");
+        if exists(&tab) {
+            let left = num(&tab, "offsetLeft")
+                - (num(&tabs, "clientWidth") - num(&tab, "offsetWidth")) / 2.0;
+            set(&tabs, "scrollLeft", &number(left.max(0.0)));
+        }
+    }
+    /// The typed callsign survives re-renders and step changes.
+    fn keep_typed(&self) {
+        set(
+            &self.look,
+            "callsign",
+            &get(&query(&self.fitting, ".cd-callsign-input"), "value"),
+        );
+    }
+    fn go_step(&mut self, step: usize) {
+        self.keep_typed();
+        self.step = step.min(creation::STEPS.len() - 1);
+        let face = creation::STEPS[self.step].3;
+        self.set_focus(if face { "face" } else { "body" });
+        self.render_create();
+        if creation::STEPS[self.step].0 == "callsign" {
+            focus(&query(&self.fitting, ".cd-callsign-input"));
+        }
+    }
+    fn set_focus(&mut self, focus: &str) {
+        self.focus = focus.into();
+        toggle(&self.fitting, "cd-face", focus == "face");
+        for button in all(&self.fitting, "[data-focus]") {
+            let on = data(&button, "focus") == focus;
+            attr(&button, "aria-pressed", if on { "true" } else { "false" });
+        }
+        call_optional(&self.viewer, "setFocus", &[js(focus)]);
     }
     fn pick_look(&mut self, key: &str, value: &str) {
-        let typed = get(&query(&self.fitting, ".cd-callsign-input"), "value");
+        self.keep_typed();
         self.look = creation::pick(&self.look, key, value);
-        set(&self.look, "callsign", &typed);
         self.render_create();
         call_optional(&self.viewer, "setLook", &[self.look.clone()]);
     }
-    fn sign(&mut self) {
-        set(&self.look, "tag", &creation::issue_tag());
-        self.open_create();
-        focus(&query(&self.fitting, ".cd-callsign-input"));
+    fn create_next(&mut self, weak: Weak<RefCell<Self>>) {
+        if exists(&self.saved) || self.step + 1 >= creation::STEPS.len() {
+            self.finish_create(weak);
+        } else {
+            self.go_step(self.step + 1);
+        }
     }
     fn finish_create(&mut self, weak: Weak<RefCell<Self>>) {
-        let input = query(&self.fitting, ".cd-callsign-input");
-        let error = query(&self.fitting, ".cd-create-error");
-        let name = rust("client.look.callsign", &[get(&input, "value")]);
+        self.keep_typed();
+        let name = rust("client.look.callsign", &[get(&self.look, "callsign")]);
         if !boolean(&name, "ok") {
+            let last = creation::STEPS.len() - 1;
+            if self.step != last {
+                self.go_step(last);
+            }
+            let error = query(&self.fitting, ".cd-create-error");
             content(&error, &text(&get(&name, "error")));
             hidden(&error, false);
-            focus(&input);
+            focus(&query(&self.fitting, ".cd-callsign-input"));
             return;
         }
         set(&self.look, "callsign", &get(&name, "callsign"));
         if !platform::save_local_look(self.look.clone()) {
+            let error = query(&self.fitting, ".cd-create-error");
             content(&error, "Не удалось сохранить Персону на этом устройстве.");
             hidden(&error, false);
             return;
@@ -237,6 +358,8 @@ impl Base {
                 self.viewer = viewer;
                 call(&self.viewer, "setLook", &[self.look.clone()]);
                 call(&self.viewer, "setBare", &[flag(self.view == "persona")]);
+                call(&self.viewer, "setCreating", &[flag(self.view == "persona")]);
+                call(&self.viewer, "setFocus", &[js(&self.focus)]);
                 call(&self.viewer, "updateLoadout", &[self.loadout.clone()]);
                 self.resize();
                 invoke(&self.viewer, "load", &[])
@@ -775,7 +898,7 @@ impl Base {
                     &format!("{:.1}px", point.get(1).as_f64().unwrap_or(0.0)),
                 );
             }
-            if !drift.flat && self.depth_ready {
+            if !drift.flat && self.depth_ready && self.view != "persona" {
                 call(&self.depth, "draw", &[number(tx * 2.0), number(ty * 2.0)]);
                 call_optional(&self.viewer, "shift", &[number(tx * 0.6), number(ty * 0.6)]);
             }
@@ -933,6 +1056,9 @@ impl BrowserBase {
             pointer: (0.0, 0.0, true),
             look,
             saved,
+            brief: 0,
+            step: 0,
+            focus: "body".into(),
             disposed: false,
         }));
         bind(&state);
@@ -995,9 +1121,13 @@ fn bind(state: &Rc<RefCell<Base>>) {
     let mut actions = vec![
         (query(&root, ".cd-to-fitting"), "click", "fitting"),
         (query(&root, ".cd-operator"), "click", "persona"),
-        (query(&root, ".cd-sign"), "click", "sign"),
+        (query(&root, ".cd-to-persona"), "click", "persona"),
+        (query(&root, ".cd-briefing-next"), "click", "briefNext"),
+        (query(&root, ".cd-briefing-skip"), "click", "briefSkip"),
+        (query(&root, ".cd-create-steps"), "click", "step"),
+        (query(&root, ".cd-focus"), "click", "focus"),
         (query(&root, ".cd-create-options"), "click", "look"),
-        (query(&root, ".cd-create-done"), "click", "createDone"),
+        (query(&root, ".cd-create-next"), "click", "createNext"),
         (query(&root, ".cd-callsign-input"), "keydown", "callsignKeys"),
         (query(&root, ".cd-back"), "click", "base"),
         (query(&root, ".cd-enter"), "click", "battle"),
@@ -1049,19 +1179,32 @@ fn bind(state: &Rc<RefCell<Base>>) {
             }
             match action {
                 "base" | "fitting" | "persona" => s.navigate(action, weak.clone()),
-                "sign" => s.sign(),
+                "briefNext" => s.brief_next(),
+                "briefSkip" => s.brief_skip(),
+                "step" => {
+                    let tab = closest(&event, "[data-step]");
+                    if exists(&tab) {
+                        s.go_step(data(&tab, "step").parse().unwrap_or(0));
+                    }
+                }
+                "focus" => {
+                    let button = closest(&event, "[data-focus]");
+                    if exists(&button) {
+                        s.set_focus(&data(&button, "focus"));
+                    }
+                }
                 "look" => {
                     let choice = closest(&event, "[data-look]");
                     if exists(&choice) {
                         s.pick_look(&data(&choice, "look"), &data(&choice, "value"));
                     }
                 }
-                "createDone" => s.finish_create(weak.clone()),
+                "createNext" => s.create_next(weak.clone()),
                 "callsignKeys" => {
                     hidden(&query(&s.fitting, ".cd-create-error"), true);
                     if text(&get(&event, "key")) == "Enter" {
                         call(&event, "preventDefault", &[]);
-                        s.finish_create(weak.clone());
+                        s.create_next(weak.clone());
                     }
                 }
                 "catalog" => {
