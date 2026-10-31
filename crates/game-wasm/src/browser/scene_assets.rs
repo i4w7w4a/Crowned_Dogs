@@ -82,7 +82,12 @@ pub fn load_model(host: JsValue, url: String) -> Promise {
 }
 
 /// Real gun models by held class (pistol, shotgun, rifle, sniper); a class without one keeps its placeholder boxes.
-pub(super) const GUN_MODELS: &[(&str, &str)] = &[("rifle", "varyag")];
+pub(super) const GUN_MODELS: &[(&str, &str)] = &[
+    ("pistol", "pustelga"),
+    ("shotgun", "taran"),
+    ("rifle", "varyag"),
+    ("sniper", "berkut"),
+];
 #[wasm_bindgen(js_name = sceneLoadGuns)]
 pub fn load_guns(host: JsValue) -> Promise {
     future_to_promise(async move {
@@ -389,6 +394,13 @@ fn front_of(host: &JsValue, gun: &JsValue) -> JsValue {
         }
     }
     call(&at, "divideScalar", &[(count.max(1) as f64).into()]);
+    // A real gun's front face can span a scope or a stock; its muzzle socket marks the bore line.
+    let socket = call(gun, "getObjectByName", &["socket_muzzle".into()]);
+    if present(&socket) {
+        // matrixWorld as updated above: getWorldPosition would refresh the parents and break `into`.
+        call(&at, "setFromMatrixPosition", &[get(&socket, "matrixWorld")]);
+        call(&at, "applyMatrix4", &[into]);
+    }
     call(&at, "setX", &[max.into()]);
     at
 }

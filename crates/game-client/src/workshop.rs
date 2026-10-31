@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 const SLOTS: [&str; 5] = ["optic", "muzzle", "rail", "mag", "stock"];
 fn models() -> Value {
     json!({"head-k6":"tripo-helmet","body-plita2":"tripo-vest","suit-field":"tripo-suit-male",
-        "rifle-varyag":"varyag"})
+        "pistol-pustelga":"pustelga","shotgun-taran":"taran","rifle-varyag":"varyag","sniper-berkut":"berkut"})
 }
 /// Mods with a mesh inside their gun's model. The mesh node is the id with `_` for `-`.
 const MOD_MESHES: [&str; 4] = [

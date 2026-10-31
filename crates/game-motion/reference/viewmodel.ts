@@ -47,7 +47,7 @@ const HOLD: Record<Stance, Hold> = {
   // aiming, the stock comes up into the shoulder and the barrel up the middle towards the eye line
   rifle: { at: [0.07, 0.33, 0.22], aim: [0.07, 0.27, 0.25], kick: [0.05, 0.012, 0.1], support: FOREEND, right: TRIGGER, left: CUP },
   shotgun: { at: [0.07, 0.33, 0.2], aim: [0.07, 0.275, 0.23], kick: [0.09, 0.025, 0.2], support: { ...FOREEND, at: [0.24, 0.0, -0.005] }, right: TRIGGER, left: CUP },
-  sniper: { at: [0.07, 0.33, 0.22], aim: [0.07, 0.265, 0.25], kick: [0.08, 0.02, 0.14], support: FOREEND, right: TRIGGER, left: CUP },
+  sniper: { at: [0.09, 0.36, 0.22], aim: [0.08, 0.29, 0.25], kick: [0.08, 0.02, 0.14], support: FOREEND, right: TRIGGER, left: CUP },
 };
 
 const v = () => new THREE.Vector3();
