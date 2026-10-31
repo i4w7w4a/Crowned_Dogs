@@ -149,7 +149,7 @@ function arenaHost() {
   class Pose { save() {} restore() {} }
   class Feet { update() {} }
   class Collapse { begin() {} apply(value) { events.push(["fall", value]); } }
-  class HoldOut { apply() {} }
+  class HoldOut { apply() {} support() {} }
   class Hand {
     constructor(model, _grip, _steel, opts) { this.mount = new Three.Group(); model.add(this.mount); this.opts = opts; }
     hold(kind) { events.push(["hold", kind]); }
