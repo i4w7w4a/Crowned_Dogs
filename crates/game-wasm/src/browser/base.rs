@@ -104,6 +104,10 @@ impl Base {
         hidden(&self.home, view != "base");
         hidden(&self.fitting, !self.staged());
         toggle(&self.fitting, "cd-creating", view == "persona");
+        if view != "persona" {
+            // The first creation hides «Назад»; the fitting room needs it back.
+            toggle(&self.fitting, "cd-first", false);
+        }
         if view == "persona" {
             if was != "persona" {
                 self.step = 0;
