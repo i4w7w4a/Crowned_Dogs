@@ -1,7 +1,6 @@
 //! Persona creation: the instructor's briefing and contract, then the look picked step by step.
 //! The base owns the events; this module only draws the screens and edits the look.
 use super::dom_support::*;
-use js_sys::Array;
 use wasm_bindgen::{JsCast, JsValue};
 
 /// Typical skin under the light-skin scan; swatches show it times each skin factor.
@@ -51,7 +50,7 @@ pub const STEPS: [(&str, &str, bool); 7] = [
 ];
 
 fn list(options: &JsValue, key: &str) -> Vec<JsValue> {
-    Array::from(&get(options, key)).iter().collect()
+    elements(&get(options, key))
 }
 fn rgb(hex: &str) -> [u8; 3] {
     let v = u32::from_str_radix(hex.trim_start_matches('#'), 16).unwrap_or(0xffffff);

@@ -1,6 +1,6 @@
 //! Weapon workshop lifecycle, selection, focus restoration and viewer coordination.
 use super::{dom_support::*, scroll::BrowserScroll};
-use js_sys::{Array, Object};
+use js_sys::Object;
 use std::{
     cell::RefCell,
     rc::{Rc, Weak},
@@ -117,7 +117,7 @@ impl Weapon {
         } else {
             call_optional(&self.viewer, "hide", &[]);
         }
-        for socket in Array::from(&get(&view, "sockets")).iter() {
+        for socket in elements(&get(&view, "sockets")) {
             let slot = text(&get(&socket, "slot"));
             let button = query(&self.element, &format!("[data-socket=\"{slot}\"]"));
             content(
@@ -180,7 +180,7 @@ impl Weapon {
         // reads every [data-slot] under it as a gear slot.
         set(&get(&self.body, "dataset"), "modSlot", &js(slot));
         let choices = rust("client.workshop.choices", &[self.loadout.clone(), js(slot)]);
-        for choice in Array::from(&choices).iter() {
+        for choice in elements(&choices) {
             let id = get(&get(&choice, "item"), "id");
             let icon = if weapon {
                 call(&self.host, "equipmentItemIcon", &[id])

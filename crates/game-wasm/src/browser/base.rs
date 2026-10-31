@@ -408,7 +408,7 @@ impl Base {
             "Оружие".into()
         };
         content(&query(&self.root, "[data-kit-name]"), &name);
-        for button in all(&self.root, "[data-slot]") {
+        for button in all(&self.root, ".cd-slot[data-slot]") {
             let slot = data(&button, "slot");
             let id = self.equipped(&slot);
             let item = self.item(&id);
@@ -428,8 +428,8 @@ impl Base {
             );
             toggle(&button, "cd-slot-empty", id.is_null());
             let details = if exists(&item) {
-                let effects: Vec<String> = Array::from(&rust("describeItem", &[item.clone()]))
-                    .iter()
+                let effects: Vec<String> = elements(&rust("describeItem", &[item.clone()]))
+                    .into_iter()
                     .filter_map(|v| v.as_string())
                     .collect();
                 if effects.is_empty() {
@@ -468,8 +468,10 @@ impl Base {
             }
             return;
         }
-        if text(&get(&get(&self.tip, "dataset"), "slot")) != slot || !open {
-            set(&get(&self.tip, "dataset"), "slot", &js(slot));
+        // The card keeps its slot as data-tip-slot: refresh() reads every
+        // .cd-slot[data-slot] under the root as a gear button.
+        if data(&self.tip, "tipSlot") != slot || !open {
+            set(&get(&self.tip, "dataset"), "tipSlot", &js(slot));
             html(&self.tip, "");
             let add = |tag: &str, value: String| {
                 if !value.is_empty() {
@@ -480,7 +482,7 @@ impl Base {
             };
             add("b", text(&get(&item, "name")));
             add("span", text(&get(&item, "note")));
-            for line in Array::from(&rust("describeItem", &[item.clone()])).iter() {
+            for line in elements(&rust("describeItem", &[item.clone()])) {
                 add("em", line.as_string().unwrap_or_default());
             }
         }
@@ -515,7 +517,7 @@ impl Base {
     }
     /// Unfolds one slot card ("" folds them all); a hover on the button also glows the figure.
     fn hot(&self, slot: &str, from_button: bool) {
-        for button in all(&self.root, "[data-slot]") {
+        for button in all(&self.root, ".cd-slot[data-slot]") {
             toggle(&button, "cd-slot-hot", data(&button, "slot") == slot);
         }
         if from_button {
@@ -559,8 +561,8 @@ impl Base {
         }
         hidden(&query(&self.root, ".cd-catalog-error"), true);
         let selected = self.equipped(&self.selected);
-        let available: Vec<_> = Array::from(&rust("client.itemsForSlot", &[js(&self.selected)]))
-            .iter()
+        let available: Vec<_> = elements(&rust("client.itemsForSlot", &[js(&self.selected)]))
+            .into_iter()
             .filter(|item| {
                 call(&self.host, "availableInFitting", &[item.clone()]).as_bool() == Some(true)
             })
@@ -963,7 +965,7 @@ fn initial(host: &JsValue) -> String {
         columns.push_str("</div>");
     }
     let mut options = String::new();
-    for slot in Array::from(&get(host, "GEAR_SLOTS")).iter() {
+    for slot in elements(&get(host, "GEAR_SLOTS")) {
         let slot = text(&slot);
         options.push_str(&format!("<button class=\"glass\" type=\"button\" role=\"option\" data-category=\"{slot}\" aria-selected=\"false\">{}</button>",text(&get(&names,&slot))));
     }
@@ -1157,7 +1159,7 @@ fn bind(state: &Rc<RefCell<Base>>) {
         (canvas.clone(), "pointerleave", "tipHide"),
         (canvas, "webglcontextrestored", "restored"),
     ];
-    for button in all(&root, "[data-slot]") {
+    for button in all(&root, ".cd-slot[data-slot]") {
         actions.push((button.clone(), "click", "slot"));
         actions.push((button.clone(), "pointerenter", "slotEnter"));
         actions.push((button.clone(), "pointerleave", "slotLeave"));

@@ -21,7 +21,9 @@ pub fn get(object: &JsValue, key: &str) -> JsValue {
     Reflect::get(object, &js(key)).unwrap_or(JsValue::UNDEFINED)
 }
 pub fn set(object: &JsValue, key: &str, value: &JsValue) {
-    Reflect::set(object, &js(key), value).unwrap_throw();
+    if let Err(error) = Reflect::set(object, &js(key), value) {
+        report(key, error);
+    }
 }
 pub fn text(value: &JsValue) -> String {
     value.as_string().unwrap_or_default()
@@ -44,7 +46,21 @@ pub fn invoke(object: &JsValue, key: &str, values: &[JsValue]) -> Result<JsValue
         .apply(object, &args(values))
 }
 pub fn call(object: &JsValue, key: &str, values: &[JsValue]) -> JsValue {
-    invoke(object, key, values).unwrap_throw()
+    invoke(object, key, values).unwrap_or_else(|error| {
+        report(key, error);
+        JsValue::UNDEFINED
+    })
+}
+// A failed call is logged and skipped, never thrown. A throw unwinds through the Rust
+// frames without releasing their RefCell borrows, so every later click on the screen
+// found the state still borrowed and did nothing (or hit "unreachable") until a reload.
+fn report(key: &str, error: JsValue) {
+    let console = get(&global(), "console");
+    let _ = invoke(
+        &console,
+        "error",
+        &[js(&format!("crowned-dogs: `{key}` failed")), error],
+    );
 }
 pub fn call_optional(object: &JsValue, key: &str, values: &[JsValue]) {
     if exists(object) {
@@ -58,9 +74,16 @@ pub fn query(root: &JsValue, selector: &str) -> JsValue {
     call(root, "querySelector", &[js(selector)])
 }
 pub fn all(root: &JsValue, selector: &str) -> Vec<JsValue> {
-    Array::from(&call(root, "querySelectorAll", &[js(selector)]))
-        .iter()
-        .collect()
+    elements(&call(root, "querySelectorAll", &[js(selector)]))
+}
+// The items of an array or a NodeList; anything else (undefined after a failed call)
+// gives none.
+pub fn elements(value: &JsValue) -> Vec<JsValue> {
+    if exists(value) && get(value, "length").as_f64().is_some() {
+        Array::from(value).iter().collect()
+    } else {
+        Vec::new()
+    }
 }
 pub fn create(tag: &str, class: &str) -> JsValue {
     let el = call(&document(), "createElement", &[js(tag)]);
@@ -124,7 +147,10 @@ pub fn error(value: &JsValue, fallback: &str) -> String {
     }
 }
 pub fn rust(method: &str, values: &[JsValue]) -> JsValue {
-    try_rust(method, values).unwrap_throw()
+    try_rust(method, values).unwrap_or_else(|error| {
+        report(method, error);
+        JsValue::NULL
+    })
 }
 pub fn try_rust(method: &str, values: &[JsValue]) -> Result<JsValue, JsValue> {
     let input = js_sys::JSON::stringify(&args(values))?
