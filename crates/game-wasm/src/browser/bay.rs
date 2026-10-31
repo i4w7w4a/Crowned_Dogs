@@ -1,12 +1,12 @@
 //! The creation bay. The persona-bay picture is projected back from the camera that took it onto
-//! a rough box of the hall, so the creation camera can really move through it: seen from the
-//! projector it is the picture itself, closer in the columns slide past the back wall. A podium
-//! stands over the floor ring; cold rim light, a light shaft, glowing lamps and slow dust keep the
-//! bay alive. A second, nearer shot of the bay is projected onto the same boxes from its own
-//! camera, fitted to the first picture, and takes over as the camera closes on the face: the
-//! hall gains detail in place instead of one picture giving way to another.
+//! a sheet laid over a rough box of the hall, so the creation camera can really move through it:
+//! seen from the projector it is the picture itself, closer in the columns slide past the back
+//! wall. A podium stands over the floor ring; cold rim light, a light shaft, glowing lamps and
+//! slow dust keep the bay alive. A second, nearer shot of the bay is projected onto the same sheet
+//! from its own camera, fitted to the first picture, and takes over as the camera closes on the
+//! face: the hall gains detail in place instead of one picture giving way to another.
 use super::view_utils::*;
-use js_sys::{Array, Float32Array, Uint16Array};
+use js_sys::{Array, Float32Array, Uint32Array};
 use wasm_bindgen::prelude::*;
 
 /// Where the picture was taken from: 0.74 m over the floor, 3.83 m in front of the ring's
@@ -259,29 +259,63 @@ pub fn eye_rotation(h: &JsValue) -> JsValue {
     );
     q
 }
-fn add_box(positions: &mut Vec<f32>, indices: &mut Vec<u16>, lo: [f64; 3], hi: [f64; 3]) {
-    let corner = |i: usize| -> [f32; 3] {
-        [
-            if i & 1 == 0 { lo[0] } else { hi[0] } as f32,
-            if i & 2 == 0 { lo[1] } else { hi[1] } as f32,
-            if i & 4 == 0 { lo[2] } else { hi[2] } as f32,
-        ]
-    };
-    let start = (positions.len() / 3) as u16;
-    for i in 0..8 {
-        positions.extend_from_slice(&corner(i));
+/// How far along `dir` from `eye` the ray first enters the box, if it does.
+fn enter(eye: [f64; 3], dir: [f64; 3], lo: [f64; 3], hi: [f64; 3]) -> Option<f64> {
+    let (mut near, mut far) = (f64::NEG_INFINITY, f64::INFINITY);
+    for i in 0..3 {
+        if dir[i].abs() < 1e-12 {
+            if eye[i] < lo[i] || eye[i] > hi[i] {
+                return None;
+            }
+            continue;
+        }
+        let (a, b) = ((lo[i] - eye[i]) / dir[i], (hi[i] - eye[i]) / dir[i]);
+        near = near.max(a.min(b));
+        far = far.min(a.max(b));
     }
-    for face in [
-        [0, 1, 3, 2],
-        [4, 6, 7, 5],
-        [0, 4, 5, 1],
-        [2, 3, 7, 6],
-        [0, 2, 6, 4],
-        [1, 5, 7, 3],
-    ] {
-        let [a, b, c, d] = face.map(|i: u16| start + i);
-        indices.extend_from_slice(&[a, b, c, a, c, d]);
+    (near <= far && near > 1e-6).then_some(near)
+}
+/// The hall as one sheet seen from where the picture was taken: each vertex lies where its ray
+/// through the picture first meets the hall's boxes. The boxes themselves tear apart along every
+/// column's outline once the camera leaves the projector, and show a cut there; the sheet only
+/// stretches across, and the picture with it. It reaches past the picture's edges, where the
+/// picture mirrors, for wide frames and the close-up.
+fn hall_sheet() -> (Vec<f32>, Vec<u32>) {
+    const COLUMNS: usize = 256;
+    const ROWS: usize = 320;
+    const ACROSS: [f64; 2] = [-0.4, 1.4];
+    const DOWN: [f64; 2] = [-0.3, 1.3];
+    let boxes: Vec<([f64; 3], [f64; 3])> = HALL
+        .iter()
+        .chain(std::iter::once(&CASES))
+        .map(|(lo, hi)| ([lo[0], lo[1], lo[2] + BACK], [hi[0], hi[1], hi[2] + BACK]))
+        .collect();
+    let t = TILT.to_radians();
+    let mut positions = Vec::with_capacity((COLUMNS + 1) * (ROWS + 1) * 3);
+    for row in 0..=ROWS {
+        let py = (DOWN[0] + (DOWN[1] - DOWN[0]) * row as f64 / ROWS as f64) * PICTURE[1];
+        for column in 0..=COLUMNS {
+            let px = (ACROSS[0] + (ACROSS[1] - ACROSS[0]) * column as f64 / COLUMNS as f64) * PICTURE[0];
+            let (x, y) = ((px - PICTURE[0] / 2.0) / FOCAL, (PICTURE[1] / 2.0 - py) / FOCAL);
+            let dir = [x, y * t.cos() + t.sin(), y * t.sin() - t.cos()];
+            let far = boxes
+                .iter()
+                .filter_map(|(lo, hi)| enter(EYE, dir, *lo, *hi))
+                .fold(f64::INFINITY, f64::min);
+            let far = if far.is_finite() { far } else { 20.0 };
+            positions.extend((0..3).map(|i| (EYE[i] + dir[i] * far) as f32));
+        }
     }
+    let mut indices = Vec::with_capacity(COLUMNS * ROWS * 6);
+    let at = |row: usize, column: usize| (row * (COLUMNS + 1) + column) as u32;
+    for row in 0..ROWS {
+        for column in 0..COLUMNS {
+            let (a, b) = (at(row, column), at(row, column + 1));
+            let (c, d) = (at(row + 1, column + 1), at(row + 1, column));
+            indices.extend_from_slice(&[a, d, c, a, c, b]);
+        }
+    }
+    (positions, indices)
 }
 fn uniforms(values: &[(&str, JsValue)]) -> JsValue {
     let out = object();
@@ -345,11 +379,7 @@ pub fn build(s: &JsValue, anisotropy: f64) {
     };
     let photo = picture("persona-bay");
     let close = picture("persona-bay-close");
-    let (mut positions, mut indices) = (Vec::new(), Vec::new());
-    let back = |p: [f64; 3]| [p[0], p[1], p[2] + BACK];
-    for (lo, hi) in HALL.iter().chain(std::iter::once(&CASES)) {
-        add_box(&mut positions, &mut indices, back(*lo), back(*hi));
-    }
+    let (positions, indices) = hall_sheet();
     let geometry = make(&h, "THREE.BufferGeometry", &[]);
     call(
         &geometry,
@@ -362,7 +392,7 @@ pub fn build(s: &JsValue, anisotropy: f64) {
     call(
         &geometry,
         "setIndex",
-        &[make(&h, "THREE.BufferAttribute", &[Uint16Array::from(&indices[..]).into(), num(1.0)])],
+        &[make(&h, "THREE.BufferAttribute", &[Uint32Array::from(&indices[..]).into(), num(1.0)])],
     );
     let hall = shader(
         &h,
