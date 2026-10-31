@@ -6,7 +6,7 @@ use js_sys::WeakMap;
 use wasm_bindgen::prelude::*;
 
 thread_local! {
-    /// Head materials that carry the eye shader; `scene_assets::tune` chains it in.
+    /// Head and hair materials with a shader of their own; `scene_assets::tune` chains it in.
     static HOOKS: WeakMap = WeakMap::new();
 }
 const HEADS: [&str; 2] = ["M_Male_Head", "M_Fem_Head"];
@@ -107,6 +107,30 @@ fn head_hook(material: &JsValue, paint: &JsValue) -> JsValue {
     uniforms
 }
 
+/// Hair strips light the same from both sides: a strip seen from behind keeps the normal that
+/// points away from the skull, so locks at the back of the silhouette do not go dark.
+fn hair_hook(material: &JsValue) {
+    if present(&hook(material)) {
+        return;
+    }
+    let compile = Closure::<dyn FnMut(JsValue)>::new(move |shader: JsValue| {
+        let fragment = string(&get(&shader, "fragmentShader")).replacen(
+            "#include <normal_fragment_begin>",
+            "#include <normal_fragment_begin>
+#ifdef DOUBLE_SIDED
+normal *= faceDirection;
+#endif",
+            1,
+        );
+        set(&shader, "fragmentShader", &fragment.into());
+    })
+    .into_js_value();
+    let hook = object(&[("key", "hair1".into()), ("compile", compile.clone())]);
+    HOOKS.with(|h| h.set(material.unchecked_ref(), &hook));
+    set(material, "onBeforeCompile", &compile);
+    set(material, "needsUpdate", &true.into());
+}
+
 /// Keeps the eye light breathing: the head's clock moves on every frame it is drawn.
 fn tick(node: &JsValue, uniforms: &JsValue) {
     let data = get(node, "userData");
@@ -163,6 +187,7 @@ pub fn apply(model: JsValue, look: JsValue) {
             tint(&material, rgb(&get(&paint, "suit")));
         } else if name == "M_Fem_HairCards" {
             tint(&material, rgb(&get(&paint, "hairCards")));
+            hair_hook(&material);
             set(&material, "visible", &get(&paint, "cards"));
         }
     }

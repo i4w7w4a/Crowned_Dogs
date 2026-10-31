@@ -23,7 +23,6 @@ struct Base {
     root: JsValue,
     home: JsValue,
     fitting: JsValue,
-    stage: JsValue,
     canvas: JsValue,
     dialog: JsValue,
     catalog: JsValue,
@@ -154,6 +153,7 @@ impl Base {
         if briefing {
             self.render_briefing();
         } else {
+            attr(&query(&self.fitting, ".cd-coach-line"), "data-step", "");
             let face = creation::STEPS[self.step].3;
             self.set_focus(if face { "face" } else { "body" });
             self.render_create();
@@ -209,10 +209,12 @@ impl Base {
         html(&tabs, &creation::tabs(self.step));
         let options = query(&self.fitting, ".cd-create-options");
         html(&options, &creation::step_markup(&self.look, self.step));
-        html(
-            &query(&self.fitting, ".cd-coach-line"),
-            &creation::spoken(line),
-        );
+        // The instructor speaks once per step, not again after every pick.
+        let coach = query(&self.fitting, ".cd-coach-line");
+        if data(&coach, "step") != id {
+            attr(&coach, "data-step", id);
+            html(&coach, &creation::spoken(line));
+        }
         let naming = id == "callsign";
         hidden(&query(&self.fitting, ".cd-create-name"), !naming);
         hidden(&options, naming);
@@ -235,13 +237,6 @@ impl Base {
         };
         content(&query(&self.fitting, ".cd-create-next"), label);
         call(&self.host, "liquidGlass", &[query(&self.fitting, ".cd-create")]);
-        // Keep the current tab in view without scrolling anything else.
-        let tab = query(&tabs, "[aria-selected=\"true\"]");
-        if exists(&tab) {
-            let left = num(&tab, "offsetLeft")
-                - (num(&tabs, "clientWidth") - num(&tab, "offsetWidth")) / 2.0;
-            set(&tabs, "scrollLeft", &number(left.max(0.0)));
-        }
     }
     /// The typed callsign survives re-renders and step changes.
     fn keep_typed(&self) {
@@ -342,8 +337,9 @@ impl Base {
         }
     }
     fn resize(&self) {
-        let w = num(&self.stage, "clientWidth");
-        let h = num(&self.stage, "clientHeight");
+        // The canvas, not its stage: while a look is made it fills the whole screen.
+        let w = num(&self.canvas, "clientWidth");
+        let h = num(&self.canvas, "clientHeight");
         if w > 0.0 && h > 0.0 {
             call_optional(&self.viewer, "resize", &[number(w), number(h)]);
         }
@@ -996,7 +992,6 @@ impl BrowserBase {
         html(&root, &initial(&host));
         let home = query(&root, ".cd-home");
         let fitting = query(&root, ".cd-fitting");
-        let stage = query(&root, ".cd-model-stage");
         let canvas = query(&root, ".cd-persona-canvas");
         let dialog = query(&root, "dialog");
         let catalog = query(&root, ".cd-catalog-items");
@@ -1019,7 +1014,6 @@ impl BrowserBase {
             root: root.clone(),
             home: home.clone(),
             fitting: fitting.clone(),
-            stage: stage.clone(),
             canvas: canvas.clone(),
             dialog: dialog.clone(),
             catalog: catalog.clone(),
@@ -1075,7 +1069,7 @@ impl BrowserBase {
             }
         }) as Box<dyn FnMut(JsValue)>);
         let observer = construct(&global(), "ResizeObserver", &[callback.as_ref().clone()])?;
-        call(&observer, "observe", &[stage]);
+        call(&observer, "observe", &[state.borrow().canvas.clone()]);
         state.borrow_mut().observer = observer;
         state.borrow_mut().callbacks.push(callback);
         let weak = Rc::downgrade(&state);
@@ -1146,6 +1140,7 @@ fn bind(state: &Rc<RefCell<Base>>) {
         (canvas.clone(), "keydown", "rotate"),
         (canvas.clone(), "persona-preview-error", "previewError"),
         (canvas.clone(), "persona-hover", "personaHover"),
+        (canvas.clone(), "persona-part", "personaPart"),
         (canvas.clone(), "pointermove", "tipMove"),
         (canvas.clone(), "pointerdown", "tipMove"),
         (canvas.clone(), "pointerleave", "tipHide"),
@@ -1229,6 +1224,16 @@ fn bind(state: &Rc<RefCell<Base>>) {
                     s.place_tip();
                 }
                 "tipHide" => s.show_tip(""),
+                // A tap on the hair, the eyes or the suit opens that step of the creation.
+                "personaPart" => {
+                    let part = get(&event, "detail").as_string().unwrap_or_default();
+                    let step = creation::STEPS.iter().position(|step| step.0 == part);
+                    if let Some(step) = step.filter(|_| s.brief >= creation::BRIEFING.len()) {
+                        if step != s.step {
+                            s.go_step(step);
+                        }
+                    }
+                }
                 "personaHover" if s.view == "persona" => {}
                 "personaHover" => {
                     let slot = get(&event, "detail").as_string().unwrap_or_default();

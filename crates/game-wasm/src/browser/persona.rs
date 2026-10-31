@@ -185,6 +185,7 @@ impl RustPersonaViewer {
                 resize(s, number(s, "width"), number(s, "height"));
             }
             render(s);
+            creation_loop(s);
         } else {
             cancel_frame(s);
             set(s, "drag", &JsValue::NULL);
@@ -253,13 +254,21 @@ impl RustPersonaViewer {
             return;
         }
         set(s, "creating", &flag(on));
+        if on && !exists(&get(s, "bay")) {
+            super::bay::build(s, anisotropy(s));
+        }
         show_stand(s);
+        super::persona_hd::update(s);
+        let _ = update_textures(s);
         if !on {
             set(s, "focusT", &num(0.0));
             set(s, "focusGoal", &num(0.0));
+            call(&get(s, "camera"), "updateProjectionMatrix", &[]);
+            set(&get(s, "canvas"), "style.cursor", &text(""));
         }
         aim(s);
         render(s);
+        creation_loop(s);
     }
     /// "face" glides the camera to a head close-up, anything else back to the whole body.
     #[wasm_bindgen(js_name=setFocus)]
@@ -303,6 +312,9 @@ impl RustPersonaViewer {
         cancel_frame(s);
         call(&global(), "cancelAnimationFrame", &[get(s, "focusFrame")]);
         set(s, "focusFrame", &JsValue::NULL);
+        call(&global(), "cancelAnimationFrame", &[get(s, "loopFrame")]);
+        set(s, "loopFrame", &JsValue::NULL);
+        set(s, "looping", &flag(false));
         let canvas = get(s, "canvas");
         let id = get(s, "drag.id");
         if exists(&id) && call(&canvas, "hasPointerCapture", &[id.clone()]).is_truthy() {
@@ -398,6 +410,7 @@ async fn load_models(s: &JsValue) -> Result<(), JsValue> {
     set(s, "ready", &flag(true));
     resize(s, number(s, "width"), number(s, "height"));
     render(s);
+    creation_loop(s);
     Ok(())
 }
 /// Loads the Persona of the look's sex onto the stand, replacing the one already there.
@@ -439,6 +452,7 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     let old = get(s, "figure");
     if exists(&old) {
         call(&old, "removeFromParent", &[]);
+        super::persona_hd::restore(&old);
         let extra = Array::from(&get(s, "originalTextures")).iter().collect::<Vec<_>>();
         let pending = get(s, "texturesPending");
         spawn_local(async move {
@@ -448,6 +462,7 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     }
     set(s, "figure", &figure);
     set(s, "figureSex", &text(&sex));
+    set(s, "mixer", &JsValue::NULL);
     set(s, "head", &JsValue::NULL);
     if female {
         // The female figure is the rigged game model: hold the first idle frame and
@@ -461,6 +476,7 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
             let mixer = make(&h, "THREE.AnimationMixer", &[figure.clone()]);
             call(&call(&mixer, "clipAction", &[clip]), "play", &[]);
             call(&mixer, "update", &[num(0.0)]);
+            set(s, "mixer", &mixer);
         }
         call(&figure, "updateMatrixWorld", &[flag(true)]);
         let box3 = make(&h, "THREE.Box3", &[]);
@@ -510,6 +526,7 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     );
     dress_figure(s);
     super::look::apply(figure, get(s, "look"));
+    super::persona_hd::update(s);
     wait(update_textures(s).into()).await?;
     Ok(true)
 }
@@ -659,7 +676,11 @@ fn update_textures(s: &JsValue) -> Promise {
         return Promise::resolve(&JsValue::UNDEFINED);
     }
     let prior = get(s, "texturesPending");
-    let size = get(s, "quality.textures");
+    // A look is made up close: there the Persona wears 2K on any device that takes 1K.
+    let mut size = get(s, "quality.textures");
+    if yes(s, "creating") && number(s, "quality.textures") >= 1024.0 {
+        size = num(number(s, "quality.textures").max(2048.0));
+    }
     let aniso = anisotropy(s);
     let a = s.clone();
     let p = future_to_promise(async move {
@@ -719,31 +740,26 @@ fn resize(s: &JsValue, width: f64, height: f64) {
     render(s);
 }
 fn aim(s: &JsValue) {
-    let (position, target) = if yes(s, "creating") {
-        creation_view(s)
-    } else {
-        let fit = graphics(
-            "graphics.fittingAim",
-            &options(&[
-                ("distance", get(s, "distance")),
-                ("height", get(s, "height")),
-                ("fov", get(s, "camera.fov")),
-                ("x", get(s, "movedX")),
-                ("y", get(s, "movedY")),
-            ]),
-        );
-        let v = |key: &str| {
-            let c = components(&get(&fit, key));
-            [c[0], c[1], c[2]]
-        };
-        (v("position"), v("target"))
-    };
-    call(&get(s, "camera.position"), "fromArray", &[floats(&position)]);
-    call(
-        &get(s, "camera"),
-        "lookAt",
-        &target.map(num),
+    if yes(s, "creating") {
+        creation_view(s);
+        return;
+    }
+    let fit = graphics(
+        "graphics.fittingAim",
+        &options(&[
+            ("distance", get(s, "distance")),
+            ("height", get(s, "height")),
+            ("fov", get(s, "camera.fov")),
+            ("x", get(s, "movedX")),
+            ("y", get(s, "movedY")),
+        ]),
     );
+    let v = |key: &str| {
+        let c = components(&get(&fit, key));
+        [c[0], c[1], c[2]]
+    };
+    call(&get(s, "camera.position"), "fromArray", &[floats(&v("position"))]);
+    call(&get(s, "camera"), "lookAt", &v("target").map(num));
     call(&get(s, "camera"), "updateMatrixWorld", &[]);
 }
 fn now() -> f64 {
@@ -780,21 +796,126 @@ fn focus_frame(s: &JsValue) {
 }
 /// How long the camera takes between the body and the face.
 const FOCUS_MS: f64 = 520.0;
-/// The creation camera: the whole Persona standing on the floor, the face close up, or between.
-fn creation_view(s: &JsValue) -> ([f64; 3], [f64; 3]) {
-    let tangent = (number(s, "camera.fov").to_radians() / 2.0).tan();
-    let aspect = (number(s, "width") / number(s, "height").max(1.0)).max(0.1);
-    let floor = number(&get(s, "host"), "PLATFORM_TOP");
-    // Crown to boots with a little air; the shoulders set the width on narrow screens.
-    let d = 1.02_f64.max(0.55 / aspect) / tangent;
-    let body = ([0.0, floor + 1.12, d], [0.0, floor + 0.95, 0.0]);
-    let h = head(s);
-    let d = 0.25_f64.max(0.17 / aspect) / tangent;
-    let face = ([h[0], h[1] + 0.015, h[2] + d], [h[0], h[1] - 0.035, h[2]]);
+/// The creation camera. The whole Persona is seen from exactly where the bay's picture was
+/// taken, so the picture shows as it was drawn; the face close-up really moves the camera into
+/// the bay. The frame's centre sits over the sheet, which covers the bottom of the canvas.
+fn creation_view(s: &JsValue) {
+    let h = get(s, "host");
+    let camera = get(s, "camera");
+    let (width, height) = (number(s, "width").max(1.0), number(s, "height").max(1.0));
+    let covered = sheet_inset(s).clamp(0.0, height * 0.7);
+    let visible = height - covered;
+    let tangent = (FACE_FOV / 2.0).to_radians().tan();
+    let head = head(s);
+    let d = 0.28_f64.max(0.19 / (width / visible)) / tangent;
+    let face = [head[0], head[1] + 0.015, head[2] + d];
+    let look = make(&h, "THREE.Matrix4", &[]);
+    call(
+        &look,
+        "lookAt",
+        &[
+            make(&h, "THREE.Vector3", &face.map(num)),
+            make(&h, "THREE.Vector3", &[num(head[0]), num(head[1] - 0.035), num(head[2])]),
+            make(&h, "THREE.Vector3", &[num(0.0), num(1.0), num(0.0)]),
+        ],
+    );
+    let turn = call(&make(&h, "THREE.Quaternion", &[]), "setFromRotationMatrix", &[look]);
     let t = number(s, "focusT").clamp(0.0, 1.0);
     let k = t * t * (3.0 - 2.0 * t);
-    let mix = |a: [f64; 3], b: [f64; 3]| [0, 1, 2].map(|i| a[i] + (b[i] - a[i]) * k);
-    (mix(body.0, face.0), mix(body.1, face.1))
+    let body = super::bay::EYE;
+    let at = [0, 1, 2].map(|i| body[i] + (face[i] - body[i]) * k);
+    call(&get(&camera, "position"), "fromArray", &[floats(&at)]);
+    call(
+        &get(&camera, "quaternion"),
+        "slerpQuaternions",
+        &[super::bay::eye_rotation(&h), turn, num(k)],
+    );
+    call(&camera, "updateMatrixWorld", &[]);
+    // The visible part of the frame spans these picture-plane tangents; the canvas goes on below.
+    let top = super::bay::BODY_TOP + (tangent - super::bay::BODY_TOP) * k;
+    let bottom = super::bay::BODY_BOTTOM + (-tangent - super::bay::BODY_BOTTOM) * k;
+    let per_pixel = (top - bottom) / visible;
+    let near = number(&camera, "near");
+    let half = width / 2.0 * per_pixel * near;
+    let matrix = get(&camera, "projectionMatrix");
+    call(
+        &matrix,
+        "makePerspective",
+        &[
+            num(-half),
+            num(half),
+            num(top * near),
+            num((bottom - covered * per_pixel) * near),
+            num(near),
+            get(&camera, "far"),
+        ],
+    );
+    call(&call(&get(&camera, "projectionMatrixInverse"), "copy", &[matrix]), "invert", &[]);
+}
+/// The close-up's vertical field of view over the visible part of the canvas.
+const FACE_FOV: f64 = 33.0;
+/// How much of the canvas the creation sheet covers, in CSS pixels.
+fn sheet_inset(s: &JsValue) -> f64 {
+    let canvas = get(s, "canvas");
+    let fitting = call(&canvas, "closest", &[text(".cd-fitting")]);
+    if !exists(&fitting) {
+        return 0.0;
+    }
+    let sheet = call(&fitting, "querySelector", &[text(".cd-create")]);
+    if !exists(&sheet) || yes(&sheet, "hidden") {
+        return 0.0;
+    }
+    let a = call(&canvas, "getBoundingClientRect", &[]);
+    let b = call(&sheet, "getBoundingClientRect", &[]);
+    if number(&b, "height") <= 0.0 {
+        return 0.0;
+    }
+    (number(&a, "bottom") - number(&b, "top")).max(0.0)
+}
+/// While a look is being made the bay is alive: dust drifts, lamps breathe, she breathes.
+fn creation_loop(s: &JsValue) {
+    if !yes(s, "creating") || !yes(s, "ready") || !yes(s, "active") || yes(s, "disposed") {
+        return;
+    }
+    if exists(&get(s, "loopFrame")) {
+        return;
+    }
+    set(s, "looping", &flag(true));
+    set(s, "loopLast", &num(now()));
+    loop_frame(s);
+}
+fn loop_frame(s: &JsValue) {
+    let a = s.clone();
+    let id = call(
+        &global(),
+        "requestAnimationFrame",
+        &[function(move |_| {
+            set(&a, "loopFrame", &JsValue::NULL);
+            if !yes(&a, "creating") || !yes(&a, "ready") || !yes(&a, "active") || yes(&a, "disposed") {
+                set(&a, "looping", &flag(false));
+                return;
+            }
+            let time = now();
+            let dt = ((time - number(&a, "loopLast")) / 1000.0).clamp(0.0, 0.1);
+            set(&a, "loopLast", &num(time));
+            let mixer = get(&a, "mixer");
+            if exists(&mixer) {
+                call(&mixer, "update", &[num(dt)]);
+            }
+            let t = number(&a, "focusT").clamp(0.0, 1.0);
+            let renderer = get(&a, "renderer");
+            let buffer = call(
+                &renderer,
+                "getDrawingBufferSize",
+                &[make(&get(&a, "host"), "THREE.Vector2", &[])],
+            );
+            super::bay::tick(&a, time / 1000.0, t * t * (3.0 - 2.0 * t), number(&buffer, "y"));
+            aim(&a);
+            call(&renderer, "render", &[get(&a, "scene"), get(&a, "camera")]);
+            loop_frame(&a);
+        })],
+    );
+    set(s, "loopFrame", &id);
 }
 /// Centre of the head in world space. Measured once per figure and dress in the turntable's
 /// frame, so it follows the figure as it turns.
@@ -871,8 +992,9 @@ fn crown(h: &JsValue, figure: &JsValue) -> f64 {
 /// The turntable and the bay floor show only in the fitting room.
 fn show_stand(s: &JsValue) {
     let on = !yes(s, "creating");
+    super::bay::show(s, !on);
     set(&get(s, "stage.fixed"), "visible", &flag(on));
-    let keep = [get(s, "figure"), get(s, "equipment"), get(s, "stage.feet")];
+    let keep = [get(s, "figure"), get(s, "equipment"), get(s, "stage.feet"), get(s, "podium")];
     for child in Array::from(&get(s, "stage.rotating.children")).iter() {
         if !keep.contains(&child) {
             set(&child, "visible", &flag(on));
@@ -1050,6 +1172,10 @@ fn render(s: &JsValue) {
     if yes(s, "disposed") || !yes(s, "ready") || !yes(s, "active") || number(s, "frame") != 0.0 {
         return;
     }
+    // While the creation bay is alive its own loop draws every frame.
+    if yes(s, "looping") {
+        return;
+    }
     let a = s.clone();
     let callback = function(move |_| {
         set(&a, "frame", &num(0.0));
@@ -1075,6 +1201,7 @@ fn release_gpu(s: &JsValue) {
         return;
     }
     set(s, "gpuReleased", &flag(true));
+    super::persona_hd::release(s);
     let roots = make(&get(s, "host"), "THREE.Group", &[]);
     call(
         &roots,
@@ -1198,14 +1325,56 @@ fn highlight(s: &JsValue, slot: &str) {
 }
 /// The slot under a screen point: only the nearest surface counts, so the body blocks gear behind it.
 fn pick(s: &JsValue, x: f64, y: f64) -> String {
-    if !yes(s, "ready") {
+    let hit = first_hit(s, &[get(s, "stage.rotating")], x, y);
+    if exists(&hit) {
+        owner(&get(&hit, "object"))
+    } else {
+        String::new()
+    }
+}
+/// The creation step for the part of the Persona under a screen point: hair, eyes, face, skin or suit.
+fn pick_part(s: &JsValue, x: f64, y: f64) -> String {
+    // She and what she wears, not the podium under her.
+    let hit = first_hit(s, &[get(s, "figure"), get(s, "equipment")], x, y);
+    if !exists(&hit) {
         return String::new();
+    }
+    let object = get(&hit, "object");
+    let material = get(&object, "material");
+    let name = string(&material, "name");
+    if name.contains("Hair") {
+        return "hair".into();
+    }
+    if name == "M_Male_Head" || name == "M_Fem_Head" {
+        // The eye shader keeps both eye spots in the head's own space; a tap near one picks the eyes.
+        let positions = get(&object, "geometry.attributes.position");
+        let at = number(&hit, "face.a");
+        let p = ["getX", "getY", "getZ"].map(|k| call(&positions, k, &[num(at)]).as_f64().unwrap_or(0.0));
+        for key in ["cdEyeA", "cdEyeB"] {
+            let eye = components(&get(&material, &format!("userData.cdLook.{key}.value")));
+            if eye.len() == 4 && (0..3).map(|i| (p[i] - eye[i]).powi(2)).sum::<f64>().sqrt() < eye[3] * 2.2 {
+                return "eyes".into();
+            }
+        }
+        return "face".into();
+    }
+    if name == "M_Male_Body" || name == "M_Fem_Body" {
+        return "skin".into();
+    }
+    // Whatever else she wears opens the suit.
+    "suit".into()
+}
+/// The nearest shown mesh under a screen point inside `roots`.
+fn first_hit(s: &JsValue, roots: &[JsValue], x: f64, y: f64) -> JsValue {
+    let roots: Vec<JsValue> = roots.iter().filter(|r| exists(r)).cloned().collect();
+    if !yes(s, "ready") || roots.is_empty() {
+        return JsValue::UNDEFINED;
     }
     let h = get(s, "host");
     let rect = call(&get(s, "canvas"), "getBoundingClientRect", &[]);
     let (w, hgt) = (number(&rect, "width"), number(&rect, "height"));
     if w <= 0.0 || hgt <= 0.0 {
-        return String::new();
+        return JsValue::UNDEFINED;
     }
     let point = make(
         &h,
@@ -1221,11 +1390,7 @@ fn pick(s: &JsValue, x: f64, y: f64) -> String {
         set(s, "raycaster", &ray);
     }
     call(&ray, "setFromCamera", &[point, get(s, "camera")]);
-    let hits = call(
-        &ray,
-        "intersectObject",
-        &[get(s, "stage.rotating"), flag(true)],
-    );
+    let hits = call(&ray, "intersectObjects", &[array(&roots), flag(true)]);
     for hit in Array::from(&hits).iter() {
         let object = get(&hit, "object");
         if yes(&object, "userData.glow") || !yes(&object, "isMesh") {
@@ -1239,10 +1404,10 @@ fn pick(s: &JsValue, x: f64, y: f64) -> String {
             o = get(&o, "parent");
         }
         if shown {
-            return owner(&object);
+            return hit;
         }
     }
-    String::new()
+    JsValue::UNDEFINED
 }
 /// Glows the slot and tells the fitting screen so its button can open.
 fn hover(s: &JsValue, slot: &str) {
@@ -1296,12 +1461,13 @@ fn input(s: &JsValue, event: &str, e: &JsValue) {
                     ("y", num(y)),
                     ("startX", num(x)),
                     ("startY", num(y)),
+                    ("at", num(now())),
                     ("hold", flag(false)),
                 ]),
             );
             call(&canvas, "setPointerCapture", &[get(e, "pointerId")]);
             clear_hold(s);
-            if !mouse {
+            if !mouse && !yes(s, "creating") {
                 let a = s.clone();
                 let id = get(e, "pointerId");
                 let timer = call(
@@ -1326,7 +1492,11 @@ fn input(s: &JsValue, event: &str, e: &JsValue) {
         "pointermove" => {
             let (x, y) = (number(e, "clientX"), number(e, "clientY"));
             if !exists(&get(s, "drag")) || get(s, "drag.id") != get(e, "pointerId") {
-                if mouse && yes(s, "active") {
+                if mouse && yes(s, "active") && yes(s, "creating") {
+                    let part = pick_part(s, x, y);
+                    let cursor = if part.is_empty() { "grab" } else { "pointer" };
+                    set(&canvas, "style.cursor", &text(cursor));
+                } else if mouse && yes(s, "active") {
                     let slot = pick(s, x, y);
                     hover(s, &slot);
                 }
@@ -1346,7 +1516,7 @@ fn input(s: &JsValue, event: &str, e: &JsValue) {
             rotate(s, (x - number(s, "drag.x")) * 0.009);
             set(s, "drag.x", &num(x));
             set(s, "drag.y", &num(y));
-            if mouse {
+            if mouse && !yes(s, "creating") {
                 let slot = pick(s, x, y);
                 hover(s, &slot);
             }
@@ -1359,7 +1529,25 @@ fn input(s: &JsValue, event: &str, e: &JsValue) {
             if !mouse {
                 hover(s, "");
             }
+            let (x, y) = (number(e, "clientX"), number(e, "clientY"));
+            let tap = event == "pointerup"
+                && (x - number(s, "drag.startX")).hypot(y - number(s, "drag.startY")) < 8.0
+                && now() - number(s, "drag.at") < 500.0;
             set(s, "drag", &JsValue::NULL);
+            if tap && yes(s, "creating") {
+                let part = pick_part(s, x, y);
+                if !part.is_empty() {
+                    let event = make(
+                        &global(),
+                        "CustomEvent",
+                        &[
+                            text("persona-part"),
+                            options(&[("detail", text(&part)), ("bubbles", flag(true))]),
+                        ],
+                    );
+                    call(&canvas, "dispatchEvent", &[event]);
+                }
+            }
             if call(&canvas, "hasPointerCapture", &[get(e, "pointerId")]).is_truthy() {
                 call(&canvas, "releasePointerCapture", &[get(e, "pointerId")]);
             }

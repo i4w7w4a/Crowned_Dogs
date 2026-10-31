@@ -83,22 +83,26 @@ fn segment(label: &str, key: &str, items: &[JsValue], current: &str) -> String {
 }
 fn swatches(label: &str, key: &str, items: &[JsValue], current: &str) -> String {
     let mut out = format!(
-        "<div class=\"cd-create-row\" role=\"group\" aria-label=\"{label}\"><span class=\"cd-overline\">{label}</span><div class=\"cd-create-swatches\">"
+        "<div class=\"cd-create-row\" role=\"group\" aria-label=\"{label}\"><span class=\"cd-overline\">{label}</span>"
     );
-    let mut picked = String::new();
+    let picked = items
+        .iter()
+        .find(|item| text(&get(item, "id")) == current)
+        .map(|item| text(&get(item, "name")))
+        .unwrap_or_default();
+    out.push_str(&format!(
+        "<span class=\"cd-create-picked\">{picked}</span><div class=\"cd-create-swatches\">"
+    ));
     for item in items {
         let id = text(&get(item, "id"));
         let name = text(&get(item, "name"));
-        if id == current {
-            picked = name.clone();
-        }
         out.push_str(&format!(
             "<button class=\"cd-swatch\" type=\"button\" data-look=\"{key}\" data-value=\"{id}\" aria-pressed=\"{}\" aria-label=\"{name}\" title=\"{name}\" style=\"--swatch:{}\"></button>",
             id == current,
             swatch_color(key, &text(&get(item, "color")))
         ));
     }
-    out.push_str(&format!("</div><span class=\"cd-create-picked\">{picked}</span></div>"));
+    out.push_str("</div></div>");
     out
 }
 
@@ -130,15 +134,29 @@ pub fn step_markup(look: &JsValue, step: usize) -> String {
     }
 }
 
-/// Step tabs; the current one is pressed.
+/// Line icons for the steps, drawn on a 24 grid like the combat icons.
+fn step_icon(id: &str) -> &'static str {
+    match id {
+        "sex" => "<circle cx=\"9\" cy=\"7.5\" r=\"3\"/><path d=\"M3.5 20v-1a5.5 5.5 0 0 1 11 0v1\"/><circle cx=\"17\" cy=\"9\" r=\"2.4\"/><path d=\"M15.6 14a4.6 4.6 0 0 1 5.9 4.4V20\"/>",
+        "face" => "<path d=\"M12 3.2c-3.8 0-6.3 2.9-6.3 7 0 4.9 2.9 10.6 6.3 10.6s6.3-5.7 6.3-10.6c0-4.1-2.5-7-6.3-7z\"/><path d=\"M9.4 10.8h.01M14.6 10.8h.01M10.1 15.6c1.2.7 2.6.7 3.8 0\"/>",
+        "skin" => "<path d=\"M12 3.5c3.1 3.9 6 7.3 6 10.7a6 6 0 0 1-12 0c0-3.4 2.9-6.8 6-10.7z\"/><path d=\"M9.2 14.6a2.9 2.9 0 0 0 2.8 2.8\"/>",
+        "eyes" => "<path d=\"M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z\"/><circle cx=\"12\" cy=\"12\" r=\"3.1\"/><path d=\"M12 12h.01\"/>",
+        "hair" => "<path d=\"M5.5 20.5c-.6-7.2 1.4-13.6 6.5-15.6 5.1 2 7.1 8.4 6.5 15.6\"/><path d=\"M12 4.9c-1.6 3.2-2.4 6.6-2.2 10.4M12 4.9c2.6 2.4 3.6 5.6 3.4 9.4\"/>",
+        "suit" => "<path d=\"M8.3 3.8L12 6.6l3.7-2.8 4.8 2.7-1.8 4.8-2.1-.9V21H7.4V10.4l-2.1.9-1.8-4.8z\"/><path d=\"M12 6.6V21\"/>",
+        _ => "<rect x=\"6.2\" y=\"3.5\" width=\"11.6\" height=\"17\" rx=\"4\"/><path d=\"M12 6.8h.01M9.2 12h5.6M9.2 15.4h3.8\"/>",
+    }
+}
+
+/// Step tabs: an icon over a short name; the current one is pressed.
 pub fn tabs(step: usize) -> String {
     STEPS
         .iter()
         .enumerate()
-        .map(|(i, (_, name, _, _))| {
+        .map(|(i, (id, name, _, _))| {
             format!(
-                "<button class=\"glass\" type=\"button\" role=\"tab\" data-step=\"{i}\" aria-selected=\"{}\">{name}</button>",
-                i == step
+                "<button class=\"glass\" type=\"button\" role=\"tab\" data-step=\"{i}\" aria-selected=\"{}\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">{}</svg><span>{name}</span></button>",
+                i == step,
+                step_icon(id)
             )
         })
         .collect()
