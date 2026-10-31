@@ -157,14 +157,37 @@ fn choices(kit: &Value, slot: &str) -> Result<Value, String> {
         .unwrap()
         .iter()
         .filter(|i| available(i))
-        .map(|item| json!({"item":item,"selected":item["id"]==selected}))
+        .map(|item| {
+            let lines = core("describeItem", json!([item])).unwrap_or(json!([]));
+            json!({"item":item,"selected":item["id"]==selected,"lines":lines})
+        })
         .collect::<Vec<_>>()))
 }
 fn options(choices: &Value, kind: &str) -> String {
     let check = r#"<span class="cd-equipped-check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>"#;
     let kind = if kind == "weapon" { "weapon" } else { "mod" };
-    let body=choices.as_array().into_iter().flatten().map(|c|format!(r#"<button class="cw-option glass" type="button" data-{kind}="{}" aria-pressed="{}"><span class="cw-part-icon">{}</span><strong>{}</strong>{}</button>"#,escape(text(&c["item"]["id"])),truth(&c["selected"]),text(&c["icon"]),escape(text(&c["item"]["name"])),if truth(&c["selected"]){check}else{""})).collect::<Vec<_>>().join("");
+    let body=choices.as_array().into_iter().flatten().map(|c|format!(r#"<button class="cw-option glass" type="button" data-{kind}="{}" aria-pressed="{}"><span class="cw-part-icon">{}</span><strong>{}</strong>{}{}</button>"#,escape(text(&c["item"]["id"])),truth(&c["selected"]),text(&c["icon"]),escape(text(&c["item"]["name"])),if truth(&c["selected"]){check}else{""},tip(c))).collect::<Vec<_>>().join("");
     format!(r#"<div class="cw-options">{body}</div>"#)
+}
+/// Hidden card content the workshop shows beside a hovered or focused option.
+fn tip(choice: &Value) -> String {
+    let item = &choice["item"];
+    let lines = choice["lines"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|l| format!("<em>{}</em>", escape(text(l))))
+        .collect::<String>();
+    let note = text(&item["note"]);
+    format!(
+        r#"<span class="cw-option-tip" hidden><b>{}</b>{}{lines}</span>"#,
+        escape(text(&item["name"])),
+        if note.is_empty() {
+            String::new()
+        } else {
+            format!("<span>{}</span>", escape(note))
+        }
+    )
 }
 fn stats(kit: &Value) -> Result<String, String> {
     let compiled = core("compileKit", json!([kit]))?;

@@ -1,5 +1,5 @@
 //! Storage, device selection and the local duel object all run on the WASM side.
-use super::{bridge::*, dom_support::rust};
+use super::{bridge::*, dom_support::{rust, try_rust}};
 use wasm_bindgen::prelude::*;
 
 const LOADOUT_KEY: &str = "crowned-dogs:loadout:v1";
@@ -76,6 +76,42 @@ pub fn switch_kit(index: usize) -> JsValue {
     store_set(ACTIVE_KIT_KEY, &index.to_string());
     save_local_loadout(loadout.clone(), JsValue::UNDEFINED);
     loadout
+}
+/// Each gun keeps its fitted mods per kit, so swapping guns and back restores them.
+const GUN_MODS_KEY: &str = "crowned-dogs:gunmods:v1";
+pub fn swap_gun(prev: &JsValue, next: JsValue) -> JsValue {
+    let old = string(&get(&get(prev, "weapon1"), "item"));
+    let new = string(&get(&get(&next, "weapon1"), "item"));
+    if old.is_empty() || old == new {
+        return next;
+    }
+    let key = format!("{GUN_MODS_KEY}:kit{}", active_kit());
+    let memory = store_get(&key)
+        .as_string()
+        .and_then(|raw| js_sys::JSON::parse(&raw).ok())
+        .filter(|v| v.is_object())
+        .unwrap_or_else(|| js_sys::Object::new().into());
+    let mods = get(&get(prev, "weapon1"), "mods");
+    if present(&mods) {
+        set(&memory, &old, &mods);
+    } else {
+        let _ = js_sys::Reflect::delete_property(&memory.clone().into(), &old.as_str().into());
+    }
+    if let Some(raw) = js_sys::JSON::stringify(&memory).ok().and_then(|r| r.as_string()) {
+        store_set(&key, &raw);
+    }
+    let saved = get(&memory, &new);
+    if !present(&saved) || present(&get(&get(&next, "weapon1"), "mods")) {
+        return next;
+    }
+    let mut result = next;
+    for slot in js_sys::Object::keys(&saved.clone().into()).iter() {
+        let id = js_sys::Reflect::get(&saved, &slot).unwrap_or(JsValue::NULL);
+        if let Ok(fitted) = try_rust("client.equipWeaponMod", &[result.clone(), slot, id]) {
+            result = fitted;
+        }
+    }
+    result
 }
 fn default_number(value: JsValue, default: f64) -> JsValue {
     if present(&value) {

@@ -474,7 +474,11 @@ impl Base {
             &[self.loadout.clone(), js(&self.selected), id_value.clone()],
         ) {
             Ok(loadout) => {
-                self.loadout = loadout;
+                self.loadout = if self.selected == "weapon1" {
+                    super::platform::swap_gun(&self.loadout, loadout)
+                } else {
+                    loadout
+                };
                 let saved = call(&self.host, "saveLocalLoadout", &[self.loadout.clone()]).as_bool()
                     == Some(true);
                 self.refresh();

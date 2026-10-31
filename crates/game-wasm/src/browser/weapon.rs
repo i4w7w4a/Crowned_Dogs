@@ -17,6 +17,7 @@ struct Weapon {
     selected: Option<String>,
     origin: JsValue,
     viewer: JsValue,
+    tip: JsValue,
     on_back: JsValue,
     on_change: JsValue,
     listeners: Vec<Listener>,
@@ -251,6 +252,11 @@ impl Weapon {
                 ],
             )
         };
+        let result = if weapon.is_empty() {
+            result
+        } else {
+            result.map(|next| super::platform::swap_gun(&self.loadout, next))
+        };
         match result {
             Ok(next) => {
                 self.loadout = next.clone();
@@ -287,6 +293,42 @@ impl Weapon {
         self.scroll.dispose();
         self.listeners.clear();
         call(&self.element, "remove", &[]);
+    }
+    /// Floats the option's description card beside the sheet (or above the option when there is no room).
+    fn show_tip(&self, option: &JsValue) {
+        let card = if exists(option) {
+            query(option, ".cw-option-tip")
+        } else {
+            JsValue::NULL
+        };
+        let open = invoke(&self.tip, "matches", &[js(":popover-open")])
+            .is_ok_and(|v| v.is_truthy());
+        if !exists(&card) {
+            if open {
+                let _ = invoke(&self.tip, "hidePopover", &[]);
+            }
+            return;
+        }
+        html(&self.tip, &text(&get(&card, "innerHTML")));
+        if !open {
+            let _ = invoke(&self.tip, "showPopover", &[]);
+        }
+        let row = call(option, "getBoundingClientRect", &[]);
+        let sheet = call(&self.sheet, "getBoundingClientRect", &[]);
+        let vw = num(&global(), "innerWidth");
+        let vh = num(&global(), "innerHeight");
+        let w = num(&self.tip, "offsetWidth");
+        let h = num(&self.tip, "offsetHeight");
+        let gap = 12.0;
+        let (x, y) = if num(&sheet, "right") + gap + w <= vw - 8.0 {
+            (num(&sheet, "right") + gap, num(&row, "top"))
+        } else if num(&sheet, "left") - gap - w >= 8.0 {
+            (num(&sheet, "left") - gap - w, num(&row, "top"))
+        } else {
+            (num(&row, "left"), num(&row, "top") - gap - h)
+        };
+        style(&self.tip, "left", &format!("{}px", x.clamp(8.0, (vw - w - 8.0).max(8.0))));
+        style(&self.tip, "top", &format!("{}px", y.clamp(8.0, (vh - h - 8.0).max(8.0))));
     }
     fn show_error(&self, err: JsValue) {
         let old = query(&self.body, ".cw-sheet-error");
@@ -335,6 +377,11 @@ impl BrowserWeapon {
             )),
         );
         call(&parent, "append", &[element.clone()]);
+        let tip = create("div", "cw-tip glass");
+        attr(&tip, "role", "tooltip");
+        // A popover sits in the top layer above the modal sheet; inside the blurred sheet it would be clipped.
+        attr(&tip, "popover", "manual");
+        call(&element, "append", &[tip.clone()]);
         call(&host, "liquidGlass", &[element.clone()]);
         let sheet = query(&element, "dialog");
         let body = query(&element, ".cw-sheet-body");
@@ -349,6 +396,7 @@ impl BrowserWeapon {
             selected: None,
             origin: JsValue::NULL,
             viewer: JsValue::NULL,
+            tip: tip.clone(),
             on_back,
             on_change,
             listeners: vec![],
@@ -366,7 +414,12 @@ impl BrowserWeapon {
             (query(&element, ".cw-stage"), "click", "stage"),
             (sheet.clone(), "click", "outside"),
             (sheet, "close", "closed"),
-            (body, "click", "select"),
+            (body.clone(), "click", "select"),
+            (body.clone(), "pointerover", "tip"),
+            (body.clone(), "focusin", "tip"),
+            (body.clone(), "pointerout", "untip"),
+            (body.clone(), "focusout", "untip"),
+            (body, "scroll", "untip"),
         ] {
             let weak = Rc::downgrade(&state);
             let listener = Listener::new(&target, kind, move |event| {
@@ -399,6 +452,7 @@ impl BrowserWeapon {
                         }
                     }
                     "closed" => {
+                        s.show_tip(&JsValue::NULL);
                         s.selected = None;
                         for button in all(&s.element, "[data-socket]") {
                             attr(&button, "aria-expanded", "false");
@@ -422,7 +476,12 @@ impl BrowserWeapon {
                             s.choices(&slot);
                         }
                     }
-                    "select" => s.select(event, weak.clone()),
+                    "select" => {
+                        s.show_tip(&JsValue::NULL);
+                        s.select(event, weak.clone())
+                    }
+                    "tip" => s.show_tip(&closest(&event, ".cw-option")),
+                    "untip" => s.show_tip(&JsValue::NULL),
                     _ => {}
                 }
             });
