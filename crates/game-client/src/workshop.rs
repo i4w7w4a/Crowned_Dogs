@@ -7,11 +7,21 @@ fn models() -> Value {
         "pistol-pustelga":"pustelga","shotgun-taran":"taran","rifle-varyag":"varyag","sniper-berkut":"berkut"})
 }
 /// Mods with a mesh inside their gun's model. The mesh node is the id with `_` for `-`.
-const MOD_MESHES: [&str; 4] = [
+const MOD_MESHES: [&str; 14] = [
     "optic-sokol",
+    "optic-znoy",
+    "optic-gran",
+    "optic-blik",
     "muzzle-tishina",
+    "muzzle-klyk",
+    "rail-koster",
+    "rail-kulak",
+    "rail-luch",
     "mag-rifle-twin",
     "mag-rifle-ap",
+    "mag-rifle-drum",
+    "stock-rifle-opora",
+    "stock-rifle-tesno",
 ];
 fn modelled_class(class: &Value) -> bool {
     game_core::constants()["ITEMS"]
