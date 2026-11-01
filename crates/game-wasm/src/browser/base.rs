@@ -104,7 +104,7 @@ impl Base {
         hidden(&self.home, view != "base");
         hidden(&query(&self.root, ".cd-sync"), view != "sync");
         if view == "sync" {
-            self.render_sync();
+            self.render_sync(None);
         }
         hidden(&self.fitting, !self.staged());
         toggle(&self.fitting, "cd-creating", view == "persona");
@@ -144,8 +144,18 @@ impl Base {
             &[flag(self.active && self.staged())],
         );
     }
-    fn render_sync(&self) {
-        html(&query(&self.root, ".cd-sync-body"), &capsule::markup());
+    /// Fills the tablet. Without `before` the tablet is raised and its screen boots; after a spend only
+    /// the changed stat moves.
+    fn render_sync(&self, before: Option<&serde_json::Value>) {
+        let body = query(&self.root, ".cd-sync-body");
+        html(&body, &capsule::markup(before));
+        if before.is_none() {
+            set(&body, "scrollTop", &number(0.0));
+            let tablet = query(&self.root, ".cd-tab");
+            toggle(&tablet, "cd-tab-up", false);
+            get(&tablet, "offsetWidth");
+            toggle(&tablet, "cd-tab-up", true);
+        }
     }
     /// Views that show the Persona on its stand.
     fn staged(&self) -> bool {
@@ -1275,8 +1285,8 @@ fn bind(state: &Rc<RefCell<Base>>) {
                 "base" | "fitting" | "persona" | "sync" => s.navigate(action, weak.clone()),
                 "syncSpend" => {
                     let plus = closest(&event, "[data-stat]");
-                    if exists(&plus) && capsule::spend(&data(&plus, "stat")) {
-                        s.render_sync();
+                    if let Some(before) = exists(&plus).then(|| capsule::spend(&data(&plus, "stat"))).flatten() {
+                        s.render_sync(Some(&before));
                         let again = query(&s.root, &format!(".cd-sync-plus[data-stat=\"{}\"]", data(&plus, "stat")));
                         if !boolean(&again, "disabled") {
                             focus(&again);
