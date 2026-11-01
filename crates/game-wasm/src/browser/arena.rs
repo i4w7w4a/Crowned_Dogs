@@ -620,6 +620,7 @@ impl RustArena {
             s.enemy = Some(s.make_figure(&foe, 0x77756f, 0.42, 0.4, 0, -1., false));
             s.me = Some(s.make_figure(&mine, 0x8a8780, 0.85, 0., 0x0a0908, 1., true));
             let me = s.me.as_ref().unwrap();
+            super::look::first_person(me.model.clone(), s.fp, super::platform::current_look());
             super::look::apply(me.model.clone(), super::platform::current_look());
             set(&me.blob, "visible", &(!s.fp).into());
             s.arms_only = sdk(&s.host, "armsOnly", &[s.me.as_ref().unwrap().model.clone()]);
@@ -666,7 +667,9 @@ impl RustArena {
     /// Repaints the player's figure after the look was edited between battles.
     #[wasm_bindgen(js_name=applyLook)]
     pub fn apply_look(&self) {
-        if let Some(me) = self.state.borrow().me.as_ref() {
+        let state = self.state.borrow();
+        if let Some(me) = state.me.as_ref() {
+            super::look::first_person(me.model.clone(), state.fp, super::platform::current_look());
             super::look::apply(me.model.clone(), super::platform::current_look());
         }
     }
@@ -1841,6 +1844,7 @@ impl ArenaState {
         self.depth = self.depth_of(self.dist);
         let me = self.me.as_ref().unwrap();
         set(&me.blob, "visible", &(!on).into());
+        super::look::first_person(me.model.clone(), on, super::platform::current_look());
         if present(&self.arms_only) {
             invoke(&self.arms_only, &[on.into()]);
         }

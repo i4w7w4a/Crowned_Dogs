@@ -41,6 +41,11 @@ impl RustTextureTiers {
             let list = materials.clone();
             let visitor = Closure::<dyn FnMut(JsValue)>::new(move |o| {
                 let m = get(&o, "material");
+                // The beard foundation replaces baked facial hair. Loading the
+                // original head tier would paint that old beard back on the skin.
+                if boolean(&get(&get(&m, "userData"), "cdFixedTextures")) {
+                    return;
+                }
                 if !boolean(&get(&m, "isMeshStandardMaterial")) || !present(&get(&m, "map")) {
                     return;
                 }

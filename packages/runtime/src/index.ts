@@ -10,6 +10,7 @@ export { RustDuelService, RustOperatorRegistry, bind_server_bot, run_server_main
 export { RustMusicDirector, RustVariantPicker, RustShuffle, audio_pick_other, audio_jitter } from "../wasm/game_wasm.js";
 export { RustLocalDuel, store_get, store_set, load_local_loadout, save_local_loadout, load_local_look, save_local_look, guess_quality, start_quality, keep_quality } from "../wasm/game_wasm.js";
 export { sceneAuthoredWeaponFit } from "../wasm/game_wasm.js";
+export { sceneSetBeardFirstPerson } from "../wasm/game_wasm.js";
 export { RustProjectedStage, RustHomeStage } from "../wasm/game_wasm.js";
 
 const wasmUrl = new URL("../wasm/game_wasm_bg.wasm", import.meta.url);

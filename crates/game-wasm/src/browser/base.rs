@@ -220,9 +220,11 @@ impl Base {
     fn render_create(&self) {
         let (id, _, _) = creation::STEPS[self.step];
         let tabs = query(&self.fitting, ".cd-create-steps");
-        html(&tabs, &creation::tabs(self.step));
+        html(&tabs, &creation::tabs(self.step, text(&get(&self.look, "sex")) == "male"));
         let options = query(&self.fitting, ".cd-create-options");
-        html(&options, &creation::step_markup(&self.look, self.step));
+        let beards_ready = get(&self.viewer, "getBeardReady").is_function()
+            && call(&self.viewer, "getBeardReady", &[]).as_bool().unwrap_or(false);
+        html(&options, &creation::step_markup_with_beards(&self.look, self.step, beards_ready));
         // A new step starts at the top of its choices; a pick keeps the place.
         if data(&options, "step") != id {
             attr(&options, "data-step", id);
@@ -1164,6 +1166,7 @@ fn bind(state: &Rc<RefCell<Base>>) {
         (state.borrow().catalog.clone(), "click", "item"),
         (canvas.clone(), "keydown", "rotate"),
         (canvas.clone(), "persona-preview-error", "previewError"),
+        (canvas.clone(), "persona-beards-ready", "beardsReady"),
         (canvas.clone(), "persona-hover", "personaHover"),
         (canvas.clone(), "persona-part", "personaPart"),
         (canvas.clone(), "pointermove", "tipMove"),
@@ -1215,10 +1218,12 @@ fn bind(state: &Rc<RefCell<Base>>) {
                 }
                 "look" => {
                     let choice = closest(&event, "[data-look]");
-                    if exists(&choice) {
+                    if exists(&choice) && !boolean(&choice, "disabled") {
                         s.pick_look(&data(&choice, "look"), &data(&choice, "value"));
                     }
                 }
+                "beardsReady" if s.view == "persona" => s.render_create(),
+                "beardsReady" => {},
                 "createNext" => s.create_next(weak.clone()),
                 "callsignKeys" => {
                     hidden(&query(&s.fitting, ".cd-create-error"), true);

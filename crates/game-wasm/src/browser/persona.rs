@@ -138,6 +138,14 @@ impl RustPersonaViewer {
     pub fn preview_description(&self) -> String {
         "3D: комплект A и стволы · остальные предметы пока показаны условно".into()
     }
+    #[wasm_bindgen(js_name=getBeardReady)]
+    pub fn get_beard_ready(&self) -> bool {
+        !yes(&self.state, "disposed")
+            && !yes(&self.state, "figureLoading")
+            && string(&self.state, "look.sex") == "male"
+            && string(&self.state, "figureSex") == "male"
+            && yes(&get(&self.state, "figure"), "userData.beardsReady")
+    }
     pub fn load(&self) -> Promise {
         let s = &self.state;
         if yes(s, "disposed") {
@@ -417,9 +425,19 @@ async fn load_models(s: &JsValue) -> Result<(), JsValue> {
 async fn load_figure(s: &JsValue) -> Result<(), JsValue> {
     // One load at a time: quick taps on the sex switch must not race two figures in.
     set(s, "figureLoading", &flag(true));
+    beard_ready_event(s);
     let done = load_latest(s).await;
     set(s, "figureLoading", &flag(false));
+    if !yes(s, "disposed") {
+        beard_ready_event(s);
+    }
     done
+}
+fn beard_ready_event(s: &JsValue) {
+    let event = make(&global(), "CustomEvent", &[
+        text("persona-beards-ready"), options(&[("bubbles", flag(true))]),
+    ]);
+    call(&get(s, "canvas"), "dispatchEvent", &[event]);
 }
 async fn load_latest(s: &JsValue) -> Result<(), JsValue> {
     loop {
