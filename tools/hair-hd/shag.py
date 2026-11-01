@@ -14,7 +14,7 @@ KIDS = int(args[2]) if len(args) > 2 else 60000
 VIEWS = args[3].split(",") if len(args) > 3 else ["front", "back", "left", "right"]
 SAVE = args[4] if len(args) > 4 else None
 rng = np.random.default_rng(9)
-PIECES = int(os.environ.get("PIECES", 450))
+PIECES = int(os.environ.get("PIECES", 330))
 COLOR = tuple(float(x) for x in os.environ.get("HAIRCOL", "0.06,0.032,0.016").split(","))
 t0 = time.time()
 head = hg.Head()
@@ -36,11 +36,12 @@ def label(p):
 
 
 def zstop(az, el):
-    """Jaw at the sides, a little shorter beside the face, nape down to the gaiter; the crown is cut
-    shorter so its ends show as a layer over the longer hair."""
+    """Jaw at the sides, a little shorter beside the face, the nape a cone ending in a point at the
+    centre (Art, 2026-11-02); the crown is cut shorter so its ends show as a layer over the longer hair."""
     a = abs(az)
-    z = 1.494 + 0.026 * smooth(70, 35, a) + 0.010 * smooth(120, 150, a) * smooth(175, 150, a)
-    return z + 0.045 * smooth(20, 60, el) * rng.uniform(0.2, 1.0)
+    z = 1.488 + 0.020 * smooth(70, 35, a) + 0.045 * smooth(95, 125, a) - 0.060 * smooth(125, 180, a)
+    # no shorter crown layer at the back: its ends stood as a step over the nape
+    return z + 0.045 * smooth(20, 60, el) * rng.uniform(0.2, 1.0) * (1 - 0.85 * smooth(100, 145, a))
 
 
 def field(p):
@@ -104,15 +105,15 @@ def envelope(strands, depth, iters=8, smooth_k=0.3):
         th = np.arctan2(dx, -dy)
         r = np.hypot(dx, dy) + 1e-9
         ad = np.abs(np.degrees(th))
-        vol = 0.018 + 0.014 * np.clip((ad - 35) / 25, 0, 1) - 0.006 * np.clip((ad - 120) / 50, 0, 1)
+        vol = 0.011 + 0.009 * np.clip((ad - 35) / 25, 0, 1) - 0.006 * np.clip((ad - 120) / 50, 0, 1)
         vol = vol * (0.5 + 0.5 * np.clip((1.69 - z) / 0.09, 0, 1))
-        vol = vol * (1 - 0.55 * np.clip((ad - 120) / 40, 0, 1) * np.clip((1.565 - z) / 0.055, 0, 1))
+        vol = vol * (1 - 0.8 * np.clip((ad - 110) / 40, 0, 1) * np.clip((1.64 - z) / 0.12, 0, 1))
         R = bilinear(RH, th, z) + vol - depth[:, None]
         w = np.clip((ad - 28) / 25, 0, 1) * np.clip((1.70 - z) / 0.05, 0, 1)
         w[:, 0] = 0
         # the back is pulled in under the occiput, so the nape tapers to a point
-        taper = np.clip((ad - 115) / 35, 0, 1) * np.clip((1.60 - z) / 0.06, 0, 1)
-        push = np.maximum(R - r, 0.0) * w + np.minimum(R - r, 0.0) * taper * 0.6
+        taper = np.clip((ad - 105) / 45, 0, 1) * np.clip((1.65 - z) / 0.12, 0, 1)
+        push = np.maximum(R - r, 0.0) * w * (1 - taper) + np.minimum(R - r, 0.0) * taper * 0.35
         out[..., 0] += dx / r * push
         out[..., 1] += dy / r * push
         if smooth_k and it < iters - 1:
@@ -207,7 +208,7 @@ if os.environ.get("GUIDES_ONLY"):
     raise SystemExit
 roots, cn = head.sample(KIDS, hg.scalp_density, seed=31)
 clab = np.array([label(Vector(r)) for r in roots])
-m = ~((clab == "F") & (rng.random(len(roots)) < 0.35))     # a thinner, wispy fringe
+m = ~((clab == "F") & (rng.random(len(roots)) < 0.6))      # a thin, see-through fringe
 roots, cn, clab = roots[m], cn[m], clab[m].tolist()
 kids, near = hg.children(guides, groots, glab, roots, clab, k=4)
 rel = np.array([hg.azel(Vector(r))[1] for r in roots])
@@ -217,9 +218,13 @@ kids = envelope(kids, depth)
 ae = np.array([hg.azel(Vector(r)) for r in roots])
 fan = 0.008 + 0.016 * np.clip((ae[:, 1] - 5.0) / 40.0, 0, 1)
 fr = np.array(clab) == "F"
-kids, keep, owner = hg.leader_clump(kids, roots, clab, PIECES, rng, strength=(0.8, 0.98), power=np.where(fr, 0.8, 0.9), fan=fan,
-                                    jag=(0.6, 1.0), cw_scale=np.where(fr, 1.25, 1.0), ret_owner=True)
-keep = np.where(fr, keep * rng.uniform(0.55, 1.0, len(roots)), keep)
+kids, keep, owner = hg.leader_clump(kids, roots, clab, PIECES, rng, strength=(0.85, 0.99), power=np.where(fr, 0.7, 0.5), fan=fan,
+                                    jag=(0.82, 1.0), cw_scale=np.where(fr, 1.25, 1.0), ret_owner=True)
+# each piece ends in a point: the hairs at its edge stop short of the ones at its middle
+dr = np.linalg.norm(roots - roots[owner], axis=1)
+pr_max = np.zeros(len(roots)); np.maximum.at(pr_max, owner, dr)
+keep = keep * (1 - 0.16 * dr / (pr_max[owner] + 1e-9))
+keep = np.where(fr, keep * rng.uniform(0.45, 1.0, len(roots)), keep)
 kids = hg.trim(kids, keep)
 kids = envelope(kids, depth, iters=3, smooth_k=0.2)
 # layered pieces: each piece sits a little in or out of its neighbours, so the cut lines read
@@ -227,11 +232,16 @@ pr = rng.normal(0, 1, len(roots))[owner]
 hz = kids - np.array([A_X, A_Y, 0.0])
 hz[..., 2] = 0
 hz /= np.linalg.norm(hz, axis=2, keepdims=True) + 1e-9
-kids = kids + hz * (pr[:, None, None] * 0.010 * np.linspace(0, 1, kids.shape[1])[None, :, None] ** 0.5)
+kids = kids + hz * (pr[:, None, None] * 0.014 * np.linspace(0, 1, kids.shape[1])[None, :, None] ** 0.5)
+# the back gathers in to the middle as it falls: the nape ends in a point, not a bowl
+dx = kids[..., 0] - A_X
+ad = np.abs(np.degrees(np.arctan2(dx, -(kids[..., 1] - A_Y))))
+wv = np.clip((ad - 100) / 50, 0, 1) * np.clip((1.60 - kids[..., 2]) / 0.10, 0, 1)
+kids[..., 0] = A_X + dx * (1 - 0.6 * wv)
 u = rng.random(len(roots))
-amp = np.where(u < 0.04, 0.011, 0.00014)
+amp = np.where(u < 0.035, 0.009, 0.00014)
 kids = hg.frizz(kids, amp, rng, power=2.0, freq=(1, 3))
-stray = (u > 0.993) & (ae[:, 1] > 10)          # a few long flyaways lifting off the crown
+stray = (u > 0.985) & (ae[:, 1] > -10)         # stray hairs lifting off all over
 kids = hg.frizz(kids, np.where(stray, 0.022, 0.0), rng, power=1.2, freq=(0.4, 1.0))
 kids = hg.pushout(head, kids, frac=0.6)
 kids = hg.relax(kids, iters=3, k=0.4)
