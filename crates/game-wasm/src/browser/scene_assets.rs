@@ -76,6 +76,13 @@ pub fn load_model(host: JsValue, url: String) -> Promise {
             &[get(&host, "MeshoptDecoder")],
         );
         let gltf = await_value(try_call(&loader, "parseAsync", &[bytes, "".into()])?).await?;
+        // A Persona carries every face; until a look picks one, only the first shows.
+        for node in nodes(&get(&gltf, "scene")) {
+            let name = string(&get(&get(&node, "material"), "name"));
+            if name.starts_with("M_Head_") && !name.ends_with('1') {
+                set(&node, "visible", &false.into());
+            }
+        }
         let _ = install_relief_async(host, get(&gltf, "scene"), url).await;
         Ok(gltf)
     })

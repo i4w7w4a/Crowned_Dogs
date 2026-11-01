@@ -1346,7 +1346,7 @@ fn pick_part(s: &JsValue, x: f64, y: f64) -> String {
     if name.contains("Hair") {
         return "hair".into();
     }
-    if name == "M_Male_Head" || name == "M_Fem_Head" {
+    if name.starts_with("M_Head_") {
         // The eye shader keeps both eye spots in the head's own space; a tap near one picks the eyes.
         let positions = get(&object, "geometry.attributes.position");
         let at = number(&hit, "face.a");

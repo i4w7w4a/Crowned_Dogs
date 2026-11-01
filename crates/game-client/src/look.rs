@@ -6,8 +6,17 @@ use serde_json::{json, Value};
 type Choice = (&'static str, &'static str, u32);
 
 const SEXES: [(&str, &str); 2] = [("male", "Мужская"), ("female", "Женская")];
-/// One head per Persona for now; new heads from Tripo join these lists.
-const FACES: [(&str, &str, &str); 2] = [("male", "m1", "Лицо 1"), ("female", "f1", "Лицо 1")];
+/// Each face is its own head mesh in the Persona's model (material `M_Head_<id>`); the first is the default.
+const FACES: [(&str, &str, &str); 8] = [
+    ("male", "m1", "Лицо 1"),
+    ("male", "m2", "Лицо 2"),
+    ("male", "m3", "Лицо 3"),
+    ("male", "m4", "Лицо 4"),
+    ("female", "f1", "Лицо 1"),
+    ("female", "f2", "Лицо 2"),
+    ("female", "f3", "Лицо 3"),
+    ("female", "f4", "Лицо 4"),
+];
 /// Multipliers over the baked skin texture; white keeps the scan as it is.
 const SKINS: [Choice; 6] = [
     ("light", "Светлая", 0xffffff),
@@ -60,12 +69,6 @@ const SUITS: [Choice; 6] = [
 /// Average sRGB of the baked hair cards and suit textures; picks are scaled against them.
 const HAIR_BASE: [f64; 3] = [0.406, 0.304, 0.229];
 const SUIT_BASE: [f64; 3] = [0.322, 0.295, 0.270];
-/// Each head's two irises in its mesh's own space (x, y, z, radius). The scans' UV atlases scatter
-/// an eye over several islands, so the eyes are found by position, not by texture area.
-const EYE_SPOTS: [(&str, [f64; 8]); 2] = [
-    ("male", [-0.037, 1.7935, 0.086, 0.006, 0.0292, 1.793, 0.0858, 0.006]),
-    ("female", [-0.283, 0.092, 0.623, 0.05, 0.266, 0.103, 0.622, 0.05]),
-];
 pub const CALLSIGN_MAX: usize = 16;
 
 fn hex(c: u32) -> String {
@@ -191,11 +194,12 @@ pub fn paint(look: &Value) -> Value {
         .unwrap_or(HAIRS[0]);
     let hair_color = find(&HAIR_COLORS, text(&look["hairColor"])).unwrap_or(HAIR_COLORS[2]);
     let eyes = find(&EYES, text(&look["eyes"])).unwrap_or(EYES[0]);
-    let spots = EYE_SPOTS.iter().find(|a| a.0 == sex).map(|a| a.1).unwrap_or([0.; 8]);
+    let face = text(&look["face"]);
     let cap = lin(srgb(hair_color.2)).map(|v| v * 0.75);
     json!({
         "sex": sex,
         "model": format!("persona-{sex}"),
+        "face": face,
         "skin": round(lin(srgb(find(&SKINS, text(&look["skin"])).unwrap_or(SKINS[0]).2))),
         "suit": round(scale(find(&SUITS, text(&look["suit"])).unwrap_or(SUITS[0]).2, SUIT_BASE, SUITS[0].2)),
         "hairCards": round(scale(hair_color.2, HAIR_BASE, HAIR_COLORS[2].2)),
@@ -203,7 +207,6 @@ pub fn paint(look: &Value) -> Value {
         "cap": hair.3,
         "cards": hair.4,
         "iris": round(lin(srgb(eyes.2))),
-        "eyeSpots": json!(spots),
     })
 }
 
@@ -314,5 +317,16 @@ mod tests {
         assert_eq!(p["iris"], json!(round(lin(srgb(EYES[0].2)))));
         assert_eq!(p["cards"], true);
         assert_eq!(paint(&finished("male"))["model"], "persona-male");
+    }
+    #[test]
+    fn each_face_is_painted_by_its_own_id() {
+        for (sex, id, _) in FACES {
+            let mut look = finished(sex);
+            look["face"] = json!(id);
+            assert_eq!(paint(&look)["face"], id);
+        }
+        let mut look = finished("female");
+        look["face"] = json!("m2");
+        assert_eq!(paint(&look)["face"], "f1");
     }
 }

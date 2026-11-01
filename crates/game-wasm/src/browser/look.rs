@@ -9,7 +9,8 @@ thread_local! {
     /// Head and hair materials with a shader of their own; `scene_assets::tune` chains it in.
     static HOOKS: WeakMap = WeakMap::new();
 }
-const HEADS: [&str; 2] = ["M_Male_Head", "M_Fem_Head"];
+/// Every face is a head mesh of its own; only the chosen one shows.
+const HEAD: &str = "M_Head_";
 const BODIES: [&str; 2] = ["M_Male_Body", "M_Fem_Body"];
 const CAP: &str = "M_Fem_HairCap";
 
@@ -53,9 +54,13 @@ fn tint(material: &JsValue, factor: [f64; 3]) {
     );
 }
 
-/// Sets up the eye shader on a head material; returns its uniforms.
-fn head_hook(material: &JsValue, paint: &JsValue) -> JsValue {
-    let spots = values(&get(paint, "eyeSpots"));
+/// Sets up the eye shader on a head material; returns its uniforms. The head's model carries its two irises in the
+/// mesh's own space (`cdEyes`: x, y, z, radius twice): the scans' UV atlases scatter an eye over several islands, so
+/// the eyes are found by position, not by texture area.
+fn head_hook(material: &JsValue, node: &JsValue, paint: &JsValue) -> JsValue {
+    let eyes = get(&get(node, "userData"), "cdEyes");
+    let mut spots = if present(&eyes) { values(&eyes) } else { Vec::new() };
+    spots.resize(8, 0.0.into());
     let area = |i: usize| array(&spots[i * 4..i * 4 + 4]).into();
     let mut uniforms = get(&get(material, "userData"), "cdLook");
     if !present(&uniforms) {
@@ -160,6 +165,7 @@ fn tick(node: &JsValue, uniforms: &JsValue) {
 pub fn apply(model: JsValue, look: JsValue) {
     let paint = paint(&look);
     let skin = rgb(&get(&paint, "skin"));
+    let face = format!("{HEAD}{}", string(&get(&paint, "face")));
     let mut cap_material = get(&get(&model, "userData"), "cdCap");
     for node in nodes(&model) {
         if !boolean(&get(&node, "isMesh")) {
@@ -186,9 +192,10 @@ pub fn apply(model: JsValue, look: JsValue) {
             set(&m, "visible", &get(&paint, "cap"));
             continue;
         }
-        if HEADS.contains(&name.as_str()) {
+        if name.starts_with(HEAD) {
+            set(&node, "visible", &(name == face).into());
             tint(&material, skin);
-            let uniforms = head_hook(&material, &paint);
+            let uniforms = head_hook(&material, &node, &paint);
             tick(&node, &uniforms);
         } else if BODIES.contains(&name.as_str()) {
             tint(&material, skin);
