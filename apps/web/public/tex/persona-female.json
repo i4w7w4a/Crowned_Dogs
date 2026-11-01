@@ -12,6 +12,21 @@
   "M_Head_f2": "tex/persona-female/M_Head_f2",
   "M_Head_f3": "tex/persona-female/M_Head_f3",
   "M_Head_f4": "tex/persona-female/M_Head_f4",
-  "M_Buff": "tex/persona-male/M_Buff"
+  "M_Buff": "tex/persona-male/M_Buff",
+  "M_Solonchak": {
+   "color": "tex/persona-female/M_Solonchak",
+   "normal": "tex/persona-female/M_Suit",
+   "orm": "tex/persona-female/M_Suit"
+  },
+  "M_Ten": {
+   "color": "tex/persona-female/M_Ten",
+   "normal": "tex/persona-female/M_Suit",
+   "orm": "tex/persona-female/M_Suit"
+  },
+  "M_Ryvok": "tex/persona-female/M_Ryvok",
+  "M_Cap": "tex/armor/M_Cap",
+  "M_Sfera": "tex/armor/M_Sfera",
+  "M_Plita4": "tex/armor/M_Plita4",
+  "M_Boots": "tex/armor/M_Boots"
  }
 }
