@@ -1052,37 +1052,37 @@
           "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
           "relief": "tex/relief/pustelga-M_UporP.relief.png",
           "resolution": [
-            512,
-            512
+            1024,
+            1024
           ],
           "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
           "seamFadePixels": 6,
           "solver": {
-            "iterations": 265,
+            "iterations": 284,
             "maxSlope": 2.0,
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.472180357374374e-6,
-            "robustHeightHalfRangePixels": 3.303043842315674,
+            "relativeResidual": 9.847322888887185e-6,
+            "robustHeightHalfRangePixels": 5.829833984375,
             "screeningLambda": 0.0024999999441206455
           },
           "sourceDepthMeters": 0.0003499999875202775,
           "sourceMaterial": "M_UporP",
           "sourceResolution": [
-            512,
-            512
+            1024,
+            1024
           ],
           "uvIslands": 206,
           "uvSet": 0,
           "validation": {
-            "clippedInteriorPixels": 181,
-            "detrendedNormalSlopeRms": 0.21033578420843976,
-            "flatNormalMeanErrorDegrees": 5.352202422915007,
-            "integratedNormalMeanErrorDegrees": 3.0439883513229025,
-            "interiorPixels": 29756,
+            "clippedInteriorPixels": 1166,
+            "detrendedNormalSlopeRms": 0.25841827415991386,
+            "flatNormalMeanErrorDegrees": 6.203166167328798,
+            "integratedNormalMeanErrorDegrees": 3.706003567745856,
+            "interiorPixels": 216516,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
-            "uvCoveredPixels": 101696
+            "uvCoveredPixels": 405573
           }
         }
       },
