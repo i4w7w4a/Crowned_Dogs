@@ -8,7 +8,37 @@ import * as Three from "three";
 import { RustArena, RustLens, RustTextureTiers, RustProjectedStage, callRust, motionCompute } from "../packages/runtime/src/index.ts";
 
 const root = resolve(import.meta.dirname, "..");
-const shaders = await import(pathToFileURL(resolve(root, "crates/game-wasm/reference/browser/lens-shaders.ts")).href);
+const shaders = { ...await import(pathToFileURL(resolve(root, "crates/game-wasm/reference/browser/lens-shaders.ts")).href) };
+// Shader changes made on purpose after the oracle was frozen, as [shader, oracle text, current text].
+// 2 Nov 2026: depth is read soft through its mips (a projected stage's proxy boxes cut halos into
+// fog and blur), and the edge smear is half white with a per-pixel start (a camouflage net split
+// into rainbow copies).
+const revisions = [
+  ["composeShader", `float coc(vec2 uv) {
+  float d = focusInv - texture(tDepth, uv).r * 1.25;`, `// A blurred read of the depth: a projected stage's proxy boxes would otherwise cut
+// hard lines into the blur and the weather (painted depth maps have no mips and stay sharp).
+float softInv(vec2 uv, float spread) {
+  return textureLod(tDepth, uv, log2(max(1.0, float(textureSize(tDepth, 0).y) * spread))).r * 1.25;
+}
+float coc(vec2 uv) {
+  float d = focusInv - softInv(uv, 0.012);`],
+  ["hazeShader", "texture(tDepth, vUv).r * 1.25", "textureLod(tDepth, vUv, log2(max(1.0, float(textureSize(tDepth, 0).y) * 0.04))).r * 1.25"],
+  ["lensShader", `    float lod = log2(max(1.0, max(span, r * outSize.y * 1.5)) * ssaa);
+`, `    float lod = log2(max(1.0, max(span * 2.0, r * outSize.y * 1.5)) * ssaa);
+    // each pixel starts its taps at its own offset, so a busy pattern near the edge (a camouflage
+    // net, sandbags) does not break into rows of copies
+    float jitter = ign(gl_FragCoord.xy + 17.0);
+`],
+  ["lensShader", `      vec3 w = spectrum(t);
+`, `      // half white: fine detail smears without splitting into red, green and blue copies
+      vec3 w = mix(vec3(1.0), spectrum(t), 0.45);
+      t = (float(i) + jitter) / float(TAPS);
+`],
+];
+for (const [name, from, to] of revisions) {
+  assert.equal(shaders[name].split(from).length, 2, `${name} revision must match the oracle once`);
+  shaders[name] = shaders[name].replace(from, to);
+}
 const quality = callRust("client.data", []).QUALITY;
 let fixtureNumber = 0;
 async function original(file, bindings) {
@@ -45,7 +75,7 @@ function normalized(value) {
   if (value == null || typeof value !== "object") return value;
   if (value.isTexture) return { texture: value.userData.label ?? "texture", width: value.image?.width, height: value.image?.height };
   if (value.isColor) return value.toArray();
-  if (value.isVector2 || value.isVector3 || value.isMatrix4) return value.toArray();
+  if (value.isVector2 || value.isVector3 || value.isVector4 || value.isMatrix4) return value.toArray();
   if (Array.isArray(value)) return value.map(normalized);
   return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalized(v)]));
 }
@@ -148,7 +178,7 @@ async function testBattleOptics() {
     lens.setBattleAtmosphere(true, false, .2, .1);
     const heat = draw();
     assert.ok(heat.shader.includes("float distant ="));
-    assert.deepEqual(heat.uniforms.cdHeatDepth, [.2,.1]);
+    assert.deepEqual(heat.uniforms.cdHeatDepth.slice(0, 3), [.2,.1,1]);
     assert.equal(typeof heat.uniforms.cdBattleTime, "number");
     assert.ok(heat.shader.includes("texture(tFig, vUv)"), "heat never moves fighter samples");
     lens.setQuality(quality.low); assert.equal(draw().shader, base, "low quality omits heat");

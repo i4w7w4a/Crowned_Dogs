@@ -176,7 +176,9 @@ fn rgb(hex: u32) -> Value {
 }
 
 /// What the lens draws for a weather: fog and dust strength, rain and lightning,
-/// a dimming of the light and the colours, tuned per time of day. Clear is all zero.
+/// a dimming of the light and the colours, tuned per time of day. Clear has no
+/// weather pass, only heat shimmer over sun-warmed ground. `surge` is how far the
+/// dust gusts close the view, `wet` how much rain beads the lens, the gun and the ground.
 pub fn fx(weather: &str, time: &str, map: &str) -> Value {
     let night = time == "night";
     let (fog_color, dust_color, rain_color) = match time {
@@ -199,9 +201,27 @@ pub fn fx(weather: &str, time: &str, map: &str) -> Value {
         ),
         _ => (0.0, 0.0, 0.0, 0.0, 1.0, 1.0),
     };
+    let clear = weather == "clear" || weather.is_empty();
+    let sun = match time {
+        "day" => 1.0,
+        "evening" => 0.55,
+        "morning" => 0.3,
+        _ => 0.0,
+    };
+    let heat = if clear {
+        sun * if outdoor { 1.0 } else { 0.35 }
+    } else {
+        0.0
+    };
+    let surge = match (weather, outdoor) {
+        ("dust", true) => 0.95,
+        ("dust", false) => 0.7,
+        _ => 0.0,
+    };
     json!({
-        "active": weather != "clear" && !weather.is_empty(),
+        "active": !clear,
         "fog": fog, "dust": dust, "rain": rain, "flash": flash, "dim": dim, "haze": haze,
+        "heat": heat, "surge": surge, "wet": rain,
         "fogColor": rgb(fog_color), "dustColor": rgb(dust_color), "rainColor": rgb(rain_color),
     })
 }
@@ -287,5 +307,15 @@ mod tests {
         assert_eq!(fx("storm", "day", "saltHall")["rain"], 0.0);
         assert!(fx("storm", "day", "blocks")["rain"].as_f64().unwrap() > 0.0);
         assert_eq!(fx("clear", "night", "blocks")["active"], false);
+    }
+
+    #[test]
+    fn heat_shimmers_only_in_clear_sunlight() {
+        assert_eq!(fx("clear", "day", "dryBed")["heat"], 1.0);
+        assert_eq!(fx("clear", "night", "dryBed")["heat"], 0.0);
+        assert_eq!(fx("fog", "day", "dryBed")["heat"], 0.0);
+        assert!(fx("clear", "day", "saltHall")["heat"].as_f64().unwrap() < 0.5);
+        assert!(fx("dust", "day", "dam")["surge"].as_f64().unwrap() > 0.9);
+        assert_eq!(fx("storm", "day", "saltHall")["wet"], 0.0);
     }
 }

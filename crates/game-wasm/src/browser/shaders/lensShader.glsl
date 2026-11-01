@@ -48,12 +48,17 @@ void main() {
   } else {
     // the taps read a blurred copy of the frame, as blurred as they are far apart, so they flow into one smear
     float span = 2.0 * amount * length((src - center) * outSize) / float(TAPS);
-    float lod = log2(max(1.0, max(span, r * outSize.y * 1.5)) * ssaa);
+    float lod = log2(max(1.0, max(span * 2.0, r * outSize.y * 1.5)) * ssaa);
+    // each pixel starts its taps at its own offset, so a busy pattern near the edge (a camouflage
+    // net, sandbags) does not break into rows of copies
+    float jitter = ign(gl_FragCoord.xy + 17.0);
     vec3 sum = vec3(0.0), wsum = vec3(0.0);
     float a = 0.0;
     for (int i = 0; i < TAPS; i++) {
       float t = (float(i) + 0.5) / float(TAPS);
-      vec3 w = spectrum(t);
+      // half white: fine detail smears without splitting into red, green and blue copies
+      vec3 w = mix(vec3(1.0), spectrum(t), 0.45);
+      t = (float(i) + jitter) / float(TAPS);
       vec4 s = textureLod(tComp, center + (src - center) * (1.0 + amount * (t - 0.5) * 2.0), lod); // red spreads outwards
       sum += s.rgb * w; wsum += w; a += s.a;
     }

@@ -767,31 +767,36 @@ impl RustArena {
         if get(&s.lens, "setNightVision").is_function() {
             call(&s.lens, "setNightVision", &[night_vision.into()]);
         }
+        let fx = policy(
+            "client.world.fx",
+            serde_json::json!([
+                m["config"]["weather"],
+                m["config"]["time"],
+                m["config"]["mapId"]
+            ]),
+        );
         if get(&s.lens, "setBattleAtmosphere").is_function() && s.k.is_some() {
-            let heat = m["config"]["time"].as_str() == Some("day")
-                && m["config"]["weather"].as_str() == Some("clear");
+            let heat = fx["heat"].as_f64().unwrap_or(0.);
             let glare = m["config"]["time"].as_str() == Some("evening")
                 && m["fighters"][own]["facesSun"].as_bool() == Some(true);
             call(
                 &s.lens,
                 "setBattleAtmosphere",
                 &[
-                    heat.into(),
+                    (heat > 0.).into(),
                     glare.into(),
                     n(1. / s.depth_of(8.)),
                     n(1. / s.depth_of(12.)),
+                    n(heat),
                 ],
             );
         }
+        // the enemy's field shows faintly in heat and in rain (my own would cover the screen)
+        s.enemy_shield.set_weather(
+            fx["heat"].as_f64().unwrap_or(0.),
+            fx["wet"].as_f64().unwrap_or(0.),
+        );
         if get(&s.lens, "setWeather").is_function() {
-            let fx = policy(
-                "client.world.fx",
-                serde_json::json!([
-                    m["config"]["weather"],
-                    m["config"]["time"],
-                    m["config"]["mapId"]
-                ]),
-            );
             call(
                 &s.lens,
                 "setWeather",
@@ -1694,6 +1699,10 @@ impl ArenaState {
             set(&self.spark, "visible", &(q[3] != 0.).into());
         }
         let aspect = p(&self.camera, "aspect");
+        if let Some(enemy) = &self.enemy {
+            let (feet, height) = self.standing(enemy);
+            self.enemy_shield.follow(feet, height);
+        }
         self.enemy_shield.update(dt, aspect);
         self.my_shield.update(dt, aspect);
         if p(&self.quality, "dust") != 0. {
@@ -2213,24 +2222,12 @@ impl ArenaState {
         } else {
             (self.enemy.as_ref().unwrap(), self.me.as_ref().unwrap())
         };
-        // Last frame's matrices, read as they are: updating them here would move the camera
-        // and the figures out of step with the frame that is drawn next.
-        let placed = |object: &JsValue| {
-            call(
-                &self.tmp_a,
-                "setFromMatrixPosition",
-                &[get(object, "matrixWorld")],
-            );
-            xyz(&self.tmp_a)
-        };
-        let top = placed(&get(&target.bones, "top"));
-        let hips = placed(&get(&target.bones, "hips"));
-        let floor = placed(&target.group)[1];
+        let (feet, height) = self.standing(target);
         let from = if mine {
             zone_world(shooter, "body", &self.tmp_a, &self.tmp_b);
             xyz(&self.tmp_a)
         } else {
-            placed(&self.camera)
+            self.placed(&self.camera)
         };
         zone_world(target, zone, &self.tmp_a, &self.tmp_b);
         let to = xyz(&self.tmp_a);
@@ -2239,14 +2236,24 @@ impl ArenaState {
         } else {
             &mut self.enemy_shield
         };
-        fx.fire(
-            [hips[0], floor, hips[2]],
-            (top[1] - floor).max(1.2),
-            from,
-            to,
-            weapon,
-            broken,
+        fx.fire(feet, height, from, to, weapon, broken);
+    }
+    // Last frame's matrices, read as they are: updating them here would move the camera
+    // and the figures out of step with the frame that is drawn next.
+    fn placed(&self, object: &JsValue) -> [f64; 3] {
+        call(
+            &self.tmp_a,
+            "setFromMatrixPosition",
+            &[get(object, "matrixWorld")],
         );
+        xyz(&self.tmp_a)
+    }
+    /// Where a fighter's feet are (under the hips, on the floor) and how tall they stand.
+    fn standing(&self, target: &Figure) -> ([f64; 3], f64) {
+        let top = self.placed(&get(&target.bones, "top"));
+        let hips = self.placed(&get(&target.bones, "hips"));
+        let floor = self.placed(&target.group)[1];
+        ([hips[0], floor, hips[2]], (top[1] - floor).max(1.2))
     }
 }
 
