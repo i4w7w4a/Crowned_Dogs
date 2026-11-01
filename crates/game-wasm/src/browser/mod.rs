@@ -4,6 +4,7 @@ pub mod arena;
 pub mod arena_audio;
 pub mod audio_engine;
 pub mod base;
+pub mod base_region;
 pub mod bay;
 pub mod battle;
 pub mod bridge;

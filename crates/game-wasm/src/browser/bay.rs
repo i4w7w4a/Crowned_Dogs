@@ -54,6 +54,48 @@ const LAMPS: [(f64, f64, usize, f64, f64, u32); 13] = [
     (90.0, 690.0, 0, -2.6, 0.8, 0x8fe6ff),
     (935.0, 690.0, 0, 2.6, 0.8, 0x8fe6ff),
 ];
+/// The «Шлюз» bay, the empty turbine pit. Its picture is taken from the same camera over the same
+/// ring (moved 32 px down onto it). The round wall of wicket-gate blades meets the floor 13.8 m
+/// from the eye straight ahead and comes to about 10 m at the picture's edges: a wall across
+/// with two side walls. The work lamps stand 9.2 m away, 2.7 m to each side.
+const PIT: [([f64; 3], [f64; 3]); 5] = [
+    ([-9.0, -0.05, -12.0], [9.0, 0.0, 6.0]),
+    ([-9.0, 9.5, -12.0], [9.0, 9.55, 6.0]),
+    ([-9.0, 0.0, -10.0], [9.0, 12.0, -9.9]),
+    ([-4.05, 0.0, -9.9], [-4.0, 9.5, 6.0]),
+    ([4.0, 0.0, -9.9], [4.05, 9.5, 6.0]),
+];
+const PIT_LAMPS: [(f64, f64, usize, f64, f64, u32); 8] = [
+    (92.0, 567.0, 2, -5.35, 1.1, 0xeef4ff),
+    (949.0, 567.0, 2, -5.35, 1.1, 0xeef4ff),
+    (141.0, 403.0, 2, -9.9, 0.8, 0xe8f0ff),
+    (357.0, 440.0, 2, -9.9, 0.8, 0xe8f0ff),
+    (560.0, 450.0, 2, -9.9, 0.8, 0xe8f0ff),
+    (758.0, 429.0, 2, -9.9, 0.8, 0xe8f0ff),
+    (282.0, 211.0, 2, -9.9, 1.0, 0xe8f0ff),
+    (833.0, 204.0, 2, -9.9, 1.0, 0xe8f0ff),
+];
+/// A base's bay: its pictures under `img/` (without the tier and the extension), the hall the
+/// wide one lies on, and its lamps. Every bay is taken from `EYE` over the same floor ring.
+pub struct Bay {
+    pub photo: &'static str,
+    /// The nearer shot for the face; without one the wide picture stays as the camera closes in.
+    pub close: Option<&'static str>,
+    hall: &'static [([f64; 3], [f64; 3])],
+    lamps: &'static [(f64, f64, usize, f64, f64, u32)],
+}
+pub const SALT: Bay = Bay {
+    photo: "base/persona-bay",
+    close: Some("base/persona-bay-close"),
+    hall: &HALL,
+    lamps: &LAMPS,
+};
+pub const SLUICE: Bay = Bay {
+    photo: "base-kaskad/persona-bay",
+    close: None,
+    hall: &PIT,
+    lamps: &PIT_LAMPS,
+};
 /// Where the close shot was taken from, fitted to the first picture through the hall's boxes
 /// (SIFT matches and the floor ring): 0.94 m up, 2.66 m in front of the ring, level within a
 /// fifth of a degree, focal length 1633 px on the same 1024×1536 frame.
@@ -275,12 +317,12 @@ fn enter(eye: [f64; 3], dir: [f64; 3], lo: [f64; 3], hi: [f64; 3]) -> Option<f64
 /// through the picture first meets the hall's boxes. The boxes are flat walls only, so the sheet
 /// never tears nor stretches. It reaches past the picture's edges, where the picture mirrors,
 /// for wide frames and the close-up.
-fn hall_sheet() -> (Vec<f32>, Vec<u32>) {
+fn hall_sheet(hall: &[([f64; 3], [f64; 3])]) -> (Vec<f32>, Vec<u32>) {
     const COLUMNS: usize = 256;
     const ROWS: usize = 320;
     const ACROSS: [f64; 2] = [-0.4, 1.4];
     const DOWN: [f64; 2] = [-0.3, 1.3];
-    let boxes: Vec<([f64; 3], [f64; 3])> = HALL
+    let boxes: Vec<([f64; 3], [f64; 3])> = hall
         .iter()
         .map(|(lo, hi)| ([lo[0], lo[1], lo[2] + BACK], [hi[0], hi[1], hi[2] + BACK]))
         .collect();
@@ -369,11 +411,12 @@ pub fn build(s: &JsValue, anisotropy: f64) {
     // unsharp mask, from the 1024×1536 originals).
     let tier = if number(s, "quality.textures") >= 1024.0 { ".2048" } else { "" };
     let picture = |name: &str| {
-        texture(&h, &format!("{base}img/base/{name}{tier}.webp"), true, anisotropy)
+        texture(&h, &format!("{base}img/{name}{tier}.webp"), true, anisotropy)
     };
-    let photo = picture("persona-bay");
-    let close = picture("persona-bay-close");
-    let (positions, indices) = hall_sheet();
+    let look = super::base_region::current().bay;
+    let photo = picture(look.photo);
+    let close = look.close.map_or_else(|| photo.clone(), picture);
+    let (positions, indices) = hall_sheet(look.hall);
     let geometry = make(&h, "THREE.BufferGeometry", &[]);
     call(
         &geometry,
@@ -519,7 +562,7 @@ pub fn build(s: &JsValue, anisotropy: f64) {
     // Blooms on the picture's lamps: the light seems to hang in the air in front of them.
     let lamps = Array::new();
     let quad = make(&h, "THREE.PlaneGeometry", &[num(1.0), num(1.0)]);
-    for (i, (px, py, axis, place, size, color)) in LAMPS.iter().enumerate() {
+    for (i, (px, py, axis, place, size, color)) in look.lamps.iter().enumerate() {
         let place = if *axis == 2 { place + BACK } else { *place };
         let at = on_picture(*px, *py, *axis, place);
         let glow = shader(
@@ -585,6 +628,7 @@ pub fn build(s: &JsValue, anisotropy: f64) {
             ("dust", dust),
             ("lift", lift),
             ("lamps", lamps.into()),
+            ("close", flag(look.close.is_some())),
         ]),
     );
     build_podium(s, &h, &base, top, anisotropy);
@@ -732,7 +776,7 @@ pub fn show(s: &JsValue, on: bool) {
 /// the camera moves fastest.
 pub fn close_in(s: &JsValue, k: f64) {
     let hall = get(s, "bayParts.hall");
-    if !exists(&hall) {
+    if !exists(&hall) || !yes(s, "bayParts.close") {
         return;
     }
     let x = ((k - 0.15) / 0.7).clamp(0.0, 1.0);

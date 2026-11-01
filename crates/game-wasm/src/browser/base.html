@@ -1,13 +1,15 @@
 
-      <section class="cd-home" aria-label="База Соль">
-        <img class="cd-backdrop" src="{{BASE}}img/base/salt-base.webp" alt="Убежище в соляной шахте: Персоны в ложементах, капсула оператора и узел очистки воды" draggable="false">
+      <section class="cd-home">
+        <img class="cd-backdrop" src="{{BASE}}img/{{HOME_PICTURE}}" alt="" draggable="false">
         <canvas class="cd-backdrop cd-home-projection" aria-hidden="true" hidden></canvas>
         <div class="cd-shade" aria-hidden="true"></div>
-        <button class="cd-tunnel cd-to-fitting" type="button" data-u="0.275" data-v="0.36" aria-label="Снаряжение: боец и экипировка"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">Снаряжение</span></button>
-        <button class="cd-tunnel cd-enter" type="button" data-u="0.235" data-v="0.527" aria-label="В бой: дуэль с ботом"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">В бой</span></button>
-        <button class="cd-tunnel cd-to-persona" type="button" data-u="0.76" data-v="0.33" aria-label="Персона: облик и позывной"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">Персона</span></button>
+        <button class="cd-tunnel cd-to-fitting" type="button" aria-label="Снаряжение: боец и экипировка"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">Снаряжение</span></button>
+        <button class="cd-tunnel cd-enter" type="button" aria-label="В бой: дуэль с ботом"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">В бой</span></button>
+        <button class="cd-tunnel cd-to-persona" type="button" aria-label="Персона: облик и позывной"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">Персона</span></button>
+        <button class="cd-tunnel cd-to-region" type="button" aria-haspopup="listbox" aria-controls="cd-region-options" aria-expanded="false" aria-label="Регион: сменить базу"><span class="cd-tunnel-ring"></span><span class="cd-tunnel-label glass">Регион</span></button>
+        <div id="cd-region-options" class="sheet glass cd-region-options" role="listbox" aria-label="Регионы" hidden>{{REGIONS}}</div>
         <header class="cd-home-header"><img class="cd-brand-mark" src="{{BASE}}brand/maw.svg" alt="Пасть из двух корон" draggable="false"><img class="cd-wordmark" src="{{BASE}}brand/wordmark.svg" alt="Crowned Dogs" draggable="false"></header>
-        <div class="cd-home-title"><p class="cd-overline">БАЗА ОПЕРАТОРА</p><h1>СОЛЬ</h1></div>
+        <div class="cd-home-title"><p class="cd-overline">БАЗА ОПЕРАТОРА</p><h1></h1></div>
         <div class="cd-home-bottom">
           <button class="cd-operator" type="button" aria-label="Оператор: изменить облик Персоны"><span class="cd-overline">ОПЕРАТОР</span><span class="cd-operator-id"><strong class="cd-callsign"></strong><span class="cd-tag"></span></span></button>
           <div class="cd-current-kit"><span>Основное оружие</span><strong data-kit-name></strong></div>
@@ -15,9 +17,9 @@
         </div>
       </section>
       <section class="cd-fitting" aria-label="Снаряжение" hidden>
-        <img class="cd-backdrop" src="{{BASE}}img/base/fitting-room-v2.png" alt="Комната снаряжения в соляной шахте" draggable="false">
+        <img class="cd-backdrop" src="{{BASE}}img/{{FITTING_PICTURE}}" alt="" draggable="false">
         <canvas class="cd-backdrop cd-backdrop-depth" aria-hidden="true" hidden></canvas>
-        <img class="cd-backdrop cd-create-backdrop" src="{{BASE}}img/base/persona-bay.webp" alt="" aria-hidden="true" draggable="false">
+        <img class="cd-backdrop cd-create-backdrop" src="{{BASE}}img/{{BAY_PICTURE}}.webp" alt="" aria-hidden="true" draggable="false">
         <div class="cd-fit-shade" aria-hidden="true"></div>
         <header class="cd-fit-header"><button class="glass cd-back" type="button" aria-label="Вернуться на базу">{{BACK}}<span>Назад</span></button>
           <div class="cd-kit-picker"><button class="glass cd-kit-trigger" type="button" aria-haspopup="listbox" aria-controls="cd-kit-options" aria-expanded="false" aria-label="Выбрать набор снаряжения"><span>Набор</span><strong class="cd-kit-current">{{KIT}}</strong><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5l5.5 5.5 5.5-5.5"/></svg></button>

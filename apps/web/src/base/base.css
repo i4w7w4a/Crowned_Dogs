@@ -40,10 +40,13 @@ body { margin: 0; }
 .cd-kit-trigger[aria-expanded="true"] svg { transform: rotate(180deg); }
 .cd-kit-options.sheet.glass { position: absolute; right: 0; top: calc(100% + 8px); width: 196px; max-height: none; display: grid; gap: 4px; padding: 6px; border-radius: 16px; animation: none; }
 .cd-kit-options.sheet.glass[hidden] { display: none; }
-.cd-kit-options [role="option"] { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-height: 44px; padding: 7px 12px; border-radius: 10px; text-align: left; }
-.cd-kit-options strong { font-size: 12px; font-weight: 600; color: #f2f3f3; }
-.cd-kit-options small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--cd-secondary); }
-.cd-kit-options [aria-selected="true"] { --rim: linear-gradient(140deg, rgba(255,255,255,.98), rgba(255,255,255,.42) 26%, rgba(255,255,255,.22) 54%, rgba(255,255,255,.78)); box-shadow: inset 0 1px 1px rgba(255,255,255,.3), inset 0 0 14px rgba(255,255,255,.16); }
+/* Regions on the comms table of the home screen: picking one moves the base there. */
+.cd-region-options.sheet.glass { position: absolute; z-index: 7; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 220px; max-height: none; display: grid; gap: 4px; padding: 6px; border-radius: 16px; animation: none; }
+.cd-region-options.sheet.glass[hidden] { display: none; }
+.cd-kit-options [role="option"], .cd-region-options [role="option"] { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-height: 44px; padding: 7px 12px; border-radius: 10px; text-align: left; }
+.cd-kit-options strong, .cd-region-options strong { font-size: 12px; font-weight: 600; color: #f2f3f3; }
+.cd-kit-options small, .cd-region-options small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--cd-secondary); }
+.cd-kit-options [aria-selected="true"], .cd-region-options [aria-selected="true"] { --rim: linear-gradient(140deg, rgba(255,255,255,.98), rgba(255,255,255,.42) 26%, rgba(255,255,255,.22) 54%, rgba(255,255,255,.78)); box-shadow: inset 0 1px 1px rgba(255,255,255,.3), inset 0 0 14px rgba(255,255,255,.16); }
 .cd-back, .cw-back { width: 90px; height: 44px; padding: 0 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; }
 .cd-back-arrow { display: block; width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .cd-model-stage { position: relative; flex: 1 1 auto; min-height: 190px; margin: 0 calc(-1 * var(--cd-edge)); }
@@ -131,6 +134,8 @@ body { margin: 0; }
 .cd-tunnel { position: absolute; z-index: 5; transform: translate(-50%, -50%); padding: 0; border: 0; background: none; color: #fff; display: grid; justify-items: center; gap: 6px; cursor: pointer; }
 .cd-tunnel-ring { width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(255,255,255,.9); background: rgba(0,0,0,.35); box-shadow: 0 0 0 0 rgba(255,255,255,.5); animation: cd-tunnel-pulse 2.2s ease-out infinite; }
 .cd-tunnel-label { position: absolute; top: calc(100% + 6px); font-size: 12px; font-weight: 500; white-space: nowrap; padding: 6px 12px; border-radius: 10px; color: #fff; }
+/* The table stands low on the picture: its label goes above, clear of the operator block. */
+.cd-to-region .cd-tunnel-label { top: auto; bottom: calc(100% + 6px); }
 .cd-tunnel:active .cd-tunnel-ring { background: rgba(255,255,255,.25); }
 @keyframes cd-tunnel-pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.45); } 70%, 100% { box-shadow: 0 0 0 14px rgba(255,255,255,0); } }
 

@@ -1,5 +1,11 @@
 //! Base and fitting-room navigation, catalogue interaction and asynchronous viewer lifecycle.
-use super::{creation, dom_support::*, platform, scroll::BrowserScroll};
+use super::{
+    base_region::{self, Region},
+    creation,
+    dom_support::*,
+    platform,
+    scroll::BrowserScroll,
+};
 use js_sys::{Array, Promise};
 use std::{
     cell::RefCell,
@@ -8,6 +14,8 @@ use std::{
 use wasm_bindgen::{closure::Closure, prelude::*};
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 
+/// Home buttons that stay still while the camera travels.
+const HOME_BUTTONS: [&str; 5] = [".cd-enter", ".cd-to-fitting", ".cd-to-persona", ".cd-to-region", ".cd-operator"];
 struct Drift {
     home: JsValue,
     image: JsValue,
@@ -24,6 +32,10 @@ struct Base {
     home: JsValue,
     fitting: JsValue,
     canvas: JsValue,
+    /// The base of the saved map's region, and the listeners on the Persona canvas, which a
+    /// region switch replaces.
+    region: &'static Region,
+    canvas_listeners: Vec<Listener>,
     dialog: JsValue,
     catalog: JsValue,
     status: JsValue,
@@ -380,6 +392,7 @@ impl Base {
                 self.resize();
                 invoke(&self.viewer, "load", &[])
             });
+        let viewer = self.viewer.clone();
         match result {
             Ok(promise) => spawn_local(async move {
                 let result = JsFuture::from(Promise::resolve(&promise)).await;
@@ -387,7 +400,8 @@ impl Base {
                     return;
                 };
                 let mut state = state.borrow_mut();
-                if state.disposed {
+                // A region switch may have replaced the viewer during the load.
+                if state.disposed || state.viewer != viewer {
                     return;
                 }
                 if result.is_ok() {
@@ -709,6 +723,88 @@ impl Base {
         self.kits(false);
         focus(&query(&self.root, ".cd-kit-trigger"));
     }
+    /// Opens or closes the regions on the comms table.
+    fn regions(&self, open: bool) {
+        let options = query(&self.home, ".cd-region-options");
+        hidden(&options, !open);
+        attr(
+            &query(&self.home, ".cd-to-region"),
+            "aria-expanded",
+            &open.to_string(),
+        );
+        if !open {
+            return;
+        }
+        for option in all(&options, "[data-region]") {
+            attr(
+                &option,
+                "aria-selected",
+                &(data(&option, "region") == self.region.id).to_string(),
+            );
+        }
+        call(&self.host, "liquidGlass", &[options.clone()]);
+        focus(&query(
+            &options,
+            &format!("[data-region=\"{}\"]", self.region.id),
+        ));
+    }
+    /// Names the base and puts its pictures and home rings in place.
+    fn dress(&self) {
+        let region = self.region;
+        let base = text(&get(&self.host, "baseUrl"));
+        attr(&self.home, "aria-label", &format!("База {}", region.title()));
+        content(&query(&self.home, ".cd-home-title h1"), region.base);
+        for (image, picture, alt) in [
+            (query(&self.home, "img.cd-backdrop"), region.home_picture.to_string(), region.home_alt),
+            (query(&self.fitting, "img.cd-backdrop:not(.cd-create-backdrop)"), region.fitting.to_string(), region.fitting_alt),
+            (query(&self.fitting, ".cd-create-backdrop"), format!("{}.webp", region.bay.photo), ""),
+        ] {
+            let url = format!("{base}img/{picture}");
+            if call(&image, "getAttribute", &[js("src")]).as_string().as_deref() != Some(&url) {
+                attr(&image, "src", &url);
+            }
+            attr(&image, "alt", alt);
+        }
+        for (selector, u, v) in region.rings {
+            let ring = query(&self.home, selector);
+            attr(&ring, "data-u", &u.to_string());
+            attr(&ring, "data-v", &v.to_string());
+        }
+    }
+    /// Lets the moving pictures and the Persona of the old base go: each canvas is swapped for an
+    /// empty copy, so the next base's stages start on contexts of their own.
+    fn unstage(&mut self) {
+        self.home_motion = None;
+        self.home_ready = false;
+        self.depth_ready = false;
+        call_optional(&self.home_stage, "dispose", &[]);
+        if get(&self.depth, "dispose").is_function() {
+            call(&self.depth, "dispose", &[]);
+        }
+        call_optional(&self.viewer, "dispose", &[]);
+        self.home_stage = JsValue::NULL;
+        self.depth = JsValue::NULL;
+        self.viewer = JsValue::NULL;
+        self.load_attempted = false;
+        self.model_ready = false;
+        self.show_tip("");
+        for canvas in [
+            query(&self.home, ".cd-home-projection"),
+            query(&self.fitting, ".cd-backdrop-depth"),
+        ] {
+            let copy = fresh_canvas(&canvas);
+            hidden(&copy, true);
+            call(&copy, "removeAttribute", &[js("data-depth-base")]);
+        }
+        hidden(&query(&self.home, "img.cd-backdrop"), false);
+        hidden(&query(&self.fitting, "img.cd-backdrop:not(.cd-create-backdrop)"), false);
+        self.canvas_listeners.clear();
+        call(&self.observer, "unobserve", &[self.canvas.clone()]);
+        self.canvas = fresh_canvas(&self.canvas);
+        call(&self.observer, "observe", &[self.canvas.clone()]);
+        content(&self.status, "Загрузка Персоны…");
+        hidden(&self.status, false);
+    }
     fn picker_key(&self, event: JsValue) {
         let key = text(&get(&event, "key"));
         let options = query(&self.root, ".cd-select-options");
@@ -870,7 +966,7 @@ impl Base {
         toggle(&self.home, "cd-travelling", false);
         attr(&self.home, "aria-busy", "false");
         style(&self.home, "--cd-travel-fade", "0");
-        for selector in [".cd-enter", ".cd-to-fitting", ".cd-to-persona", ".cd-operator"] {
+        for selector in HOME_BUTTONS {
             set(&query(&self.home, selector), "disabled", &flag(false));
         }
         if self.home_ready {
@@ -1048,7 +1144,16 @@ fn initial(host: &JsValue) -> String {
     for index in 0..platform::KITS {
         kits.push_str(&format!("<button class=\"glass\" type=\"button\" role=\"option\" data-kit=\"{index}\" aria-selected=\"false\"><strong>Набор {}</strong><small></small></button>", index + 1));
     }
+    let mut regions = String::new();
+    for region in &base_region::REGIONS {
+        regions.push_str(&format!("<button class=\"glass\" type=\"button\" role=\"option\" data-region=\"{}\" aria-selected=\"false\"><strong>{}</strong><small>База {}</small></button>", region.id, base_region::name(region.id), region.title()));
+    }
+    let region = base_region::current();
     include_str!("base.html")
+        .replace("{{HOME_PICTURE}}", region.home_picture)
+        .replace("{{FITTING_PICTURE}}", region.fitting)
+        .replace("{{BAY_PICTURE}}", region.bay.photo)
+        .replace("{{REGIONS}}", &regions)
         .replace("{{KIT}}", &(platform::active_kit() + 1).to_string())
         .replace("{{KITS}}", &kits)
         .replace("{{BASE}}", &text(&get(host, "baseUrl")))
@@ -1101,7 +1206,9 @@ impl BrowserBase {
             root: root.clone(),
             home: home.clone(),
             fitting: fitting.clone(),
-            canvas: canvas.clone(),
+            canvas,
+            region: base_region::current(),
+            canvas_listeners: vec![],
             dialog: dialog.clone(),
             catalog: catalog.clone(),
             status,
@@ -1143,9 +1250,12 @@ impl BrowserBase {
             focus: "body".into(),
             disposed: false,
         }));
+        state.borrow().dress();
         bind(&state);
+        bind_canvas(&state);
         setup_workshop(&state)?;
         setup_drift(&state, &home, 1882.0 / 3344.0, true);
+        setup_drift(&state, &fitting, 941.0 / 1672.0, false);
         setup_home_stage(&state);
         setup_depth(&state);
         let weak = Rc::downgrade(&state);
@@ -1182,12 +1292,16 @@ impl BrowserBase {
         Ok(Self { state })
     }
     pub fn show(&self, view: &str) {
+        sync_region(&self.state);
         self.state
             .borrow_mut()
             .show(view, Rc::downgrade(&self.state));
     }
     #[wasm_bindgen(js_name=setActive)]
     pub fn set_active(&self, active: bool) {
+        if active {
+            sync_region(&self.state);
+        }
         self.state.borrow_mut().active(active);
     }
     pub fn dispose(&self) {
@@ -1197,8 +1311,8 @@ impl BrowserBase {
 
 fn bind(state: &Rc<RefCell<Base>>) {
     let root = state.borrow().root.clone();
+    let home = state.borrow().home.clone();
     let dialog = state.borrow().dialog.clone();
-    let canvas = state.borrow().canvas.clone();
     let picker = query(&root, ".cd-slot-picker");
     let mut actions = vec![
         (query(&root, ".cd-to-fitting"), "click", "fitting"),
@@ -1225,15 +1339,11 @@ fn bind(state: &Rc<RefCell<Base>>) {
         (picker.clone(), "click", "category"),
         (picker, "keydown", "keys"),
         (state.borrow().catalog.clone(), "click", "item"),
-        (canvas.clone(), "keydown", "rotate"),
-        (canvas.clone(), "persona-preview-error", "previewError"),
-        (canvas.clone(), "persona-beards-ready", "beardsReady"),
-        (canvas.clone(), "persona-hover", "personaHover"),
-        (canvas.clone(), "persona-part", "personaPart"),
-        (canvas.clone(), "pointermove", "tipMove"),
-        (canvas.clone(), "pointerdown", "tipMove"),
-        (canvas.clone(), "pointerleave", "tipHide"),
-        (canvas, "webglcontextrestored", "restored"),
+        (query(&home, ".cd-to-region"), "click", "regions"),
+        (query(&home, ".cd-to-region"), "keydown", "regionKeys"),
+        (query(&home, ".cd-region-options"), "click", "region"),
+        (query(&home, ".cd-region-options"), "keydown", "regionKeys"),
+        (home, "click", "regionOutside"),
     ];
     for button in all(&root, ".cd-slot[data-slot]") {
         actions.push((button.clone(), "click", "slot"));
@@ -1245,238 +1355,336 @@ fn bind(state: &Rc<RefCell<Base>>) {
         actions.push((button, "contextmenu", "slotMenu"));
     }
     for (target, event, action) in actions {
-        let target_copy = target.clone();
-        let weak = Rc::downgrade(state);
-        let listener = Listener::new(&target, event, move |event| {
-            let Some(state) = weak.upgrade() else {
-                return;
-            };
-            if action == "battle" || action == "fitting" || action == "persona" {
-                begin_home_transition(&state, action);
-                return;
-            }
-            let Ok(mut s) = state.try_borrow_mut() else {
-                return;
-            };
-            if s.disposed {
-                return;
-            }
-            match action {
-                "base" | "fitting" | "persona" => s.navigate(action, weak.clone()),
-                "briefNext" => s.brief_next(),
-                "briefSkip" => s.brief_skip(),
-                "step" => {
-                    let tab = closest(&event, "[data-step]");
-                    if exists(&tab) {
-                        s.go_step(data(&tab, "step").parse().unwrap_or(0));
-                    }
-                }
-                "focus" => {
-                    let button = closest(&event, "[data-focus]");
-                    if exists(&button) {
-                        s.set_focus(&data(&button, "focus"));
-                    }
-                }
-                "look" => {
-                    let choice = closest(&event, "[data-look]");
-                    if exists(&choice) && !boolean(&choice, "disabled") {
-                        s.pick_look(&data(&choice, "look"), &data(&choice, "value"));
-                    }
-                }
-                "beardsReady" if s.view == "persona" => s.render_create(),
-                "beardsReady" => {},
-                "createNext" => s.create_next(weak.clone()),
-                "callsignKeys" => {
-                    hidden(&query(&s.fitting, ".cd-create-error"), true);
-                    if text(&get(&event, "key")) == "Enter" {
-                        call(&event, "preventDefault", &[]);
-                        s.create_next(weak.clone());
-                    }
-                }
-                "catalog" => {
-                    let slot = s.selected.clone();
-                    s.open_catalog(&slot, weak.clone());
-                }
-                "slot" => {
-                    // The click that ends a long press only folds the card.
-                    if s.held {
-                        s.held = false;
-                        return;
-                    }
-                    s.hot("", true);
-                    s.open_catalog(&data(&target_copy, "slot"), weak.clone());
-                }
-                "tipMove" => {
-                    s.pointer = (
-                        num(&event, "clientX"),
-                        num(&event, "clientY"),
-                        text(&get(&event, "pointerType")) == "mouse",
-                    );
-                    s.place_tip();
-                }
-                "tipHide" => s.show_tip(""),
-                // A tap on the hair, the eyes or the suit opens that step of the creation.
-                "personaPart" => {
-                    let part = get(&event, "detail").as_string().unwrap_or_default();
-                    let step = creation::STEPS.iter().position(|step| step.0 == part);
-                    if let Some(step) = step.filter(|_| s.brief >= creation::BRIEFING.len()) {
-                        if step != s.step {
-                            s.go_step(step);
-                        }
-                    }
-                }
-                "personaHover" if s.view == "persona" => {}
-                "personaHover" => {
-                    let slot = get(&event, "detail").as_string().unwrap_or_default();
-                    s.show_tip(&slot);
-                    s.hot(&slot, false);
-                }
-                "slotEnter" | "slotLeave" | "slotDown" | "slotUp" => {
-                    let mouse = text(&get(&event, "pointerType")) == "mouse";
-                    let slot = data(&target_copy, "slot");
-                    match (action, mouse) {
-                        ("slotEnter", true) => s.hot(&slot, true),
-                        ("slotLeave", true) => s.hot("", true),
-                        ("slotDown", false) => {
-                            s.held = false;
-                            s.cancel_hold();
-                            let weak = weak.clone();
-                            let fire = Closure::once_into_js(move || {
-                                let Some(state) = weak.upgrade() else {
-                                    return;
-                                };
-                                let Ok(mut s) = state.try_borrow_mut() else {
-                                    return;
-                                };
-                                s.hold_timer = JsValue::NULL;
-                                if !s.disposed {
-                                    s.held = true;
-                                    s.hot(&slot, true);
-                                }
-                            });
-                            s.hold_timer = call(&global(), "setTimeout", &[fire, number(380.0)]);
-                        }
-                        ("slotUp" | "slotLeave", false) => {
-                            s.cancel_hold();
-                            if s.held {
-                                s.hot("", true);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                "slotMenu" => {
-                    call(&event, "preventDefault", &[]);
-                }
-                "close" => {
-                    call(&s.dialog, "close", &[]);
-                }
-                "dialog" => {
-                    if outside(&event, &s.dialog) {
-                        call(&s.dialog, "close", &[]);
-                    }
-                    let picker = query(&s.root, ".cd-slot-picker");
-                    if call(&picker, "contains", &[get(&event, "target")]).as_bool() != Some(true) {
-                        s.picker(false);
-                    }
-                }
-                "closed" => {
-                    s.picker(false);
-                    call_optional(&s.item_viewer, "setActive", &[flag(false)]);
-                    if s.view == "fitting" {
-                        focus(&s.origin);
-                    }
-                }
-                "picker" => s.picker(boolean(&query(&s.root, ".cd-select-options"), "hidden")),
-                "kits" => s.kits(boolean(&query(&s.root, ".cd-kit-options"), "hidden")),
-                "kit" => {
-                    let option = closest(&event, "[data-kit]");
-                    if exists(&option) {
-                        s.pick_kit(data(&option, "kit").parse().unwrap_or(0));
-                    }
-                }
-                "kitKeys" => {
-                    let options = query(&s.root, ".cd-kit-options");
-                    let key = text(&get(&event, "key"));
-                    let open = !boolean(&options, "hidden");
-                    if key == "Escape" && open {
-                        call(&event, "preventDefault", &[]);
-                        call(&event, "stopPropagation", &[]);
-                        s.kits(false);
-                        focus(&query(&s.root, ".cd-kit-trigger"));
-                    } else if open && (key == "ArrowDown" || key == "ArrowUp") {
-                        call(&event, "preventDefault", &[]);
-                        let items = all(&options, "[data-kit]");
-                        let active = get(&document(), "activeElement");
-                        let at = items.iter().position(|item| *item == active).unwrap_or(0);
-                        let next = if key == "ArrowDown" {
-                            (at + 1) % items.len()
-                        } else {
-                            (at + items.len() - 1) % items.len()
-                        };
-                        focus(&items[next]);
-                    }
-                }
-                "kitOutside" => {
-                    let picker = query(&s.root, ".cd-kit-picker");
-                    if !boolean(&query(&s.root, ".cd-kit-options"), "hidden")
-                        && call(&picker, "contains", &[get(&event, "target")]).as_bool() != Some(true)
-                    {
-                        s.kits(false);
-                    }
-                }
-                "category" => {
-                    let option = closest(&event, "[data-category]");
-                    if exists(&option) {
-                        s.picker(false);
-                        let slot = data(&option, "category");
-                        if slot == "weapon1" {
-                            s.weapon_return = Some((
-                                s.selected.clone(),
-                                num(&get(&s.catalog, "parentElement"), "scrollTop"),
-                            ));
-                            call(&s.dialog, "close", &[]);
-                            s.navigate("weapon", weak.clone());
-                        } else {
-                            s.selected = slot;
-                            s.render_catalog(None);
-                            focus(&query(&s.root, ".cd-select-trigger"));
-                        }
-                    }
-                }
-                "keys" => s.picker_key(event),
-                "item" => s.catalog_click(event),
-                "rotate" => {
-                    let key = text(&get(&event, "key"));
-                    if key == "ArrowLeft" || key == "ArrowRight" {
-                        call(&event, "preventDefault", &[]);
-                        call_optional(
-                            &s.viewer,
-                            "rotate",
-                            &[number(if key == "ArrowLeft" { -0.2 } else { 0.2 })],
-                        );
-                    }
-                }
-                "previewError" => {
-                    let detail = get(&event, "detail");
-                    content(
-                        &s.status,
-                        &detail.as_string().unwrap_or(
-                            "3D-просмотр недоступен. Каталог снаряжения доступен.".into(),
-                        ),
-                    );
-                    hidden(&s.status, false);
-                }
-                "restored" => {
-                    if s.model_ready {
-                        hidden(&s.status, true);
-                    }
-                }
-                _ => {}
-            }
-        });
+        let listener = listen(state, &target, event, action);
         state.borrow_mut().listeners.push(listener);
     }
+}
+/// The Persona canvas's own listeners; a region switch replaces the canvas and binds them again.
+fn bind_canvas(state: &Rc<RefCell<Base>>) {
+    let canvas = state.borrow().canvas.clone();
+    for (event, action) in [
+        ("keydown", "rotate"),
+        ("persona-preview-error", "previewError"),
+        ("persona-beards-ready", "beardsReady"),
+        ("persona-hover", "personaHover"),
+        ("persona-part", "personaPart"),
+        ("pointermove", "tipMove"),
+        ("pointerdown", "tipMove"),
+        ("pointerleave", "tipHide"),
+        ("webglcontextrestored", "restored"),
+    ] {
+        let listener = listen(state, &canvas, event, action);
+        state.borrow_mut().canvas_listeners.push(listener);
+    }
+}
+fn listen(state: &Rc<RefCell<Base>>, target: &JsValue, event: &str, action: &'static str) -> Listener {
+    let target_copy = target.clone();
+    let weak = Rc::downgrade(state);
+    Listener::new(target, event, move |event| {
+        let Some(state) = weak.upgrade() else {
+            return;
+        };
+        if action == "battle" || action == "fitting" || action == "persona" {
+            begin_home_transition(&state, action);
+            return;
+        }
+        if action == "region" {
+            let option = closest(&event, "[data-region]");
+            if exists(&option) {
+                pick_region(&state, &data(&option, "region"));
+            }
+            return;
+        }
+        let Ok(mut s) = state.try_borrow_mut() else {
+            return;
+        };
+        if s.disposed {
+            return;
+        }
+        match action {
+            "base" | "fitting" | "persona" => s.navigate(action, weak.clone()),
+            "briefNext" => s.brief_next(),
+            "briefSkip" => s.brief_skip(),
+            "step" => {
+                let tab = closest(&event, "[data-step]");
+                if exists(&tab) {
+                    s.go_step(data(&tab, "step").parse().unwrap_or(0));
+                }
+            }
+            "focus" => {
+                let button = closest(&event, "[data-focus]");
+                if exists(&button) {
+                    s.set_focus(&data(&button, "focus"));
+                }
+            }
+            "look" => {
+                let choice = closest(&event, "[data-look]");
+                if exists(&choice) && !boolean(&choice, "disabled") {
+                    s.pick_look(&data(&choice, "look"), &data(&choice, "value"));
+                }
+            }
+            "beardsReady" if s.view == "persona" => s.render_create(),
+            "beardsReady" => {},
+            "createNext" => s.create_next(weak.clone()),
+            "callsignKeys" => {
+                hidden(&query(&s.fitting, ".cd-create-error"), true);
+                if text(&get(&event, "key")) == "Enter" {
+                    call(&event, "preventDefault", &[]);
+                    s.create_next(weak.clone());
+                }
+            }
+            "catalog" => {
+                let slot = s.selected.clone();
+                s.open_catalog(&slot, weak.clone());
+            }
+            "slot" => {
+                // The click that ends a long press only folds the card.
+                if s.held {
+                    s.held = false;
+                    return;
+                }
+                s.hot("", true);
+                s.open_catalog(&data(&target_copy, "slot"), weak.clone());
+            }
+            "tipMove" => {
+                s.pointer = (
+                    num(&event, "clientX"),
+                    num(&event, "clientY"),
+                    text(&get(&event, "pointerType")) == "mouse",
+                );
+                s.place_tip();
+            }
+            "tipHide" => s.show_tip(""),
+            // A tap on the hair, the eyes or the suit opens that step of the creation.
+            "personaPart" => {
+                let part = get(&event, "detail").as_string().unwrap_or_default();
+                let step = creation::STEPS.iter().position(|step| step.0 == part);
+                if let Some(step) = step.filter(|_| s.brief >= creation::BRIEFING.len()) {
+                    if step != s.step {
+                        s.go_step(step);
+                    }
+                }
+            }
+            "personaHover" if s.view == "persona" => {}
+            "personaHover" => {
+                let slot = get(&event, "detail").as_string().unwrap_or_default();
+                s.show_tip(&slot);
+                s.hot(&slot, false);
+            }
+            "slotEnter" | "slotLeave" | "slotDown" | "slotUp" => {
+                let mouse = text(&get(&event, "pointerType")) == "mouse";
+                let slot = data(&target_copy, "slot");
+                match (action, mouse) {
+                    ("slotEnter", true) => s.hot(&slot, true),
+                    ("slotLeave", true) => s.hot("", true),
+                    ("slotDown", false) => {
+                        s.held = false;
+                        s.cancel_hold();
+                        let weak = weak.clone();
+                        let fire = Closure::once_into_js(move || {
+                            let Some(state) = weak.upgrade() else {
+                                return;
+                            };
+                            let Ok(mut s) = state.try_borrow_mut() else {
+                                return;
+                            };
+                            s.hold_timer = JsValue::NULL;
+                            if !s.disposed {
+                                s.held = true;
+                                s.hot(&slot, true);
+                            }
+                        });
+                        s.hold_timer = call(&global(), "setTimeout", &[fire, number(380.0)]);
+                    }
+                    ("slotUp" | "slotLeave", false) => {
+                        s.cancel_hold();
+                        if s.held {
+                            s.hot("", true);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            "slotMenu" => {
+                call(&event, "preventDefault", &[]);
+            }
+            "close" => {
+                call(&s.dialog, "close", &[]);
+            }
+            "dialog" => {
+                if outside(&event, &s.dialog) {
+                    call(&s.dialog, "close", &[]);
+                }
+                let picker = query(&s.root, ".cd-slot-picker");
+                if call(&picker, "contains", &[get(&event, "target")]).as_bool() != Some(true) {
+                    s.picker(false);
+                }
+            }
+            "closed" => {
+                s.picker(false);
+                call_optional(&s.item_viewer, "setActive", &[flag(false)]);
+                if s.view == "fitting" {
+                    focus(&s.origin);
+                }
+            }
+            "picker" => s.picker(boolean(&query(&s.root, ".cd-select-options"), "hidden")),
+            "kits" => s.kits(boolean(&query(&s.root, ".cd-kit-options"), "hidden")),
+            "kit" => {
+                let option = closest(&event, "[data-kit]");
+                if exists(&option) {
+                    s.pick_kit(data(&option, "kit").parse().unwrap_or(0));
+                }
+            }
+            "kitKeys" => {
+                let options = query(&s.root, ".cd-kit-options");
+                let key = text(&get(&event, "key"));
+                let open = !boolean(&options, "hidden");
+                if key == "Escape" && open {
+                    call(&event, "preventDefault", &[]);
+                    call(&event, "stopPropagation", &[]);
+                    s.kits(false);
+                    focus(&query(&s.root, ".cd-kit-trigger"));
+                } else if open && (key == "ArrowDown" || key == "ArrowUp") {
+                    call(&event, "preventDefault", &[]);
+                    let items = all(&options, "[data-kit]");
+                    let active = get(&document(), "activeElement");
+                    let at = items.iter().position(|item| *item == active).unwrap_or(0);
+                    let next = if key == "ArrowDown" {
+                        (at + 1) % items.len()
+                    } else {
+                        (at + items.len() - 1) % items.len()
+                    };
+                    focus(&items[next]);
+                }
+            }
+            "regions" => s.regions(boolean(&query(&s.home, ".cd-region-options"), "hidden")),
+            "regionKeys" => {
+                let options = query(&s.home, ".cd-region-options");
+                let key = text(&get(&event, "key"));
+                let open = !boolean(&options, "hidden");
+                if key == "Escape" && open {
+                    call(&event, "preventDefault", &[]);
+                    call(&event, "stopPropagation", &[]);
+                    s.regions(false);
+                    focus(&query(&s.home, ".cd-to-region"));
+                } else if open && (key == "ArrowDown" || key == "ArrowUp") {
+                    call(&event, "preventDefault", &[]);
+                    let items = all(&options, "[data-region]");
+                    let active = get(&document(), "activeElement");
+                    let at = items.iter().position(|item| *item == active).unwrap_or(0);
+                    let next = if key == "ArrowDown" {
+                        (at + 1) % items.len()
+                    } else {
+                        (at + items.len() - 1) % items.len()
+                    };
+                    focus(&items[next]);
+                }
+            }
+            "regionOutside" => {
+                if !boolean(&query(&s.home, ".cd-region-options"), "hidden")
+                    && !exists(&closest(&event, ".cd-to-region, .cd-region-options"))
+                {
+                    s.regions(false);
+                }
+            }
+            "kitOutside" => {
+                let picker = query(&s.root, ".cd-kit-picker");
+                if !boolean(&query(&s.root, ".cd-kit-options"), "hidden")
+                    && call(&picker, "contains", &[get(&event, "target")]).as_bool() != Some(true)
+                {
+                    s.kits(false);
+                }
+            }
+            "category" => {
+                let option = closest(&event, "[data-category]");
+                if exists(&option) {
+                    s.picker(false);
+                    let slot = data(&option, "category");
+                    if slot == "weapon1" {
+                        s.weapon_return = Some((
+                            s.selected.clone(),
+                            num(&get(&s.catalog, "parentElement"), "scrollTop"),
+                        ));
+                        call(&s.dialog, "close", &[]);
+                        s.navigate("weapon", weak.clone());
+                    } else {
+                        s.selected = slot;
+                        s.render_catalog(None);
+                        focus(&query(&s.root, ".cd-select-trigger"));
+                    }
+                }
+            }
+            "keys" => s.picker_key(event),
+            "item" => s.catalog_click(event),
+            "rotate" => {
+                let key = text(&get(&event, "key"));
+                if key == "ArrowLeft" || key == "ArrowRight" {
+                    call(&event, "preventDefault", &[]);
+                    call_optional(
+                        &s.viewer,
+                        "rotate",
+                        &[number(if key == "ArrowLeft" { -0.2 } else { 0.2 })],
+                    );
+                }
+            }
+            "previewError" => {
+                let detail = get(&event, "detail");
+                content(
+                    &s.status,
+                    &detail.as_string().unwrap_or(
+                        "3D-просмотр недоступен. Каталог снаряжения доступен.".into(),
+                    ),
+                );
+                hidden(&s.status, false);
+            }
+            "restored" => {
+                if s.model_ready {
+                    hidden(&s.status, true);
+                }
+            }
+            _ => {}
+        }
+    })
+}
+/// The region picked at the comms table: its first map is saved, and the base follows it.
+fn pick_region(state: &Rc<RefCell<Base>>, id: &str) {
+    base_region::choose(id);
+    state.borrow().regions(false);
+    sync_region(state);
+    focus(&query(&state.borrow().home, ".cd-to-region"));
+}
+/// Moves the screens to the base of the saved map's region, if a battle or the table changed it.
+fn sync_region(state: &Rc<RefCell<Base>>) {
+    {
+        let mut s = state.borrow_mut();
+        let region = base_region::current();
+        if s.disposed || std::ptr::eq(s.region, region) {
+            return;
+        }
+        s.region = region;
+        s.unstage();
+        s.dress();
+    }
+    bind_canvas(state);
+    setup_home_stage(state);
+    setup_depth(state);
+    let mut s = state.borrow_mut();
+    if s.staged() {
+        s.ensure_viewer(Rc::downgrade(state));
+        let active = s.active;
+        call_optional(&s.viewer, "setActive", &[flag(active)]);
+    }
+}
+/// An empty copy of a canvas in its place. The old canvas's context is let go at once, not when
+/// the page runs out of contexts.
+fn fresh_canvas(old: &JsValue) -> JsValue {
+    let copy = call(old, "cloneNode", &[flag(false)]);
+    call(old, "replaceWith", &[copy.clone()]);
+    let gl = call(old, "getContext", &[js("webgl2")]);
+    if exists(&gl) {
+        call_optional(&call(&gl, "getExtension", &[js("WEBGL_lose_context")]), "loseContext", &[]);
+    }
+    copy
 }
 fn setup_workshop(state: &Rc<RefCell<Base>>) -> Result<(), JsValue> {
     let weak = Rc::downgrade(state);
@@ -1531,6 +1739,7 @@ fn begin_home_transition(state: &Rc<RefCell<Base>>, target: &str) {
         {
             return;
         }
+        s.regions(false);
         let reduce = boolean(
             &call(
                 &global(),
@@ -1548,7 +1757,7 @@ fn begin_home_transition(state: &Rc<RefCell<Base>>, target: &str) {
             ));
             toggle(&s.home, "cd-travelling", true);
             attr(&s.home, "aria-busy", "true");
-            for selector in [".cd-enter", ".cd-to-fitting", ".cd-to-persona", ".cd-operator"] {
+            for selector in HOME_BUTTONS {
                 set(&query(&s.home, selector), "disabled", &flag(true));
             }
             // Load the Persona during the tunnel journey, while the base remains visible.
@@ -1582,14 +1791,15 @@ fn setup_home_stage(state: &Rc<RefCell<Base>>) {
     let canvas = query(&state.borrow().home, ".cd-home-projection");
     // Hidden canvases have no layout size: reveal it only once textures are ready.
     let url = format!(
-        "{}img/base-depth/manifest.json",
-        text(&get(&host, "baseUrl"))
+        "{}img/{}",
+        text(&get(&host, "baseUrl")),
+        state.borrow().region.home
     );
     let Ok(stage) = construct(&host, "HomeStage", &[canvas.clone(), js(&url)]) else {
         return;
     };
     let ready = get(&stage, "ready");
-    state.borrow_mut().home_stage = stage;
+    state.borrow_mut().home_stage = stage.clone();
     let weak = Rc::downgrade(state);
     spawn_local(async move {
         if JsFuture::from(Promise::resolve(&ready)).await.is_err() {
@@ -1599,7 +1809,7 @@ fn setup_home_stage(state: &Rc<RefCell<Base>>) {
             return;
         };
         let mut s = state.borrow_mut();
-        if s.disposed {
+        if s.disposed || s.home_stage != stage {
             return;
         }
         hidden(&canvas, false);
@@ -1657,31 +1867,32 @@ fn setup_depth(state: &Rc<RefCell<Base>>) {
     let image = query(&fitting, "img.cd-backdrop");
     let host = state.borrow().host.clone();
     let base = text(&get(&host, "baseUrl"));
+    let region = state.borrow().region;
     let picture = if platform::sharp_pictures() {
-        "fitting-room-v2@2x.webp"
+        region.fitting_sharp
     } else {
-        "fitting-room-v2.png"
+        region.fitting
     };
     let result = construct(
         &host,
         "DepthBackdrop",
         &[
             canvas.clone(),
-            js(&format!("{base}img/base/{picture}")),
-            js(&format!("{base}img/base/fitting-room-v2-depth.png")),
+            js(&format!("{base}img/{picture}")),
+            js(&format!("{base}img/{}", region.fitting_depth)),
             number(941.0 / 1672.0),
             number(1.1),
         ],
     );
     if let Ok(depth) = result {
         let ready = get(&depth, "ready");
-        state.borrow_mut().depth = depth;
+        state.borrow_mut().depth = depth.clone();
         let weak = Rc::downgrade(state);
         spawn_local(async move {
             if JsFuture::from(Promise::resolve(&ready)).await.is_ok() {
                 if let Some(state) = weak.upgrade() {
                     let mut s = state.borrow_mut();
-                    if !s.disposed {
+                    if !s.disposed && s.depth == depth {
                         s.depth_ready = true;
                         hidden(&canvas, false);
                         hidden(&image, true);
@@ -1689,7 +1900,6 @@ fn setup_depth(state: &Rc<RefCell<Base>>) {
                 }
             }
         });
-        setup_drift(state, &fitting, 941.0 / 1672.0, false);
     }
 }
 fn setup_drift(state: &Rc<RefCell<Base>>, home: &JsValue, ratio: f64, flat: bool) {

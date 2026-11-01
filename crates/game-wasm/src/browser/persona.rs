@@ -662,8 +662,9 @@ async fn load_environment(s: &JsValue) {
         &loader,
         "loadAsync",
         &[text(&format!(
-            "{}img/base/fitting-room-v2.png",
-            string(&h, "base")
+            "{}img/{}",
+            string(&h, "base"),
+            super::base_region::current().fitting
         ))],
     ) else {
         return;
