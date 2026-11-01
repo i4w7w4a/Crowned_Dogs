@@ -4,6 +4,8 @@ uniform sampler2D originalPhoto;
 uniform sampler2D repairMask;
 uniform float useRepair;
 uniform vec3 sideColor;
+uniform vec3 sideTint;
+uniform float sideExposure;
 uniform float isSide;
 uniform float surfaceKind;
 uniform vec3 extensionTint;
@@ -23,7 +25,7 @@ void main() {
   float sourceW = sourceClip.w < 0.0 ? min(sourceClip.w, -.00001) : max(sourceClip.w, .00001);
   vec2 uv = sourceClip.xy / sourceW * .5 + .5;
   // Clamp to the clean plate at overscan edges, never reveal a transparent tear.
-  vec3 color = isSide > .5 ? sideColor : texture2D(photo, clamp(uv, vec2(.001), vec2(.999))).rgb;
+  vec3 color = isSide > .5 ? sideColor * sideTint * sideExposure : texture2D(photo, clamp(uv, vec2(.001), vec2(.999))).rgb;
   if (useRepair > .5) {
     vec2 at = clamp(uv, vec2(.001), vec2(.999));
     color = mix(texture2D(originalPhoto, at).rgb, color, texture2D(repairMask, at).r);

@@ -803,6 +803,14 @@ impl LensState {
             fragment = fragment.replace("gl_FragColor = vec4(c, max(a, n.a));", "vec2 glareDelta = (vUv - cdGlareSun) * vec2(bgSize.x / max(bgSize.y, 1.0), 1.0);\n  float glare = exp(-length(glareDelta) * 5.5);\n  c += vec3(1.0, 0.83, 0.62) * glare * 0.14;\n  gl_FragColor = vec4(c, max(a, n.a));");
         }
         if self.night_vision {
+            // Daylight ACES subtracts a black offset and clamps faint HDR
+            // radiance to zero before the intensifier can amplify it. Preserve
+            // that signal for both fighters and the first-person weapon only
+            // in the NVG shader; unaided exposure keeps the original ACES path.
+            fragment = fragment.replace(
+                "vec3 c = toSRGB(aces(lin));",
+                "vec3 c = toSRGB(max(lin, vec3(0.0)));",
+            );
             fragment = fragment.replace(
                 "gl_FragColor = vec4(c, max(a, n.a));",
                 include_str!("shaders/nightVision.glsl"),

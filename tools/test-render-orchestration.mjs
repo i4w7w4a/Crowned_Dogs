@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import ts from "typescript";
 import * as Three from "three";
-import { RustArena, RustLens, RustTextureTiers, callRust, motionCompute } from "../packages/runtime/src/index.ts";
+import { RustArena, RustLens, RustTextureTiers, RustProjectedStage, callRust, motionCompute } from "../packages/runtime/src/index.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const shaders = await import(pathToFileURL(resolve(root, "crates/game-wasm/reference/browser/lens-shaders.ts")).href);
@@ -160,7 +160,11 @@ async function testBattleOptics() {
     assert.ok(glare.uniforms.cdGlareSun[0] > .5);
     assert.ok(!glare.shader.includes("float distant ="));
     lens.setBattleAtmosphere(false, false, .2, .1);
-    lens.setNightVision(true); assert.ok(draw().shader.includes("vec3 phosphor ="));
+    lens.setNightVision(true);
+    const intensified = draw().shader;
+    assert.ok(intensified.includes("vec3 phosphor ="));
+    assert.ok(intensified.includes("toSRGB(max(lin, vec3(0.0)))"),"NVG must receive weak HDR figure and weapon signals before daylight black clipping");
+    assert.ok(!intensified.includes("aces(lin)"),"daylight ACES must not erase faint radiance before intensification");
     lens.setNightVision(false); assert.equal(draw().shader, base);
     const restored = draw().uniforms;
     assert.ok(!("cdGlareSun" in restored)); assert.ok(!("cdHeatDepth" in restored));
@@ -436,6 +440,42 @@ async function testTimePresentation() {
   } finally { arena.dispose(); arena.free(); }
 }
 
+async function testProjectedSideLighting() {
+  const previousDocument=globalThis.document, previousFetch=globalThis.fetch;
+  // This material test is headless. Do not let the 2D canvas stub masquerade
+  // as the throwaway WebGL2 context used by the device-quality probe.
+  globalThis.document={baseURI:"http://stage.test/"};
+  globalThis.fetch=async()=>new Response(JSON.stringify({
+    version:1, calibration:{fov:55,aspect:941/1672,camHeight:2,horizon:.37244444444444447},
+    textures:{clean:"clean.png",equipment:"hall.png"},
+    meshes:[{name:"closed-wall-side",material:"side",color:[.25,.235,.21],positions:[0,0,-2,1,0,-2,0,1,-2],indices:[0,1,2]}],
+  }));
+  const h=makeHost();
+  h.THREE.TextureLoader=class { async loadAsync(url){return texture(url);} };
+  const renderer=new h.THREE.WebGLRenderer();
+  renderer.getRenderTarget=()=>renderer.target??null;
+  const stage=new RustProjectedStage({THREE:h.THREE},renderer),camera=new Three.PerspectiveCamera();
+  const surface=()=>{
+    stage.drawToScreen(camera);
+    return renderer.scene.getObjectByName("closed-wall-side").material.uniforms;
+  };
+  try {
+    await stage.load("manifest.json",{sideTint:0x7f8790,sideExposure:.06});
+    const night=surface();
+    assert.equal(night.sideTint.value.getHex(),0x7f8790);
+    assert.equal(night.sideExposure.value,.06);
+    const tint=night.sideTint.value;
+    assert.ok((tint.r*.2126+tint.g*.7152+tint.b*.0722)*night.sideExposure.value<.02,"unseen sides must not retain daylight luminance at night");
+    await stage.load("manifest.json");
+    const day=surface();
+    assert.equal(day.sideTint.value.getHex(),0xffffff,"an old manifest with no variant must restore its authored side colours");
+    assert.equal(day.sideExposure.value,1);
+    assert.deepEqual(day.sideColor.value.toArray(),[.25,.235,.21]);
+  } finally {
+    stage.dispose();stage.free();globalThis.document=previousDocument;globalThis.fetch=previousFetch;
+  }
+}
+
 async function testTeardown() {
   const h = makeHost(), renderer = new h.THREE.WebGLRenderer();
   const lens = new RustLens(h, renderer);
@@ -484,6 +524,7 @@ try {
   await testProjectedArenaLifecycle();
   await testBattleOptics();
   await testTimePresentation();
+  await testProjectedSideLighting();
   console.log("PASS Rust lens: identical shaders, quality targets, passes, uniforms, projection, async backdrop cancellation");
   console.log("PASS Rust texture tiers: shared maps, shrink, stale completion, failed tier fallback, atomic restoration");
   console.log("PASS Rust arena: lifecycle, quality, first-person framing, walking, firing, hit/fall, reflection, callback reentry");
@@ -491,6 +532,7 @@ try {
   console.log("PASS Rust projected combat: animated own step/retreat/rush, enemy-only movement, interrupted camera change, reset and blocked advance");
   console.log("PASS Rust projected lifecycle: independent hall switching, cancelled teardown and usable painted fallback");
   console.log("PASS Rust time presentation: canonical NVG/glare, depth-limited heat, quality transitions, variant projection and daylight color restoration");
+  console.log("PASS Rust projected side lighting: dark night sides and exact legacy daylight restoration");
   if (process.env.CD_RENDER_BENCH === "1") {
     console.log("CPU-only orchestration benchmark (ms/frame, stub renderer, no GPU):", { rust: await benchmarkArena(true), typescript: await benchmarkArena(false) });
   }

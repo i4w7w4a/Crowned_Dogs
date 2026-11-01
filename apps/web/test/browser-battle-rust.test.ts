@@ -120,7 +120,10 @@ function createHarness(options: HarnessOptions = {}) {
     frames: [...["day", "morning", "evening", "night"].map(time => ({
       id: time === "day" ? "hall1" : `hall-${time}`, name: "Соляной цех", src: `${time}.png`,
       w: 941, h: 1672, top: 0, mapId: "saltHall", weather: "clear", time,
-    })), { id: "blocks-day", name: "Пятиэтажки", src: "blocks.png", w: 941, h: 1672, top: 0, mapId: "blocks", weather: "clear", time: "day" }],
+    })), ...["day", "morning", "evening", "night"].map(time => ({
+      id: `blocks-${time}`, name: "Пятиэтажки", src: `blocks-${time}.png`,
+      w: 941, h: 1672, top: 0, mapId: "blocks", weather: "clear", time,
+    }))],
     weaponIds: WEAPON_IDS, weapons: WEAPONS, veteranKits: VETERAN_KITS, playlist: [], tracks: {}, timing: data.TIMING,
     myModel: "me.json", foeModel: "enemy.json",
   };
@@ -258,14 +261,18 @@ test("saved time is restored when a direct link does not override it", async () 
   assert.match(h.element("conditionNote").textContent, /Солнце перед/);
 }, { time: "evening" }));
 
-test("a blocks link cannot invent a night plate and starts on the real map dimensions", async () => harness(async h => {
-  assert.equal(h.duel().match.config.mapId, "blocks");
-  assert.equal(h.duel().match.config.time, "day");
-  const frame = h.calls.find(c => c.name === "arena.frame")!.args[0] as { id: string; mapId: string; time: string };
-  assert.deepEqual([frame.id, frame.mapId, frame.time], ["blocks-day", "blocks", "day"]);
-  assert.equal(h.duel().match.map.maxDistance, 12);
-  assert.equal(h.duel().match.distance, 7);
-}, { search: "?muted=1&map=blocks&time=night", time: "night", map: "saltHall" }));
+test("blocks links choose all four real time variants on the correct map dimensions", async () => {
+  for (const time of ["morning", "day", "evening", "night"]) {
+    await harness(async h => {
+      assert.equal(h.duel().match.config.mapId, "blocks");
+      assert.equal(h.duel().match.config.time, time);
+      const frame = h.calls.find(c => c.name === "arena.frame")!.args[0] as { id: string; mapId: string; time: string };
+      assert.deepEqual([frame.id, frame.mapId, frame.time], [`blocks-${time}`, "blocks", time]);
+      assert.equal(h.duel().match.map.maxDistance, 12);
+      assert.equal(h.duel().match.distance, 7);
+    }, { search: `?muted=1&map=blocks&time=${time}`, time: "night", map: "saltHall" });
+  }
+});
 
 test("map changes preserve the fitted kit and expose only the chosen map's available times", async () => harness(async h => {
   const kit = { ...starterLoadout("rifle"), head: "head-sych" };
@@ -279,22 +286,31 @@ test("map changes preserve the fitted kit and expose only the chosen map's avail
   assert.deepEqual(h.duel().fighters[0].kit, kit);
   assert.equal(h.duel().match.fighters[0].gear.nvg, true);
   assert.equal(h.duel().match.config.mapId, "blocks");
-  assert.equal(h.duel().match.config.time, "day");
+  assert.equal(h.duel().match.config.time, "night");
   assert.equal(h.duel().match.map.maxDistance, 12);
   assert.equal(h.stored.get("cd-map"), "blocks");
-  assert.equal(h.stored.get("cd-time"), "day");
+  assert.equal(h.stored.get("cd-time"), "night");
   h.click("moreBtn");
-  assert.equal(h.element("frameSeg").children.length, 1);
-  assert.match(h.element("frameSeg").children[0]!.innerHTML, /День/);
+  assert.equal(h.element("frameSeg").children.length, 4);
+  assert.equal(h.element("frameSeg").children[3]!.getAttribute("aria-pressed"), "true");
   assert.equal(h.element("mapSeg").children[1]!.getAttribute("aria-pressed"), "true");
+  h.element("frameSeg").children[0]!.click();
+  assert.equal(h.duel().match.config.mapId, "blocks");
+  assert.equal(h.duel().match.config.time, "morning");
+  assert.deepEqual(h.duel().fighters[0].kit, kit);
+  assert.equal(h.stored.get("cd-map"), "blocks");
+  assert.equal(h.stored.get("cd-time"), "morning");
+  const morningFrame = h.calls.filter(c => c.name === "arena.frame").at(-1)!.args[0] as { id: string };
+  assert.equal(morningFrame.id, "blocks-morning");
+  h.click("moreBtn");
   h.element("mapSeg").children[0]!.click();
   assert.equal(h.duel().match.config.mapId, "saltHall");
-  assert.equal(h.duel().match.config.time, "day");
+  assert.equal(h.duel().match.config.time, "morning");
   h.click("moreBtn");
   assert.equal(h.element("frameSeg").children.length, 4);
 }, { time: "night" }));
 
-test("saved blocks map restores with its available day instead of a stale saved night", async () => harness(async h => {
+test("saved blocks map restores its selected night", async () => harness(async h => {
   assert.equal(h.duel().match.config.mapId, "blocks");
-  assert.equal(h.duel().match.config.time, "day");
+  assert.equal(h.duel().match.config.time, "night");
 }, { map: "blocks", time: "night" }));

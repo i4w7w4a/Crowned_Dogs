@@ -14,38 +14,49 @@ if (previous) Object.defineProperty(globalThis, "location", previous);
 else Reflect.deleteProperty(globalThis, "location");
 const publicFile = (path: string) => fileURLToPath(new URL(`../public/${path}`, import.meta.url));
 
-test("all four battle times have complete plates and preserve the shared spatial calibration", () => {
-  const day = FRAMES.find(frame => frame.id === "hall1")!;
-  const times = FRAMES.filter(frame => frame.mapId === "saltHall" && frame.weather === "clear");
-  assert.deepEqual(times.map(frame => frame.time).sort(), ["day", "evening", "morning", "night"]);
-  for (const frame of times) {
-    assert.deepEqual(frame.cal, day.cal, `${frame.time}: live figures must stay registered`);
-    assert.equal(frame.depth, day.depth, `${frame.time}: changing light must not change occlusion`);
-    assert.equal(frame.projectedStage?.manifest, day.projectedStage!.manifest);
-    const sources = [frame.src, frame.src2x, frame.depth, frame.projectedStage?.manifest,
-      ...Object.values(frame.projectedStage?.textures ?? {}), ...Object.values(frame.projectedStage?.textures2x ?? {})];
-    for (const path of sources.filter((path): path is string => !!path)) {
-      assert.ok(existsSync(publicFile(path)), `${frame.time}: missing packaged asset ${path}`);
-    }
-    if (frame.time !== "day") {
-      for (const key of ["clean", "equipment"] as const) {
-        const png: Buffer = readFileSync(publicFile(frame.projectedStage!.textures2x![key]!));
-        assert.equal(png.toString("hex", 0, 8), "89504e470d0a1a0a");
-        assert.equal(png.readUInt32BE(16), frame.w);
-        assert.equal(png.readUInt32BE(20), frame.h);
+test("both maps have four complete time variants with their own shared calibration and geometry", () => {
+  for (const mapId of ["saltHall", "blocks"]) {
+    const times = FRAMES.filter(frame => frame.mapId === mapId && frame.weather === "clear");
+    const day = times.find(frame => frame.time === "day")!;
+    assert.deepEqual(times.map(frame => frame.time).sort(), ["day", "evening", "morning", "night"], mapId);
+    for (const frame of times) {
+      const context = `${mapId}/${frame.time}`;
+      assert.deepEqual(frame.cal, day.cal, `${context}: figures must stay registered`);
+      assert.deepEqual([frame.w, frame.h, frame.top], [day.w, day.h, day.top], `${context}: framing stays fixed`);
+      assert.equal(frame.depth, day.depth, `${context}: changing light must not change occlusion`);
+      assert.equal(frame.projectedStage?.manifest, day.projectedStage!.manifest, `${context}: shared geometry`);
+      const sources = [frame.src, frame.src2x, frame.depth, frame.projectedStage?.manifest,
+        ...Object.values(frame.projectedStage?.textures ?? {}), ...Object.values(frame.projectedStage?.textures2x ?? {})];
+      for (const path of sources.filter((path): path is string => !!path)) {
+        assert.ok(existsSync(publicFile(path)), `${context}: missing packaged asset ${path}`);
+      }
+      if (frame.time !== "day") {
+        assert.notEqual(frame.src, day.src, `${context}: needs its own relit plate`);
+        for (const key of ["clean", "equipment"] as const) {
+          const png: Buffer = readFileSync(publicFile(frame.projectedStage!.textures2x![key]!));
+          assert.equal(png.toString("hex", 0, 8), "89504e470d0a1a0a", context);
+          assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [frame.w, frame.h], context);
+        }
       }
     }
   }
 });
 
-test("real map frames route a blocks night request to its available day with the catalogue's field size", () => {
+test("real map frames route blocks night to its night plate with the catalogue's field size", () => {
   const chosen = callRust<Frame>("client.conditions.initial", [FRAMES, "night", null, null, false, "blocks", null]);
-  assert.equal(chosen.id, "blocks-day");
+  assert.equal(chosen.id, "blocks-night");
   assert.equal(chosen.mapId, "blocks");
-  assert.equal(chosen.time, "day");
-  assert.deepEqual(callRust<{ id: string }[]>("client.conditions.choices", [FRAMES, chosen.mapId]).map(choice => choice.id), ["day"]);
+  assert.equal(chosen.time, "night");
+  assert.deepEqual(callRust<{ id: string }[]>("client.conditions.choices", [FRAMES, chosen.mapId]).map(choice => choice.id), ["morning", "day", "evening", "night"]);
   const match = createMatch({ seed: "blocks-real-frame", mapId: chosen.mapId, weather: chosen.weather, time: chosen.time,
     fighters: [{ id: "a", name: "Тень", weapon: "rifle" }, { id: "b", name: "Искра", weapon: "rifle" }] });
   assert.equal(match.map.maxDistance, 12);
   assert.equal(match.distance, 7);
+});
+
+test("a synthetic day-only map still falls back without relabelling daytime as night", () => {
+  const limited = FRAMES.filter(frame => frame.mapId !== "blocks" || frame.time === "day");
+  const chosen = callRust<Frame>("client.conditions.initial", [limited, "night", null, null, false, "blocks", null]);
+  assert.deepEqual([chosen.id, chosen.time], ["blocks-day", "day"]);
+  assert.equal(callRust("client.conditions.frame", [limited, { mapId: "blocks", time: "night", weather: "clear" }, null]), null);
 });

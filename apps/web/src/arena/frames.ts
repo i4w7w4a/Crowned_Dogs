@@ -52,6 +52,9 @@ export interface StageProjection {
   /** Only the real surfaces outside the photographed frustum use these. */
   extensionTint?: number;
   extensionExposure?: number;
+  /** Hidden geometry has independent lighting; legacy scenes retain their authored colours. */
+  sideTint?: number;
+  sideExposure?: number;
 }
 
 /** The bodycam of Art's style: sharp middle, rainbow smear and a fisheye bend towards the edges, dark corners. */
@@ -113,12 +116,39 @@ const NIGHT_LOOK: Look = {
   lens: { ...GREY_HALL.look.lens, contrast: 0.19, vignette: 0.90, glow: 0.08, saturation: 0.40, tint: 0xd5dce3, rays: 0.015, haze: 0.003, hazeColor: 0x505d6a },
 };
 
-/** First courtyard variant from the White Yar concept. Other times remain unavailable until authored. */
+/** The approved daytime courtyard remains the lighting reference for the other three variants. */
 const BLOCKS_LOOK: Look = {
   reflection: false,
   exposure: 0.98, rim: 0xf1e7d3, fill: 0xb6c2cc, fog: 0x9d9b93, sky: 0xc8d0d7, ground: 0x36332e, puddle: 0,
   lighting: { sky: 0.75, rim: 3.4, fill: 1.65, key: 4.4 }, sun: [0.10, 0.96, -0.5],
   lens: { ...GREY_HALL.look.lens, saturation: 0.58, tint: 0xe7eaf0, rays: 0.22, glow: 0.22, haze: 0.014, hazeColor: 0xc2c0b9 },
+};
+
+const blocksStage = (time: "morning" | "evening" | "night", extensionTint: number, extensionExposure: number, sideTint: number, sideExposure: number): StageProjection => ({
+  manifest: "img/blocks-stage/manifest.json",
+  textures: { clean: `img/blocks-times/${time}/clean.webp`, equipment: `img/blocks-times/${time}/hall.webp` },
+  textures2x: { clean: `img/blocks-times/${time}/clean.png`, equipment: `img/blocks-times/${time}/hall.png` },
+  extensionTint, extensionExposure, sideTint, sideExposure,
+});
+
+const BLOCKS_MORNING_LOOK: Look = {
+  ...BLOCKS_LOOK,
+  exposure: 0.94, rim: 0xe9d9bc, fill: 0xb3c3d2, fog: 0x989a94, sky: 0xb5c7d6, ground: 0x2e2b27,
+  lighting: { sky: 0.55, rim: 2.9, fill: 1.4, key: 3.5 }, sun: [-0.55, 0.28, -1],
+  lens: { ...BLOCKS_LOOK.lens, contrast: 0.26, saturation: 0.56, tint: 0xe1e7e9, rays: 0.17, glow: 0.17, haze: 0.011, hazeColor: 0xb5c2cc },
+};
+const BLOCKS_EVENING_LOOK: Look = {
+  ...BLOCKS_LOOK,
+  exposure: 0.88, rim: 0xffcf98, fill: 0x9faebc, fog: 0x817265, sky: 0xb3b8be, ground: 0x29231e,
+  lighting: { sky: 0.32, rim: 3.5, fill: 1.0, key: 2.8 }, sun: [0.68, 0.12, -1],
+  lens: { ...BLOCKS_LOOK.lens, contrast: 0.28, saturation: 0.58, tint: 0xf0dfcc, rays: 0.32, glow: 0.26, haze: 0.010, hazeColor: 0xb89770 },
+};
+const BLOCKS_NIGHT_LOOK: Look = {
+  ...BLOCKS_LOOK,
+  // Unaided exposure stays dark. The canonical NVG branch supplies its own gain.
+  exposure: 0.62, rim: 0x8c949d, fill: 0x626970, fog: 0x0c1015, sky: 0x525c68, ground: 0x07090c,
+  lighting: { sky: 0.045, rim: 0.25, fill: 0.115, key: 0.28 }, sun: [0.10, 0.72, -1],
+  lens: { ...BLOCKS_LOOK.lens, contrast: 0.16, vignette: 0.88, saturation: 0.30, tint: 0xd6dce2, rays: 0, glow: 0.025, haze: 0.0015, hazeColor: 0x39434c },
 };
 
 export const FRAMES: Frame[] = [
@@ -130,6 +160,15 @@ export const FRAMES: Frame[] = [
   { ...GREY_HALL, id: "blocks-day", name: "Пятиэтажки", mapId: "blocks", time: "day", weather: "clear",
     src: "img/blocks-day/hall.webp", src2x: "img/blocks-day/hall.png", look: BLOCKS_LOOK,
     projectedStage: { manifest: "img/blocks-stage/manifest.json", extensionTint: 0xa9a99e, extensionExposure: 0.80 } },
+  { ...GREY_HALL, id: "blocks-morning", name: "Пятиэтажки", mapId: "blocks", time: "morning", weather: "clear",
+    src: "img/blocks-times/morning/hall.webp", src2x: "img/blocks-times/morning/hall.png", look: BLOCKS_MORNING_LOOK,
+    projectedStage: blocksStage("morning", 0xb5c3ce, 0.55, 0xc0cdd6, 0.90) },
+  { ...GREY_HALL, id: "blocks-evening", name: "Пятиэтажки", mapId: "blocks", time: "evening", weather: "clear",
+    src: "img/blocks-times/evening/hall.webp", src2x: "img/blocks-times/evening/hall.png", look: BLOCKS_EVENING_LOOK,
+    projectedStage: blocksStage("evening", 0xd7ac78, 0.42, 0xd7ac78, 0.60) },
+  { ...GREY_HALL, id: "blocks-night", name: "Пятиэтажки", mapId: "blocks", time: "night", weather: "clear",
+    src: "img/blocks-times/night/hall.webp", src2x: "img/blocks-times/night/hall.png", look: BLOCKS_NIGHT_LOOK,
+    projectedStage: blocksStage("night", 0x7f8790, 0.06, 0x7f8790, 0.06) },
 ];
 
 /** Art's fight screen with a painted soldier: the live enemy must cover him exactly. Open with ?cal. */

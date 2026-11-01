@@ -688,6 +688,22 @@ async fn load_assets(
                     "sideColor",
                     make(&three, "Vector3", &[n(color[0]), n(color[1]), n(color[2])]),
                 ),
+                (
+                    "sideTint",
+                    make(
+                        &three,
+                        "Color",
+                        &[n(variant["sideTint"].as_u64().unwrap_or(0xffffff) as f64)],
+                    ),
+                ),
+                (
+                    "sideExposure",
+                    n(variant["sideExposure"]
+                        .as_f64()
+                        .filter(|v| v.is_finite())
+                        .unwrap_or(1.)
+                        .clamp(0., 4.)),
+                ),
             ],
         );
         let mesh = make(&three, "Mesh", &[geometry, material]);
