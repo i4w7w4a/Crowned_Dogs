@@ -39,7 +39,7 @@
 
 ## Мужские (2026-11-02)
 
-Референс `research/hair-ref/hair-male-ref.webp`, сцена `3d\hair-hdase_male.blend` (головы `Head_m1`–`Head_m4`),
+Референс `research/hair-ref/hair-male-ref.webp`, сцена `3d\hair-hd\base_male.blend` (головы `Head_m1`–`Head_m4`),
 запуск с `PERSONA=male`. Скрипты: `male.py` (линия роста, кадры референса), `male_short.py` (m1 короткая),
 `male_slick.py` (m2 зачёс назад), `male_medium.py` (m3 средняя). HD: `3d\hair-hd\male_*.blend`, лист для Арта
 `research/hair-ref/male-hd-v1.jpg`. Дреды (m4) Арт отменил; вместо них будет низкий хвост по его эскизу.
