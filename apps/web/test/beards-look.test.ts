@@ -3,7 +3,7 @@ import { test } from "node:test";
 import * as THREE from "three";
 import { callRust, sceneApplyLook, sceneDress, sceneSetBeardFirstPerson } from "../../../packages/runtime/src/index.ts";
 
-const styles = ["boxed", "goatee", "full", "tapered"];
+const styles = ["boxed", "goatee", "full", "tapered", "stubble"];
 const faces = ["m1", "m2", "m3", "m4"];
 function look(extra: Record<string, unknown> = {}) {
   return callRust<Record<string, unknown>>("client.look.normalize", [{ sex: "male", callsign: "Сокол", tag: "K-053-243", ...extra }]);
@@ -32,7 +32,7 @@ test("every beard selects only its fitted face, with shared materials and safe s
     assert.equal(cards.map!.wrapS, THREE.ClampToEdgeWrapping);
   }
   sceneApplyLook(root, look());
-  assert.ok(root.children.every(n => !n.visible), "none clears every previously selected style");
+  assert.deepEqual(root.children.filter(n => n.visible).map(n => n.name), ["Beard_m1_stubble_cards", "Beard_m1_stubble_root"], "the default man wears light stubble");
   sceneApplyLook(root, look({ sex: "female", beard: "full" }));
   assert.ok(root.children.every(n => !n.visible), "female cannot inherit beard meshes");
 });

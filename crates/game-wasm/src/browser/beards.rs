@@ -24,7 +24,7 @@ pub(super) async fn install(host: &JsValue, scene: &JsValue, source: &str) {
     let names: Vec<String> = super::scene_assets::nodes(&pack).iter()
         .filter(|node| boolean(&get(node, "isMesh")))
         .map(|node| string(&get(node, "name"))).collect();
-    let complete = (1..=4).all(|face| ["boxed", "goatee", "full", "tapered"].iter()
+    let complete = (1..=4).all(|face| ["boxed", "goatee", "full", "tapered", "stubble"].iter()
         .all(|style| names.iter().any(|name| name.starts_with(&format!("Beard_m{face}_{style}_")))));
     if !present(&anchor) || !complete {
         super::view_utils::dispose(&pack, &[], true);

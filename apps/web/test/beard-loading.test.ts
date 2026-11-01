@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { sceneLoadModel } from "../../../packages/runtime/src/index.ts";
 
 const base = "https://beards.test/game/";
-const styles = ["boxed", "goatee", "full", "tapered"];
+const styles = ["boxed", "goatee", "full", "tapered", "stubble"];
 type Counts = { geometry: number; material: number; texture: number; image: number };
 const headPositions = [.01, .1, .02, .04, .1, .02, .01, .13, .02, .01, .1, .02];
 function resources() {

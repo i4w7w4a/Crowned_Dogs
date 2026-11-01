@@ -59,7 +59,7 @@ const HAIR_COLORS: [Choice; 6] = [
     ("grey", "Седые", 0xa9a6a2),
 ];
 const BEARDS: [(&str, &str); 5] = [
-    ("none", "Без бороды"),
+    ("stubble", "Щетина"),
     ("boxed", "Короткая"),
     ("goatee", "Эспаньолка"),
     ("full", "Полная"),
@@ -156,7 +156,7 @@ fn defaults(sex: &str) -> Value {
         "eyes": "grey",
         "hair": if female { "long" } else { "buzz" },
         "hairColor": "brown",
-        "beard": "none",
+        "beard": if female { "none" } else { "stubble" },
         "beardColor": "brown",
         "suit": "graphite",
     })
@@ -285,6 +285,10 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
                     fields.entry("beardColor").or_insert(json!("brown"));
                 }
             }
+            // Light stubble replaced the clean-shaven choice: a saved shaven man wears it now.
+            if look["sex"] != "female" && look["beard"] == "none" {
+                look["beard"] = json!("stubble");
+            }
             Ok(if (saved["version"] == 1 || saved["version"] == 2) && valid(&look) {
                 look
             } else {
@@ -358,8 +362,20 @@ mod tests {
         let mut look = finished("male");
         look["beard"] = json!("not-a-style");
         assert!(!valid(&look));
-        assert_eq!(normalize(&look)["beard"], "none");
+        assert_eq!(normalize(&look)["beard"], "stubble");
         assert!(dispatch("client.look.load", json!([json!({"version": 99, "look": finished("male")}).to_string()])).unwrap().is_null());
+    }
+    #[test]
+    fn a_saved_clean_shaven_man_loads_with_stubble() {
+        let mut old = finished("male");
+        old["beard"] = json!("none");
+        for version in [1, 2] {
+            let loaded = dispatch("client.look.load", json!([json!({"version": version, "look": old}).to_string()])).unwrap();
+            assert_eq!(loaded["beard"], "stubble");
+            assert_eq!(loaded["callsign"], "Сыч");
+        }
+        assert_eq!(finished("male")["beard"], "stubble");
+        assert_eq!(finished("female")["beard"], "none");
     }
     #[test]
     fn missing_or_broken_storage_means_no_persona_yet() {
