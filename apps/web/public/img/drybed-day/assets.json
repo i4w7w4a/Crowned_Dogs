@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "source": "Codex image_gen: approved drybed-day plate, its clean edit and lighting-weather edits",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/drybed-day/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3079036,
+      "sha256": "bd623d47babe014f5b67c833006162d96b9523ebb3c06c2650dcd1c227dcd100"
+    },
+    {
+      "path": "apps/web/public/img/drybed-day/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 656572,
+      "sha256": "81922497e67366f61833463a186ac78014659dd99bd80ca02540b2d4ca9827f3"
+    },
+    {
+      "path": "apps/web/public/img/drybed-day/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3070843,
+      "sha256": "7372338f62d332bf04e0936196713e08c2dc40725f510a8a406e0ddaf02d721f"
+    },
+    {
+      "path": "apps/web/public/img/drybed-day/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 664556,
+      "sha256": "38b24849a89c3e9956c9266d2e201a303b80e18df701fec8a95c63c734b17bd5"
+    }
+  ]
+}

@@ -123,7 +123,10 @@ function createHarness(options: HarnessOptions = {}) {
     })), ...["day", "morning", "evening", "night"].map(time => ({
       id: `blocks-${time}`, name: "Пятиэтажки", src: `blocks-${time}.png`,
       w: 941, h: 1672, top: 0, mapId: "blocks", weather: "clear", time,
-    }))],
+    })), ...[["dam", "dam", "Плотина"], ["drybed", "dryBed", "Сухое дно"]].flatMap(([prefix, mapId, name]) => ["day", "morning", "evening", "night"].map(time => ({
+      id: `${prefix}-${time}`, name, src: `${prefix}-${time}.png`,
+      w: 941, h: 1672, top: 0, mapId, weather: "clear", time,
+    })))],
     weaponIds: WEAPON_IDS, weapons: WEAPONS, veteranKits: VETERAN_KITS, playlist: [], tracks: {}, timing: data.TIMING,
     myModel: "me.json", foeModel: "enemy.json",
   };
@@ -308,6 +311,19 @@ test("map changes preserve the fitted kit and expose only the chosen map's avail
   assert.equal(h.duel().match.config.time, "morning");
   h.click("moreBtn");
   assert.equal(h.element("frameSeg").children.length, 4);
+  assert.equal(h.element("regionSeg").children.length, 2);
+  assert.equal(h.element("regionSeg").children[0]!.getAttribute("aria-pressed"), "true");
+  h.element("regionSeg").children[1]!.click();
+  assert.equal(h.duel().match.config.mapId, "dam");
+  assert.equal(h.duel().match.config.time, "morning");
+  assert.equal(h.duel().match.map.maxDistance, 14);
+  assert.deepEqual(h.duel().fighters[0].kit, kit);
+  h.click("moreBtn");
+  assert.equal(h.element("mapSeg").children.length, 2, "only the chosen region's maps are listed");
+  h.element("mapSeg").children[1]!.click();
+  assert.equal(h.duel().match.config.mapId, "dryBed");
+  assert.equal(h.duel().match.map.maxDistance, 13);
+  assert.equal(h.stored.get("cd-map"), "dryBed");
 }, { time: "night" }));
 
 test("saved blocks map restores its selected night", async () => harness(async h => {

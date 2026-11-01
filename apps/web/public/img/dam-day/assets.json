@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "source": "Codex image_gen: approved dam-day plate, its clean edit and lighting-weather edits",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/dam-day/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3382842,
+      "sha256": "da5165d4b1e50475721f407151e88fa0a64904e46b935cc63f19e841c1544314"
+    },
+    {
+      "path": "apps/web/public/img/dam-day/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 775566,
+      "sha256": "7065f1287727f6739cd7120ea2b9deb86e1580bca2d17353e562591aa5c9fe82"
+    },
+    {
+      "path": "apps/web/public/img/dam-day/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3202970,
+      "sha256": "830c41dc08cc70b7f392598e71326ea4c646284496dfa7ee0b9fa02cc42d1ebb"
+    },
+    {
+      "path": "apps/web/public/img/dam-day/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 726154,
+      "sha256": "54b76d6905a88488965b8f650f25a79c24ecfcc125fa6fd9c0b55d4470fc68f0"
+    }
+  ]
+}

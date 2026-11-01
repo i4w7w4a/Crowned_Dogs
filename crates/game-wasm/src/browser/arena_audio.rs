@@ -171,7 +171,11 @@ impl BrowserArenaAudio {
     #[wasm_bindgen(js_name=setPlace)]
     pub fn set_place(&mut self, m: JsValue) {
         let config = get(&m, "config");
-        let blocks = text(&get(&config, "mapId")) == "blocks";
+        // Open-air maps share the courtyard's short outdoor tail and ambience.
+        let blocks = matches!(
+            text(&get(&config, "mapId")).as_str(),
+            "blocks" | "dam" | "dryBed"
+        );
         let bed = if blocks { "amb.blocks" } else { "amb.hall" };
         self.room = if blocks { "blocks" } else { "hall" }.into();
         call_optional(&self.audio, "setRoom", &[js(&self.room)]);
