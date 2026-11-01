@@ -45,9 +45,14 @@ const EYES: [Choice; 14] = [
     ("blue", "Синие", 0x00a3ff),
 ];
 /// (sex, id, name, hair cap, hair cards). The male scan has its buzz cut baked into the head.
-const HAIRS: [(&str, &str, &str, bool, bool); 3] = [
+/// Pixie, bob and braid are their own meshes in the hair pack (`Hair_<id>_*`), not the long
+/// hair's cap and cards; the renderer shows them by the paint's `hair` id.
+const HAIRS: [(&str, &str, &str, bool, bool); 6] = [
     ("male", "buzz", "Ёжик", false, false),
     ("female", "long", "Длинные", true, true),
+    ("female", "pixie", "Пикси", false, false),
+    ("female", "bob", "Боб", false, false),
+    ("female", "braid", "Коса", false, false),
     ("female", "shaved", "Под ноль", false, false),
 ];
 const HAIR_COLORS: [Choice; 6] = [
@@ -59,7 +64,7 @@ const HAIR_COLORS: [Choice; 6] = [
     ("grey", "Седые", 0xa9a6a2),
 ];
 const BEARDS: [(&str, &str); 5] = [
-    ("none", "Без бороды"),
+    ("stubble", "Щетина"),
     ("boxed", "Короткая"),
     ("goatee", "Эспаньолка"),
     ("full", "Полная"),
@@ -162,7 +167,7 @@ fn defaults(sex: &str) -> Value {
         "eyes": "grey",
         "hair": if female { "long" } else { "buzz" },
         "hairColor": "brown",
-        "beard": "none",
+        "beard": if female { "none" } else { "stubble" },
         "beardColor": "brown",
         "suit": "graphite",
     })
@@ -237,6 +242,7 @@ pub fn paint(look: &Value) -> Value {
         "hairCap": round(cap),
         "beard": look["beard"],
         "beardColor": round(scale(find(&BEARD_COLORS, text(&look["beardColor"])).unwrap_or(BEARD_COLORS[2]).2, BEARD_BASE, BEARD_COLORS[2].2)),
+        "hair": hair.1,
         "cap": hair.3,
         "cards": hair.4,
         "iris": round(lin(srgb(eyes.2))),
@@ -341,6 +347,10 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
                     fields.entry("beardColor").or_insert(json!("brown"));
                 }
             }
+            // Light stubble replaced the clean-shaven choice: a saved shaven man wears it now.
+            if look["sex"] != "female" && look["beard"] == "none" {
+                look["beard"] = json!("stubble");
+            }
             Ok(if (saved["version"] == 1 || saved["version"] == 2) && valid(&look) {
                 look
             } else {
@@ -431,8 +441,20 @@ mod tests {
         let mut look = finished("male");
         look["beard"] = json!("not-a-style");
         assert!(!valid(&look));
-        assert_eq!(normalize(&look)["beard"], "none");
+        assert_eq!(normalize(&look)["beard"], "stubble");
         assert!(dispatch("client.look.load", json!([json!({"version": 99, "look": finished("male")}).to_string()])).unwrap().is_null());
+    }
+    #[test]
+    fn a_saved_clean_shaven_man_loads_with_stubble() {
+        let mut old = finished("male");
+        old["beard"] = json!("none");
+        for version in [1, 2] {
+            let loaded = dispatch("client.look.load", json!([json!({"version": version, "look": old}).to_string()])).unwrap();
+            assert_eq!(loaded["beard"], "stubble");
+            assert_eq!(loaded["callsign"], "Сыч");
+        }
+        assert_eq!(finished("male")["beard"], "stubble");
+        assert_eq!(finished("female")["beard"], "none");
     }
     #[test]
     fn missing_or_broken_storage_means_no_persona_yet() {
@@ -470,6 +492,19 @@ mod tests {
         assert_eq!(p["iris"], json!(round(lin(srgb(EYES[0].2)))));
         assert_eq!(p["cards"], true);
         assert_eq!(paint(&finished("male"))["model"], "persona-male");
+    }
+    #[test]
+    fn new_hairstyles_drop_the_long_hair_and_stay_female() {
+        for id in ["pixie", "bob", "braid"] {
+            let mut look = finished("female");
+            look["hair"] = json!(id);
+            let p = paint(&normalize(&look));
+            assert_eq!(p["hair"], id);
+            assert_eq!(p["cards"], false);
+            assert_eq!(p["cap"], false);
+            look["sex"] = json!("male");
+            assert_eq!(normalize(&look)["hair"], "buzz");
+        }
     }
     #[test]
     fn each_face_is_painted_by_its_own_id() {

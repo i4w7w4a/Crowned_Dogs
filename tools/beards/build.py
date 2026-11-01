@@ -43,7 +43,7 @@ S=.9630493809698595
 FIT=Matrix(((S,0,0,-.00429309),(0,S,0,-.00425317),(0,0,S,.17305149),(0,0,0,1)))
 # FIT is authored transformation expressed in Blender axes: glTF(x,y,z)->Blender(x,-z,y).
 CONFIG={'m1':(1.608,1.562),'m2':(1.6148,1.572),'m3':(1.614,1.565),'m4':(1.6078,1.559)}
-STYLES=['boxed','goatee','full','tapered']
+STYLES=['boxed','goatee','full','tapered','stubble']
 # Native, authored texture: narrow fibers with varied curvature/opacity, generated from fixed seeds.
 W,H=512,1024
 pix=[0.0]*(W*H*4);rnd=random.Random(311)
@@ -107,11 +107,15 @@ def region(p,n,face,style):
   if x>limit:return 0
   if z>mouth+.020:return 0
  lip=math.sqrt((x/.033)**2+((z-mouth)/.0085)**2)
- edge=min((top-z)/.006,(z-jaw)/.004,(.082-x)/.008,(lip-1)/(.18 if style=='goatee' else .32),(rear-p.y)/.010)
+ # Stubble fades out over a wider band, so its border never reads as a drawn line.
+ soft=2.4 if style=='stubble' else 1
+ edge=min((top-z)/(.006*soft),(z-jaw)/(.004*soft),(.082-x)/(.008*soft),(lip-1)/(.18 if style=='goatee' else .32),(rear-p.y)/(.010*soft))
  if style=='goatee':edge=min(edge,(limit-x)/.004)
  return max(0,min(1,edge))*(1-.85*patch)
 def strand_length(p,face,style):
  mouth,chin=CONFIG[face];x=abs(p.x)
+ # Light stubble, the default look: the full beard area, sparse fibre under 1.5 mm.
+ if style=='stubble':return .0014
  if p.z>mouth+.007 and x<.034:return .0045
  jaw=chin+.044*(x/.080)**1.8
  low=max(0,min(1,(mouth+.012-p.z)/max(.010,mouth+.012-jaw)))
@@ -145,7 +149,8 @@ for face in (['m1'] if PILOT else ['m4'] if REPAIR_M4 else CONFIG):
     jaw=chin+.044*(abs(x)/.080)**1.8
     bulk=strand_length(p,face,style)*max(0,min(1,(mouth+.012-z)/max(.01,mouth+.012-jaw)))*1.08
     if style=='boxed':bulk*=.2
-    rv.append(clear_collar(p+n*(.00055+bulk*.40)+Vector((0,0,-bulk*.60))));ra.append(weight*.88)
+    if style=='stubble':bulk=0
+    rv.append(clear_collar(p+n*(.00055+bulk*.40)+Vector((0,0,-bulk*.60))));ra.append(weight*(.5 if style=='stubble' else .88))
   for (ix,iz),a in grid.items():
    if all(k in grid for k in [(ix+1,iz),(ix+1,iz+1),(ix,iz+1)]):
     quad=(a,grid[(ix+1,iz)],grid[(ix+1,iz+1)],grid[(ix,iz+1)])
@@ -167,7 +172,7 @@ for face in (['m1'] if PILOT else ['m4'] if REPAIR_M4 else CONFIG):
     u,v=rng.random(),rng.random()
     if u+v>1:u,v=1-u,1-v
     p=a+(b-a)*u+(c-a)*v;n=(vs[0].normal*(1-u-v)+vs[1].normal*u+vs[2].normal*v).normalized()
-    if rng.random()<region(p,n,face,style):roots.append((p.copy(),n.copy()))
+    if rng.random()<region(p,n,face,style)*(.4 if style=='stubble' else 1):roots.append((p.copy(),n.copy()))
   verts=[];faces=[];uvs=[];guides=[]
   for p,n in roots:
    length=strand_length(p,face,style)*rng.uniform(.78,1.12)*(.45+.55*math.sqrt(region(p,n,face,style)))
@@ -175,7 +180,7 @@ for face in (['m1'] if PILOT else ['m4'] if REPAIR_M4 else CONFIG):
    if p.z>CONFIG[face][0]+.006 and abs(p.x)<.034:down=Vector((math.copysign(.65,p.x),0,-.35))
    tangent=(down-n*down.dot(n)).normalized()
    if tangent.length<.3:tangent=Vector((0,-1,-.3)).normalized()
-   side=tangent.cross(n).normalized();width=rng.uniform(.0025,.0045)
+   side=tangent.cross(n).normalized();width=rng.uniform(.0009,.0016) if style=='stubble' else rng.uniform(.0025,.0045)
    start=p+n*.00035
    path=[];curl=rng.uniform(-.0014,.0014)
    for k in range(4):

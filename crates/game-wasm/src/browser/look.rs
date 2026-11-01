@@ -193,13 +193,50 @@ fn beard_selection(model: &JsValue, paint: &JsValue) -> (String, bool) {
 #[wasm_bindgen(js_name=sceneSetBeardFirstPerson)]
 pub fn first_person(model: JsValue, on: bool, look: JsValue) {
     set(&get(&model, "userData"), "cdBeardFirstPerson", &on.into());
-    let (prefix, visible) = beard_selection(&model, &paint(&look));
+    let paint = paint(&look);
+    let (prefix, visible) = beard_selection(&model, &paint);
+    let (hair, hair_on, _) = hair_selection(&model, &paint);
     for node in nodes(&model) {
         let name = string(&get(&node, "name"));
         if boolean(&get(&node, "isMesh")) && name.starts_with("Beard_") {
             set(&node, "visible", &(visible && name.starts_with(&prefix)).into());
+        } else if boolean(&get(&node, "isMesh")) && name.starts_with("Hair_") {
+            set(&node, "visible", &(hair_on && name.starts_with(&hair)).into());
         }
     }
+}
+
+/// A female hairstyle from the hair pack (`Hair_<style>_*` under the head bone): its prefix,
+/// whether it shows now, and whether the pack has it. Without it the long hair stands in.
+fn hair_selection(model: &JsValue, paint: &JsValue) -> (String, bool, bool) {
+    let style = string(&get(paint, "hair"));
+    let prefix = format!("Hair_{style}_");
+    let packed = super::beards::HAIR_STYLES.contains(&style.as_str())
+        && present(&call(model, "getObjectByName", &[format!("{prefix}cards").into()]));
+    let visible = packed
+        && string(&get(paint, "sex")) == "female"
+        && !boolean(&get(&get(model, "userData"), "cdBeardFirstPerson"))
+        && !closed_helmet(model);
+    (prefix, visible, packed)
+}
+
+/// The arena swaps untextured parts for a shared body colour; a hair cap or tie keeps one of its own.
+fn own_material(model: &JsValue, node: &JsValue, name: &str) -> JsValue {
+    let material = get(node, "material");
+    if string(&get(&material, "name")) == name {
+        return material;
+    }
+    let key = format!("cd{name}");
+    let mut own = get(&get(model, "userData"), &key);
+    if !present(&own) {
+        own = call(&material, "clone", &[]);
+        set(&own, "name", &name.into());
+        set(&own, "roughness", &0.78.into());
+        set(&own, "metalness", &0.0.into());
+        set(&get(model, "userData"), &key, &own);
+    }
+    set(node, "material", &own);
+    own
 }
 
 /// Paints `look` onto `model`. Safe to call again after every change.
@@ -215,6 +252,9 @@ pub fn apply(model: JsValue, look: JsValue) {
     let skin = rgb(&get(&paint, "skin"));
     let face = format!("{HEAD}{}", string(&get(&paint, "face")));
     let (beard, beard_on) = beard_selection(&model, &paint);
+    let (hair, hair_on, packed) = hair_selection(&model, &paint);
+    // a pack style the model lacks shows the long hair rather than none
+    let stand_in = super::beards::HAIR_STYLES.contains(&string(&get(&paint, "hair")).as_str()) && !packed;
     let mut cap_material = get(&get(&model, "userData"), "cdCap");
     for node in nodes(&model) {
         if !boolean(&get(&node, "isMesh")) {
@@ -229,6 +269,21 @@ pub fn apply(model: JsValue, look: JsValue) {
             set(&node, "visible", &(beard_on && mesh.starts_with(&beard)).into());
             tint(&material, rgb(&get(&paint, "beardColor")));
             if name.starts_with("M_Beard_Cards") {
+                hair_hook(&material);
+            }
+            continue;
+        }
+        if mesh.starts_with("Hair_") {
+            set(&node, "visible", &(hair_on && mesh.starts_with(&hair)).into());
+            if mesh.ends_with("_cap") {
+                let m = own_material(&model, &node, "M_Hair_Cap");
+                let c = rgb(&get(&paint, "hairCap"));
+                call(&get(&m, "color"), "setRGB", &[c[0].into(), c[1].into(), c[2].into()]);
+            } else if mesh.ends_with("_tie") {
+                let m = own_material(&model, &node, "M_Hair_Tie");
+                call(&get(&m, "color"), "setRGB", &[0.012.into(), 0.012.into(), 0.013.into()]);
+            } else {
+                tint(&material, rgb(&get(&paint, "hairCards")));
                 hair_hook(&material);
             }
             continue;
@@ -248,7 +303,7 @@ pub fn apply(model: JsValue, look: JsValue) {
             let m = get(&node, "material");
             let c = rgb(&get(&paint, "hairCap"));
             call(&get(&m, "color"), "setRGB", &[c[0].into(), c[1].into(), c[2].into()]);
-            set(&m, "visible", &get(&paint, "cap"));
+            set(&m, "visible", &(boolean(&get(&paint, "cap")) || stand_in).into());
             continue;
         }
         if name.starts_with(HEAD) {
@@ -264,7 +319,7 @@ pub fn apply(model: JsValue, look: JsValue) {
         } else if name == "M_Fem_HairCards" {
             tint(&material, rgb(&get(&paint, "hairCards")));
             hair_hook(&material);
-            set(&material, "visible", &get(&paint, "cards"));
+            set(&material, "visible", &(boolean(&get(&paint, "cards")) || stand_in).into());
         }
     }
 }

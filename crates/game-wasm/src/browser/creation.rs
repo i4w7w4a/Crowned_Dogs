@@ -162,6 +162,7 @@ fn icon_paths(id: &str) -> &'static str {
         "goatee" => "<path fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\" d=\"M8 11l4-2 4 2 1 6-5 4-5-4zM9 14v2l3 2 3-2v-2l-3 1z\"/>",
         "full" => "<path fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\" d=\"M4 6l4 5 4-2 4 2 4-5v9c0 4-4 7-8 7s-8-3-8-7zM9 14v2h6v-2z\"/>",
         "tapered" => "<path fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\" d=\"M4 6l4 5 4-2 4 2 4-5-1 9-7 8-7-8zM9 14v2h6v-2z\"/>",
+        "stubble" => "<g fill=\"currentColor\" stroke=\"none\"><circle cx=\"5\" cy=\"9\" r=\"1.1\"/><circle cx=\"19\" cy=\"9\" r=\"1.1\"/><circle cx=\"6\" cy=\"13\" r=\"1.1\"/><circle cx=\"9.5\" cy=\"12\" r=\"1.1\"/><circle cx=\"14.5\" cy=\"12\" r=\"1.1\"/><circle cx=\"18\" cy=\"13\" r=\"1.1\"/><circle cx=\"8\" cy=\"16.5\" r=\"1.1\"/><circle cx=\"12\" cy=\"16\" r=\"1.1\"/><circle cx=\"16\" cy=\"16.5\" r=\"1.1\"/><circle cx=\"10\" cy=\"19.5\" r=\"1.1\"/><circle cx=\"14\" cy=\"19.5\" r=\"1.1\"/></g>",
         "body" => "<g fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\"><path d=\"M9.2 4.4a2.8 2.8 0 1 0 5.6 0a2.8 2.8 0 1 0-5.6 0z\"/><path d=\"M7.5 8.1h9c1.4 0 2.4 1.2 2.1 2.6l-1.3 5.2h-1.8v6.1h-2.6v-6h-1.8v6H8.5v-6.1H6.7l-1.3-5.2c-.3-1.4.7-2.6 2.1-2.6z\"/></g>",
         "next" => "<path d=\"M14 5.5l6.5 6.5-6.5 6.5M20 12H3.5\"/>",
         "save" => "<path d=\"M4.5 12.5l5 5 10-11\"/>",

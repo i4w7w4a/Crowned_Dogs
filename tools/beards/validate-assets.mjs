@@ -163,7 +163,7 @@ for (let face = 1; face <= 4; face++) {
   const index = game.data.nodes.findIndex(n => n.name === `Head_m${face}`);
   assert.ok(index >= 0);
   const headBounds = box(repairedGame.get(`Head_m${face}`) ?? game.points(index));
-  for (const style of ['boxed', 'goatee', 'full', 'tapered']) {
+  for (const style of ['boxed', 'goatee', 'full', 'tapered', 'stubble']) {
     const prefix = `Beard_m${face}_${style}_`;
     const selected = male.data.nodes.map((n, i) => ({ n, i })).filter(({ n }) => n.mesh !== undefined && n.name?.startsWith(prefix));
     assert.ok(selected.length >= 2, `${prefix} needs roots and cards`);
@@ -183,7 +183,7 @@ for (let face = 1; face <= 4; face++) {
     report.fits.push({ face: `m${face}`, style, headBounds: plainBox(headBounds), beardBounds: plainBox(bounds), parts: paired });
   }
 }
-report.assertions = ['16 face/style fits with roots and cards in both packs', 'No independent skins, skeleton or animations', 'Finite accessors and node transforms', 'Cards MASK / roots BLEND / double-sided materials', 'Animated pack stays in repaired head bounds +45mm at rest', 'Authored export matches FIT × current-head-rest × animated export within 0.25mm', ...(skin ? ['All four normal/position companions match actual animated and authored heads within 2µm (measured Blender drift <0.75µm)', 'Applied scan seam position repairs stay within 2mm and preserve source topology'] : [])];
+report.assertions = ['20 face/style fits with roots and cards in both packs', 'No independent skins, skeleton or animations', 'Finite accessors and node transforms', 'Cards MASK / roots BLEND / double-sided materials', 'Animated pack stays in repaired head bounds +45mm at rest', 'Authored export matches FIT × current-head-rest × animated export within 0.25mm', ...(skin ? ['All four normal/position companions match actual animated and authored heads within 2µm (measured Blender drift <0.75µm)', 'Applied scan seam position repairs stay within 2mm and preserve source topology'] : [])];
 mkdirSync(dirname(output), { recursive: true });
 writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
 console.log(`PASS: ${report.fits.length} fits, 2 packs; ${output}`);
