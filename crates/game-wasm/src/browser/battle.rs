@@ -1161,19 +1161,28 @@ fn option(parent: &JsValue, content: &str, selected: bool, action: impl FnMut(Js
     call(parent, "appendChild", &[b]);
 }
 /// The game clock picks the map's hour and weather. Address keys (`time`,
-/// `weather`, `frame`, `map`, `cal`) pin them for checks and screenshots.
+/// `weather`, `frame`, `map`, `cal`) pin them for checks and screenshots; the
+/// menu's test pickers pin time and weather until "По часам" is chosen again.
 fn live_frame(s: &JsValue, map: Option<&str>) -> JsValue {
     let params = construct(
         &get(&global(), "URLSearchParams"),
         &[get(&get(&global(), "location"), "search")],
     );
     let param = |key: &str| call(&params, "get", &[key.into()]);
+    let pinned = |key: &str, stored: &str| {
+        let value = param(key);
+        if value.is_null() {
+            store_get(s, stored)
+        } else {
+            value
+        }
+    };
     core(
         "client.conditions.live",
         &[
             get(s, "frames"),
             object(&[
-                ("time", param("time")),
+                ("time", pinned("time", "cd-test-time")),
                 (
                     "frame",
                     if map.is_some() {
@@ -1185,7 +1194,7 @@ fn live_frame(s: &JsValue, map: Option<&str>) -> JsValue {
                 ("cal", call(&params, "has", &["cal".into()])),
                 ("map", map.map_or_else(|| param("map"), JsValue::from)),
                 ("savedMap", store_get(s, "cd-map")),
-                ("weather", param("weather")),
+                ("weather", pinned("weather", "cd-test-weather")),
                 ("now", js_sys::Date::now().into()),
             ]),
         ],
@@ -1393,6 +1402,34 @@ fn render_menu(s: &JsValue) {
     }
     let c = clock_of(&current_map);
     hide(&id("frameLabel"), false);
+    // Test pickers: a choice holds until "По часам" and starts a new fight with the same kit.
+    let picks = core(
+        "client.conditions.picks",
+        &[get(s, "frames"), current_map.as_str().into()],
+    );
+    let mut manual = false;
+    for (seg, key, list) in [
+        ("timeSeg", "cd-test-time", "times"),
+        ("weatherSeg", "cd-test-weather", "weathers"),
+    ] {
+        let chosen = store_get(s, key).as_string().unwrap_or_default();
+        let options = values(&get(&picks, list));
+        let known = options.iter().any(|o| word(o, "id") == chosen);
+        manual |= known && !chosen.is_empty();
+        let row = segment(seg, options.len());
+        for choice in options {
+            let wanted = word(&choice, "id");
+            let current = wanted == chosen || (!known && wanted.is_empty());
+            let state = s.clone();
+            let map = current_map.clone();
+            option(&row, &word(&choice, "name"), current, move |_| {
+                if !current {
+                    store_set(&state, key, &wanted);
+                    choose_map(&state, &map);
+                }
+            });
+        }
+    }
     let weather_next = if word(&c, "nextWeather") == word(&c, "weather") {
         format!(
             "{} ещё {}",
@@ -1406,9 +1443,15 @@ fn render_menu(s: &JsValue) {
             word(&c, "nextWeatherName")
         )
     };
-    text(
-        &id("clockNote"),
-        &format!(
+    let note = if manual {
+        format!(
+            "Часы на этой карте отключены вашим выбором. По часам сейчас было бы {}, {}, {}.",
+            word(&c, "clock"),
+            word(&c, "timeName"),
+            word(&c, "weatherName")
+        )
+    } else {
+        format!(
             "Сейчас {}, {}, {}. Через {} {}, {}. В регионе: {}.",
             word(&c, "clock"),
             word(&c, "timeName"),
@@ -1417,8 +1460,9 @@ fn render_menu(s: &JsValue) {
             word(&c, "nextTimeName"),
             weather_next,
             word(&c, "eventName").to_lowercase()
-        ),
-    );
+        )
+    };
+    text(&id("clockNote"), &note);
     text(
         &id("conditionNote"),
         &string(&core("client.conditions.description", &[match_(s)])),
