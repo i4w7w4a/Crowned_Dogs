@@ -74,7 +74,7 @@ const GREY_HALL = {
 } satisfies Omit<Frame, "id" | "name" | "src" | "weather">;
 
 export const FRAMES: Frame[] = [
-  { ...GREY_HALL, id: "hall1", name: "Соляной цех", src: "img/grey-hall-1.jpg", depth: "img/grey-hall-1.depth.png", weather: "clear" },
+  { ...GREY_HALL, id: "hall1", name: "Соляной цех", src: "img/grey-hall-1.jpg", src2x: "img/grey-hall-1@2x.jpg", depth: "img/grey-hall-1.depth.png", weather: "clear" },
   { ...GREY_HALL, id: "hall2", name: "Цех в дымке", src: "img/grey-hall-2.jpg", src2x: "img/grey-hall-2@2x.jpg", depth: "img/grey-hall-2.depth.png", weather: "fog" },
 ];
 

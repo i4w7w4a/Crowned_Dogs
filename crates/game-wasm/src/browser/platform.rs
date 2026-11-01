@@ -204,6 +204,29 @@ pub fn start_quality(gl: JsValue) -> JsValue {
 pub fn keep_quality(id: &str) {
     store_set("cd-quality", id);
 }
+thread_local! {
+    static SHARP: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+/// Whether this device gets the double-size painted backgrounds: the quality picked for it
+/// draws the arena's backdrop sharp. Asked once per page, on a throwaway WebGL context.
+pub fn sharp_pictures() -> bool {
+    if let Some(sharp) = SHARP.with(|c| c.get()) {
+        return sharp;
+    }
+    let canvas = call(&get(&global(), "document"), "createElement", &["canvas".into()]);
+    let gl = try_call(&canvas, "getContext", &["webgl2".into()]).unwrap_or(JsValue::NULL);
+    let id = string(&get(&start_quality(gl.clone()), "id"));
+    let quality = get(&get(&rust("client.data", &[]), "QUALITY"), &id);
+    let sharp = boolean(&get(&quality, "sharpBackdrop"));
+    if present(&gl) {
+        let lose = call(&gl, "getExtension", &["WEBGL_lose_context".into()]);
+        if present(&lose) {
+            call(&lose, "loseContext", &[]);
+        }
+    }
+    SHARP.with(|c| c.set(Some(sharp)));
+    sharp
+}
 
 #[wasm_bindgen]
 pub struct RustLocalDuel {

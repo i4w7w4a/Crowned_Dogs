@@ -1591,12 +1591,17 @@ fn setup_depth(state: &Rc<RefCell<Base>>) {
     let image = query(&fitting, "img.cd-backdrop");
     let host = state.borrow().host.clone();
     let base = text(&get(&host, "baseUrl"));
+    let picture = if platform::sharp_pictures() {
+        "fitting-room-v2@2x.webp"
+    } else {
+        "fitting-room-v2.png"
+    };
     let result = construct(
         &host,
         "DepthBackdrop",
         &[
             canvas.clone(),
-            js(&format!("{base}img/base/fitting-room-v2.png")),
+            js(&format!("{base}img/base/{picture}")),
             js(&format!("{base}img/base/fitting-room-v2-depth.png")),
             number(941.0 / 1672.0),
             number(1.1),
