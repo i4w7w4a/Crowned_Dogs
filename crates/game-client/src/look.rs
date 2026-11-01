@@ -45,9 +45,14 @@ const EYES: [Choice; 14] = [
     ("blue", "Синие", 0x00a3ff),
 ];
 /// (sex, id, name, hair cap, hair cards). The male scan has its buzz cut baked into the head.
-const HAIRS: [(&str, &str, &str, bool, bool); 3] = [
+/// Pixie, bob and braid are their own meshes in the hair pack (`Hair_<id>_*`), not the long
+/// hair's cap and cards; the renderer shows them by the paint's `hair` id.
+const HAIRS: [(&str, &str, &str, bool, bool); 6] = [
     ("male", "buzz", "Ёжик", false, false),
     ("female", "long", "Длинные", true, true),
+    ("female", "pixie", "Пикси", false, false),
+    ("female", "bob", "Боб", false, false),
+    ("female", "braid", "Коса", false, false),
     ("female", "shaved", "Под ноль", false, false),
 ];
 const HAIR_COLORS: [Choice; 6] = [
@@ -231,6 +236,7 @@ pub fn paint(look: &Value) -> Value {
         "hairCap": round(cap),
         "beard": look["beard"],
         "beardColor": round(scale(find(&BEARD_COLORS, text(&look["beardColor"])).unwrap_or(BEARD_COLORS[2]).2, BEARD_BASE, BEARD_COLORS[2].2)),
+        "hair": hair.1,
         "cap": hair.3,
         "cards": hair.4,
         "iris": round(lin(srgb(eyes.2))),
@@ -413,6 +419,19 @@ mod tests {
         assert_eq!(p["iris"], json!(round(lin(srgb(EYES[0].2)))));
         assert_eq!(p["cards"], true);
         assert_eq!(paint(&finished("male"))["model"], "persona-male");
+    }
+    #[test]
+    fn new_hairstyles_drop_the_long_hair_and_stay_female() {
+        for id in ["pixie", "bob", "braid"] {
+            let mut look = finished("female");
+            look["hair"] = json!(id);
+            let p = paint(&normalize(&look));
+            assert_eq!(p["hair"], id);
+            assert_eq!(p["cards"], false);
+            assert_eq!(p["cap"], false);
+            look["sex"] = json!("male");
+            assert_eq!(normalize(&look)["hair"], "buzz");
+        }
     }
     #[test]
     fn each_face_is_painted_by_its_own_id() {
