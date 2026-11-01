@@ -774,15 +774,23 @@ pub fn make_carry(host: JsValue, mount: JsValue, sex: String, weapon: String) ->
         place(&host, &clip, &get(&descriptor, "matrix"));
         call(&group, "add", &[clip]);
     }
-    let parts = values(&get(&spec, "holster"));
-    if !parts.is_empty() {
+    if let Some(url) = get(&spec, "holster").as_string() {
         let holster = make(&host, "Group", &[]);
         set(&holster, "name", &"Drop_Leg_Holster".into());
-        for part in &parts {
-            call(&holster, "add", &[accessory(&host, part)]);
-        }
         place(&host, &holster, &get(&spec, "matrix"));
-        call(&group, "add", &[holster]);
+        call(&group, "add", &[holster.clone()]);
+        // Each carry loads its own copy: a carry that goes away frees its textures' images with it.
+        wasm_bindgen_futures::spawn_local(async move {
+            let Ok(gltf) = await_value(invoke(&get(&host, "loadModel"), &[url.into()])).await else {
+                return;
+            };
+            let model = get(&gltf, "scene");
+            for node in nodes(&model) {
+                set(&node, "castShadow", &true.into());
+                set(&node, "receiveShadow", &true.into());
+            }
+            call(&holster, "add", &[model]);
+        });
     }
     group
 }

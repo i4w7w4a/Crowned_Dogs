@@ -107,10 +107,11 @@ pub fn carry(args: &Value) -> Result<Value, String> {
         .map(|all| all.iter().map(strap).collect::<Result<Vec<_>, _>>())
         .transpose()?
         .unwrap_or_default();
+    // The holster is a textured model of its own, authored in the pistol's frame.
     let holster = if fit["holster"] == true {
         data()["holster"].clone()
     } else {
-        json!([])
+        Value::Null
     };
     Ok(json!({
         "matrix": fit["matrix"],
@@ -142,11 +143,11 @@ mod tests {
                         .all(|i| i.as_u64().unwrap() < count));
                 }
                 let clips = c["clips"].as_array().unwrap().len();
-                let holster = c["holster"].as_array().unwrap().len();
+                let holster = c["holster"].as_str();
                 if weapon == "pistol" {
-                    assert_eq!((clips, holster), (0, 2));
+                    assert_eq!((clips, holster), (0, Some("models/holster.json")));
                 } else {
-                    assert_eq!((clips, holster), (2, 0));
+                    assert_eq!((clips, holster), (2, None));
                 }
             }
         }
