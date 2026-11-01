@@ -528,54 +528,131 @@ fn front_of(host: &JsValue, gun: &JsValue) -> JsValue {
     at
 }
 
+/// Worn item id to its mesh in the Persona models; items without a mesh of their own wear a close one.
+const GEAR: [(&str, &str); 19] = [
+    ("head-k6", "Helmet"),
+    ("head-sych", "Helmet"),
+    ("head-marevo", "Helmet"),
+    ("head-cap", "Cap"),
+    ("head-sfera", "Sfera"),
+    ("head-filin", "Sfera"),
+    ("body-light", "Vest"),
+    ("body-plita2", "Vest"),
+    ("body-plita4", "Plita4"),
+    ("body-bastion", "Plita4"),
+    ("suit-field", "Suit"),
+    ("suit-leshy", "Suit"),
+    ("suit-solonchak", "Solonchak"),
+    ("suit-ten", "Ten"),
+    ("suit-ryvok", "Ryvok"),
+    ("boots-bertsy", "Boots"),
+    ("boots-sprint", "Boots"),
+    ("boots-hodok", "Boots"),
+    ("boots-saper", "Boots"),
+];
+/// Each slot's meshes; the first is worn for `true` and when the model lacks the item's own.
+const SLOTS: [(&str, &[&str]); 4] = [
+    ("head", &["Helmet", "Cap", "Sfera"]),
+    ("body", &["Vest", "Plita4"]),
+    ("suit", &["Suit", "Solonchak", "Ten", "Ryvok"]),
+    ("boots", &["Boots"]),
+];
+/// The kit slot a Persona mesh is worn in.
+pub(super) fn gear_slot(name: &str) -> Option<&'static str> {
+    SLOTS
+        .iter()
+        .find(|(_, meshes)| meshes.contains(&name))
+        .map(|(slot, _)| *slot)
+}
+/// The recoloured suits share the field suit's cut, and so its body mask.
+fn mask_of(mesh: &str) -> String {
+    match mesh {
+        "Solonchak" | "Ten" => "_suit".into(),
+        _ => format!("_{}", mesh.to_ascii_lowercase()),
+    }
+}
+/// Meshes the plain kit wears; figures are sized by these so other items never change a height.
+pub(super) fn plain_kit(name: &str) -> bool {
+    !SLOTS.iter().any(|(_, meshes)| {
+        meshes[1..]
+            .iter()
+            .any(|m| name == *m || name.ends_with(&format!("_{m}")))
+    })
+}
+/// The mesh `wear[slot]` puts on: an item id, `true` for the plain kit's, nothing otherwise.
+fn worn(model: &JsValue, wear: &JsValue, slot: &str, meshes: &[&str]) -> Option<String> {
+    let value = get(wear, slot);
+    let mesh = if let Some(id) = value.as_string() {
+        GEAR.iter().find(|(item, _)| *item == id).map(|(_, m)| *m)?
+    } else if boolean(&value) {
+        meshes[0]
+    } else {
+        return None;
+    };
+    let has = |m: &str| present(&call(model, "getObjectByName", &[m.into()]));
+    [mesh, meshes[0]]
+        .into_iter()
+        .find(|m| has(m))
+        .map(String::from)
+}
 #[wasm_bindgen(js_name=sceneDress)]
 pub fn dress(host: JsValue, model: JsValue, wear: JsValue) {
+    let on = SLOTS
+        .iter()
+        .filter_map(|(slot, meshes)| worn(&model, &wear, slot, meshes))
+        .collect::<Vec<_>>();
+    let head = SLOTS[0].1;
+    let hat = on.iter().find(|m| head.contains(&m.as_str())).cloned();
     for node in nodes(&model) {
         if !boolean(&get(&node, "isMesh")) {
             continue;
         }
         let name = string(&get(&node, "name"));
-        let slot = match name.as_str() {
-            "Suit" => Some("suit"),
-            "Vest" => Some("body"),
-            "Helmet" => Some("head"),
-            _ => None,
-        };
-        if let Some(slot) = slot {
-            set(&node, "visible", &get(&wear, slot));
+        if SLOTS.iter().any(|(_, meshes)| meshes.contains(&name.as_str())) {
+            set(&node, "visible", &on.contains(&name).into());
             continue;
         }
-        if name.ends_with("_Helmet") {
-            set(&node, "visible", &get(&wear, "head"));
+        // Hair squeezed under a hat is `<hair>_<hat>`; the free hair shows when no variant fits.
+        if let Some(under) = head.iter().find(|m| name.ends_with(&format!("_{m}"))) {
+            set(&node, "visible", &(hat.as_deref() == Some(*under)).into());
             continue;
         }
-        if present(&call(
-            &model,
-            "getObjectByName",
-            &[format!("{name}_Helmet").into()],
-        )) {
-            set(&node, "visible", &(!boolean(&get(&wear, "head"))).into());
+        let has = |m: &str| present(&call(&model, "getObjectByName", &[format!("{name}_{m}").into()]));
+        if head.iter().any(|m| has(m)) {
+            set(&node, "visible", &(!hat.as_deref().is_some_and(has)).into());
             continue;
         }
-        let geometry = get(&node, "geometry");
-        let mut masks = vec![];
-        for (attribute, slot) in [("_suit", "suit"), ("_vest", "body")] {
-            if boolean(&get(&wear, slot)) {
-                let mask = call(&geometry, "getAttribute", &[attribute.into()]);
-                if present(&mask) {
-                    masks.push(mask);
-                }
-            }
-        }
-        if masks.is_empty() {
+        let mut geometry = get(&node, "geometry");
+        let masks = on
+            .iter()
+            .map(|m| call(&geometry, "getAttribute", &[mask_of(m).into()]))
+            .filter(present)
+            .collect::<Vec<_>>();
+        let attributes = Object::keys(&Object::from(get(&geometry, "attributes")));
+        let masked = attributes.iter().any(|k| {
+            let k = string(&k);
+            k.starts_with('_') && SLOTS.iter().any(|(_, ms)| ms.iter().any(|m| mask_of(m) == k))
+        });
+        if !masked {
             continue;
         }
-        let data = get(&geometry, "userData");
-        let mut full = get(&data, "fullIndex");
-        if !present(&full) {
-            full = get(&geometry, "index");
-            set(&data, "fullIndex", &full);
+        // Clones share geometry: each figure cuts its own copy of the body.
+        if !boolean(&get(&get(&node, "userData"), "ownGeometry")) {
+            let shared = geometry.clone();
+            let full = get(&get(&shared, "userData"), "fullIndex");
+            geometry = call(&shared, "clone", &[]);
+            set(
+                &geometry,
+                "userData",
+                &object(&[(
+                    "fullIndex",
+                    if present(&full) { full } else { get(&shared, "index") },
+                )]),
+            );
+            set(&node, "geometry", &geometry);
+            set(&get(&node, "userData"), "ownGeometry", &true.into());
         }
+        let full = get(&get(&geometry, "userData"), "fullIndex");
         let count = if present(&full) {
             num(&get(&full, "count"))
         } else {

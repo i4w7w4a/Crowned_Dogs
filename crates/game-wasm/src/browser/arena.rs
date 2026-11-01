@@ -131,6 +131,8 @@ struct Figure {
     kick: [f64; 4],
     fall_t: f64,
     fall_side: f64,
+    /// The kit last put on, as `head|body|suit|boots`.
+    worn: String,
 }
 struct Mirror {
     group: JsValue,
@@ -806,6 +808,39 @@ impl RustArena {
             s.my_gun = gun;
         }
     }
+    /// Puts on a fighter's kit (`head`, `body`, `suit`, `boots` item ids); the same kit again does nothing.
+    pub fn wear(&self, who: String, kit: JsValue) {
+        let mut s = self.state.borrow_mut();
+        if !s.ready || !kit.is_object() {
+            return;
+        }
+        let wear = object(&["head", "body", "suit", "boots"].map(|k| (k, get(&kit, k))));
+        let key = ["head", "body", "suit", "boots"]
+            .map(|k| get(&kit, k).as_string().unwrap_or_default())
+            .join("|");
+        let enemy = who == "enemy";
+        let s = &mut *s;
+        let f = if enemy { s.enemy.as_mut() } else { s.me.as_mut() }.unwrap();
+        if f.worn == key {
+            return;
+        }
+        f.worn = key;
+        let model = f.model.clone();
+        if enemy {
+            sdk(&s.host, "dress", &[model, wear.clone()]);
+            if let Some(m) = &s.mirror {
+                sdk(&s.host, "dress", &[m.model.clone(), wear]);
+            }
+            return;
+        }
+        // The first-person cut keeps the triangles it saw: rebuild it for the new kit.
+        if get(&s.arms_only, "dispose").is_function() {
+            let _ = try_call(&s.arms_only, "dispose", &[]);
+        }
+        sdk(&s.host, "dress", &[model.clone(), wear]);
+        s.arms_only = sdk(&s.host, "armsOnly", &[model]);
+        invoke(&s.arms_only, &[s.fp.into()]);
+    }
     #[wasm_bindgen(js_name=move)]
     pub fn move_to(&self, distance: f64, me_move: f64, enemy_move: f64) {
         let mut s = self.state.borrow_mut();
@@ -1006,6 +1041,14 @@ impl ArenaState {
         let h = &self.host;
         let model = sdk(h, "clone", &[get(gltf, "scene")]);
         sdk(h, "dress", &[model.clone(), get(h, "KIT_A")]);
+        if near {
+            // The first-person cut swaps index buffers: keep them apart from the foe's clone.
+            for mesh in meshes(&model) {
+                if !boolean(&get(&get(&mesh, "userData"), "ownGeometry")) {
+                    set(&mesh, "geometry", &call(&get(&mesh, "geometry"), "clone", &[]));
+                }
+            }
+        }
         let body = make(
             h,
             "MeshStandardMaterial",
@@ -1050,7 +1093,11 @@ impl ArenaState {
         }
         call(&model, "updateMatrixWorld", &[true.into()]);
         let bounds = make(h, "Box3", &[]);
-        call(&bounds, "setFromObject", &[model.clone(), true.into()]);
+        for mesh in meshes(&model) {
+            if super::scene_assets::plain_kit(&string(&get(&mesh, "name"))) {
+                call(&bounds, "expandByObject", &[mesh, true.into()]);
+            }
+        }
         let bones = sdk(h, "findBones", &[model.clone(), bounds.clone()]);
         let size = math(
             "scale",
@@ -1169,6 +1216,7 @@ impl ArenaState {
             kick: [0.; 4],
             fall_t: -1.,
             fall_side,
+            worn: String::new(),
         }
     }
 

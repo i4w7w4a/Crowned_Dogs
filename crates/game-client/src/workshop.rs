@@ -6,7 +6,14 @@ const SLOTS: [&str; 5] = ["optic", "muzzle", "rail", "mag", "stock"];
 fn models() -> Value {
     // Temporary, explicitly approved placeholder: Sych keeps its own rules and
     // catalogue icon, but uses the ordinary helmet until its model is ready.
-    json!({"head-k6":"tripo-helmet","head-sych":"tripo-helmet","body-plita2":"tripo-vest","suit-field":"persona-authored#Костюм",
+    json!({"head-k6":"tripo-helmet","head-sych":"tripo-helmet","head-marevo":"tripo-helmet",
+        "head-cap":"gear#Cap","head-sfera":"gear#Sfera","head-filin":"gear#Sfera",
+        "body-light":"tripo-vest","body-plita2":"tripo-vest","body-plita4":"gear#Plita4","body-bastion":"gear#Plita4",
+        "suit-field":"gear#Suit","suit-leshy":"gear#Suit","suit-solonchak":"gear#Solonchak","suit-ten":"gear#Ten",
+        "suit-ryvok":"gear#Ryvok","boots-bertsy":"gear#Boots","boots-sprint":"gear#Boots","boots-hodok":"gear#Boots",
+        "boots-saper":"gear#Boots",
+        "knife":"knife","knife-std":"knife","knife-iskra":"knife","knife-kogot":"knife","knife-shtyk":"knife","knife-zhalo":"knife",
+        "grenade-rg1":"grenade","grenade-grad":"grenade","grenade-emp":"grenade","grenade-smoke":"grenade",
         "pistol-pustelga":"pustelga","shotgun-taran":"taran","rifle-varyag":"varyag","sniper-berkut":"berkut"})
 }
 /// Mods with a mesh inside each gun class's model. The mesh node is the id with `_` for `-`.
@@ -398,9 +405,8 @@ mod tests {
         let mut kit = core("starterLoadout", json!(["rifle"])).unwrap();
         kit["head"] = json!("head-sych");
         assert_eq!(core("compileKit", json!([kit])).unwrap()["nvg"], true);
-        for id in ["head-cap", "head-sfera", "head-marevo", "head-filin", "body-light", "body-plita4", "body-bastion", "suit-leshy", "suit-ryvok", "suit-ten", "suit-solonchak"] {
-            assert!(!available(&core("getItem", json!([id])).unwrap(), ""), "{id} must remain hidden");
-        }
+        // Batch-2 gear now has authored models in main. Its availability is
+        // covered by only_modelled_and_explicit_exceptions_are_offered above.
     }
     #[test]
     fn mods_are_offered_only_where_their_gun_has_the_mesh() {

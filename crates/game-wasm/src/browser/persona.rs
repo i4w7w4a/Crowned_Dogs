@@ -290,6 +290,7 @@ impl RustPersonaViewer {
     pub fn update_loadout(&self, loadout: JsValue) -> JsValue {
         let s = &self.state;
         set(s, "loadout", &loadout);
+        dress_figure(s);
         apply_weapon(s);
         render(s);
         graphics(
@@ -438,11 +439,7 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     let h = get(s, "host");
     let sex = sex.to_string();
     let female = sex == "female";
-    let url = if female {
-        format!("{}models/persona-female.json", string(&h, "base"))
-    } else {
-        format!("{}preview/persona-authored.json", string(&h, "base"))
-    };
+    let url = format!("{}models/persona-{sex}.json", string(&h, "base"));
     let gltf = wait(try_call(&h, "loadModel", &[text(&url)])?).await?;
     let figure = get(&gltf, "scene");
     if yes(s, "disposed") || string(s, "look.sex") != sex {
@@ -464,9 +461,8 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     set(s, "figureSex", &text(&sex));
     set(s, "mixer", &JsValue::NULL);
     set(s, "head", &JsValue::NULL);
-    if female {
-        // The female figure is the rigged game model: hold the first idle frame and
-        // stand it on the platform at a height matching the authored male.
+    {
+        // The figure is the rigged game model: hold the first idle frame and stand it on the platform.
         let clip = call(
             &get(&h, "THREE.AnimationClip"),
             "findByName",
@@ -480,9 +476,14 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
         }
         call(&figure, "updateMatrixWorld", &[flag(true)]);
         let box3 = make(&h, "THREE.Box3", &[]);
-        call(&box3, "setFromObject", &[figure.clone(), flag(true)]);
+        for n in nodes(&figure, false) {
+            if yes(&n, "isMesh") && super::scene_assets::plain_kit(&string(&n, "name")) {
+                call(&box3, "expandByObject", &[n, flag(true)]);
+            }
+        }
         let low = number(&box3, "min.y");
-        let k = FEMALE_HEIGHT / (number(&box3, "max.y") - low).max(0.1);
+        let height = if female { FEMALE_HEIGHT } else { MALE_HEIGHT };
+        let k = height / (number(&box3, "max.y") - low).max(0.1);
         call(&get(&figure, "scale"), "setScalar", &[num(k)]);
         let centre = call(&box3, "getCenter", &[make(&h, "THREE.Vector3", &[])]);
         call(
@@ -499,18 +500,8 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     for n in nodes(&figure, false) {
         if yes(&n, "isMesh") {
             // Blender object names; the loader may swap spaces for underscores.
-            let name = string(&n, "name");
-            for (prefix, slot) in [
-                ("Бронежилет", "body"),
-                ("Каска", "head"),
-                ("Костюм", "suit"),
-                ("Vest", "body"),
-                ("Helmet", "head"),
-                ("Suit", "suit"),
-            ] {
-                if name.starts_with(prefix) {
-                    set(&n, "userData.slot", &text(slot));
-                }
+            if let Some(slot) = super::scene_assets::gear_slot(&string(&n, "name")) {
+                set(&n, "userData.slot", &text(slot));
             }
             set(&n, "frustumCulled", &flag(false));
             set(&n, "castShadow", &flag(true));
@@ -530,29 +521,31 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     wait(update_textures(s).into()).await?;
     Ok(true)
 }
-/// Female height on the stand; the authored male stands 1.8 m.
+/// Heights on the stand.
 const FEMALE_HEIGHT: f64 = 1.72;
-/// Shows the worn kit, or only the suit while the look is being chosen.
+const MALE_HEIGHT: f64 = 1.8;
+/// Shows the worn kit, or only suit and boots while the look is being chosen.
 fn dress_figure(s: &JsValue) {
     let figure = get(s, "figure");
     if !exists(&figure) {
         return;
     }
     let bare = yes(s, "bare");
-    if string(s, "figureSex") == "female" {
-        super::scene_assets::dress(
-            get(s, "host"),
-            figure.clone(),
-            options(&[("suit", flag(true)), ("body", flag(!bare)), ("head", flag(!bare))]),
-        );
-    } else {
-        for n in nodes(&figure, false) {
-            let slot = string(&n, "userData.slot");
-            if slot == "head" || slot == "body" {
-                set(&n, "visible", &flag(!bare));
-            }
+    let kit = get(s, "loadout");
+    let wear = |slot: &str| {
+        if bare && (slot == "head" || slot == "body") {
+            JsValue::NULL
+        } else if exists(&kit) {
+            get(&kit, slot)
+        } else {
+            flag(true)
         }
-    }
+    };
+    super::scene_assets::dress(
+        get(s, "host"),
+        figure.clone(),
+        options(&["head", "body", "suit", "boots"].map(|k| (k, wear(k)))),
+    );
     set(&get(s, "equipment"), "visible", &flag(!bare));
 }
 async fn load_environment(s: &JsValue) {
@@ -1154,11 +1147,7 @@ fn apply_weapon(s: &JsValue) {
         call(&old, "removeFromParent", &[]);
         dispose(&old, &[], true);
     }
-    let sling = if real && weapon == "rifle" && string(s, "figureSex") != "female" {
-        call(&h, "authoredWeaponFit", &[mount])
-    } else {
-        call(&h, "makeSling", &[mount, flag(weapon == "pistol")])
-    };
+    let sling = call(&h, "makeSling", &[mount, flag(weapon == "pistol")]);
     set(&sling, "userData.slot", &text("weapon1"));
     set(s, "sling", &sling);
     call(&get(s, "equipment"), "add", &[sling]);
