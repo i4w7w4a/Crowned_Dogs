@@ -8,6 +8,7 @@ mod draft;
 mod loadout;
 pub mod rng;
 mod sync;
+mod tag;
 
 pub(crate) const ZONES: [&str; 4] = ["head", "body", "groin", "legs"];
 pub(crate) const BANDS: [&str; 3] = ["near", "mid", "far"];
@@ -206,6 +207,11 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
                     .collect::<Vec<_>>())
             }
         }
+        "nextTag" => {
+            let taken = x(1).as_array().ok_or("tags must be a list")?;
+            json!(tag::next(n(x(0)), taken.iter().filter_map(Value::as_str))?)
+        }
+        "localTag" => json!(tag::local(n(x(0)))),
         "formatTag" => {
             let v = n(x(0));
             if v.fract() != 0.0 || !(0.0..1_000_000.0).contains(&v) {

@@ -208,6 +208,11 @@ impl Base {
             &query(&contract, ".cd-contract-tag b"),
             if tag.is_empty() { "K-···-···" } else { &tag },
         );
+        let callup = tag.get(2..5).and_then(|n| n.parse::<u32>().ok());
+        content(
+            &query(&contract, ".cd-contract-tag span"),
+            &callup.map_or("Жетон".into(), |n| format!("Жетон · призыв {n}")),
+        );
         hidden(
             &query(&self.fitting, ".cd-briefing-skip"),
             self.brief >= creation::SIGN_LINE,

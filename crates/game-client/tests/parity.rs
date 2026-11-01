@@ -90,6 +90,12 @@ fn concept_gear(args: &Value) -> bool {
         .iter()
         .any(|id| text.contains(&format!("\"{id}\"")))
 }
+/// Shotgun pellets catch neighbouring zones since 02.11.2026 and roll extra dice; the oracle's duels
+/// with a shotgun predate that.
+fn shotgun_duel(method: &str, args: &Value) -> bool {
+    (method.starts_with("client.duel") || method.starts_with("server."))
+        && args.to_string().contains("\"weapon\":\"shotgun\"")
+}
 #[test]
 fn client_behavior_matches_the_pre_migration_game() {
     let cases: Vec<Value> = serde_json::from_str(include_str!("../fixtures/oracle.json")).unwrap();
@@ -98,6 +104,7 @@ fn client_behavior_matches_the_pre_migration_game() {
         if frozen_sniper_rail(method, &case["args"])
             || concept_gear(&case["args"])
             || concept_gear(&case["value"])
+            || shotgun_duel(method, &case["args"])
         {
             continue;
         }

@@ -5,13 +5,15 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { OperatorRegistry } from "../src/operators.ts";
 
-test("signing hands out a tag once, and never the same tag twice", () => {
-  const picks = [417093, 417093, 5];
-  const reg = new OperatorRegistry({ pick: () => picks.shift()!, now: () => 1000 });
+test("tags go by call-up and signing order, once per player", () => {
+  let now = Date.UTC(2026, 10, 2);
+  const reg = new OperatorRegistry({ now: () => now });
   const ann = reg.sign("100", "Аня");
-  assert.deepEqual(ann, { tag: "K-417-093", telegramId: "100", name: "Аня", signedAt: 1000 });
+  assert.deepEqual(ann, { tag: "K-001-001", telegramId: "100", name: "Аня", signedAt: now });
   assert.equal(reg.sign("100", "Аня Новая"), ann, "signing again keeps the first tag");
-  assert.equal(reg.sign("200", "Боб").tag, "K-000-005", "a taken number is drawn again");
+  assert.equal(reg.sign("200", "Боб").tag, "K-001-002", "the next signer gets the next number");
+  now = Date.UTC(2026, 11, 3);
+  assert.equal(reg.sign("400", "Вера").tag, "K-002-001", "December is the second call-up");
   assert.equal(reg.byTelegram("200")?.name, "Боб");
   assert.equal(reg.byTelegram("300"), undefined);
 });
