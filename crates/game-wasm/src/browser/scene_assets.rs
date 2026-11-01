@@ -96,6 +96,9 @@ pub(super) const GUN_MODELS: &[(&str, &str)] = &[
     ("rifle", "varyag"),
     ("sniper", "berkut"),
 ];
+/// The knife and grenade in the hand: Tripo models already in the hand mount's frame (`models/knife.glb`,
+/// `grenade.glb`). Снаряжение keeps showing their catalogue previews, so they stay out of GUN_MODELS.
+const HELD_MODELS: &[(&str, &str)] = &[("knife", "knife"), ("grenade", "grenade")];
 /// A real gun whose own origin is not where the hand closes: its scale in the hand, then its shift
 /// in the mount (x along the bore, y up). The pistol's centre sat in the fist with the grip back in
 /// the wrist; it goes up and forward into the palm, a size up to fill the gloved hand (Art, 2026-11-01).
@@ -106,6 +109,7 @@ pub fn load_guns(host: JsValue) -> Promise {
         let guns = Object::new();
         let loads: Vec<_> = GUN_MODELS
             .iter()
+            .chain(HELD_MODELS)
             .map(|(_, model)| {
                 await_value(invoke(
                     &get(&host, "loadModel"),
@@ -113,7 +117,7 @@ pub fn load_guns(host: JsValue) -> Promise {
                 ))
             })
             .collect();
-        for ((held, _), load) in GUN_MODELS.iter().zip(loads) {
+        for ((held, _), load) in GUN_MODELS.iter().chain(HELD_MODELS).zip(loads) {
             if let Ok(model) = load.await {
                 let gun = get(&model, "scene");
                 prepare_varyag(&gun);
