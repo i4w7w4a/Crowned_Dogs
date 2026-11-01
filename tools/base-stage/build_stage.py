@@ -9,6 +9,8 @@ from pathlib import Path
 import bpy, bmesh, numpy as np
 from mathutils import Vector
 from mathutils.geometry import tessellate_polygon
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from pack_png import pack_png
 
 REPO = Path(__file__).resolve().parents[2]
 WEB = REPO / 'apps/web/public/img/base-stage'
@@ -482,7 +484,9 @@ if args.bake:
     bpy.data.objects.remove(joined,do_unlink=True)
     for ob in objects:ob.hide_render=False
     scene.cycles.samples=8
-    atlas.filepath_raw=str(WEB/'base-atlas.png');atlas.file_format='PNG';atlas.save();atlas.pack()
+    atlas.filepath_raw=str(WEB/'base-atlas.png');atlas.file_format='PNG';atlas.save()
+    print('LOSSLESS_PNG',pack_png(atlas.filepath_raw),flush=True)
+    atlas.pack()
     baked=bpy.data.materials.new('RUNTIME · same baked UV atlas');baked.use_nodes=True
     ns,ls=baked.node_tree.nodes,baked.node_tree.links;ns.clear()
     tex=ns.new('ShaderNodeTexImage');tex.image=atlas;em=ns.new('ShaderNodeEmission');out=ns.new('ShaderNodeOutputMaterial')
