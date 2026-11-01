@@ -5,7 +5,7 @@ export { BrowserBase, mount_sound_settings, show_sound_settings, equipment_icon,
 export { BrowserGameAudio, BrowserArenaAudio } from "../wasm/game_wasm.js";
 export { RustApplication, mount_application, unmount_application, activate_after_ready, run_battle_loading, RustFightLog, liquid_glass, RustRadio } from "../wasm/game_wasm.js";
 export { RustGrip, RustFeet, rig_set_world_quat, rig_turn, rig_reach, rig_gait_of, RustMotion, RustPose, RustCollapse, RustViewmodel, rig_find_bones, rig_axes_pitch, rig_axes_roll, rig_names, RustArmsOnly, RustHoldOut, RustFlash, RustDust } from "../wasm/game_wasm.js";
-export { sceneLoadModel, sceneLoadGuns, sceneGripOf, RustSceneHand, sceneDress, sceneTune, sceneInstallRelief, sceneReliefHook, sceneSetReliefPreview, sceneTurntableMaterial, sceneTuneFittingMaterial, sceneSilhouetteDeck, sceneApplyLook, sceneMakeFittingStage, sceneMakeSling, scenePrepareVaryag, sceneFitVaryag, RustDepthBackdrop } from "../wasm/game_wasm.js";
+export { sceneLoadModel, sceneLoadGuns, sceneGripOf, RustSceneHand, sceneDress, sceneTune, sceneInstallRelief, sceneReliefHook, sceneSetReliefPreview, sceneTurntableMaterial, sceneTuneFittingMaterial, sceneSilhouetteDeck, sceneApplyLook, sceneMakeFittingStage, sceneMakeSling, sceneMakeCarry, scenePrepareVaryag, sceneFitVaryag, RustDepthBackdrop } from "../wasm/game_wasm.js";
 export { RustDuelService, RustOperatorRegistry, bind_server_bot, run_server_main } from "../wasm/game_wasm.js";
 export { RustMusicDirector, RustVariantPicker, RustShuffle, audio_pick_other, audio_jitter } from "../wasm/game_wasm.js";
 export { RustLocalDuel, store_get, store_set, load_local_loadout, save_local_loadout, load_local_look, save_local_look, guess_quality, start_quality, keep_quality } from "../wasm/game_wasm.js";

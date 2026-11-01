@@ -1,4 +1,5 @@
 //! Platform-independent procedural graphics. Three.js only uploads these results.
+mod carry;
 mod stage;
 mod surface;
 mod texture;
@@ -36,6 +37,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
         })),
         "graphics.stage" => Ok(stage::stage()),
         "graphics.sling" => stage::sling(&args),
+        "graphics.carry" => carry::carry(&args),
         "graphics.pomShaders" => Ok(json!({
             "common": include_str!("silhouette-pom.glsl"),
             "trace": include_str!("silhouette-trace.glsl"),

@@ -879,11 +879,15 @@ fn arm_both(s: &JsValue) {
     for side in 0..2 {
         let f = at(&get(&match_(s), "fighters"), side);
         let kit = get(&at(&get(&duel(s), "fighters"), side), "kit");
+        let who: JsValue = if side == 0 { "me" } else { "enemy" }.into();
+        if get(&get(s, "arena"), "wear").is_function() {
+            arena(s, "wear", &[who.clone(), kit.clone()]);
+        }
         arena(
             s,
             "arm",
             &[
-                if side == 0 { "me" } else { "enemy" }.into(),
+                who,
                 get(&f, "weapon"),
                 get(&get(&kit, "weapon1"), "mods"),
             ],

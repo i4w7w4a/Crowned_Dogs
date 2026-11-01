@@ -262,6 +262,7 @@ impl RustPersonaViewer {
             return;
         }
         set(s, "creating", &flag(on));
+        pose(s);
         if on && !exists(&get(s, "bay")) {
             super::bay::build(s, anisotropy(s));
         }
@@ -282,7 +283,11 @@ impl RustPersonaViewer {
     #[wasm_bindgen(js_name=setFocus)]
     pub fn set_focus(&self, focus: &str) {
         let s = &self.state;
-        set(s, "focusGoal", &num(if focus == "face" { 1.0 } else { 0.0 }));
+        set(
+            s,
+            "focusGoal",
+            &num(if focus == "face" { 1.0 } else { 0.0 }),
+        );
         if !yes(s, "creating") || !yes(s, "ready") || !yes(s, "active") {
             // Not on screen: jump straight there.
             set(s, "focusT", &get(s, "focusGoal"));
@@ -298,6 +303,7 @@ impl RustPersonaViewer {
     pub fn update_loadout(&self, loadout: JsValue) -> JsValue {
         let s = &self.state;
         set(s, "loadout", &loadout);
+        dress_figure(s);
         apply_weapon(s);
         render(s);
         graphics(
@@ -456,12 +462,14 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     let h = get(s, "host");
     let sex = sex.to_string();
     let female = sex == "female";
-    let url = if female {
-        format!("{}models/persona-female.json", string(&h, "base"))
-    } else {
-        format!("{}preview/persona-authored.json", string(&h, "base"))
-    };
+    let url = format!("{}models/persona-{sex}.json", string(&h, "base"));
     let gltf = wait(try_call(&h, "loadModel", &[text(&url)])?).await?;
+    if !exists(&get(s, "poses")) {
+        let url = format!("{}models/persona-poses.json", string(&h, "base"));
+        if let Ok(poses) = wait(try_call(&h, "loadModel", &[text(&url)])?).await {
+            set(s, "poses", &get(&poses, "animations"));
+        }
+    }
     let figure = get(&gltf, "scene");
     if yes(s, "disposed") || string(s, "look.sex") != sex {
         dispose(&figure, &[], true);
@@ -471,7 +479,9 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     if exists(&old) {
         call(&old, "removeFromParent", &[]);
         super::persona_hd::restore(&old);
-        let extra = Array::from(&get(s, "originalTextures")).iter().collect::<Vec<_>>();
+        let extra = Array::from(&get(s, "originalTextures"))
+            .iter()
+            .collect::<Vec<_>>();
         let pending = get(s, "texturesPending");
         spawn_local(async move {
             let _ = wait(pending).await;
@@ -482,53 +492,50 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     set(s, "figureSex", &text(&sex));
     set(s, "mixer", &JsValue::NULL);
     set(s, "head", &JsValue::NULL);
-    if female {
-        // The female figure is the rigged game model: hold the first idle frame and
-        // stand it on the platform at a height matching the authored male.
-        let clip = call(
-            &get(&h, "THREE.AnimationClip"),
-            "findByName",
-            &[get(&gltf, "animations"), text("idle")],
-        );
-        if exists(&clip) {
-            let mixer = make(&h, "THREE.AnimationMixer", &[figure.clone()]);
-            call(&call(&mixer, "clipAction", &[clip]), "play", &[]);
-            call(&mixer, "update", &[num(0.0)]);
-            set(s, "mixer", &mixer);
+    // Both figures are the rigged game models: sized and centred at the first idle frame,
+    // then posed (see `pose`) with the feet on the platform.
+    let mixer = make(&h, "THREE.AnimationMixer", &[figure.clone()]);
+    set(s, "mixer", &mixer);
+    set(s, "figureClips", &get(&gltf, "animations"));
+    hold(&mixer, &clip(&h, &get(&gltf, "animations"), "idle"));
+    let box3 = lowest_box(&h, &figure);
+    let height = if female { FEMALE_HEIGHT } else { MALE_HEIGHT };
+    let k = height / (number(&box3, "max.y") - number(&box3, "min.y")).max(0.1);
+    call(&get(&figure, "scale"), "setScalar", &[num(k)]);
+    let centre = call(&box3, "getCenter", &[make(&h, "THREE.Vector3", &[])]);
+    call(
+        &get(&figure, "position"),
+        "set",
+        &[
+            num(-number(&centre, "x") * k),
+            num(0.0),
+            num(-number(&centre, "z") * k),
+        ],
+    );
+    // Where the feet are in each pose, measured while the figure stands alone.
+    let lows = Object::new();
+    for name in [
+        format!("{sex}_stand"),
+        format!("{sex}_idle"),
+        "idle".to_string(),
+    ] {
+        let c = pose_clip(s, &name);
+        if exists(&c) {
+            hold(&mixer, &c);
+            set(
+                &lows,
+                &name,
+                &num(number(&lowest_box(&h, &figure), "min.y")),
+            );
         }
-        call(&figure, "updateMatrixWorld", &[flag(true)]);
-        let box3 = make(&h, "THREE.Box3", &[]);
-        call(&box3, "setFromObject", &[figure.clone(), flag(true)]);
-        let low = number(&box3, "min.y");
-        let k = FEMALE_HEIGHT / (number(&box3, "max.y") - low).max(0.1);
-        call(&get(&figure, "scale"), "setScalar", &[num(k)]);
-        let centre = call(&box3, "getCenter", &[make(&h, "THREE.Vector3", &[])]);
-        call(
-            &get(&figure, "position"),
-            "set",
-            &[
-                num(-number(&centre, "x") * k),
-                num(number(&h, "PLATFORM_TOP") - low * k),
-                num(-number(&centre, "z") * k),
-            ],
-        );
     }
+    set(s, "poseLows", &lows);
     set(&figure, "name", &text("Persona_Authored_In_Blender"));
     for n in nodes(&figure, false) {
         if yes(&n, "isMesh") {
             // Blender object names; the loader may swap spaces for underscores.
-            let name = string(&n, "name");
-            for (prefix, slot) in [
-                ("Бронежилет", "body"),
-                ("Каска", "head"),
-                ("Костюм", "suit"),
-                ("Vest", "body"),
-                ("Helmet", "head"),
-                ("Suit", "suit"),
-            ] {
-                if name.starts_with(prefix) {
-                    set(&n, "userData.slot", &text(slot));
-                }
+            if let Some(slot) = super::scene_assets::gear_slot(&string(&n, "name")) {
+                set(&n, "userData.slot", &text(slot));
             }
             set(&n, "frustumCulled", &flag(false));
             set(&n, "castShadow", &flag(true));
@@ -536,6 +543,7 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
         }
     }
     call(&get(s, "stage.rotating"), "add", &[figure.clone()]);
+    pose(s);
     set(s, "originalTextures", &array(&textures(&figure)));
     set(
         s,
@@ -548,29 +556,105 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     wait(update_textures(s).into()).await?;
     Ok(true)
 }
-/// Female height on the stand; the authored male stands 1.8 m.
+/// Heights on the stand, with the helmet; the male as the authored Blender scene he replaced.
 const FEMALE_HEIGHT: f64 = 1.72;
-/// Shows the worn kit, or only the suit while the look is being chosen.
+const MALE_HEIGHT: f64 = 1.8;
+/// Art's poses (models/persona-poses, retargeted from his Mixamo files, 2026-11-01). The male
+/// idles in "Neutral Idle" while his look is made and stands in the first frame of "Standing
+/// Idle" in the fitting room, where the kit is hung on that frame; the female keeps her one pose.
+fn pose_name(s: &JsValue) -> String {
+    let sex = string(s, "figureSex");
+    if sex == "male" && yes(s, "creating") {
+        "male_idle".into()
+    } else {
+        format!("{sex}_stand")
+    }
+}
+/// Puts the figure in the pose for the screen, feet on the platform; the game's first idle
+/// frame when the poses did not load.
+fn pose(s: &JsValue) {
+    let figure = get(s, "figure");
+    let mixer = get(s, "mixer");
+    if !exists(&figure) || !exists(&mixer) {
+        return;
+    }
+    let h = get(s, "host");
+    let mut name = pose_name(s);
+    if !exists(&pose_clip(s, &name)) {
+        name = "idle".into();
+    }
+    hold(&mixer, &pose_clip(s, &name));
+    if let Some(low) = get(&get(s, "poseLows"), &name).as_f64() {
+        set(
+            &get(&figure, "position"),
+            "y",
+            &num(number(&h, "PLATFORM_TOP") - low),
+        );
+    }
+    set(s, "head", &JsValue::NULL);
+}
+fn pose_clip(s: &JsValue, name: &str) -> JsValue {
+    let h = get(s, "host");
+    let from = if name == "idle" {
+        get(s, "figureClips")
+    } else {
+        get(s, "poses")
+    };
+    if exists(&from) {
+        clip(&h, &from, name)
+    } else {
+        JsValue::NULL
+    }
+}
+fn clip(h: &JsValue, clips: &JsValue, name: &str) -> JsValue {
+    call(
+        &get(h, "THREE.AnimationClip"),
+        "findByName",
+        &[clips.clone(), text(name)],
+    )
+}
+/// Plays only `clip`, from its start.
+fn hold(mixer: &JsValue, clip: &JsValue) {
+    if !exists(clip) {
+        return;
+    }
+    call(mixer, "stopAllAction", &[]);
+    call(&call(mixer, "clipAction", &[clip.clone()]), "play", &[]);
+    call(mixer, "setTime", &[num(0.0)]);
+}
+/// The box of the plain kit as the figure stands (skinned meshes follow their bones).
+fn lowest_box(h: &JsValue, figure: &JsValue) -> JsValue {
+    call(figure, "updateMatrixWorld", &[flag(true)]);
+    let box3 = make(h, "THREE.Box3", &[]);
+    for n in nodes(figure, false) {
+        if yes(&n, "isMesh") && super::scene_assets::plain_kit(&string(&n, "name")) {
+            call(&box3, "expandByObject", &[n, flag(true)]);
+        }
+    }
+    box3
+}
+/// Shows the worn kit, or only suit and boots while the look is being chosen.
 fn dress_figure(s: &JsValue) {
     let figure = get(s, "figure");
     if !exists(&figure) {
         return;
     }
     let bare = yes(s, "bare");
-    if string(s, "figureSex") == "female" {
-        super::scene_assets::dress(
-            get(s, "host"),
-            figure.clone(),
-            options(&[("suit", flag(true)), ("body", flag(!bare)), ("head", flag(!bare))]),
-        );
-    } else {
-        for n in nodes(&figure, false) {
-            let slot = string(&n, "userData.slot");
-            if slot == "head" || slot == "body" {
-                set(&n, "visible", &flag(!bare));
-            }
+    let kit = get(s, "loadout");
+    let wear = |slot: &str| {
+        if bare && (slot == "head" || slot == "body") {
+            JsValue::NULL
+        } else if exists(&kit) {
+            get(&kit, slot)
+        } else {
+            flag(true)
         }
-    }
+    };
+    super::scene_assets::dress(
+        get(s, "host"),
+        figure.clone(),
+        options(&["head", "body", "suit", "boots"].map(|k| (k, wear(k)))),
+    );
     set(&get(s, "equipment"), "visible", &flag(!bare));
 }
 async fn load_environment(s: &JsValue) {
@@ -776,7 +860,11 @@ fn aim(s: &JsValue) {
         let c = components(&get(&fit, key));
         [c[0], c[1], c[2]]
     };
-    call(&get(s, "camera.position"), "fromArray", &[floats(&v("position"))]);
+    call(
+        &get(s, "camera.position"),
+        "fromArray",
+        &[floats(&v("position"))],
+    );
     call(&get(s, "camera"), "lookAt", &v("target").map(num));
     call(&get(s, "camera"), "updateMatrixWorld", &[]);
 }
@@ -799,7 +887,11 @@ fn focus_frame(s: &JsValue) {
             set(&a, "focusLast", &num(time));
             let (t, goal) = (number(&a, "focusT"), number(&a, "focusGoal"));
             let step = dt / FOCUS_MS;
-            let next = if goal > t { (t + step).min(goal) } else { (t - step).max(goal) };
+            let next = if goal > t {
+                (t + step).min(goal)
+            } else {
+                (t - step).max(goal)
+            };
             set(&a, "focusT", &num(next));
             aim(&a);
             render(&a);
@@ -833,11 +925,19 @@ fn creation_view(s: &JsValue) {
         "lookAt",
         &[
             make(&h, "THREE.Vector3", &face.map(num)),
-            make(&h, "THREE.Vector3", &[num(head[0]), num(head[1] - 0.035), num(head[2])]),
+            make(
+                &h,
+                "THREE.Vector3",
+                &[num(head[0]), num(head[1] - 0.035), num(head[2])],
+            ),
             make(&h, "THREE.Vector3", &[num(0.0), num(1.0), num(0.0)]),
         ],
     );
-    let turn = call(&make(&h, "THREE.Quaternion", &[]), "setFromRotationMatrix", &[look]);
+    let turn = call(
+        &make(&h, "THREE.Quaternion", &[]),
+        "setFromRotationMatrix",
+        &[look],
+    );
     let t = number(s, "focusT").clamp(0.0, 1.0);
     let k = t * t * (3.0 - 2.0 * t);
     super::bay::close_in(s, k);
@@ -869,7 +969,11 @@ fn creation_view(s: &JsValue) {
             get(&camera, "far"),
         ],
     );
-    call(&call(&get(&camera, "projectionMatrixInverse"), "copy", &[matrix]), "invert", &[]);
+    call(
+        &call(&get(&camera, "projectionMatrixInverse"), "copy", &[matrix]),
+        "invert",
+        &[],
+    );
 }
 /// The close-up's vertical field of view over the visible part of the canvas.
 const FACE_FOV: f64 = 33.0;
@@ -910,7 +1014,11 @@ fn loop_frame(s: &JsValue) {
         "requestAnimationFrame",
         &[function(move |_| {
             set(&a, "loopFrame", &JsValue::NULL);
-            if !yes(&a, "creating") || !yes(&a, "ready") || !yes(&a, "active") || yes(&a, "disposed") {
+            if !yes(&a, "creating")
+                || !yes(&a, "ready")
+                || !yes(&a, "active")
+                || yes(&a, "disposed")
+            {
                 set(&a, "looping", &flag(false));
                 return;
             }
@@ -928,7 +1036,12 @@ fn loop_frame(s: &JsValue) {
                 "getDrawingBufferSize",
                 &[make(&get(&a, "host"), "THREE.Vector2", &[])],
             );
-            super::bay::tick(&a, time / 1000.0, t * t * (3.0 - 2.0 * t), number(&buffer, "y"));
+            super::bay::tick(
+                &a,
+                time / 1000.0,
+                t * t * (3.0 - 2.0 * t),
+                number(&buffer, "y"),
+            );
             aim(&a);
             call(&renderer, "render", &[get(&a, "scene"), get(&a, "camera")]);
             loop_frame(&a);
@@ -965,8 +1078,16 @@ fn measure_head(h: &JsValue, rotating: &JsValue, figure: &JsValue) -> [f64; 3] {
     let origin = make(h, "THREE.Vector3", &[num(0.0), num(y), num(3.0)]);
     call(rotating, "localToWorld", &[origin.clone()]);
     let direction = make(h, "THREE.Vector3", &[num(0.0), num(0.0), num(-1.0)]);
-    call(&direction, "transformDirection", &[get(rotating, "matrixWorld")]);
-    let ray = make(h, "THREE.Raycaster", &[origin, direction, num(0.0), num(6.0)]);
+    call(
+        &direction,
+        "transformDirection",
+        &[get(rotating, "matrixWorld")],
+    );
+    let ray = make(
+        h,
+        "THREE.Raycaster",
+        &[origin, direction, num(0.0), num(6.0)],
+    );
     let hits = call(&ray, "intersectObject", &[figure.clone(), flag(true)]);
     for hit in Array::from(&hits).iter() {
         let mut node = get(&hit, "object");
@@ -1013,7 +1134,12 @@ fn show_stand(s: &JsValue) {
     let on = !yes(s, "creating");
     super::bay::show(s, !on);
     set(&get(s, "stage.fixed"), "visible", &flag(on));
-    let keep = [get(s, "figure"), get(s, "equipment"), get(s, "stage.feet"), get(s, "podium")];
+    let keep = [
+        get(s, "figure"),
+        get(s, "equipment"),
+        get(s, "stage.feet"),
+        get(s, "podium"),
+    ];
     for child in Array::from(&get(s, "stage.rotating.children")).iter() {
         if !keep.contains(&child) {
             set(&child, "visible", &flag(on));
@@ -1172,8 +1298,18 @@ fn apply_weapon(s: &JsValue) {
         call(&old, "removeFromParent", &[]);
         dispose(&old, &[], true);
     }
-    let sling = if real && weapon == "rifle" && string(s, "figureSex") != "female" {
-        call(&h, "authoredWeaponFit", &[mount])
+    // A real gun hangs as fitted to this Persona's pose; anything without a fit keeps the generic sling.
+    let carry = if real {
+        call(
+            &h,
+            "makeCarry",
+            &[mount.clone(), text(&string(s, "figureSex")), text(&weapon)],
+        )
+    } else {
+        JsValue::NULL
+    };
+    let sling = if exists(&carry) {
+        carry
     } else {
         call(&h, "makeSling", &[mount, flag(weapon == "pistol")])
     };
@@ -1368,10 +1504,13 @@ fn pick_part(s: &JsValue, x: f64, y: f64) -> String {
         // The eye shader keeps both eye spots in the head's own space; a tap near one picks the eyes.
         let positions = get(&object, "geometry.attributes.position");
         let at = number(&hit, "face.a");
-        let p = ["getX", "getY", "getZ"].map(|k| call(&positions, k, &[num(at)]).as_f64().unwrap_or(0.0));
+        let p = ["getX", "getY", "getZ"]
+            .map(|k| call(&positions, k, &[num(at)]).as_f64().unwrap_or(0.0));
         for key in ["cdEyeA", "cdEyeB"] {
             let eye = components(&get(&material, &format!("userData.cdLook.{key}.value")));
-            if eye.len() == 4 && (0..3).map(|i| (p[i] - eye[i]).powi(2)).sum::<f64>().sqrt() < eye[3] * 2.2 {
+            if eye.len() == 4
+                && (0..3).map(|i| (p[i] - eye[i]).powi(2)).sum::<f64>().sqrt() < eye[3] * 2.2
+            {
                 return "eyes".into();
             }
         }

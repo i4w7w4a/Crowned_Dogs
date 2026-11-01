@@ -7,12 +7,12 @@ import { tuneFittingMaterial } from "./turntable-material.ts";
 import { QUALITY, startQuality } from "../arena/quality.ts";
 import { TextureTiers } from "../arena/textures.ts";
 import { Hand } from "../arena/weapons.ts";
-import { fitVaryag, makeFittingStage, makeSling, PLATFORM_TOP, prepareVaryag } from "./fitting-stage.ts";
+import { fitVaryag, makeCarry, makeFittingStage, makeSling, PLATFORM_TOP, prepareVaryag } from "./fitting-stage.ts";
 import { authoredWeaponFit } from "./user-fitting-layout.ts";
 
 export interface PersonaPreviewCoverage { exact: false; description: string; missingItemIds: string[] }
 const host = { THREE, RoomEnvironment, getItem, loadModel, tuneFittingMaterial, QUALITY, startQuality,
-  TextureTiers, Hand, fitVaryag, makeFittingStage, makeSling, PLATFORM_TOP, prepareVaryag,
+  TextureTiers, Hand, fitVaryag, makeCarry, makeFittingStage, makeSling, PLATFORM_TOP, prepareVaryag,
   authoredWeaponFit, base: import.meta.env.BASE_URL };
 
 /** Keeps the authored model intact while Rust owns the preview lifecycle. */
