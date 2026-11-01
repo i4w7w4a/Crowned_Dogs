@@ -248,6 +248,7 @@ impl RustSceneHand {
                     };
                     set(&node, "material", &replacement);
                 }
+                pull_stocks(&host, &group);
             } else {
                 for b in boxes[held].as_array().unwrap() {
                     let d = b
@@ -402,6 +403,63 @@ impl RustSceneHand {
         call(&out, "copy", &[at.clone()]);
         call(&self.mount, "localToWorld", &[out]);
         true
+    }
+}
+/// A stock bought longer than the factory one sticks out through the back of the shoulder, so in
+/// the hands it is pulled in to the factory length (the «Опора» stocks are adjustable anyway).
+/// A taller butt goes three times its extra height further, so its top clears the collar.
+fn pull_stocks(host: &JsValue, gun: &JsValue) {
+    call(gun, "updateMatrixWorld", &[true.into()]);
+    let into = call(&call(&get(gun, "matrixWorld"), "clone", &[]), "invert", &[]);
+    // The back end and the top of a stock in the gun's frame, from each mesh's own box.
+    let reach = |stock: &JsValue| {
+        let bounds = make(host, "Box3", &[]);
+        for node in nodes(stock) {
+            if !boolean(&get(&node, "isMesh")) {
+                continue;
+            }
+            let geometry = get(&node, "geometry");
+            call(&geometry, "computeBoundingBox", &[]);
+            let matrix = call(
+                &make(host, "Matrix4", &[]),
+                "multiplyMatrices",
+                &[into.clone(), get(&node, "matrixWorld")],
+            );
+            let own = call(&get(&geometry, "boundingBox"), "clone", &[]);
+            call(&bounds, "union", &[call(&own, "applyMatrix4", &[matrix])]);
+        }
+        (num(&get(&get(&bounds, "min"), "x")), num(&get(&get(&bounds, "max"), "y")))
+    };
+    let stocks: Vec<_> = nodes(gun)
+        .into_iter()
+        .filter(|node| string(&get(&get(node, "userData"), "slot")) == "stock")
+        .collect();
+    let Some(factory) = stocks
+        .iter()
+        .find(|node| get(&get(node, "userData"), "factory").as_bool() == Some(true))
+    else {
+        return;
+    };
+    let name = string(&get(factory, "name"));
+    let (back, top) = reach(factory);
+    for node in &stocks {
+        let data = get(node, "userData");
+        if get(&data, "factory").as_bool() != Some(false) || string(&get(&data, "replaces")) != name {
+            continue;
+        }
+        let (rear, height) = reach(node);
+        let over = back - rear + 3. * (height - top).max(0.);
+        if over <= 0.001 {
+            continue;
+        }
+        // Forward along the gun, written in the stock's own parent frame.
+        let parent = get(node, "parent");
+        let shift = [0., over].map(|x| {
+            let p = make(host, "Vector3", &[x.into(), 0.into(), 0.into()]);
+            call(&p, "applyMatrix4", &[get(gun, "matrixWorld")]);
+            call(&parent, "worldToLocal", &[p])
+        });
+        call(&get(node, "position"), "add", &[call(&shift[1], "sub", &[shift[0].clone()])]);
     }
 }
 fn front_of(host: &JsValue, gun: &JsValue) -> JsValue {

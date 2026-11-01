@@ -156,7 +156,10 @@ impl RustViewmodel {
             &[vector(&self.three, &[])],
         )));
         input.extend(numbers(&get(&get(&mount, "matrix"), "elements")));
-        self.place(1, &math("viewmodelTransforms", &input), camera);
+        // Arms held out at a pistol bend their elbows out to the sides, not in under the chest:
+        // how much the elbow follows that pull (against a straight wrist), and how far out it swings.
+        let pole = if stance == "pistol" { (1., 2.5) } else { (0.5, 1.) };
+        self.place(1, &math("viewmodelTransforms", &input), camera, pole);
         if present(&self.palm) {
             // The left hand goes where the gun really is once the right arm has reached.
             call(&mount, "updateWorldMatrix", &[true.into(), false.into()]);
@@ -167,7 +170,7 @@ impl RustViewmodel {
             let held = if stance_index < 0. { 1. } else { stance_index };
             input.extend([held, f64::from(foregrip)]);
             let grip = math("support", &input);
-            self.place(0, &grip[..16], camera);
+            self.place(0, &grip[..16], camera, pole);
             self.left.close(&cupped(grip[16], grip[17]), self.weight);
         }
         let right = if stance == "pistol" {
@@ -184,18 +187,18 @@ impl RustViewmodel {
     }
 }
 impl RustViewmodel {
-    fn place(&self, side: usize, matrix: &[f64], camera: &JsValue) {
+    fn place(&self, side: usize, matrix: &[f64], camera: &JsValue, (bend, spread): (f64, f64)) {
         let [upper, lower, hand] = &self.arms.as_ref().unwrap()[side];
         let mut input = matrix.to_vec();
         input.extend(components(&world_position(&self.three, hand)));
         input.extend(numbers(&get(&get(camera, "matrixWorld"), "elements")));
-        input.extend([self.weight, if side == 1 { 1. } else { -1. }]);
+        input.extend([self.weight, if side == 1 { spread } else { -spread }]);
         input.extend(components(&world_quat(&self.three, hand)));
         input.extend(components(&world_position(&self.three, upper)));
         input.extend(components(&self.forearms[side]));
         let forearm = world_position(&self.three, lower);
         input.push(num(&call(&forearm, "distanceTo", &[world_position(&self.three, hand)])));
-        input.push(0.5);
+        input.push(bend);
         let pose = math("placeHand", &input);
         rig_reach(
             &self.three,

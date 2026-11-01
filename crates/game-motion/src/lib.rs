@@ -47,9 +47,12 @@ fn appendq(out: &mut Vec<f64>, q: DQuat) {
 fn appendv(out: &mut Vec<f64>, v: DVec3) {
     out.extend(v.to_array());
 }
+/// Each stance's gun in first person: where it rests and where it rises to fire (right, down,
+/// forward from the eye), then its kick. The pistol is held out at arm's length, a little right
+/// of centre (Art, 2026-11-01: not pressed to the chest).
 fn held(i: usize) -> ([f64; 3], [f64; 3], [f64; 3]) {
     match i {
-        0 => ([0.0, 0.23, 0.48], [0.02, 0.15, 0.55], [0.035, 0.02, 0.3]),
+        0 => ([0.08, 0.27, 0.55], [0.025, 0.15, 0.6], [0.035, 0.02, 0.3]),
         2 => ([0.07, 0.33, 0.2], [0.07, 0.275, 0.23], [0.09, 0.025, 0.2]),
         3 => ([0.09, 0.36, 0.22], [0.08, 0.29, 0.25], [0.08, 0.02, 0.14]),
         _ => ([0.07, 0.33, 0.22], [0.07, 0.27, 0.25], [0.05, 0.012, 0.1]),
