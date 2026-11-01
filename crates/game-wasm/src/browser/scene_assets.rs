@@ -95,6 +95,10 @@ pub(super) const GUN_MODELS: &[(&str, &str)] = &[
     ("rifle", "varyag"),
     ("sniper", "berkut"),
 ];
+/// A real gun whose own origin is not where the hand closes: its scale in the hand, then its shift
+/// in the mount (x along the bore, y up). The pistol's centre sat in the fist with the grip back in
+/// the wrist; it goes up and forward into the palm, a size up to fill the gloved hand (Art, 2026-11-01).
+const HOLDS: &[(&str, f64, [f64; 3])] = &[("pistol", 1.2, [0.03, 0.02, 0.])];
 #[wasm_bindgen(js_name = sceneLoadGuns)]
 pub fn load_guns(host: JsValue) -> Promise {
     future_to_promise(async move {
@@ -249,6 +253,10 @@ impl RustSceneHand {
                     set(&node, "material", &replacement);
                 }
                 pull_stocks(&host, &group);
+                if let Some((_, scale, [x, y, z])) = HOLDS.iter().find(|(gun, ..)| *gun == held) {
+                    call(&get(&group, "scale"), "setScalar", &[(*scale).into()]);
+                    call(&get(&group, "position"), "set", &[(*x).into(), (*y).into(), (*z).into()]);
+                }
             } else {
                 for b in boxes[held].as_array().unwrap() {
                     let d = b
@@ -401,7 +409,8 @@ impl RustSceneHand {
             .entry(what.clone())
             .or_insert_with(|| front_of(&self.host, group));
         call(&out, "copy", &[at.clone()]);
-        call(&self.mount, "localToWorld", &[out]);
+        // The muzzle is found in the gun's own frame, which a hold may scale and shift in the mount.
+        call(group, "localToWorld", &[out]);
         true
     }
 }
