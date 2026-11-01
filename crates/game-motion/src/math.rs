@@ -500,7 +500,8 @@ fn support(stance: usize, foregrip: bool) -> (DVec3, DVec3, DVec3, f64, f64) {
     };
     let ((at, along, across), fingers, thumb) = match (stance, foregrip) {
         (0, false) => (handle([0.0231, -0.0414, -0.0757], -0.179, 0.179), 0.74, -1.0),
-        (0, true) => (handle([0.1025, -0.046, -0.0291], 0.069, 0.638), 1.29, 1.09),
+        // The pistol sits 1.2 times its size, up and forward in the mount (`HOLDS` in scene_assets.rs).
+        (0, true) => (handle([0.153, -0.0352, -0.0349], 0.069, 0.638), 1.2, 1.09),
         (1, true) => (handle([0.3151, -0.022, -0.0266], 0.082, 0.624), 1.3, 0.74),
         (2, _) => (barrel([0.43, -0.014, -0.0391], 0.253, 0.462), 0.82, -0.55),
         (3, _) => (barrel([0.40, 0.0375, -0.0363], 0.331, 0.448), 0.82, -0.84),
