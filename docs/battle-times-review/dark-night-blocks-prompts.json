@@ -1,0 +1,42 @@
+{
+  "tool": "Built-in image_gen",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "date": "2026-11-01",
+  "prompts": [
+    {
+      "key": "dark-night-hall",
+      "referenced_image_paths": [
+        "C:/Users/qtas5/OneDrive/Documents/ChatGPT/Crowned Dogs/crowned-dogs-battle-times/apps/web/public/img/battle-times/night/hall.png"
+      ],
+      "prompt": "Use case: lighting-weather. EDIT the supplied exact game texture, preserving PIXEL-REGISTERED framing, camera, ALL architecture and equipment silhouettes, cracks, rubble and material detail. This is the same salt factory at night, but the current version is MUCH TOO BRIGHT without night-vision equipment. Relight to a realistically dark, overcast, nearly moonless night. Lower ambient illumination roughly 2.5 stops, with about ONE FIFTH of the input's overall visible brightness. Dark graphite sky; the bright moonlit cloud patch is now hidden behind thick clouds. Most machinery and foreground merge into deep neutral near-black shadow. Salt sacks, pale salt and floor are NOT self-luminous; only very faint narrow cold highlights and silhouettes, rather than a broadly lit silver floor. Keep just the original tiny red status light and a few dim far emergency glints, without bright halos or lighting the whole room. Preserve a little low-level shadow texture information for a separately rendered image intensifier, rather than crushing every dark surface to uniform solid black. This must look substantially darker than the input at a glance: true dangerous darkness where night vision has a purpose. No blue daylight, no bright fog, no glowing salt, no new lights or geometry. No people, robots, weapons, UI or text. Exact same portrait 941x1672 format. Do not change perspective or crop. It is a physically relit environment plate, not a black gradient overlay. Keep all conveyors and sacks exactly in place.",
+      "transparent_background": false
+    },
+    {
+      "key": "dark-night-clean",
+      "referenced_image_paths": [
+        "C:/Users/qtas5/OneDrive/Documents/ChatGPT/Crowned Dogs/crowned-dogs-battle-times/apps/web/public/img/battle-times/night/clean.png"
+      ],
+      "prompt": "Use case: lighting-weather. EDIT the supplied exact game texture, preserving PIXEL-REGISTERED framing, camera, ALL architecture and equipment silhouettes, cracks, rubble and material detail. This is the same salt factory at night, but the current version is MUCH TOO BRIGHT without night-vision equipment. Relight to a realistically dark, overcast, nearly moonless night. Lower ambient illumination roughly 2.5 stops, with about ONE FIFTH of the input's overall visible brightness. Dark graphite sky; the bright moonlit cloud patch is now hidden behind thick clouds. Most machinery and foreground merge into deep neutral near-black shadow. Salt sacks, pale salt and floor are NOT self-luminous; only very faint narrow cold highlights and silhouettes, rather than a broadly lit silver floor. Keep just the original tiny red status light and a few dim far emergency glints, without bright halos or lighting the whole room. Preserve a little low-level shadow texture information for a separately rendered image intensifier, rather than crushing every dark surface to uniform solid black. This must look substantially darker than the input at a glance: true dangerous darkness where night vision has a purpose. No blue daylight, no bright fog, no glowing salt, no new lights or geometry. No people, robots, weapons, UI or text. Exact same portrait 941x1672 format. Do not change perspective or crop. It is a physically relit environment plate, not a black gradient overlay. This is a CLEAN ARCHITECTURE PLATE: keep it EMPTY, do not add machinery, conveyors, sacks, people or foreground props.",
+      "transparent_background": false
+    },
+    {
+      "key": "blocks-day",
+      "referenced_image_paths": [
+        "C:/Users/qtas5/Documents/CrownedDogs/art/06-round2/06-combat-panel-blocks-noon-darkreal.png",
+        "C:/Users/qtas5/Documents/CrownedDogs/project-files/crowned-dogs/art/style-2/02-factory-yard.png"
+      ],
+      "prompt": "Use case: photorealistic-natural. Create ONE finished EMPTY playable environment plate for Crowned Dogs, portrait 9:16, 1882x3344 if possible. Image1 is the LOCATION reference only: the Soviet five-storey courtyard, burned bus and rocket slide. Completely OMIT its people, weapons and ALL UI. Image2 is the authoritative STYLE reference only: cold grey industrial near-photoreal bodycam realism, believable rough PBR surfaces, restrained rust, concrete, pale salt, subdued cinematic exposure, no outlines or cartoon treatment. Create a coherent courtyard of ruined Soviet FIVE-STOREY concrete panel apartment blocks: precisely FIVE occupied floor rows, panel-grid facades, damaged balconies, shattered windows, pockmarks. One burned-out full-size city bus along the LEFT side, one rusty playground rocket-slide on the RIGHT side, sections of precast concrete fence with diamond/lozenge relief, one faded Soviet abstract mosaic on a building end wall. Years of fighting are visible through broken asphalt, craters, old tangled camouflage netting, fallen power wires, and a few abandoned mechanical fragments; no bodies. Harsh overhead noon sun through thin haze, pale grey sky, cool deep shadows with limited warm highlights, oppressive dry heat, light airborne dust. DRY cracked ground with a trace of salt-white crust, NO puddles, no rain, no snow. Perspective: stationary eye/bodycam about 2 metres high, vertical field of view about55 degrees. Ground horizon/vanishing point around37% down the image, central vanishing point at57% across. Keep the central combat lane open from the bottom centre deep into the courtyard, enough for two live 3D fighters and movement along a line: no big props blocking the central40% of the image. Buildings enclose the sides and distance, bus and rocket subordinate at the sides. Strong natural architectural perspective, no extreme fisheye, sharp materials, dark grounded exposure. Empty scene with NO people, NO robots, NO combatants, NO detached weapons, NO foreground hands/rifle, NO targeting rings, NO HUD, NO text, NO numbers, NO logos or flags. Absolutely no copied game interface. This is an environment texture for a real camera-projection stage, not a game screenshot with characters.",
+      "transparent_background": false
+    },
+    {
+      "key": "blocks-clean",
+      "prompt": "Use case: precise-object-edit. EDIT this exact image into a CLEAN ARCHITECTURE PLATE for camera-projected game scenery. Preserve the identical camera, crop, pixel registration, portrait 941x1672 size, building geometry, windows, mosaic, sky, light, wall colours, asphalt perspective and central fighting lane. REMOVE the entire burned-out bus on the left, the entire rocket slide and playground apparatus on the right, BOTH close foreground concrete fence segments, and the close camouflage/rusty foreground junk at bottom left. Reconstruct the naturally revealed asphalt and low rubble behind these props, and the exact plausible unobscured building/fence surfaces behind the removed tall props. Retain the distant architecture, sparse trees and rubble. Do not add different large props, people, weapons, vehicles, text or UI. This plate will lie behind independently projected 3D foreground props. Everything else stays exactly aligned with the input; no reframing, relighting or stylistic change.",
+      "referenced_image_paths": [
+        "apps/web/public/img/blocks-day/hall.png"
+      ]
+    }
+  ]
+}
