@@ -213,7 +213,11 @@ pub fn sharp_pictures() -> bool {
     if let Some(sharp) = SHARP.with(|c| c.get()) {
         return sharp;
     }
-    let canvas = call(&get(&global(), "document"), "createElement", &["canvas".into()]);
+    // Without a page (tests, workers) there is no canvas to ask: the plain pictures.
+    let Ok(canvas) = try_call(&get(&global(), "document"), "createElement", &["canvas".into()]) else {
+        SHARP.with(|c| c.set(Some(false)));
+        return false;
+    };
     let gl = try_call(&canvas, "getContext", &["webgl2".into()]).unwrap_or(JsValue::NULL);
     let id = string(&get(&start_quality(gl.clone()), "id"));
     let quality = get(&get(&rust("client.data", &[]), "QUALITY"), &id);
