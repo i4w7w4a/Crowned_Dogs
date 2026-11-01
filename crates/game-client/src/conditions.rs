@@ -75,6 +75,33 @@ fn time_choices(frames: Option<&Vec<Value>>, map: &str) -> Value {
         .collect::<Vec<_>>())
 }
 
+/// Maps that have a picture, in frame order, each with the catalogue region it belongs to.
+fn drawn_maps(frames: &[Value]) -> Vec<Value> {
+    let constants = game_core::constants();
+    let mut result = Vec::<Value>::new();
+    for frame in frames {
+        let map = text(&frame["mapId"]);
+        if !result.iter().any(|m| m["id"] == map) && frame["id"] != "cal" {
+            let name = constants["MAPS"][map]["name"].clone();
+            if !name.is_null() {
+                let region = constants["REGIONS"]
+                    .as_object()
+                    .and_then(|all| {
+                        all.iter().find(|(_, r)| {
+                            r["maps"]
+                                .as_array()
+                                .is_some_and(|maps| maps.iter().any(|m| m == map))
+                        })
+                    })
+                    .map(|(id, _)| id.clone())
+                    .unwrap_or_default();
+                result.push(json!({"id":map,"name":name,"region":region}));
+            }
+        }
+    }
+    result
+}
+
 pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
     Ok(match method {
         "client.conditions.initial" => {
@@ -116,19 +143,21 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             args[0].as_array().ok_or("Conditions require frames")?,
             &args[1],
         ),
-        "client.conditions.maps" => {
-            let frames = args[0].as_array().ok_or("Conditions require frames")?;
-            let mut result = Vec::<Value>::new();
-            for frame in frames {
-                let map = text(&frame["mapId"]);
-                if !result.iter().any(|m| m["id"] == map) && frame["id"] != "cal" {
-                    let name = game_core::constants()["MAPS"][map]["name"].clone();
-                    if !name.is_null() {
-                        result.push(json!({"id":map,"name":name}));
-                    }
-                }
-            }
-            json!(result)
+        "client.conditions.maps" => json!(drawn_maps(
+            args[0].as_array().ok_or("Conditions require frames")?
+        )),
+        "client.conditions.regions" => {
+            // Regions in catalogue order, only those with at least one drawn map.
+            let maps = drawn_maps(args[0].as_array().ok_or("Conditions require frames")?);
+            let regions = &game_core::constants()["REGIONS"];
+            json!(regions
+                .as_object()
+                .map(|all| all
+                    .iter()
+                    .filter(|(id, _)| maps.iter().any(|m| m["region"] == id.as_str()))
+                    .map(|(id, r)| json!({"id":id,"name":r["name"]}))
+                    .collect::<Vec<_>>())
+                .unwrap_or_default())
         }
         "client.conditions.choices" => time_choices(args[0].as_array(), text(&args[1])),
         "client.conditions.frame" => frame_for(
@@ -165,7 +194,8 @@ mod tests {
             {"id":"hall-evening","mapId":"saltHall","time":"evening","weather":"clear","src":"evening.jpg"},
             {"id":"hall-night","mapId":"saltHall","time":"night","weather":"clear","src":"night.jpg"},
             {"id":"hall2","mapId":"saltHall","time":"day","weather":"fog","src":"fog.jpg"},
-            {"id":"blocks-day","mapId":"blocks","time":"day","weather":"clear","src":"blocks.jpg"}
+            {"id":"blocks-day","mapId":"blocks","time":"day","weather":"clear","src":"blocks.jpg"},
+            {"id":"dam-night","mapId":"dam","time":"night","weather":"clear","src":"dam.jpg"}
         ])
     }
     #[test]
@@ -231,9 +261,16 @@ mod tests {
                 .iter()
                 .map(|m| text(&m["id"]))
                 .collect::<Vec<_>>(),
-            vec!["saltHall", "blocks"]
+            vec!["saltHall", "blocks", "dam"]
         );
         assert_eq!(maps[1]["name"], "Пятиэтажки");
+        assert_eq!(maps[1]["region"], "belyYar");
+        assert_eq!(maps[2]["region"], "kaskad");
+        let regions = dispatch("client.conditions.regions", json!([frames()])).unwrap();
+        assert_eq!(
+            regions,
+            json!([{"id":"belyYar","name":"Белый Яр"},{"id":"kaskad","name":"Каскад"}])
+        );
         let choices = dispatch("client.conditions.choices", json!([frames(), "blocks"])).unwrap();
         assert_eq!(choices.as_array().unwrap().len(), 1);
         assert_eq!(choices[0]["id"], "day");

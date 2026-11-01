@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "source": "Codex image_gen: approved drybed-day plate, its clean edit and lighting-weather edits",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/drybed-times/morning/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2682660,
+      "sha256": "760397986d80016d2e1b18c56ca3cdd126b766165ff67918e82736ed713899b9"
+    },
+    {
+      "path": "apps/web/public/img/drybed-times/morning/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 511506,
+      "sha256": "dca54dcd6e343768641565fa851cdda87dec9fb7d653c523a877e198b319e99b"
+    },
+    {
+      "path": "apps/web/public/img/drybed-times/morning/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2719721,
+      "sha256": "453055b785ab4bc5665a81f9f4f473925e4a90396c5b4c1d709f878673fccb9a"
+    },
+    {
+      "path": "apps/web/public/img/drybed-times/morning/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 519012,
+      "sha256": "b3f4ddf4827bee6b967bf9601a38286ada2c14e6029caa6540f62e0bb68d8a67"
+    },
+    {
+      "path": "apps/web/public/img/drybed-times/evening/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2863747,
+      "sha256": "d7d5f10a0582516eb05580765238189494f325867a29089c77f5aff66ceb22a6"
+    },
+    {
+      "path": "apps/web/public/img/drybed-times/evening/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 597734,
+      "sha256": "5de3eed12c01c0646b4ec386fd566f915308047a618bfc55ea7861a0ebf5e725"
+    },
+    {
+      "path": "apps/web/public/img/drybed-times/evening/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2935495,
+      "sha256": "80366c4089ffb75d68cd1470df18a81eb82838f114558f1538e72d2abd993d1e"
+    },
+    {
+      "path": "apps/web/public/img/drybed-times/evening/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 629548,
+      "sha256": "cc629258623ffb60e93457980818297d74fa05ac6c985499e7faeadf7b88de84"
+    },
+    {
+      "path": "apps/web/public/img/drybed-times/night/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2157093,
+      "sha256": "6afea1276562bad61b872eb67906040ecdecccb7ddca6a3d77e1b1c0211d3a3b"
+    },
+    {
+      "path": "apps/web/public/img/drybed-times/night/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 333226,
+      "sha256": "5fe1c705303b752dfc900e04854f536c82ebe6ab081da6c13fbcd602b6edaa51"
+    },
+    {
+      "path": "apps/web/public/img/drybed-times/night/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2067269,
+      "sha256": "1787563f2a7ad1fa29a9fa0966252b0585efdafd674b04a2e0b30ff51be37ea3"
+    },
+    {
+      "path": "apps/web/public/img/drybed-times/night/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 296158,
+      "sha256": "ab727477419626d31258ab8e0e3cccf6863fd95c3f67a93c3052906b2c6336f5"
+    }
+  ]
+}

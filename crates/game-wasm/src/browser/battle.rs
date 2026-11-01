@@ -1291,7 +1291,35 @@ fn render_menu(s: &JsValue) {
     let current_config = get(&match_(s), "config");
     let current_map = word(&current_config, "mapId");
     let time = word(&current_config, "time");
-    let maps = values(&core("client.conditions.maps", &[get(s, "frames")]));
+    let all_maps = values(&core("client.conditions.maps", &[get(s, "frames")]));
+    let current_region = all_maps
+        .iter()
+        .find(|m| word(m, "id") == current_map)
+        .map(|m| word(m, "region"))
+        .unwrap_or_default();
+    let regions = values(&core("client.conditions.regions", &[get(s, "frames")]));
+    let rs = segment("regionSeg", regions.len());
+    for region in regions {
+        let wanted = word(&region, "id");
+        let current = wanted == current_region;
+        // A region opens on its first drawn map, keeping the chosen time of day.
+        let first = all_maps
+            .iter()
+            .find(|m| word(m, "region") == wanted)
+            .map(|m| word(m, "id"))
+            .unwrap_or_default();
+        let state = s.clone();
+        let time = time.clone();
+        option(&rs, &word(&region, "name"), current, move |_| {
+            if !current {
+                choose_conditions(&state, &first, &time);
+            }
+        });
+    }
+    let maps: Vec<JsValue> = all_maps
+        .into_iter()
+        .filter(|m| word(m, "region") == current_region)
+        .collect();
     let ms = segment("mapSeg", maps.len());
     for choice in maps {
         let wanted = word(&choice, "id");
