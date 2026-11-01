@@ -591,6 +591,11 @@ impl RustArena {
     pub fn gl(&self) -> JsValue {
         call(&self.state.borrow().renderer, "getContext", &[])
     }
+    /// Lightning strikes the lens has drawn in this battle picture.
+    #[wasm_bindgen(getter)]
+    pub fn strikes(&self) -> f64 {
+        num(&get(&self.state.borrow().lens, "strikes"))
+    }
     #[wasm_bindgen(getter,js_name=onFrame)]
     pub fn on_frame(&self) -> JsValue {
         self.state.borrow().on_frame.clone()
@@ -769,6 +774,21 @@ impl RustArena {
                 ],
             );
         }
+        if get(&s.lens, "setWeather").is_function() {
+            let fx = policy(
+                "client.world.fx",
+                serde_json::json!([
+                    m["config"]["weather"],
+                    m["config"]["time"],
+                    m["config"]["mapId"]
+                ]),
+            );
+            call(
+                &s.lens,
+                "setWeather",
+                &[js_sys::JSON::parse(&fx.to_string()).unwrap_or(JsValue::NULL)],
+            );
+        }
         for (slot, fighter) in [own, 1 - own].into_iter().enumerate() {
             let spec = game_core::dispatch(
                 "weaponSpec",
@@ -821,10 +841,18 @@ impl RustArena {
         let key = ["head", "body", "suit", "boots"]
             .map(|k| get(&kit, k).as_string().unwrap_or_default())
             .join("|")
-            + &js_sys::JSON::stringify(&get(&kit, "colors")).ok().and_then(|t| t.as_string()).unwrap_or_default();
+            + &js_sys::JSON::stringify(&get(&kit, "colors"))
+                .ok()
+                .and_then(|t| t.as_string())
+                .unwrap_or_default();
         let enemy = who == "enemy";
         let s = &mut *s;
-        let f = if enemy { s.enemy.as_mut() } else { s.me.as_mut() }.unwrap();
+        let f = if enemy {
+            s.enemy.as_mut()
+        } else {
+            s.me.as_mut()
+        }
+        .unwrap();
         if f.worn == key {
             return;
         }

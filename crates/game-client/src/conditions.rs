@@ -17,6 +17,14 @@ fn frame_for(frames: &[Value], config: &Value, preferred: &str) -> Value {
         .iter()
         .filter(matches)
         .find(|f| text(&f["id"]) == preferred && f["weather"] == config["weather"])
+        // The plate on screen stays when it fits the hour: weather is drawn
+        // live over it, so a dedicated weather plate only wins a fresh pick.
+        .or_else(|| {
+            frames
+                .iter()
+                .filter(matches)
+                .find(|f| !preferred.is_empty() && text(&f["id"]) == preferred)
+        })
         .or_else(|| {
             frames
                 .iter()
@@ -110,6 +118,54 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
                     "day"
                 };
                 select_frame(frames, &json!({"mapId":map,"weather":"clear","time":time}))
+            }
+        }
+        // The battle follows the game clock: the map's own hour picks the plate
+        // and the weather. Address overrides stay for checks and screenshots.
+        "client.conditions.live" => {
+            let frames = args[0].as_array().ok_or("Conditions require frames")?;
+            let o = &args[1];
+            let time = text(&o["time"]);
+            let named = named_frame(frames, text(&o["frame"]));
+            let pinned = !TIMES.contains(&time) && text(&o["map"]).is_empty();
+            if pinned && named.is_some() {
+                named.unwrap()
+            } else if pinned && truth(&o["cal"]) {
+                frames.first().cloned().unwrap_or(Value::Null)
+            } else {
+                let map = [
+                    text(&o["map"]),
+                    named.as_ref().map_or("", |f| text(&f["mapId"])),
+                    text(&o["savedMap"]),
+                ]
+                .into_iter()
+                .find(|m| !m.is_empty() && frames.iter().any(|f| text(&f["mapId"]) == *m))
+                .unwrap_or("saltHall");
+                let world = crate::world::at(o["now"].as_f64().unwrap_or(0.0), map);
+                let weather = text(&o["weather"]);
+                let weathers = game_core::constants()["WEATHERS"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default();
+                // Weather is drawn live over the clear plate of that hour, so the
+                // projected stage and its lighting stay the same in every weather.
+                let mut frame = select_frame(
+                    frames,
+                    &json!({
+                        "mapId": map,
+                        "time": if TIMES.contains(&time) { json!(time) } else { world["time"].clone() },
+                        "weather": "clear",
+                    }),
+                );
+                if frame.is_object() {
+                    frame["weather"] = if weathers.iter().any(|w| text(w) == weather) {
+                        json!(weather)
+                    } else {
+                        world["weather"].clone()
+                    };
+                    frame["clock"] = world;
+                }
+                frame
             }
         }
         "client.conditions.select" => select_frame(
@@ -217,10 +273,20 @@ mod tests {
         assert_eq!(chosen["weather"], "dust");
         let fog = dispatch(
             "client.conditions.frame",
-            json!([frames(),{"mapId":"saltHall","time":"day","weather":"fog"},"hall1"]),
+            json!([frames(),{"mapId":"saltHall","time":"day","weather":"fog"},""]),
         )
         .unwrap();
         assert_eq!(fog["id"], "hall2");
+        let kept = dispatch(
+            "client.conditions.frame",
+            json!([frames(),{"mapId":"saltHall","time":"day","weather":"fog"},"hall1"]),
+        )
+        .unwrap();
+        assert_eq!(
+            kept["id"], "hall1",
+            "live fog is drawn over the plate on screen"
+        );
+        assert_eq!(kept["weather"], "fog");
     }
     #[test]
     fn only_available_map_and_time_pairs_can_be_selected() {
@@ -273,6 +339,27 @@ mod tests {
             assert_eq!(selected["time"], "day");
             assert_eq!(selected["src"], "blocks.jpg");
         }
+    }
+    #[test]
+    fn the_battle_follows_the_game_clock_unless_the_address_pins_it() {
+        let hour = crate::world::DAY_MS;
+        let noon = 1_800_000_000_000.0_f64.div_euclid(hour) * hour + hour / 2.0;
+        let live = |o: Value| dispatch("client.conditions.live", json!([frames(), o])).unwrap();
+        let hall = live(json!({"now": noon}));
+        assert_eq!(hall["mapId"], "saltHall");
+        assert_eq!(hall["time"], "day");
+        assert_eq!(hall["weather"], hall["clock"]["weather"]);
+        assert_ne!(hall["id"], "hall2", "weather is drawn over the clear plate");
+        let night = live(json!({"now": noon + hour / 2.0}));
+        assert_eq!(night["id"], "hall-night");
+        let pinned = live(json!({"now": noon, "time": "evening", "weather": "storm"}));
+        assert_eq!(pinned["time"], "evening");
+        assert_eq!(pinned["weather"], "storm");
+        // Blocks only has its day plate here: the rules follow the plate.
+        let blocks = live(json!({"now": noon, "savedMap": "blocks"}));
+        assert_eq!(blocks["mapId"], "blocks");
+        assert_eq!(blocks["time"], "day");
+        assert_eq!(live(json!({"now": noon, "frame": "hall2"}))["id"], "hall2");
     }
     #[test]
     fn explanations_follow_the_actual_side_and_equipment() {

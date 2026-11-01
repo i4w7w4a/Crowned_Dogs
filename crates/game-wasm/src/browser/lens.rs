@@ -71,6 +71,10 @@ struct LensState {
     heat: bool,
     sun_glare: bool,
     heat_depth: [f64; 2],
+    /// The match weather as the world clock describes it (`client.world.fx`).
+    weather: serde_json::Value,
+    /// Lightning strikes drawn so far, and whether one is lit right now.
+    strikes: std::cell::Cell<(u32, bool)>,
     shader_features: u8,
     px: [f64; 2],
     css: [f64; 2],
@@ -252,6 +256,8 @@ impl RustLens {
                 heat: false,
                 sun_glare: false,
                 heat_depth: [0.2, 0.1],
+                weather: serde_json::Value::Null,
+                strikes: Default::default(),
                 shader_features: 0,
                 px: [1., 1.],
                 css: [1., 1.],
@@ -364,7 +370,8 @@ impl RustLens {
             call(&c, "copy", &[color.clone()]);
             call(&c, "multiplyScalar", &[n(factor)]);
         }
-        put(&s.haze_mat, "density", get(&look, "haze"));
+        let haze = prop(&look, "haze") * s.weather_haze();
+        put(&s.haze_mat, "density", n(haze));
     }
     /// White-phosphor gain is available only when the canonical match grants NVG.
     /// Keep the normal shader byte-for-byte intact when it is switched off.
@@ -408,6 +415,32 @@ impl RustLens {
             s.heat_depth = [near_depth, far_depth];
         }
         s.refresh_battle_shader();
+    }
+
+    /// Weather is drawn into the air of the battle picture; clear removes it and
+    /// leaves the compose shader exactly as it was.
+    #[wasm_bindgen(js_name = setWeather)]
+    pub fn set_weather(&self, fx: JsValue) {
+        let mut s = self.state.borrow_mut();
+        if s.disposed {
+            return;
+        }
+        s.weather = js_sys::JSON::stringify(&fx)
+            .ok()
+            .and_then(|t| t.as_string())
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_default();
+        if present(&s.look) {
+            let haze = prop(&s.look, "haze") * s.weather_haze();
+            put(&s.haze_mat, "density", n(haze));
+        }
+        s.refresh_battle_shader();
+    }
+
+    /// How many lightning strikes have flashed; the battle rolls thunder after each.
+    #[wasm_bindgen(getter)]
+    pub fn strikes(&self) -> u32 {
+        self.state.borrow().strikes.get().0
     }
 
     #[wasm_bindgen(getter)]
@@ -597,6 +630,15 @@ impl RustLens {
         if s.shader_features & 4 != 0 {
             call(&uniform(&s.compose, "cdGlareSun"), "copy", &[s.sun.clone()]);
         }
+        if s.shader_features & 8 != 0 {
+            let t = num(&call(&s.clock, "getElapsed", &[]));
+            put(&s.compose, "cdWeatherTime", n(t));
+            let flash = s.weather["flash"].as_f64().unwrap_or(0.) * lightning(t);
+            set(&uniform(&s.compose, "cdWeather"), "w", &n(flash));
+            let (count, lit) = s.strikes.get();
+            s.strikes
+                .set((count + u32::from(flash > 0.05 && !lit), flash > 0.05));
+        }
         call(&layers, "set", &[n(0.)]);
         if present(&stage) {
             let projected = try_call(
@@ -744,14 +786,45 @@ fn set_defines(material: &JsValue, defines: JsValue) {
     set(material, "needsUpdate", &true.into());
 }
 
+/// A lightning strike every eight to twenty seconds: a bright double flicker
+/// that dies away within a second. Returns 0..1.
+pub(crate) fn lightning(t: f64) -> f64 {
+    let period = 14.0;
+    let k = (t / period).floor();
+    let h = |x: f64| ((x * 12.9898).sin() * 43758.5453).fract().abs();
+    let dt = t - (k * period + h(k) * (period - 2.0));
+    if !(0.0..1.4).contains(&dt) {
+        return 0.0;
+    }
+    let first = (-dt * 9.0).exp();
+    let second = if dt > 0.18 {
+        (-(dt - 0.18) * 4.0).exp() * 0.85
+    } else {
+        0.0
+    };
+    (first + second).min(1.0) * (0.55 + 0.45 * h(k + 3.1))
+}
+
 impl LensState {
+    fn weather_haze(&self) -> f64 {
+        self.weather["haze"].as_f64().unwrap_or(1.)
+    }
+    fn weather_on(&self) -> bool {
+        self.weather["active"].as_bool() == Some(true)
+    }
     fn refresh_battle_shader(&mut self) {
         let heat = self.heat
             && !self.night_vision
             && present(&self.quality)
             && string(&get(&self.quality, "id")) != "low";
-        let features =
-            u8::from(self.night_vision) | (u8::from(heat) << 1) | (u8::from(self.sun_glare) << 2);
+        let weather = self.weather_on();
+        let features = u8::from(self.night_vision)
+            | (u8::from(heat) << 1)
+            | (u8::from(self.sun_glare) << 2)
+            | (u8::from(weather) << 3);
+        if weather {
+            self.weather_uniforms();
+        }
         if features == self.shader_features {
             if heat {
                 call(
@@ -766,7 +839,17 @@ impl LensState {
         let original = include_str!("shaders/composeShader.glsl");
         let mut fragment = original.to_string();
         let uniforms = get(&self.compose, "uniforms");
-        for key in ["cdBattleTime", "cdHeatDepth", "cdGlareSun"] {
+        for key in [
+            "cdBattleTime",
+            "cdHeatDepth",
+            "cdGlareSun",
+            "cdWeather",
+            "cdWeatherTime",
+            "cdWeatherDim",
+            "cdFogColor",
+            "cdDustColor",
+            "cdRainColor",
+        ] {
             let _ = js_sys::Reflect::delete_property(
                 &js_sys::Object::from(uniforms.clone()),
                 &key.into(),
@@ -802,6 +885,14 @@ impl LensState {
             );
             fragment = fragment.replace("gl_FragColor = vec4(c, max(a, n.a));", "vec2 glareDelta = (vUv - cdGlareSun) * vec2(bgSize.x / max(bgSize.y, 1.0), 1.0);\n  float glare = exp(-length(glareDelta) * 5.5);\n  c += vec3(1.0, 0.83, 0.62) * glare * 0.14;\n  gl_FragColor = vec4(c, max(a, n.a));");
         }
+        if weather {
+            declarations.push_str(include_str!("shaders/weatherCommon.glsl"));
+            fragment = fragment.replace(
+                "vec4 n = smoothRead(tNear, vUv, nearSize);",
+                include_str!("shaders/weather.glsl"),
+            );
+            self.weather_uniforms();
+        }
         if self.night_vision {
             // Daylight ACES subtracts a black offset and clamps faint HDR
             // radiance to zero before the intensifier can amplify it. Preserve
@@ -822,6 +913,42 @@ impl LensState {
             &format!("{declarations}{fragment}").into(),
         );
         set(&self.compose, "needsUpdate", &true.into());
+    }
+    /// Creates the weather uniforms when missing and fills them from the fx.
+    fn weather_uniforms(&self) {
+        let uniforms = get(&self.compose, "uniforms");
+        let w = &self.weather;
+        let f = |k: &str| w[k].as_f64().unwrap_or(0.);
+        let three = &self.three;
+        let ensure = |key: &str, value: JsValue| {
+            if !present(&get(&uniforms, key)) {
+                set(&uniforms, key, &object(&[("value", value)]));
+            }
+        };
+        ensure("cdWeather", make(three, "Vector4", &[]));
+        ensure("cdWeatherTime", n(0.));
+        ensure("cdWeatherDim", n(1.));
+        for key in ["cdFogColor", "cdDustColor", "cdRainColor"] {
+            ensure(key, make(three, "Vector3", &[]));
+        }
+        call(
+            &uniform(&self.compose, "cdWeather"),
+            "set",
+            &[n(f("fog")), n(f("dust")), n(f("rain")), n(0.)],
+        );
+        put(
+            &self.compose,
+            "cdWeatherDim",
+            n(w["dim"].as_f64().unwrap_or(1.)),
+        );
+        for (key, field) in [
+            ("cdFogColor", "fogColor"),
+            ("cdDustColor", "dustColor"),
+            ("cdRainColor", "rainColor"),
+        ] {
+            let c = |i: usize| n(w[field][i].as_f64().unwrap_or(0.));
+            call(&uniform(&self.compose, key), "set", &[c(0), c(1), c(2)]);
+        }
     }
     fn dispose(&mut self) {
         if self.disposed {

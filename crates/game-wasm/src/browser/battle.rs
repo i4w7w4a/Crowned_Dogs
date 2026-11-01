@@ -190,22 +190,7 @@ impl RustBattle {
         .map(|v| flag(&v, "matches"))
         .unwrap_or(false);
         set(&state, "reduceMotion", &reduced.into());
-        let params = construct(
-            &get(&global(), "URLSearchParams"),
-            &[get(&get(&global(), "location"), "search")],
-        );
-        let selected = core(
-            "client.conditions.initial",
-            &[
-                get(&state, "frames"),
-                call(&params, "get", &["time".into()]),
-                call(&params, "get", &["frame".into()]),
-                store_get(&state, "cd-time"),
-                call(&params, "has", &["cal".into()]),
-                call(&params, "get", &["map".into()]),
-                store_get(&state, "cd-map"),
-            ],
-        );
+        let selected = live_frame(&state, None);
         if present(&selected) {
             set(&state, "frame", &selected);
         }
@@ -239,7 +224,11 @@ impl RustBattle {
             set(
                 &a,
                 "onFrame",
-                &Closure::<dyn FnMut()>::new(move || place_rings(&s)).into_js_value(),
+                &Closure::<dyn FnMut()>::new(move || {
+                    place_rings(&s);
+                    thunder(&s);
+                })
+                .into_js_value(),
             );
             arena(&state, "setFirstPerson", &[(camera == "fp").into()]);
             let q = host(&state, "startQuality", &[get(&a, "gl")]);
@@ -1096,6 +1085,11 @@ fn finish(s: &JsValue) {
 }
 fn restart(s: &JsValue, keep_sheet: bool) {
     set(s, "fightNo", &(number(s, "fightNo") + 1.).into());
+    // A new fight starts at the map's current hour and weather.
+    let live = live_frame(s, Some(&word(&get(s, "frame"), "mapId")));
+    if present(&live) {
+        set(s, "frame", &live);
+    }
     hide(&id("endVeil"), true);
     toggle(&id("stage"), "down", false);
     set(s, "duel", &new_duel(s));
@@ -1166,20 +1160,70 @@ fn option(parent: &JsValue, content: &str, selected: bool, action: impl FnMut(Js
     listen(&b, "click", action);
     call(parent, "appendChild", &[b]);
 }
-fn choose_conditions(s: &JsValue, map: &str, time: &str) {
-    let config = object(&[
-        ("mapId", map.into()),
-        ("weather", get(&get(&match_(s), "config"), "weather")),
-        ("time", time.into()),
-    ]);
-    let frame = core("client.conditions.select", &[get(s, "frames"), config]);
+/// The game clock picks the map's hour and weather. Address keys (`time`,
+/// `weather`, `frame`, `map`, `cal`) pin them for checks and screenshots.
+fn live_frame(s: &JsValue, map: Option<&str>) -> JsValue {
+    let params = construct(
+        &get(&global(), "URLSearchParams"),
+        &[get(&get(&global(), "location"), "search")],
+    );
+    let param = |key: &str| call(&params, "get", &[key.into()]);
+    core(
+        "client.conditions.live",
+        &[
+            get(s, "frames"),
+            object(&[
+                ("time", param("time")),
+                (
+                    "frame",
+                    if map.is_some() {
+                        JsValue::NULL
+                    } else {
+                        param("frame")
+                    },
+                ),
+                ("cal", call(&params, "has", &["cal".into()])),
+                ("map", map.map_or_else(|| param("map"), JsValue::from)),
+                ("savedMap", store_get(s, "cd-map")),
+                ("weather", param("weather")),
+                ("now", js_sys::Date::now().into()),
+            ]),
+        ],
+    )
+}
+/// Thunder follows each lightning flash after a second or two, like a strike
+/// a few hundred metres away.
+fn thunder(s: &JsValue) {
+    let strikes = number(&get(s, "arena"), "strikes");
+    if strikes <= number(s, "strikesHeard") {
+        return;
+    }
+    set(s, "strikesHeard", &strikes.into());
+    let state = s.clone();
+    let roll = Closure::once_into_js(move || audio(&state, "play", &["thunder".into()]));
+    call(
+        &global(),
+        "setTimeout",
+        &[roll, (900. + js_sys::Math::random() * 1600.).into()],
+    );
+}
+fn choose_map(s: &JsValue, map: &str) {
+    let frame = live_frame(s, Some(map));
     if !present(&frame) {
         return;
     }
     store_set(s, "cd-map", &word(&frame, "mapId"));
-    store_set(s, "cd-time", &word(&frame, "time"));
     set_frame(s, &frame);
     restart(s, false);
+}
+fn minutes(ms: f64) -> String {
+    let m = (ms / 60_000.).ceil().max(1.) as u32;
+    let unit = match (m % 10, m % 100) {
+        (1, x) if x != 11 => "минуту",
+        (2..=4, x) if !(12..=14).contains(&x) => "минуты",
+        _ => "минут",
+    };
+    format!("{m} {unit}")
 }
 fn render_menu(s: &JsValue) {
     let bindings = get(s, "host");
@@ -1288,49 +1332,66 @@ fn render_menu(s: &JsValue) {
             }
         ),
     );
-    let current_config = get(&match_(s), "config");
-    let current_map = word(&current_config, "mapId");
-    let time = word(&current_config, "time");
+    let current_map = word(&get(&match_(s), "config"), "mapId");
     let maps = values(&core("client.conditions.maps", &[get(s, "frames")]));
+    let clocks = core("client.world.maps", &[js_sys::Date::now().into()]);
+    let clock_of = |map: &str| {
+        values(&clocks)
+            .into_iter()
+            .find(|c| word(c, "mapId") == map)
+            .unwrap_or(JsValue::NULL)
+    };
     let ms = segment("mapSeg", maps.len());
     for choice in maps {
         let wanted = word(&choice, "id");
         let current = wanted == current_map;
+        let c = clock_of(&wanted);
         let state = s.clone();
-        let time = time.clone();
-        option(&ms, &word(&choice, "name"), current, move |_| {
-            if !current {
-                choose_conditions(&state, &wanted, &time);
-            }
-        });
-    }
-    let choices = values(&core(
-        "client.conditions.choices",
-        &[get(s, "frames"), current_map.clone().into()],
-    ));
-    let fs = segment("frameSeg", choices.len());
-    hide(&id("frameLabel"), false);
-    hide(&fs, false);
-    for choice in choices {
-        let wanted = word(&choice, "id");
-        let current = wanted == time;
-        let state = s.clone();
-        let current_map = current_map.clone();
         option(
-            &fs,
+            &ms,
             &format!(
-                "{}<span>{}</span>",
-                string(&host(s, "icon", &[get(&choice, "icon")])),
-                word(&choice, "name")
+                "{}<small>{} · {}, {}</small>",
+                word(&choice, "name"),
+                word(&c, "clock"),
+                word(&c, "timeName"),
+                word(&c, "weatherName")
             ),
             current,
             move |_| {
                 if !current {
-                    choose_conditions(&state, &current_map, &wanted);
+                    choose_map(&state, &wanted);
                 }
             },
         );
     }
+    let c = clock_of(&current_map);
+    hide(&id("frameLabel"), false);
+    let weather_next = if word(&c, "nextWeather") == word(&c, "weather") {
+        format!(
+            "{} ещё {}",
+            word(&c, "weatherName"),
+            minutes(number(&c, "nextWeatherInMs"))
+        )
+    } else {
+        format!(
+            "через {} {}",
+            minutes(number(&c, "nextWeatherInMs")),
+            word(&c, "nextWeatherName")
+        )
+    };
+    text(
+        &id("clockNote"),
+        &format!(
+            "Сейчас {}, {}, {}. Через {} {}, {}. В регионе: {}.",
+            word(&c, "clock"),
+            word(&c, "timeName"),
+            word(&c, "weatherName"),
+            minutes(number(&c, "nextTimeInMs")),
+            word(&c, "nextTimeName"),
+            weather_next,
+            word(&c, "eventName").to_lowercase()
+        ),
+    );
     text(
         &id("conditionNote"),
         &string(&core("client.conditions.description", &[match_(s)])),
