@@ -10,6 +10,7 @@ const canvas = $<HTMLCanvasElement>("gl"), plate = $<HTMLImageElement>("plate");
 const kit = $<HTMLSelectElement>("kit"), quality = $<HTMLSelectElement>("quality"), fp = $<HTMLInputElement>("fp");
 const controls = [...document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("button,input,select")];
 const query = new URLSearchParams(location.search);
+const reviewSeed = query.get("seed") ?? "battle-times-gpu-review";
 const reviewURL = new URL(location.href);
 reviewURL.searchParams.set("muted", "1"); reviewURL.searchParams.set("motionDebug", "1");
 history.replaceState(null, "", reviewURL);
@@ -18,16 +19,21 @@ let time: TimeOfDay = validTimes.find(value => value === query.get("time")) ?? "
 document.querySelector<HTMLInputElement>(`input[name=time][value=${time}]`)!.checked = true;
 if ([...kit.options].some(option => option.value === query.get("kit"))) kit.value = query.get("kit")!;
 if (query.get("q") && query.get("q")! in QUALITY) quality.value = query.get("q")!;
+let closed = false;
+const events = new AbortController();
+const eventOptions = { signal: events.signal };
 
 function fail(reason: unknown) {
+  if (closed) return;
   const message = reason instanceof Error ? `${reason.message}\n${reason.stack ?? ""}` : String(reason);
   errors.hidden = false; errors.textContent += `${message.slice(0, 6000)}\n`;
   qa.dataset.errorCount = String(Number(qa.dataset.errorCount ?? 0) + 1);
   qa.dataset.ready = "false"; status.textContent = "Ошибка: см. отчёт ниже";
 }
-const originalError = console.error.bind(console);
-console.error = (...args: unknown[]) => { fail(args.map(String).join(" ")); originalError(...args); };
-window.addEventListener("unhandledrejection", event => fail(event.reason));
+const previousError = console.error;
+const reviewError = (...args: unknown[]) => { fail(args.map(String).join(" ")); previousError.apply(console, args); };
+console.error = reviewError;
+window.addEventListener("unhandledrejection", event => fail(event.reason), eventOptions);
 
 const arena = new Arena(canvas);
 let match: Match;
@@ -42,7 +48,8 @@ function loadout(): Loadout {
   return value;
 }
 function resize() { arena.resize(canvas.clientWidth, canvas.clientHeight); }
-new ResizeObserver(resize).observe($("viewport"));
+const observer = new ResizeObserver(resize);
+observer.observe($("viewport"));
 
 function describe() {
   const weapon = weaponSpec(match, 0, match.fighters[0].weapon);
@@ -67,7 +74,7 @@ async function reset() {
   const chosen = FRAMES.find(frame => frame.time === time && frame.weather === "clear")!;
   const own = loadout();
   match = createMatch({
-    seed: "battle-times-gpu-review", mapId: chosen.mapId, weather: chosen.weather, time: chosen.time,
+    seed: reviewSeed, mapId: chosen.mapId, weather: chosen.weather, time: chosen.time,
     fighters: [kitFighter("qa-me", "Оператор", own), kitFighter("qa-enemy", "Искра", starterLoadout("rifle"))], startDistance: 7,
   });
   plate.src = quality.value === "low" ? chosen.src : chosen.src2x ?? chosen.src;
@@ -80,7 +87,9 @@ async function reset() {
   if (request !== generation) return;
   arena.arm("me", "rifle", own.weapon1.mods ?? {}); arena.arm("enemy", "rifle", {});
   arena.reset(match.distance); arena.setConditions(match);
-  await arena.warm(); await arena.drawn();
+  await arena.warm();
+  if (request !== generation) return;
+  await arena.drawn();
   await new Promise<void>((resolve, reject) => {
     const deadline = performance.now() + 30_000;
     const check = () => {
@@ -100,18 +109,26 @@ async function reset() {
 function turn(move: 0 | 2) {
   if (match.result) { void reset().catch(fail); return; }
   const ours: Order = move === 0 ? { action: { type: "shoot", move: 0, zone: "body" }, defend: ["head", "body"] } : { action: { type: "run", move: 2 }, defend: ["head", "body"] };
-  const theirs: Order = { action: { type: "wait" }, defend: ["head", "body"] };
+  const theirs: Order = { action: { type: "shoot", move: 0, zone: "body" }, defend: ["head", "body"] };
   match = resolveTurn(match, [ours, theirs]).match;
   arena.setConditions(match);
   if (move) arena.move(match.distance, move, 0); else arena.attack("me", "rifle", .05);
   describe();
 }
-document.querySelectorAll<HTMLInputElement>("input[name=time]").forEach(input => input.addEventListener("change", () => { if (input.checked) { time = input.value as TimeOfDay; void reset().catch(fail); } }));
-kit.addEventListener("change", () => { void reset().catch(fail); });
-quality.addEventListener("change", () => { void reset().catch(fail); });
-fp.addEventListener("change", () => { arena.setFirstPerson(fp.checked); arena.setConditions(match); });
-$("shot").addEventListener("click", () => { try { turn(0); } catch (error) { fail(error); } });
-$("step").addEventListener("click", () => { try { turn(2); } catch (error) { fail(error); } });
-$("reset").addEventListener("click", () => { void reset().catch(fail); });
-window.addEventListener("pagehide", () => { arena.dispose(); arena.free(); });
+document.querySelectorAll<HTMLInputElement>("input[name=time]").forEach(input => input.addEventListener("change", () => { if (input.checked) { time = input.value as TimeOfDay; void reset().catch(fail); } }, eventOptions));
+kit.addEventListener("change", () => { void reset().catch(fail); }, eventOptions);
+quality.addEventListener("change", () => { void reset().catch(fail); }, eventOptions);
+fp.addEventListener("change", () => { arena.setFirstPerson(fp.checked); arena.setConditions(match); }, eventOptions);
+$("shot").addEventListener("click", () => { try { turn(0); } catch (error) { fail(error); } }, eventOptions);
+$("step").addEventListener("click", () => { try { turn(2); } catch (error) { fail(error); } }, eventOptions);
+$("reset").addEventListener("click", () => { void reset().catch(fail); }, eventOptions);
+function cleanup() {
+  if (closed) return;
+  closed = true; generation++;
+  observer.disconnect(); events.abort();
+  if (console.error === reviewError) console.error = previousError;
+  arena.dispose(); arena.free();
+}
+window.addEventListener("pagehide", cleanup, { once: true, ...eventOptions });
+import.meta.hot?.dispose(cleanup);
 void reset().catch(fail);

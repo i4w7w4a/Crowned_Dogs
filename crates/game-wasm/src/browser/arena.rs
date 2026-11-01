@@ -273,6 +273,7 @@ pub struct RustArena {
 impl RustArena {
     #[wasm_bindgen(constructor)]
     pub fn new(host: JsValue, canvas: JsValue, options: JsValue) -> Self {
+        console_error_panic_hook::set_once();
         let renderer = make(
             &host,
             "WebGLRenderer",

@@ -32,6 +32,6 @@
     <pre id="report">Ожидание…</pre><pre id="errors" hidden></pre>
   </aside>
 </div>
-<script>window.addEventListener('error',function(e){var q=document.getElementById('qa'),p=document.getElementById('errors');p.hidden=false;p.textContent+=(e.message||'Ошибка загрузки')+'\n';q.dataset.errorCount=String(Number(q.dataset.errorCount||0)+1)})</script>
+<script>window.addEventListener('error',function(e){var q=document.getElementById('qa'),p=document.getElementById('errors'),count=Number(q.dataset.errorCount||0);p.hidden=false;if(count<3)p.textContent+=(e.error&&e.error.stack||e.message||'Ошибка загрузки')+'\n';q.dataset.errorCount=String(count+1)})</script>
 <script type="module" src="/src/arena/battle-times-check.ts"></script>
 </html>
