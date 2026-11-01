@@ -53,13 +53,16 @@ function deferred() {
 }
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 
-type HarnessOptions = { search?: string; time?: string; map?: string };
+type HarnessOptions = { search?: string; time?: string; map?: string; now?: number };
 async function harness(run: (h: ReturnType<typeof createHarness>) => Promise<void>, options: HarnessOptions = {}) {
   const h = createHarness(options);
   const before = Object.fromEntries(Object.keys(h.globals).map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   for (const [key, value] of Object.entries(h.globals)) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  const realNow = Date.now;
+  if (options.now !== undefined) Date.now = () => h.now;
   try { h.battle = new RustBattle(h.bindings); await run(h); }
   finally {
+    Date.now = realNow;
     h.clock.tasks.clear(); h.clock.frames.clear();
     for (const key of Object.keys(h.globals)) { if (before[key]) Object.defineProperty(globalThis, key, before[key]!); else Reflect.deleteProperty(globalThis, key); }
     Reflect.deleteProperty(globalThis, "__cd");
@@ -137,7 +140,7 @@ function createHarness(options: HarnessOptions = {}) {
     requestAnimationFrame: (cb: () => void) => { const id = clock.next++; clock.frames.set(id, cb); return id; },
     cancelAnimationFrame: (id: number) => clock.frames.delete(id),
   };
-  return { bindings, globals, clock, element, guards, panel, calls, load, textures, timing: data.TIMING, stored, doc,
+  return { now: options.now ?? 0, bindings, globals, clock, element, guards, panel, calls, load, textures, timing: data.TIMING, stored, doc,
     battle: null as RustBattle | null, arena: () => arena,
     setLoading: (next: () => Promise<void>) => { loading = next; },
     duel: () => (globalThis as typeof globalThis & { __cd: { duel: LocalDuel } }).__cd.duel,
@@ -235,34 +238,26 @@ test("time links choose matching art and rules before the first fight, overridin
   }
 });
 
-test("time selection starts a new local fight with the fitted kit and persists the chosen conditions", async () => harness(async h => {
-  const kit = starterLoadout("rifle");
-  const start = h.battle!.start(kit, () => {}, async () => {}, undefined); await h.ready(); await start;
-  const initial = h.duel();
-  h.click("moreBtn");
-  assert.equal(h.element("frameLabel").hidden, false);
-  const choices = h.element("frameSeg");
-  assert.equal(choices.children.length, 4);
-  choices.children[3]!.click();
-  assert.notEqual(h.duel(), initial);
-  assert.equal(h.duel().match.config.time, "night");
-  assert.deepEqual(h.duel().fighters[0].kit, kit);
-  assert.equal(h.stored.get("cd-time"), "night");
-  assert.equal(h.element("infoVeil").hidden, true);
-  assert.equal((h.calls.filter(c => c.name === "arena.frame").at(-1)!.args[0] as { time: string }).time, "night");
-  h.click("moreBtn");
-  assert.equal(h.element("frameSeg").children[3]!.getAttribute("aria-pressed"), "true");
-  assert.match(h.element("conditionNote").textContent, /−25%.*4 шагов/);
-  h.click("restartBtn");
-  assert.equal(h.duel().match.config.time, "night", "New fight keeps its selected time");
-}));
+// A UTC hour boundary: the salt hall reads 00:00 (night), the blocks run 12 game hours ahead (day).
+const DAY = 3_600_000, MIDNIGHT = 1_800_000_000_000, GAME_HOUR = DAY / 24;
+const world = (now: number, map: string) => callRust<{ time: string; weather: string; clock: string }>("client.world.at", [now, map]);
 
-test("saved time is restored when a direct link does not override it", async () => harness(async h => {
-  assert.equal(h.duel().match.config.time, "evening");
-  const start = h.battle!.start(starterLoadout("rifle"), () => {}, async () => {}, undefined); await h.ready(); await start;
+test("the fight takes its time and weather from the map's game clock", async () => harness(async h => {
+  const now = h.now, kit = starterLoadout("rifle");
+  assert.equal(h.duel().match.config.time, "night");
+  assert.equal(h.duel().match.config.weather, world(now, "saltHall").weather);
+  const start = h.battle!.start(kit, () => {}, async () => {}, undefined); await h.ready(); await start;
   h.click("moreBtn");
-  assert.match(h.element("conditionNote").textContent, /Солнце перед/);
-}, { time: "evening" }));
+  assert.match(h.element("clockNote").textContent, /^Сейчас 00:01, ночь/);
+  h.click("restartBtn");
+  assert.equal(h.duel().match.config.time, "night");
+  // The day goes on: an hour of real time later is morning, and a new fight starts there.
+  h.now = now + 6 * GAME_HOUR;
+  h.click("moreBtn"); h.click("restartBtn");
+  assert.equal(h.duel().match.config.time, "morning");
+  assert.equal(h.duel().match.config.weather, world(h.now, "saltHall").weather);
+  assert.deepEqual(h.duel().fighters[0].kit, kit);
+}, { now: MIDNIGHT + GAME_HOUR / 60, time: "evening" }));
 
 test("blocks links choose all four real time variants on the correct map dimensions", async () => {
   for (const time of ["morning", "day", "evening", "night"]) {
@@ -277,56 +272,45 @@ test("blocks links choose all four real time variants on the correct map dimensi
   }
 });
 
-test("map changes preserve the fitted kit and expose only the chosen map's available times", async () => harness(async h => {
+test("map changes preserve the fitted kit and move to that map's own hour", async () => harness(async h => {
   const kit = { ...starterLoadout("rifle"), head: "head-sych" };
   const start = h.battle!.start(kit, () => {}, async () => {}, undefined); await h.ready(); await start;
   h.click("moreBtn");
   assert.equal(h.element("mapSeg").children.length, 2);
-  assert.equal(h.element("frameSeg").children.length, 4);
+  assert.match(h.element("mapSeg").children[1]!.innerHTML, /12:0\d · день/);
   const first = h.duel();
   h.element("mapSeg").children[1]!.click();
   assert.notEqual(h.duel(), first);
   assert.deepEqual(h.duel().fighters[0].kit, kit);
   assert.equal(h.duel().match.fighters[0].gear.nvg, true);
   assert.equal(h.duel().match.config.mapId, "blocks");
-  assert.equal(h.duel().match.config.time, "night");
+  assert.equal(h.duel().match.config.time, "day");
+  assert.equal(h.duel().match.config.weather, world(h.now, "blocks").weather);
   assert.equal(h.duel().match.map.maxDistance, 12);
   assert.equal(h.stored.get("cd-map"), "blocks");
-  assert.equal(h.stored.get("cd-time"), "night");
   h.click("moreBtn");
-  assert.equal(h.element("frameSeg").children.length, 4);
-  assert.equal(h.element("frameSeg").children[3]!.getAttribute("aria-pressed"), "true");
   assert.equal(h.element("mapSeg").children[1]!.getAttribute("aria-pressed"), "true");
-  h.element("frameSeg").children[0]!.click();
-  assert.equal(h.duel().match.config.mapId, "blocks");
-  assert.equal(h.duel().match.config.time, "morning");
-  assert.deepEqual(h.duel().fighters[0].kit, kit);
-  assert.equal(h.stored.get("cd-map"), "blocks");
-  assert.equal(h.stored.get("cd-time"), "morning");
-  const morningFrame = h.calls.filter(c => c.name === "arena.frame").at(-1)!.args[0] as { id: string };
-  assert.equal(morningFrame.id, "blocks-morning");
-  h.click("moreBtn");
   h.element("mapSeg").children[0]!.click();
   assert.equal(h.duel().match.config.mapId, "saltHall");
-  assert.equal(h.duel().match.config.time, "morning");
+  assert.equal(h.duel().match.config.time, "night");
   h.click("moreBtn");
-  assert.equal(h.element("frameSeg").children.length, 4);
   assert.equal(h.element("regionSeg").children.length, 2);
   assert.equal(h.element("regionSeg").children[0]!.getAttribute("aria-pressed"), "true");
   h.element("regionSeg").children[1]!.click();
   assert.equal(h.duel().match.config.mapId, "dam");
-  assert.equal(h.duel().match.config.time, "morning");
+  assert.equal(h.duel().match.config.time, "morning", "the dam runs six game hours ahead");
   assert.equal(h.duel().match.map.maxDistance, 14);
   assert.deepEqual(h.duel().fighters[0].kit, kit);
   h.click("moreBtn");
   assert.equal(h.element("mapSeg").children.length, 2, "only the chosen region's maps are listed");
   h.element("mapSeg").children[1]!.click();
   assert.equal(h.duel().match.config.mapId, "dryBed");
+  assert.equal(h.duel().match.config.time, "evening", "the dry bed runs eighteen game hours ahead");
   assert.equal(h.duel().match.map.maxDistance, 13);
   assert.equal(h.stored.get("cd-map"), "dryBed");
-}, { time: "night" }));
+}, { now: MIDNIGHT + GAME_HOUR / 60 }));
 
-test("saved blocks map restores its selected night", async () => harness(async h => {
+test("saved blocks map is restored at its own hour", async () => harness(async h => {
   assert.equal(h.duel().match.config.mapId, "blocks");
-  assert.equal(h.duel().match.config.time, "night");
-}, { map: "blocks", time: "night" }));
+  assert.equal(h.duel().match.config.time, "day");
+}, { map: "blocks", time: "night", now: MIDNIGHT + GAME_HOUR / 60 }));

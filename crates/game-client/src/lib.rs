@@ -14,6 +14,7 @@ mod server;
 mod server_view;
 mod words;
 mod workshop;
+mod world;
 pub use arena::compute as arena_compute;
 pub use dsp::audio_samples;
 
@@ -56,6 +57,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
         _ if method.starts_with("server.") => server::dispatch(method, args),
         _ if method.starts_with("client.arena.") => arena::dispatch(method, args),
         _ if method.starts_with("client.conditions.") => conditions::dispatch(method, args),
+        _ if method.starts_with("client.world.") => world::dispatch(method, args),
         _ if method.starts_with("client.workshop.") || method.starts_with("client.models.") => {
             workshop::dispatch(method, args)
         }

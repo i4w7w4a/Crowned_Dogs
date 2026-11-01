@@ -334,12 +334,10 @@ button:disabled { cursor: default; }
 .seg { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 6px; }
 .seg button { height: 44px; padding: 0 2px; font: 500 14px/1.1 var(--body); color: rgba(236,232,223,.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .seg button[aria-pressed="true"] { color: #fff; font-weight: 600; }
-#frameSeg button { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 4px; }
-#frameSeg .ico { width: 16px; height: 16px; flex: 0 0 16px; }
-@media (max-width: 350px) {
-  #frameSeg button { font-size: 12px; gap: 3px; padding: 0 3px; }
-  #frameSeg .ico { width: 14px; height: 14px; flex-basis: 14px; }
-}
+/* each map shows its own hour and weather under its name */
+#mapSeg button { height: 52px; }
+#mapSeg button small { display: block; margin-top: 3px; font: 400 11px/1.2 var(--body); color: rgba(236,232,223,.55); overflow: hidden; text-overflow: ellipsis; }
+#mapSeg button[aria-pressed="true"] small { color: var(--cyan); }
 .sheet .gfx-note { margin-top: -6px; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .tracks button { text-align: left; padding: 10px 12px; font: 500 14px/1.2 var(--body); color: rgba(236,232,223,.85); }

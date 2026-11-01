@@ -1,5 +1,5 @@
 /** Dev-only GPU review with real renderer, assets, catalogue and deterministic rules. No audio is imported. */
-import { createMatch, kitFighter, starterLoadout, validateLoadout, weaponSpec, hitChance, resolveTurn, guardShare, type Match, type TimeOfDay, type Loadout, type Order } from "@crowned-dogs/core";
+import { createMatch, kitFighter, starterLoadout, validateLoadout, weaponSpec, hitChance, resolveTurn, guardShare, type Match, type TimeOfDay, type Weather, type Loadout, type Order } from "@crowned-dogs/core";
 import { Arena } from "./arena.ts";
 import { callRust } from "../../../../packages/runtime/src/index.ts";
 import { FRAMES, type Frame } from "./frames.ts";
@@ -13,6 +13,8 @@ const kit = $<HTMLSelectElement>("kit"), quality = $<HTMLSelectElement>("quality
 const controls = [...document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("button,input,select")];
 const query = new URLSearchParams(location.search);
 const reviewSeed = query.get("seed") ?? "battle-times-gpu-review";
+const WEATHERS: Weather[] = ["clear", "dust", "storm", "fog"];
+const reviewWeather: Weather = WEATHERS.find(w => w === query.get("weather")) ?? "clear";
 const reviewURL = new URL(location.href);
 reviewURL.searchParams.set("muted", "1"); reviewURL.searchParams.set("motionDebug", "1");
 history.replaceState(null, "", reviewURL);
@@ -96,7 +98,7 @@ async function reset() {
   history.replaceState(null, "", nextURL);
   const own = loadout();
   match = createMatch({
-    seed: reviewSeed, mapId: chosen.mapId, weather: chosen.weather, time: chosen.time,
+    seed: reviewSeed, mapId: chosen.mapId, weather: reviewWeather, time: chosen.time,
     fighters: [kitFighter("qa-me", "Оператор", own), kitFighter("qa-enemy", "Искра", starterLoadout("rifle"))], startDistance: 7,
   });
   plate.src = quality.value === "low" ? chosen.src : chosen.src2x ?? chosen.src;
