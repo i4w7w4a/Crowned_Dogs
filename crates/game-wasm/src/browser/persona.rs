@@ -655,6 +655,7 @@ fn dress_figure(s: &JsValue) {
         figure.clone(),
         options(&["head", "body", "suit", "boots"].map(|k| (k, wear(k)))),
     );
+    super::look::first_person(figure, false, get(s, "look"));
     set(&get(s, "equipment"), "visible", &flag(!bare));
 }
 async fn load_environment(s: &JsValue) {

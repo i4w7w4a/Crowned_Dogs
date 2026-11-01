@@ -773,8 +773,9 @@ impl RustArena {
             let _ = try_call(&s.arms_only, "dispose", &[]);
         }
         sdk(&s.host, "dress", &[model.clone(), wear]);
-        s.arms_only = sdk(&s.host, "armsOnly", &[model]);
+        s.arms_only = sdk(&s.host, "armsOnly", &[model.clone()]);
         invoke(&s.arms_only, &[s.fp.into()]);
+        super::look::first_person(model, s.fp, super::platform::current_look());
     }
     #[wasm_bindgen(js_name=move)]
     pub fn move_to(&self, distance: f64, me_move: f64, enemy_move: f64) {
@@ -1892,10 +1893,11 @@ impl ArenaState {
         self.depth = self.depth_of(self.dist);
         let me = self.me.as_ref().unwrap();
         set(&me.blob, "visible", &(!on).into());
-        super::look::first_person(me.model.clone(), on, super::platform::current_look());
         if present(&self.arms_only) {
             invoke(&self.arms_only, &[on.into()]);
         }
+        // Restore the helmet's actual visibility before deciding whether it covers the beard.
+        super::look::first_person(me.model.clone(), on, super::platform::current_look());
         set(
             &self.me_key,
             "intensity",

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as THREE from "three";
-import { callRust, sceneApplyLook, sceneSetBeardFirstPerson } from "../../../packages/runtime/src/index.ts";
+import { callRust, sceneApplyLook, sceneDress, sceneSetBeardFirstPerson } from "../../../packages/runtime/src/index.ts";
 
 const styles = ["boxed", "goatee", "full", "tapered"];
 const faces = ["m1", "m2", "m3", "m4"];
@@ -128,4 +128,28 @@ test("first-person toggle affects only the player and restores a changed saved b
   assert.deepEqual(shown(player), ["Beard_m4_goatee_cards", "Beard_m4_goatee_root"]);
   assert.deepEqual(shown(enemy), ["Beard_m1_full_cards", "Beard_m1_full_root"]);
   assert.equal(head.visible, true);
+});
+
+test("current gear dressing and camera refresh hide Sfera aliases and restore open gear", () => {
+  const player = fixture().root;
+  for (const name of ["Helmet", "Cap", "Sfera"]) {
+    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial());
+    mesh.name = name; player.add(mesh);
+  }
+  const chosen = look({ face: "m2", beard: "full" });
+  sceneApplyLook(player, chosen);
+  const shown = () => player.children.filter(n => n.name.startsWith("Beard_") && n.visible).length;
+  for (const id of ["head-sfera", "head-filin", "head-cap", "head-k6", null]) {
+    sceneDress({ THREE }, player, { head: id });
+    sceneSetBeardFirstPerson(player, false, chosen);
+    const closed = id === "head-sfera" || id === "head-filin";
+    assert.equal(shown(), closed ? 0 : 2, `dress then refresh: ${id}`);
+    sceneSetBeardFirstPerson(player, true, chosen);
+    assert.equal(shown(), 0);
+    // ArmsOnly restores the selected helmet before the beard is refreshed on leaving FP.
+    sceneDress({ THREE }, player, { head: id });
+    sceneSetBeardFirstPerson(player, false, chosen);
+    assert.equal(shown(), closed ? 0 : 2, `return from first person: ${id}`);
+  }
+  assert.equal(chosen.beard, "full");
 });
