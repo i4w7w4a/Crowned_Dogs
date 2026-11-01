@@ -1,35 +1,117 @@
-//! Fixed photographic projector and two physical camera paths through the base.
+//! The base uses the camera calibration and sampled paths exported with its geometry.
 use super::{bridge::*, projected_stage::RustProjectedStage};
 use js_sys::Promise;
 use wasm_bindgen::{JsCast, prelude::*};
 
 const ASPECT: f64 = 1882. / 3344.;
 const FOV: f64 = 55.;
-const HORIZON: f64 = 0.30;
 fn n(v: f64) -> JsValue {
     v.into()
-}
-fn ray(u: f64, v: f64, d: f64) -> [f64; 3] {
-    let f = 0.5 / (FOV.to_radians() * 0.5).tan();
-    [(u - 0.5) * ASPECT * d / f, 2. + (HORIZON - v) * d / f, -d]
 }
 fn mix(a: [f64; 3], b: [f64; 3], t: f64) -> [f64; 3] {
     std::array::from_fn(|i| a[i] + (b[i] - a[i]) * t)
 }
-fn path(target: &str, t: f64) -> ([f64; 3], [f64; 3]) {
-    let t = t.clamp(0., 1.);
-    let e = t * t * t * (t * (6. * t - 15.) + 10.);
-    let (end, mut look) = if target == "battle" {
-        ([-0.40, 1.40, -2.55], ray(0.235, 0.527, 4.25))
-    } else {
-        ([-0.9, 1.9, -6.8], ray(0.275, 0.36, 18.))
-    };
-    look[1] += if target == "battle" { 0.38 } else { 2.0 };
-    let mut pos = mix([0., 2., 0.], end, e);
-    if target != "battle" {
-        pos[0] += 1.40 * (std::f64::consts::PI * e).sin();
+
+#[derive(Clone, Copy)]
+struct Pose {
+    position: [f64; 3],
+    target: [f64; 3],
+}
+struct View {
+    fov: f64,
+    aspect: f64,
+    height: f64,
+    horizon: f64,
+    battle: Vec<Pose>,
+    fitting: Vec<Pose>,
+}
+impl View {
+    fn from_manifest(manifest: &serde_json::Value) -> Self {
+        let calibration = &manifest["calibration"];
+        let number = |key: &str, fallback: f64| {
+            calibration[key]
+                .as_f64()
+                .filter(|v| v.is_finite())
+                .unwrap_or(fallback)
+        };
+        let samples = |route: &str| -> Vec<Pose> {
+            let Some(samples) = manifest["cameraPaths"][route].as_array() else {
+                return vec![];
+            };
+            if samples.len() < 2 {
+                return vec![];
+            }
+            let vector = |value: &serde_json::Value| -> Option<[f64; 3]> {
+                let values = value.as_array()?;
+                if values.len() != 3 {
+                    return None;
+                }
+                let mut out = [0.; 3];
+                for (i, value) in values.iter().enumerate() {
+                    out[i] = value.as_f64().filter(|v| v.is_finite())?;
+                }
+                Some(out)
+            };
+            // Reject an incomplete route as a whole instead of joining non-adjacent samples.
+            samples
+                .iter()
+                .map(|sample| {
+                    let position = vector(&sample["position"])?;
+                    let target = vector(&sample["target"])?;
+                    if position
+                        .iter()
+                        .zip(target)
+                        .all(|(a, b)| (a - b).abs() < 1e-9)
+                    {
+                        return None;
+                    }
+                    Some(Pose { position, target })
+                })
+                .collect::<Option<Vec<_>>>()
+                .unwrap_or_default()
+        };
+        Self {
+            fov: number("fov", FOV).clamp(1., 179.),
+            aspect: number("aspect", ASPECT).max(0.001),
+            height: number("camHeight", 2.),
+            horizon: number("horizon", 0.30).clamp(0.001, 0.999),
+            battle: samples("battle"),
+            fitting: samples("fitting"),
+        }
     }
-    (pos, mix([0., 2., -8.], look, e))
+    fn pose(&self, route: &str, progress: f64) -> Pose {
+        let samples = match route {
+            "battle" => &self.battle,
+            "fitting" => &self.fitting,
+            _ => {
+                return self
+                    .battle
+                    .first()
+                    .or(self.fitting.first())
+                    .copied()
+                    .unwrap_or_else(|| self.origin());
+            }
+        };
+        if samples.is_empty() {
+            // Older manifests remain usable without replaying an uncalibrated camera journey.
+            return self.origin();
+        }
+        let at = progress.clamp(0., 1.) * (samples.len() - 1) as f64;
+        let left = at.floor() as usize;
+        let right = (left + 1).min(samples.len() - 1);
+        let t = at - left as f64;
+        // Blender samples already contain their easing. Interpolate once, in raw progress.
+        Pose {
+            position: mix(samples[left].position, samples[right].position, t),
+            target: mix(samples[left].target, samples[right].target, t),
+        }
+    }
+    fn origin(&self) -> Pose {
+        Pose {
+            position: [0., self.height, 0.],
+            target: [0., self.height, -8.],
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -39,6 +121,7 @@ pub struct RustHomeStage {
     camera: JsValue,
     stage: RustProjectedStage,
     ready: Promise,
+    view: Option<View>,
     width: f64,
     height: f64,
     last: String,
@@ -72,6 +155,7 @@ impl RustHomeStage {
             camera,
             stage,
             ready,
+            view: None,
             width: 0.,
             height: 0.,
             last: String::new(),
@@ -86,6 +170,10 @@ impl RustHomeStage {
         if self.disposed || !self.stage.ready() {
             return Ok(());
         }
+        if self.view.is_none() {
+            self.view = Some(View::from_manifest(&self.stage.manifest_data()));
+        }
+        let view = self.view.as_ref().unwrap();
         let w = num(&get(&self.canvas, "clientWidth"));
         let h = num(&get(&self.canvas, "clientHeight"));
         if w <= 0. || h <= 0. {
@@ -111,9 +199,9 @@ impl RustHomeStage {
             );
             call(&self.renderer, "setSize", &[n(w), n(h), false.into()]);
             // Object-fit cover, at fixed focal length throughout both dolly paths.
-            let full_w = (h * ASPECT).max(w);
-            let full_h = (w / ASPECT).max(h);
-            let f = 0.5 / (FOV.to_radians() * 0.5).tan();
+            let full_w = (h * view.aspect).max(w);
+            let full_h = (w / view.aspect).max(h);
+            let f = 0.5 / (view.fov.to_radians() * 0.5).tan();
             let near = 0.05;
             let x0 = (full_w - w) * 0.5 / full_w;
             let x1 = 1. - x0;
@@ -123,10 +211,10 @@ impl RustHomeStage {
                 &get(&self.camera, "projectionMatrix"),
                 "makePerspective",
                 &[
-                    n((x0 - 0.5) * ASPECT * near / f),
-                    n((x1 - 0.5) * ASPECT * near / f),
-                    n((HORIZON - y0) * near / f),
-                    n((HORIZON - y1) * near / f),
+                    n((x0 - 0.5) * view.aspect * near / f),
+                    n((x1 - 0.5) * view.aspect * near / f),
+                    n((view.horizon - y0) * near / f),
+                    n((view.horizon - y1) * near / f),
                     n(near),
                     n(100.),
                 ],
@@ -138,7 +226,10 @@ impl RustHomeStage {
             );
             call(&get(&self.camera, "projectionMatrixInverse"), "invert", &[]);
         }
-        let (pos, look) = path(target, progress);
+        let Pose {
+            position: pos,
+            target: look,
+        } = view.pose(target, progress);
         call(&get(&self.camera, "position"), "set", &pos.map(n));
         call(&self.camera, "lookAt", &look.map(n));
         call(
@@ -180,19 +271,31 @@ impl Drop for RustHomeStage {
 mod tests {
     use super::*;
     #[test]
-    fn routes_have_shared_origin_and_distinct_metric_destinations() {
-        assert_eq!(path("battle", 0.).0, [0., 2., 0.]);
-        assert_eq!(path("fitting", 0.).0, [0., 2., 0.]);
-        assert_eq!(path("battle", 1.).0, [-0.4, 1.4, -2.55]);
-        let tunnel = path("fitting", 1.).0;
-        assert!((tunnel[2] + 6.8).abs() < 1e-10);
-        for route in ["battle", "fitting"] {
-            let mut z = 0.;
-            for i in 0..101 {
-                let p = path(route, i as f64 / 100.).0;
-                assert!(p[2] <= z + 1e-10);
-                z = p[2];
-            }
-        }
+    fn exported_camera_samples_are_interpolated_without_a_second_ease() {
+        let view = View::from_manifest(&serde_json::json!({
+            "calibration": { "fov": 63, "aspect": 0.6, "camHeight": 1.75, "horizon": 0.4 },
+            "cameraPaths": { "battle": [
+                { "position": [0, 1.75, 0], "target": [0, 1.75, -8] },
+                { "position": [0.4, 1.6, -1], "target": [0.1, 1.2, -5] },
+                { "position": [-0.6, 1.4, -4], "target": [-0.2, 1.0, -6] }
+            ] }
+        }));
+        assert_eq!(view.pose("base", 0.).position, [0., 1.75, 0.]);
+        assert_eq!(view.pose("battle", 0.25).position, [0.2, 1.675, -0.5]);
+        assert_eq!(view.pose("battle", 0.5).position, [0.4, 1.6, -1.]);
+        assert_eq!(view.pose("battle", 1.).position, [-0.6, 1.4, -4.]);
+        assert_eq!(view.pose("fitting", 1.).position, [0., 1.75, 0.]);
+    }
+    #[test]
+    fn incomplete_path_keeps_the_calibrated_projector_view() {
+        let view = View::from_manifest(&serde_json::json!({
+            "calibration": { "camHeight": 1.65 },
+            "cameraPaths": { "battle": [
+                { "position": [0, 1.65, 0], "target": [0, 1.65, -8] },
+                { "position": [0, 1.65], "target": [0, 1.65, -8] },
+                { "position": [0, 1.65, -3], "target": [0, 1.65, -8] }
+            ] }
+        }));
+        assert_eq!(view.pose("battle", 0.8).position, [0., 1.65, 0.]);
     }
 }

@@ -65,6 +65,7 @@ struct StageState {
     backdrop: JsValue,
     meshes: Vec<JsValue>,
     textures: Vec<JsValue>,
+    manifest: serde_json::Value,
 }
 
 #[wasm_bindgen]
@@ -143,6 +144,7 @@ impl RustProjectedStage {
                 backdrop: JsValue::NULL,
                 meshes: vec![],
                 textures: vec![],
+                manifest: serde_json::Value::Null,
             })),
         }
     }
@@ -308,6 +310,13 @@ impl RustProjectedStage {
     }
 }
 
+impl RustProjectedStage {
+    /// The home camera consumes the same calibration and animation that Blender exports.
+    pub(crate) fn manifest_data(&self) -> serde_json::Value {
+        self.state.borrow().manifest.clone()
+    }
+}
+
 impl Drop for RustProjectedStage {
     fn drop(&mut self) {
         if let Ok(mut s) = self.state.try_borrow_mut() {
@@ -322,6 +331,7 @@ impl StageState {
         }
         self.disposed = true;
         self.ready = false;
+        self.manifest = serde_json::Value::Null;
         self.request += 1;
         self.loading = None;
         if let Some(abort) = self.abort.take() {
@@ -417,6 +427,14 @@ async fn load_assets(
             Some(resolved_url(file, &manifest_url)?)
         });
     }
+    // A Blender-baked set supplies a single atlas. Legacy battle scenes keep
+    // their fixed-camera projection and do not allocate an additional texture.
+    urls.push(
+        manifest_data["bakedTexture"]
+            .as_str()
+            .map(|file| resolved_url(file, &manifest_url))
+            .transpose()?,
+    );
     let mut promises = vec![];
     for url in urls {
         promises.push(if let Some(url) = url {
@@ -430,7 +448,7 @@ async fn load_assets(
     }
     // Wait for every texture, including failed siblings, so partial loads never leak.
     let settled = JsFuture::from(Promise::all_settled(&array(&promises))).await?;
-    let mut textures = Vec::with_capacity(keys.len());
+    let mut textures = Vec::with_capacity(keys.len() + 1);
     let mut failure = None;
     for result in values(&settled) {
         if string(&get(&result, "status")) == "fulfilled" {
@@ -452,7 +470,7 @@ async fn load_assets(
     for (index, texture) in textures.iter().enumerate().filter(|(_, t)| present(t)) {
         set(texture, "colorSpace", &get(&three, "NoColorSpace"));
         set(texture, "anisotropy", &n(anisotropy));
-        if index >= 2 {
+        if (2..=4).contains(&index) {
             set(texture, "wrapS", &get(&three, "RepeatWrapping"));
             set(texture, "wrapT", &get(&three, "RepeatWrapping"));
         }
@@ -536,6 +554,21 @@ async fn load_assets(
             &[Float32Array::from(positions.as_slice()).into(), n(3.)],
         );
         call(&geometry, "setAttribute", &["position".into(), attribute]);
+        let baked_uv = present(&textures[5]) && part["uvs"].is_array();
+        if baked_uv {
+            let uvs: Vec<f32> = part["uvs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_f64().unwrap() as f32)
+                .collect();
+            let attribute = make(
+                &three,
+                "Float32BufferAttribute",
+                &[Float32Array::from(uvs.as_slice()).into(), n(2.)],
+            );
+            call(&geometry, "setAttribute", &["uv".into(), attribute]);
+        }
         call(&geometry, "setIndex", &[json(&part["indices"])]);
         call(&geometry, "computeBoundingSphere", &[]);
         let kind = part["material"].as_str().unwrap();
@@ -566,6 +599,11 @@ async fn load_assets(
             FRAGMENT,
             &[
                 ("sourceViewProjection", source.clone()),
+                ("useBakedUv", n(if baked_uv { 1. } else { 0. })),
+                (
+                    "bakedTexture",
+                    textures[if baked_uv { 5 } else { 0 }].clone(),
+                ),
                 (
                     "photo",
                     textures[usize::from(kind == "equipment" || projected_side)].clone(),
@@ -614,6 +652,7 @@ async fn load_assets(
         s.meshes.push(mesh);
     }
     s.backdrop = textures[0].clone();
+    s.manifest = manifest_data;
     s.ready = true;
     Ok(())
 }
@@ -622,6 +661,11 @@ fn validate_manifest(data: &serde_json::Value) -> Result<(), JsValue> {
     let invalid = || error("Invalid projected stage manifest");
     if data["version"].as_u64() != Some(1) {
         return Err(invalid());
+    }
+    if let Some(atlas) = data.get("bakedTexture") {
+        if !atlas.as_str().is_some_and(|s| !s.trim().is_empty()) {
+            return Err(invalid());
+        }
     }
     let c = &data["calibration"];
     for key in ["fov", "aspect", "camHeight", "horizon"] {
@@ -678,6 +722,17 @@ fn validate_manifest(data: &serde_json::Value) -> Result<(), JsValue> {
             })
         {
             return Err(invalid());
+        }
+        if let Some(uvs) = part.get("uvs") {
+            let uvs = uvs.as_array().ok_or_else(invalid)?;
+            if uvs.len() != positions.len() / 3 * 2
+                || uvs.iter().any(|v| {
+                    !v.as_f64()
+                        .is_some_and(|x| x.is_finite() && x.abs() <= f32::MAX as f64)
+                })
+            {
+                return Err(invalid());
+            }
         }
         let indices = part["indices"].as_array().ok_or_else(invalid)?;
         if indices.is_empty()
