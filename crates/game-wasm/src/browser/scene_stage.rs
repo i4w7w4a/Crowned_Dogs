@@ -397,6 +397,37 @@ fn geometry(host: &JsValue, spec: &JsValue) -> JsValue {
     }
 }
 
+/// One authored accessory surface: positions, normals, indices and a plain material.
+fn accessory(host: &JsValue, part: &JsValue) -> JsValue {
+    let geometry = make(host, "BufferGeometry", &[]);
+    for (attribute, field) in [("position", "positions"), ("normal", "normals")] {
+        let data = make(
+            host,
+            "Float32BufferAttribute",
+            &[get(part, field), 3.into()],
+        );
+        call(&geometry, "setAttribute", &[attribute.into(), data]);
+    }
+    call(&geometry, "setIndex", &[get(part, "indices")]);
+    let color = make(host, "Color", &[]);
+    let rgb = get(part, "color");
+    call(&color, "setRGB", &[at(&rgb, 0), at(&rgb, 1), at(&rgb, 2)]);
+    let material = make(
+        host,
+        "MeshStandardMaterial",
+        &[object(&[
+            ("color", color),
+            ("roughness", get(part, "roughness")),
+            ("metalness", get(part, "metalness")),
+            ("side", three(host, "DoubleSide")),
+        ])],
+    );
+    let mesh = make(host, "Mesh", &[geometry, material]);
+    set(&mesh, "name", &get(part, "name"));
+    set(&mesh, "castShadow", &true.into());
+    set(&mesh, "receiveShadow", &true.into());
+    mesh
+}
 /// Preserve the user's evaluated Blender accessory surfaces and authored weapon matrix.
 #[wasm_bindgen(js_name = sceneAuthoredWeaponFit)]
 pub fn authored_weapon_fit(host: JsValue, mount: JsValue, layout: JsValue) -> JsValue {
@@ -414,34 +445,7 @@ pub fn authored_weapon_fit(host: JsValue, mount: JsValue, layout: JsValue) -> Js
     let group = make(&host, "Group", &[]);
     set(&group, "name", &"Authored_Sling_And_Clips".into());
     for part in values(&get(&layout, "accessories")) {
-        let geometry = make(&host, "BufferGeometry", &[]);
-        for (attribute, field) in [("position", "positions"), ("normal", "normals")] {
-            let data = make(
-                &host,
-                "Float32BufferAttribute",
-                &[get(&part, field), 3.into()],
-            );
-            call(&geometry, "setAttribute", &[attribute.into(), data]);
-        }
-        call(&geometry, "setIndex", &[get(&part, "indices")]);
-        let color = make(&host, "Color", &[]);
-        let rgb = get(&part, "color");
-        call(&color, "setRGB", &[at(&rgb, 0), at(&rgb, 1), at(&rgb, 2)]);
-        let material = make(
-            &host,
-            "MeshStandardMaterial",
-            &[object(&[
-                ("color", color),
-                ("roughness", get(&part, "roughness")),
-                ("metalness", get(&part, "metalness")),
-                ("side", three(&host, "DoubleSide")),
-            ])],
-        );
-        let mesh = make(&host, "Mesh", &[geometry, material]);
-        set(&mesh, "name", &get(&part, "name"));
-        set(&mesh, "castShadow", &true.into());
-        set(&mesh, "receiveShadow", &true.into());
-        call(&group, "add", &[mesh]);
+        call(&group, "add", &[accessory(&host, &part)]);
     }
     group
 }
@@ -590,6 +594,58 @@ pub fn make_stage(host: JsValue) -> JsValue {
         ("setQuality", quality),
     ])
 }
+/// A carabiner sling clip: a bent steel loop and its gate, in the clip's own plane.
+fn sling_clip(host: &JsValue, name: &str, clip_path: &JsValue) -> JsValue {
+    let clip = make(host, "Group", &[]);
+    set(&clip, "name", &name.into());
+    let metal = make(
+        host,
+        "MeshStandardMaterial",
+        &[object(&[
+            ("color", 0x666b6cu32.into()),
+            ("metalness", 0.8.into()),
+            ("roughness", 0.48.into()),
+        ])],
+    );
+    let points = values(clip_path)
+        .iter()
+        .map(|p| make(host, "Vector3", &values(p)))
+        .collect::<Vec<_>>();
+    let path = make(host, "CatmullRomCurve3", &[array(&points).into()]);
+    let frame = make(
+        host,
+        "Mesh",
+        &[
+            make(
+                host,
+                "TubeGeometry",
+                &[path, 24.into(), 0.0024.into(), 6.into(), false.into()],
+            ),
+            metal.clone(),
+        ],
+    );
+    set(&frame, "name", &format!("{name}_Frame").into());
+    let gate = make(
+        host,
+        "Mesh",
+        &[
+            make(
+                host,
+                "CylinderGeometry",
+                &[0.0019.into(), 0.0019.into(), 0.031.into(), 8.into()],
+            ),
+            metal,
+        ],
+    );
+    set(&gate, "name", &format!("{name}_Gate").into());
+    call(
+        &get(&gate, "position"),
+        "set",
+        &[0.009.into(), (-0.001).into(), 0.into()],
+    );
+    call(&clip, "add", &[frame, gate]);
+    clip
+}
 #[wasm_bindgen(js_name=sceneMakeSling)]
 pub fn make_sling(host: JsValue, mount: JsValue, pistol: bool) -> JsValue {
     call(&mount, "updateMatrix", &[]);
@@ -640,8 +696,7 @@ pub fn make_sling(host: JsValue, mount: JsValue, pistol: bool) -> JsValue {
     set(&sling, "receiveShadow", &true.into());
     for descriptor in values(&get(&spec, "clips")) {
         let name = string(&get(&descriptor, "name"));
-        let clip = make(&host, "Group", &[]);
-        set(&clip, "name", &name.clone().into());
+        let clip = sling_clip(&host, &name, &get(&spec, "clipPath"));
         call(
             &get(&clip, "position"),
             "fromArray",
@@ -652,55 +707,84 @@ pub fn make_sling(host: JsValue, mount: JsValue, pistol: bool) -> JsValue {
             "z",
             &get(&get(&mount, "rotation"), "z"),
         );
-        let metal = make(
-            &host,
-            "MeshStandardMaterial",
-            &[object(&[
-                ("color", 0x666b6cu32.into()),
-                ("metalness", 0.8.into()),
-                ("roughness", 0.48.into()),
-            ])],
-        );
-        let points = values(&get(&spec, "clipPath"))
-            .iter()
-            .map(|p| make(&host, "Vector3", &values(p)))
-            .collect::<Vec<_>>();
-        let path = make(&host, "CatmullRomCurve3", &[array(&points).into()]);
-        let frame = make(
-            &host,
-            "Mesh",
-            &[
-                make(
-                    &host,
-                    "TubeGeometry",
-                    &[path, 24.into(), 0.0024.into(), 6.into(), false.into()],
-                ),
-                metal.clone(),
-            ],
-        );
-        set(&frame, "name", &format!("{name}_Frame").into());
-        let gate = make(
-            &host,
-            "Mesh",
-            &[
-                make(
-                    &host,
-                    "CylinderGeometry",
-                    &[0.0019.into(), 0.0019.into(), 0.031.into(), 8.into()],
-                ),
-                metal,
-            ],
-        );
-        set(&gate, "name", &format!("{name}_Gate").into());
-        call(
-            &get(&gate, "position"),
-            "set",
-            &[0.009.into(), (-0.001).into(), 0.into()],
-        );
-        call(&clip, "add", &[frame, gate]);
         call(&sling, "add", &[clip]);
     }
     sling
+}
+/// Put `target` where a fitted column-major matrix says.
+fn place(host: &JsValue, target: &JsValue, elements: &JsValue) {
+    let matrix = make(host, "Matrix4", &[]);
+    call(&matrix, "fromArray", &[elements.clone()]);
+    call(
+        &matrix,
+        "decompose",
+        &[
+            get(target, "position"),
+            get(target, "quaternion"),
+            get(target, "scale"),
+        ],
+    );
+}
+/// The gun as it is carried by this Persona's fitting pose: the mount moves to its fitted place and the returned group
+/// holds the straps lying on the clothes, the sling clips and the holster. Null when the pose has no fit for the gun.
+#[wasm_bindgen(js_name=sceneMakeCarry)]
+pub fn make_carry(host: JsValue, mount: JsValue, sex: String, weapon: String) -> JsValue {
+    let spec = compute(
+        &host,
+        "graphics.carry",
+        object(&[("sex", sex.into()), ("weapon", weapon.into())]),
+    );
+    if !present(&spec) {
+        return JsValue::NULL;
+    }
+    place(&host, &mount, &get(&spec, "matrix"));
+    let group = make(&host, "Group", &[]);
+    set(&group, "name", &"Fitted_Carry".into());
+    let cloth = make(
+        &host,
+        "MeshStandardMaterial",
+        &[object(&[
+            ("color", 0x20251fu32.into()),
+            ("roughness", 0.94.into()),
+            ("metalness", 0.into()),
+            ("side", three(&host, "DoubleSide")),
+        ])],
+    );
+    for (i, strap) in values(&get(&spec, "straps")).iter().enumerate() {
+        let geometry = make(&host, "BufferGeometry", &[]);
+        for (key, size) in [("position", 3), ("uv", 2)] {
+            let data = make(
+                &host,
+                "Float32BufferAttribute",
+                &[get(strap, key), size.into()],
+            );
+            call(&geometry, "setAttribute", &[key.into(), data]);
+        }
+        call(&geometry, "setIndex", &[get(strap, "index")]);
+        call(&geometry, "computeVertexNormals", &[]);
+        let mesh = make(&host, "Mesh", &[geometry, cloth.clone()]);
+        set(&mesh, "name", &format!("Carry_Strap_{i}").into());
+        set(&mesh, "castShadow", &true.into());
+        set(&mesh, "receiveShadow", &true.into());
+        call(&group, "add", &[mesh]);
+    }
+    for descriptor in values(&get(&spec, "clips")) {
+        let name = string(&get(&descriptor, "name"));
+        let clip = sling_clip(&host, &name, &get(&spec, "clipPath"));
+        place(&host, &clip, &get(&descriptor, "matrix"));
+        call(&group, "add", &[clip]);
+    }
+    let parts = values(&get(&spec, "holster"));
+    if !parts.is_empty() {
+        let holster = make(&host, "Group", &[]);
+        set(&holster, "name", &"Drop_Leg_Holster".into());
+        for part in &parts {
+            call(&holster, "add", &[accessory(&host, part)]);
+        }
+        place(&host, &holster, &get(&spec, "matrix"));
+        call(&group, "add", &[holster]);
+    }
+    group
 }
 #[wasm_bindgen(js_name=scenePrepareVaryag)]
 pub fn prepare(gun: JsValue) {
