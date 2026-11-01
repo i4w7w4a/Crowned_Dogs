@@ -13,6 +13,22 @@ document.querySelector<HTMLButtonElement>("#crown")!.onclick=()=>{route="battle"
 document.querySelector<HTMLButtonElement>("#tunnel")!.onclick=()=>{route="fitting";set(0);};
 for(const [id,v] of [["start",0],["middle",.5],["end",1]] as const) document.querySelector<HTMLButtonElement>(`#${id}`)!.onclick=()=>set(v);
 progress.oninput=()=>set(Number(progress.value)/1000);
+const size=document.querySelector<HTMLSelectElement>("#size")!;
+size.onchange=()=>{
+  const [width,height]=size.value.split("x");
+  for(const [name,v] of [["width",width],["height",height]] as const){
+    if(size.value==="auto")document.body.style.removeProperty(`--review-${name}`);
+    else document.body.style.setProperty(`--review-${name}`,`${v}px`);
+  }
+  draw();
+};
+const live=document.querySelector<HTMLInputElement>("#live")!;
+const game=document.querySelector<HTMLIFrameElement>("#game")!;
+live.onchange=()=>{
+  stop();canvas.hidden=live.checked;game.hidden=!live.checked;
+  if(live.checked)game.src="/?muted=1#base";
+  else{game.removeAttribute("src");draw();}
+};
 document.querySelector<HTMLButtonElement>("#play")!.onclick=()=>{
   stop();const start=performance.now();
   const tick=(now:number)=>{value=Math.min(1,(now-start)/(route==="battle"?2100:2400));progress.value=String(value*1000);draw();if(value<1)frame=requestAnimationFrame(tick);};

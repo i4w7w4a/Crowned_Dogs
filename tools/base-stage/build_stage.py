@@ -274,8 +274,67 @@ surface('Laptop',[(0,.710),(.123,.732),(.105,.825),(0,.826)],[2.62,2.62,2.17,2.1
 surface('Radio bank',[(.722,.779),(.769,.751),(.804,.760),(.824,.792),(.900,.793),(.953,.814),(.951,.920),(.726,.877)],[2.4,2.4,2.4,2.4,2.2,2.2,2.15,2.2],.13)
 surface('Radio antenna left',[(.734,.779),(.733,.729),(.742,.719),(.749,.733),(.749,.789)],2.4,.025)
 surface('Radio antenna right',[(.898,.804),(.896,.745),(.903,.735),(.911,.746),(.911,.812)],2.2,.025)
-def storage_box(name,footprint,bottom,height):
+def case_material(name,color):
+    """Stable, softly lit case paint: no image projection on an unknown face."""
+    m=bpy.data.materials.new(name);m.use_nodes=True
+    ns,ls=m.node_tree.nodes,m.node_tree.links;ns.clear()
+    out=ns.new('ShaderNodeOutputMaterial');em=ns.new('ShaderNodeEmission');ls.new(em.outputs[0],out.inputs[0])
+    grain=ns.new('ShaderNodeTexNoise');grain.inputs['Scale'].default_value=95;grain.inputs['Detail'].default_value=2
+    ramp=ns.new('ShaderNodeValToRGB')
+    ramp.color_ramp.elements[0].color=(*[x*.82 for x in color],1)
+    ramp.color_ramp.elements[1].color=(*[x*1.08 for x in color],1)
+    ls.new(grain.outputs['Fac'],ramp.inputs[0])
+    geom=ns.new('ShaderNodeNewGeometry');dot=ns.new('ShaderNodeVectorMath');dot.operation='DOT_PRODUCT'
+    dot.inputs[1].default_value=Vector((-.2,-.45,.87)).normalized();ls.new(geom.outputs['Normal'],dot.inputs[0])
+    light=mathnode(ns,ls,'ADD',.35,mathnode(ns,ls,'MULTIPLY',.65,mathnode(ns,ls,'MAXIMUM',0,dot.outputs['Value'])))
+    ao=ns.new('ShaderNodeAmbientOcclusion');ao.inputs['Distance'].default_value=.10;ao.samples=8
+    shade=ns.new('ShaderNodeMixRGB');shade.blend_type='MULTIPLY';shade.inputs[0].default_value=1
+    ls.new(ramp.outputs[0],shade.inputs[1]);ls.new(light,shade.inputs[2])
+    contact=ns.new('ShaderNodeMixRGB');contact.blend_type='MULTIPLY';contact.inputs[0].default_value=.45
+    ls.new(shade.outputs[0],contact.inputs[1]);ls.new(ao.outputs['Color'],contact.inputs[2]);ls.new(contact.outputs[0],em.inputs[0])
+    return m
+
+case_paint=case_material('CASE · worn charcoal olive paint',(.014,.016,.013))
+case_lid=case_material('CASE · reinforced lid paint',(.020,.022,.018))
+case_hardware=case_material('CASE · dark steel catches and guards',(.030,.033,.029))
+case_rubber=case_material('CASE · rubber gasket and handle',(.003,.0035,.003))
+
+def storage_box(name,footprint,bottom,height,authored=False):
     base=[ray(u,v,(HEIGHT-bottom)*F/(v-HORIZON)) for u,v in footprint]
+    if authored:
+        parts=[]
+        def point(u,v,h):
+            return base[0]*(1-u)*(1-v)+base[1]*u*(1-v)+base[2]*u*v+base[3]*(1-u)*v+Vector((0,h,0))
+        def part(label,u0,v0,u1,v1,h0,h1,material):
+            corners=[point(u,v,h) for h in (h0,h1) for u,v in ((u0,v0),(u1,v0),(u1,v1),(u0,v1))]
+            item=mesh(name+label,corners,[(0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)],material)
+            parts.append(item);return item
+        body=part('',0,0,1,1,0,height-.042,case_paint)
+        part(' · gasket',.006,.006,.994,.994,height-.044,height-.034,case_rubber)
+        part(' · lid',0,0,1,1,height-.034,height,case_lid)
+        # Raised lid ribs and short corner guards catch the overhead practicals.
+        for u in (.19,.48,.77):
+            part(' · lid rib',u,.065,u+.045,.935,height,height+.008,case_paint)
+        for u0,u1 in ((0,.09),(.91,1)):
+            for v0,v1 in ((0,.10),(.90,1)):
+                part(' · corner guard',u0,v0,u1,v1,.015,min(.065,height*.2),case_hardware)
+        # Front catches straddle the real lid seam; the carry handle sits below.
+        for u in (.18,.75):
+            part(' · catch backplate',u,-.022,u+.075,.008,height-.135,height-.020,case_rubber)
+            part(' · steel catch',u+.012,-.039,u+.063,-.012,height-.112,height-.032,case_hardware)
+        part(' · handle recess',.34,-.014,.66,.004,height*.34,height*.65,case_rubber)
+        for u in (.37,.59):
+            part(' · handle pivot',u,-.045,u+.04,-.010,height*.41,height*.61,case_hardware)
+        part(' · carry grip',.39,-.064,.61,-.035,height*.43,height*.49,case_rubber)
+        # Keep one mesh per case in the runtime, retaining distinct material slots for baking.
+        bpy.ops.object.select_all(action='DESELECT')
+        for item in parts:item.select_set(True)
+        for item in parts[1:]:objects.remove(item)
+        bpy.context.view_layer.objects.active=body;bpy.ops.object.join()
+        bm=bmesh.new();bm.from_mesh(body.data);bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces));bm.to_mesh(body.data);bm.free()
+        bevel=body.modifiers.new('Rounded case shell and hardware','BEVEL');bevel.width=.004;bevel.segments=2
+        bpy.ops.object.modifier_apply(modifier=bevel.name)
+        return body
     upper=[p+Vector((0,height,0)) for p in base]
     ob=mesh(name,base+upper,[(0,3,2,1),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7),(4,5,6,7)],photo)
     ob.data.materials.append(metal)
@@ -287,9 +346,9 @@ def storage_box(name,footprint,bottom,height):
     bevel=ob.modifiers.new('Case edge radius','BEVEL');bevel.width=.009;bevel.segments=2
     bpy.context.view_layer.objects.active=ob;bpy.ops.object.modifier_apply(modifier=bevel.name)
     return ob
-storage_box('Case · grounded lower box',[(-.02,.738),(.156,.727),(.131,.699),(-.03,.708)],0,.40)
-storage_box('Case · stacked upper box',[(-.02,.645),(.098,.644),(.094,.617),(-.03,.615)],.40,.30)
-storage_box('Case · rear box',[(.083,.674),(.132,.661),(.119,.630),(.079,.634)],.25,.27)
+storage_box('Case · grounded lower box',[(-.02,.738),(.156,.727),(.131,.699),(-.03,.708)],0,.40,authored=True)
+storage_box('Case · stacked upper box',[(-.02,.645),(.098,.644),(.094,.617),(-.03,.615)],.40,.30,authored=True)
+storage_box('Case · rear box',[(.083,.674),(.132,.661),(.119,.630),(.079,.634)],.25,.27,authored=True)
 repair_polygons.append([(0,.575),(.10,.582),(.11,.615),(.137,.628),(.164,.649),(.165,.730),(0,.744)])
 surface('Upright tablet',[(.390,.705),(.421,.691),(.450,.697),(.447,.777),(.410,.780),(.394,.764)],2.98,.07)
 surface('Left workbench',[(0,.354),(.106,.385),(.170,.417),(.096,.470),(0,.473)],[8.0,8.0,7.8,7.8,8],.25)
