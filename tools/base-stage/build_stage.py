@@ -18,6 +18,7 @@ cli = argparse.ArgumentParser()
 cli.add_argument('--bake', action='store_true')
 cli.add_argument('--render', action='store_true')
 cli.add_argument('--atlas-size', type=int, default=4096)
+cli.add_argument('--draft', action='store_true', help='Fast source-material review before baking')
 args = cli.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
 ASPECT, FOV, HEIGHT, HORIZON = 1882/3344, 55., 2., .30
 F = .5 / math.tan(math.radians(FOV/2))
@@ -36,6 +37,9 @@ scene.render.engine='CYCLES';scene.cycles.samples=8
 scene.cycles.use_denoising=True
 scene.render.resolution_x=564;scene.render.resolution_y=1002
 scene.render.resolution_percentage=100;scene.render.fps=30
+if args.draft:
+    scene.cycles.samples=1;scene.cycles.use_denoising=False
+    scene.render.resolution_x=360;scene.render.resolution_y=640
 scene.view_settings.view_transform='Standard';scene.view_settings.look='None'
 scene.view_settings.exposure=0;scene.view_settings.gamma=1
 scene.unit_settings.system='METRIC'
@@ -85,12 +89,31 @@ def projected_material(name, environment=False, tile='wall'):
     photo=ns.new('ShaderNodeTexImage');photo.image=images['original'];photo.extension='EXTEND';ls.new(uv.outputs[0],photo.inputs[0])
     color=photo.outputs['Color']
     if environment:
-        clean=ns.new('ShaderNodeTexImage');clean.image=images.get('floor_clean',images['clean']);clean.extension='EXTEND';ls.new(uv.outputs[0],clean.inputs[0])
+        clean=ns.new('ShaderNodeTexImage');clean.image=images.get('floor_clean',images['clean']) if tile=='floor' else images['clean'];clean.extension='EXTEND';ls.new(uv.outputs[0],clean.inputs[0])
+        if tile=='floor':
+            # Extend only actual ground pixels across the floor, with mirrored
+            # sampling at its side boundaries. This continuous extension keeps
+            # the photographed light and grain and cannot import a wall/prop.
+            ground_coord=ns.new('ShaderNodeTexCoord');ground_xyz=ns.new('ShaderNodeSeparateXYZ');ls.new(ground_coord.outputs['Object'],ground_xyz.inputs[0])
+            gx=mathnode(ns,ls,'PINGPONG',mathnode(ns,ls,'ADD',.3,mathnode(ns,ls,'DIVIDE',ground_xyz.outputs['X'],1.4)),1.)
+            gd=mathnode(ns,ls,'ADD',3.9,mathnode(ns,ls,'MULTIPLY',mathnode(ns,ls,'PINGPONG',mathnode(ns,ls,'DIVIDE',ground_xyz.outputs['Y'],1.7),1.),1.7))
+            gx=mathnode(ns,ls,'MULTIPLY',mathnode(ns,ls,'SUBTRACT',gx,.5),1.4)
+            flooruv=ns.new('ShaderNodeCombineXYZ')
+            ls.new(mathnode(ns,ls,'ADD',.5,mathnode(ns,ls,'DIVIDE',mathnode(ns,ls,'MULTIPLY',gx,F/ASPECT),gd)),flooruv.inputs[0])
+            ls.new(mathnode(ns,ls,'SUBTRACT',1-HORIZON,mathnode(ns,ls,'DIVIDE',HEIGHT*F,gd)),flooruv.inputs[1])
+            ground_tile=ns.new('ShaderNodeTexImage');ground_tile.image=clean.image;ground_tile.extension='EXTEND';ls.new(flooruv.outputs[0],ground_tile.inputs[0])
+            down=mathnode(ns,ls,'SUBTRACT',mathnode(ns,ls,'SUBTRACT',1,v),.42)
+            left=mathnode(ns,ls,'SUBTRACT',.23,mathnode(ns,ls,'MULTIPLY',down,1.1))
+            right=mathnode(ns,ls,'ADD',.32,mathnode(ns,ls,'MULTIPLY',down,2.3))
+            margin=mathnode(ns,ls,'MINIMUM',mathnode(ns,ls,'SUBTRACT',u,left),mathnode(ns,ls,'SUBTRACT',right,u))
+            valid=mathnode(ns,ls,'MINIMUM',.2,mathnode(ns,ls,'MAXIMUM',0,mathnode(ns,ls,'MULTIPLY',margin,2.8)))
+            ground_tint=ns.new('ShaderNodeMixRGB');ground_tint.blend_type='MULTIPLY';ground_tint.inputs[0].default_value=1;ground_tint.inputs[2].default_value=(.6,.6,.6,1);ls.new(ground_tile.outputs[0],ground_tint.inputs[1])
+            ground_mix=ns.new('ShaderNodeMixRGB');ls.new(valid,ground_mix.inputs[0]);ls.new(ground_tint.outputs[0],ground_mix.inputs[1]);ls.new(clean.outputs[0],ground_mix.inputs[2])
         mask=ns.new('ShaderNodeTexImage');mask.name='Occluded areas only';mask.extension='EXTEND';ls.new(uv.outputs[0],mask.inputs[0])
         mix=ns.new('ShaderNodeMixRGB');ls.new(mask.outputs[0],mix.inputs[0]);ls.new(color,mix.inputs[1]);ls.new(clean.outputs[0],mix.inputs[2]);color=mix.outputs[0]
         # The original floor contains rails/cables far outside the solid-object
         # outlines. Only the empty plate belongs on this horizontal surface.
-        if tile=='floor':color=clean.outputs[0]
+        if tile=='floor':color=ground_mix.outputs[0]
         # Beyond the source frustum: spatial UVs on the same physical surface.
         coord=ns.new('ShaderNodeTexCoord');xyz=ns.new('ShaderNodeSeparateXYZ');ls.new(coord.outputs['Object'],xyz.inputs[0])
         tuv=ns.new('ShaderNodeCombineXYZ')
@@ -102,10 +125,21 @@ def projected_material(name, environment=False, tile='wall'):
             scale=ns.new('ShaderNodeVectorMath');scale.operation='SCALE';scale.inputs[3].default_value=.28;ls.new(coord.outputs['Object'],scale.inputs[0])
             til.projection='BOX';til.projection_blend=.3;ls.new(scale.outputs['Vector'],til.inputs[0])
         distance=mathnode(ns,ls,'MINIMUM',mathnode(ns,ls,'MINIMUM',u,mathnode(ns,ls,'SUBTRACT',1,u)),mathnode(ns,ls,'MINIMUM',v,mathnode(ns,ls,'SUBTRACT',1,v)))
-        inside=mathnode(ns,ls,'MINIMUM',1,mathnode(ns,ls,'MAXIMUM',0,mathnode(ns,ls,'MULTIPLY',distance,12)))
+        inside=mathnode(ns,ls,'MINIMUM',1,mathnode(ns,ls,'MAXIMUM',0,mathnode(ns,ls,'MULTIPLY',mathnode(ns,ls,'ADD',distance,.04),25)))
+        if tile=='floor':
+            # Empty-plate walls are NOT floor texture. Outside its photographed
+            # ground wedge, use the actual planar ground material. Otherwise
+            # the white rock foot becomes a fake pedestal under every dock.
+            down=mathnode(ns,ls,'SUBTRACT',mathnode(ns,ls,'SUBTRACT',1,v),.38)
+            left=mathnode(ns,ls,'SUBTRACT',.28,mathnode(ns,ls,'MULTIPLY',down,.75))
+            right=mathnode(ns,ls,'ADD',.28,mathnode(ns,ls,'MULTIPLY',down,2.2))
+            ground=mathnode(ns,ls,'MINIMUM',mathnode(ns,ls,'SUBTRACT',u,left),mathnode(ns,ls,'SUBTRACT',right,u))
+            ground=mathnode(ns,ls,'MINIMUM',1,mathnode(ns,ls,'MAXIMUM',0,mathnode(ns,ls,'MULTIPLY',ground,55)))
+            inside=mathnode(ns,ls,'MULTIPLY',inside,ground)
         tint=ns.new('ShaderNodeMixRGB');tint.blend_type='MULTIPLY';tint.inputs[0].default_value=1;tint.inputs[2].default_value=(.48,.48,.48,1);ls.new(til.outputs[0],tint.inputs[1])
         mix=ns.new('ShaderNodeMixRGB');ls.new(inside,mix.inputs[0]);ls.new(tint.outputs[0],mix.inputs[1]);ls.new(color,mix.inputs[2]);color=mix.outputs[0]
         if tile=='floor':
+            color=ground_mix.outputs[0]
             ao=ns.new('ShaderNodeAmbientOcclusion');ao.inputs['Distance'].default_value=.25;ao.samples=16
             mul=ns.new('ShaderNodeMixRGB');mul.blend_type='MULTIPLY';mul.inputs[0].default_value=.65;ls.new(color,mul.inputs[1]);ls.new(ao.outputs['Color'],mul.inputs[2]);color=mul.outputs[0]
     ls.new(color,em.inputs[0]);return m
@@ -179,8 +213,8 @@ def surface(name,outline,depth,thickness=.16,bulge=0):
 # The slightly oblique tunnel axis is read from the photographic vanishing point.
 axis=-.135
 sections=[]
-for i in range(141):
-    d=-3+i*.34
+for i in range(81):
+    d=-3+i*(21.8/80)
     narrow=max(0,min(1,(d-10)/8))
     left=-1.40+.50*narrow;right=2.65-1.30*narrow;roof=4.35-1.05*narrow
     x0=axis*d
@@ -208,23 +242,29 @@ surface('CROWN · rounded interface',[(.158,.524),(.171,.509),(.209,.495),(.241,
 
 # Dock platforms are physical supports. Backplates stand on their platforms;
 # the three front panels are finite thickness photographic relief, not sprites.
-def dock(name,outline,left,right):
+def dock(name,outline,left,front,right,soles):
     a=ray(*left,floor_depth(left[1]));b=ray(*right,floor_depth(right[1]))
     # Vertical plane through the measured floor contacts. Every image ray is
     # intersected with that plane, so feet and sockets cannot move independently.
-    normal=Vector((b.z-a.z,0,a.x-b.x));constant=normal.dot(a)
+    sole_a,sole_b=[ray(u,v,(HEIGHT-.16)*F/(v-HORIZON)) for u,v in soles]
+    normal=Vector((sole_b.z-sole_a.z,0,sole_a.x-sole_b.x));constant=normal.dot(sole_a)
     def dep(u,v):
         direction=ray(u,v,1)-Vector((0,HEIGHT,0))
         return constant/normal.dot(direction)
-    depths=[floor_depth(v) if i>=len(outline)-3 else dep(u,v) for i,(u,v) in enumerate(outline)]
-    surface(name,outline,depths,.24,.035)
-    front=[a,b,b+Vector((0,0,-.30)),a+Vector((0,0,-.30))]
-    top=[p+Vector((0,.02,0)) for p in front]
-    mesh(name+' · platform and floor contact',front+top,[(0,3,2,1),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7),(4,5,6,7)],metal)
-    contacts.append(dict(name=name,floor=0,minY=min(p.y for p in front)))
-dock('Near Persona and docking cradle',[(.674,.168),(.841,.130),(.861,.469),(.851,.561),(.754,.574),(.684,.548)],(.684,.548),(.851,.561))
-dock('Middle Persona and docking cradle',[(.548,.223),(.665,.197),(.682,.510),(.607,.525),(.544,.501)],(.544,.501),(.682,.510))
-dock('Far Persona and docking cradle',[(.464,.264),(.536,.245),(.550,.481),(.495,.497),(.459,.485)],(.459,.485),(.550,.481))
+    # A single vertical photographic relief ends at the actual sole plane.
+    # Feet stay on the relief and never get painted onto the horizontal deck.
+    outline=outline[:-2]+[(u,HORIZON+(HEIGHT-.16)*F/dep(u,v)) for u,v in outline[-2:]]
+    surface(name,outline,dep,.24,.035)
+    c=ray(*front,floor_depth(front[1]));back=a+b-c
+    base=[a,c,b,back];top=[p+Vector((0,.16,0)) for p in base]
+    platform=mesh(name+' · platform and floor contact',base+top,[(0,3,2,1),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7),(4,5,6,7)],photo)
+    platform.data.materials.append(metal)
+    platform.data.polygons[-1].material_index=1
+    repair_polygons.append([left,front,right])
+    contacts.append(dict(name=name,floor=0,minY=min(p.y for p in base)))
+dock('Near Persona and docking cradle',[(.674,.168),(.841,.130),(.861,.469),(.851,.541),(.642,.528)],(.642,.550),(.736,.577),(.847,.569),[(.733,.535),(.759,.538)])
+dock('Middle Persona and docking cradle',[(.548,.223),(.665,.197),(.682,.493),(.520,.484)],(.520,.509),(.578,.525),(.647,.521),[(.577,.496),(.595,.498)])
+dock('Far Persona and docking cradle',[(.464,.264),(.536,.245),(.550,.466),(.440,.470)],(.440,.487),(.479,.496),(.532,.493),[(.480,.473),(.496,.475)])
 
 # Independent near-field equipment. Countertop has four legs reaching the floor.
 surface('Foreground console',[(0,.760),(.126,.729),(.267,.738),(.437,.776),(.718,.819),(1,.896),(1,1),(0,1)],lambda u,v: (HEIGHT-.82)*F/(max(v,.72)-HORIZON),.075)
@@ -234,7 +274,23 @@ surface('Laptop',[(0,.710),(.123,.732),(.105,.825),(0,.826)],[2.62,2.62,2.17,2.1
 surface('Radio bank',[(.722,.779),(.769,.751),(.804,.760),(.824,.792),(.900,.793),(.953,.814),(.951,.920),(.726,.877)],[2.4,2.4,2.4,2.4,2.2,2.2,2.15,2.2],.13)
 surface('Radio antenna left',[(.734,.779),(.733,.729),(.742,.719),(.749,.733),(.749,.789)],2.4,.025)
 surface('Radio antenna right',[(.898,.804),(.896,.745),(.903,.735),(.911,.746),(.911,.812)],2.2,.025)
-surface('Left storage cases',[(0,.576),(.065,.581),(.079,.628),(.146,.646),(.159,.714),(.106,.741),(0,.718)],lambda u,v:floor_depth(.74),.25)
+def storage_box(name,footprint,bottom,height):
+    base=[ray(u,v,(HEIGHT-bottom)*F/(v-HORIZON)) for u,v in footprint]
+    upper=[p+Vector((0,height,0)) for p in base]
+    ob=mesh(name,base+upper,[(0,3,2,1),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7),(4,5,6,7)],photo)
+    ob.data.materials.append(metal)
+    bm=bmesh.new();bm.from_mesh(ob.data);bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces));bm.to_mesh(ob.data);bm.free()
+    for face in ob.data.polygons:
+        if face.normal.z<.6 and face.normal.y>-.25:face.material_index=1
+        if face.normal.dot(Vector((0,0,HEIGHT))-face.center)<=0:face.material_index=1
+    # Fine chamfers turn the previously exposed black cutout into a box edge.
+    bevel=ob.modifiers.new('Case edge radius','BEVEL');bevel.width=.009;bevel.segments=2
+    bpy.context.view_layer.objects.active=ob;bpy.ops.object.modifier_apply(modifier=bevel.name)
+    return ob
+storage_box('Case · grounded lower box',[(-.02,.738),(.156,.727),(.131,.699),(-.03,.708)],0,.40)
+storage_box('Case · stacked upper box',[(-.02,.645),(.098,.644),(.094,.617),(-.03,.615)],.40,.30)
+storage_box('Case · rear box',[(.083,.674),(.132,.661),(.119,.630),(.079,.634)],.25,.27)
+repair_polygons.append([(0,.575),(.10,.582),(.11,.615),(.137,.628),(.164,.649),(.165,.730),(0,.744)])
 surface('Upright tablet',[(.390,.705),(.421,.691),(.450,.697),(.447,.777),(.410,.780),(.394,.764)],2.98,.07)
 surface('Left workbench',[(0,.354),(.106,.385),(.170,.417),(.096,.470),(0,.473)],[8.0,8.0,7.8,7.8,8],.25)
 
@@ -242,12 +298,18 @@ surface('Left workbench',[(0,.354),(.106,.385),(.170,.417),(.096,.470),(0,.473)]
 # vertical faces forward and retain bare floor behind them for the tunnel pass.
 for name,poly,ground in [
     ('Distant storage lockers',[(.295,.362),(.323,.358),(.329,.352),(.387,.357),(.388,.414),(.302,.414)],.414),
-    ('Field cot and cases',[(.321,.391),(.344,.383),(.410,.387),(.421,.427),(.338,.440),(.320,.425)],.440),
     ('Tunnel mesh screen',[(.388,.308),(.477,.298),(.479,.449),(.441,.468),(.397,.445)],.468),
     ('Tunnel backpack',[(.377,.437),(.400,.422),(.431,.424),(.473,.434),(.471,.471),(.403,.474),(.376,.469)],.474),
 ]:
-    ds=[floor_depth(v) if v>=ground-.012 else floor_depth(ground) for u,v in poly]
+    bottom_count=2 if name=='Distant storage lockers' else 3
+    ds=[floor_depth(v) if i>=len(poly)-bottom_count else floor_depth(ground) for i,(u,v) in enumerate(poly)]
     surface(name,poly,ds,.24,.025)
+storage_box('Case · below field cot',[(.342,.443),(.392,.451),(.403,.443),(.354,.435)],0,.50)
+bed_outline=[(.323,.397),(.399,.409),(.412,.399),(.335,.386)]
+bed=[ray(u,v,(HEIGHT-.55)*F/(v-HORIZON)) for u,v in bed_outline]
+mesh('Cot · supported mattress',bed+[(p.x,p.y-.08,p.z) for p in bed],[(0,1,2,3),(4,7,6,5),(0,4,5,1),(1,5,6,2),(2,6,7,3),(3,7,4,0)],photo)
+for i,p in enumerate(bed):box('Cot leg '+str(i),(p.x-.012,0,p.z-.012),(p.x+.012,.50,p.z+.012),metal)
+repair_polygons.append([(.318,.382),(.412,.385),(.423,.428),(.398,.453),(.333,.449),(.317,.428)])
 
 # Repair masks are data, not a new painting: same photographed occlusion contours.
 w,h=1024,round(1024/ASPECT)
@@ -268,7 +330,7 @@ for mat in [rock,floor_mat]:mat.node_tree.nodes['Occluded areas only'].image=mas
 paths={}
 for route in ['battle','fitting']:
     cam=camera('VIEW · '+route.upper());samples=[]
-    end=[-.36,1.66,-3.00] if route=='battle' else [-.76,2.0,-7.00]
+    end=[-.36,1.66,-3.00] if route=='battle' else [-.55,2.0,-4.80]
     aim=list(ray(.235,.527,5.90)) if route=='battle' else [-1.75,1.65,-17.0]
     # The off-axis camera's screen centre is below its optical axis. Compensate
     # the look point, keeping the destination at mid-frame without digital zoom.
@@ -304,6 +366,7 @@ def export_manifest(baked=False):
         parts.append(p)
     data=dict(version=1,calibration=dict(fov=FOV,aspect=ASPECT,camHeight=HEIGHT,horizon=HORIZON),cameraPaths=paths,
         textures=dict(clean='clean.png',equipment='../base/salt-base.webp'),meshes=parts,
+        textures2x=dict(clean='clean@2x.webp'),
         reconstruction=dict(version=2,contacts=contacts,source='Blender fixed projector; authored closed volumes; shared baked UVs'))
     if baked:data['bakedTexture']='base-atlas.png'
     (WEB/'manifest.json').write_text(json.dumps(data,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
@@ -317,15 +380,49 @@ if args.bake:
     bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.uv.smart_project(angle_limit=math.radians(70),island_margin=.004,area_weight=.5)
     bpy.ops.object.mode_set(mode='OBJECT')
+    # Screen-space density: do not spend almost the whole atlas on 45 metres
+    # of distant rock while starving the crown and capsule seen at arm's length.
+    for ob in objects:
+        ob.data.calc_loop_triangles();layer=ob.data.uv_layers.active.data
+        area=sum(abs((layer[t.loops[1]].uv-layer[t.loops[0]].uv).cross(layer[t.loops[2]].uv-layer[t.loops[0]].uv))*.5 for t in ob.data.loop_triangles)
+        if ob.name.startswith('Rock vault'):wanted=.65
+        elif ob.name.startswith('Floor'):wanted=.65
+        elif ob.name.startswith('Distant corridor'):wanted=.025
+        elif ob.name.startswith('Case ·'):wanted=.025
+        elif 'closed rear' in ob.name:wanted=.003
+        elif 'calibrated front' in ob.name:
+            projected=[]
+            for ve in ob.data.vertices:
+                x,y,z=uncv(ve.co);d=max(.05,-z)
+                projected.append(Vector((.5+x*F/(ASPECT*d),HORIZON+(HEIGHT-y)*F/d)))
+            wanted=sum(abs((projected[t.vertices[1]]-projected[t.vertices[0]]).cross(projected[t.vertices[2]]-projected[t.vertices[0]]))*.5 for t in ob.data.loop_triangles)
+            wanted*=3 if ob.name.startswith('Capsule') else 5 if ob.name.startswith('CROWN') else 1.5
+        else:wanted=.001
+        scale=math.sqrt(wanted/max(area,1e-10))
+        for loop in layer:loop.uv*=scale
+    bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.uv.pack_islands(rotate=True,scale=True,margin=.003)
+    bpy.ops.object.mode_set(mode='OBJECT')
     atlas=bpy.data.images.new('BASE · baked photograph and unseen surfaces',width=args.atlas_size,height=args.atlas_size,alpha=False)
     atlas.colorspace_settings.name='sRGB'
     used=set(mat for ob in objects for mat in ob.data.materials)
     for mat in used:
         node=mat.node_tree.nodes.new('ShaderNodeTexImage');node.image=atlas;node.name='BAKE_TARGET';mat.node_tree.nodes.active=node
     scene.render.bake.margin=12;scene.render.bake.use_clear=True
+    # One joined disposable bake target avoids rescanning a 4K atlas for every
+    # separate component. Original editable objects retain their own UV layers.
+    bpy.ops.object.select_all(action='DESELECT');copies=[]
+    for ob in objects:
+        dup=ob.copy();dup.data=ob.data.copy();scene.collection.objects.link(dup);dup.select_set(True);copies.append(dup);ob.hide_render=True
+    bpy.context.view_layer.objects.active=copies[0];bpy.ops.object.join();joined=bpy.context.object
+    joined.name='TEMP · single atlas bake target'
+    scene.cycles.samples=1
     print('BAKE_START',len(objects),args.atlas_size,flush=True)
     bpy.ops.object.bake(type='EMIT')
     print('BAKE_DONE',flush=True)
+    bpy.data.objects.remove(joined,do_unlink=True)
+    for ob in objects:ob.hide_render=False
+    scene.cycles.samples=8
     atlas.filepath_raw=str(WEB/'base-atlas.png');atlas.file_format='PNG';atlas.save();atlas.pack()
     baked=bpy.data.materials.new('RUNTIME · same baked UV atlas');baked.use_nodes=True
     ns,ls=baked.node_tree.nodes,baked.node_tree.links;ns.clear()
@@ -339,7 +436,7 @@ bpy.ops.wm.save_as_mainfile(filepath=str(native),compress=True)
 if args.render:
     for route in ['battle','fitting']:
         scene.camera=bpy.data.objects['VIEW · '+route.upper()]
-        for frame in [1,16,31,46,61]:
+        for frame in ([1,31,61] if args.draft else [1,16,31,46,61]):
             scene.frame_set(frame);scene.render.filepath=str(OUT/f'{route}-{frame:02d}.png');bpy.ops.render.render(write_still=True)
     scene.camera=bpy.data.objects['VIEW · BATTLE'];scene.frame_set(1)
 print('BASE_REBUILT',len(objects),'objects','contacts',contacts,flush=True)
