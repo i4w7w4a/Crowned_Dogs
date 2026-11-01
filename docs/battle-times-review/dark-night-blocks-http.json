@@ -1,9 +1,10 @@
 {
-  "sourceCommit": "933e6a3b21e3f4b60fdbef3b51736d7ea2b1cd76",
-  "filesHashed": 522,
-  "httpAssets": 519,
+  "sourceCommit": "a223d746978ed358c922a77a3ebfb6f0bf000fe1",
+  "includesMain": "2184f10",
+  "filesHashed": 569,
+  "httpAssets": 566,
   "httpStatus": 200,
   "wasmMime": "application/wasm",
   "nativeGuiOpened": false,
-  "review": "Current production browser build; unchanged Windows launchers not reopened because port 5197 belongs to another process."
+  "review": "Production browser build including main batch-2 models; unchanged Windows launchers not reopened because port 5197 belongs to another process."
 }
