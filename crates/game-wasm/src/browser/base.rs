@@ -807,7 +807,7 @@ impl Base {
         toggle(&self.home, "cd-travelling", false);
         attr(&self.home, "aria-busy", "false");
         style(&self.home, "--cd-travel-fade", "0");
-        for selector in [".cd-enter", ".cd-to-fitting"] {
+        for selector in [".cd-enter", ".cd-to-fitting", ".cd-to-persona", ".cd-operator"] {
             set(&query(&self.home, selector), "disabled", &flag(false));
         }
         if self.home_ready {
@@ -1187,7 +1187,7 @@ fn bind(state: &Rc<RefCell<Base>>) {
             let Some(state) = weak.upgrade() else {
                 return;
             };
-            if action == "battle" || action == "fitting" {
+            if action == "battle" || action == "fitting" || action == "persona" {
                 begin_home_transition(&state, action);
                 return;
             }
@@ -1482,11 +1482,11 @@ fn begin_home_transition(state: &Rc<RefCell<Base>>, target: &str) {
             ));
             toggle(&s.home, "cd-travelling", true);
             attr(&s.home, "aria-busy", "true");
-            for selector in [".cd-enter", ".cd-to-fitting"] {
+            for selector in [".cd-enter", ".cd-to-fitting", ".cd-to-persona", ".cd-operator"] {
                 set(&query(&s.home, selector), "disabled", &flag(true));
             }
             // Load the Persona during the tunnel journey, while the base remains visible.
-            if target == "fitting" {
+            if target == "fitting" || target == "persona" {
                 s.ensure_viewer(Rc::downgrade(state));
             }
             true
@@ -1505,7 +1505,7 @@ fn finish_home_transition(state: &Rc<RefCell<Base>>, target: &str) {
     if target == "battle" {
         enter_battle(state);
     } else {
-        state.borrow_mut().navigate("fitting", Rc::downgrade(state));
+        state.borrow_mut().navigate(target, Rc::downgrade(state));
     }
 }
 fn setup_home_stage(state: &Rc<RefCell<Base>>) {

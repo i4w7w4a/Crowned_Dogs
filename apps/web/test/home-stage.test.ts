@@ -7,7 +7,7 @@ const aspect = 1882 / 3344;
 const manifest = {
   version: 1, kind: "depth-photo", image: "../base/salt-base.webp", depth: "depth.png",
   aspect, zoom: 1.06, parallax: .002,
-  targets: { battle: [.235, .527], fitting: [.275, .36] },
+  targets: { battle: [.235, .527], fitting: [.275, .36], persona: [.76, .33] },
 };
 type Shot = {
   cover: number[]; pivot: number[]; zoom: number; parallax: number;
@@ -103,7 +103,7 @@ test("home remains one intact two-triangle photograph with exact cover framing a
 
 test("crown and tunnel approach their own photograph coordinates by exactly six percent", async (t) => {
   const { stage, shots, attrs, counts } = await fixture(t);
-  for (const route of ["battle", "fitting"] as const) {
+  for (const route of ["battle", "fitting", "persona"] as const) {
     stage.draw(route, 0);
     const start = shots.at(-1)!;
     assert.equal(start.zoom, 1); assert.equal(start.parallax, 0);

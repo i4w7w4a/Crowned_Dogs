@@ -75,6 +75,6 @@ png += chunk(b'IDAT', zlib.compress(rows, 9)) + chunk(b'IEND', b'')
 (OUTPUT / 'depth.png').write_bytes(png)
 manifest = dict(version=1, kind='depth-photo', image='../base/salt-base.webp', depth='depth.png',
                 aspect=ASPECT, zoom=1.06, parallax=.002,
-                targets=dict(battle=[.235,.527], fitting=[.275,.36]))
+                targets=dict(battle=[.235,.527], fitting=[.275,.36], persona=[.76,.33]))
 (OUTPUT / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
 print(f'Depth data: {WIDTH}x{HEIGHT}, {len(png)} bytes; original photograph unchanged')

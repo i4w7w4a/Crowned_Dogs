@@ -49,6 +49,7 @@ struct Config {
     parallax: f64,
     battle: [f64; 2],
     fitting: [f64; 2],
+    persona: [f64; 2],
 }
 impl Config {
     fn parse(data: &serde_json::Value) -> Result<Self, JsValue> {
@@ -93,6 +94,7 @@ impl Config {
             parallax: number("parallax", 0.002).clamp(0., 0.002),
             battle: target("battle")?,
             fitting: target("fitting")?,
+            persona: target("persona")?,
         })
     }
 }
@@ -243,6 +245,7 @@ impl RustHomeStage {
         let (pivot, p) = match target {
             "battle" => (config.battle, progress),
             "fitting" => (config.fitting, progress),
+            "persona" => (config.persona, progress),
             _ => ([0.5, 0.5], 0.),
         };
         let p = if p.is_finite() { p.clamp(0., 1.) } else { 0. };
