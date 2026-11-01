@@ -157,7 +157,7 @@ test("the female hairstyles pack hangs hidden under the head bone", async t => {
 test("the male hairstyles pack hangs hidden under his head bone, next to the beards", async t => {
   const { root, anchor } = figure(), beards = beardPack(), url = `${base}models/persona-male.json`;
   const pack = new THREE.Group(), owned = resources();
-  for (const style of ["crop", "slick", "medium"]) for (const part of ["cards", "cap"]) {
+  for (const style of ["crop", "slick", "medium", "ponytail"]) for (const part of ["cards", "cap"]) {
     const node = new THREE.Mesh(owned.geometry, owned.material);
     node.name = `Hair_${style}_${part}`; pack.add(node);
   }
