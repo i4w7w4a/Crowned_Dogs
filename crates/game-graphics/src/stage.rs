@@ -193,6 +193,18 @@ fn point(points: &[V3], t: f64) -> V3 {
     })
 }
 
+/// The carabiner loop of a sling clip, in the clip's own plane.
+pub fn clip_path() -> Value {
+    json!([
+        [0.009, -0.016, 0.],
+        [-0.007, -0.018, 0.],
+        [-0.011, -0.009, 0.],
+        [-0.011, 0.014, 0.],
+        [0., 0.021, 0.],
+        [0.009, 0.014, 0.]
+    ])
+}
+
 pub fn sling(args: &Value) -> Result<Value, String> {
     let matrix = args["matrix"]
         .as_array()
@@ -254,9 +266,7 @@ pub fn sling(args: &Value) -> Result<Value, String> {
             json!({"name":"Sling_Clip_Foreend","position":points[points.len() - 1]}),
         ]
     };
-    Ok(
-        json!({"position":vertices,"uv":uvs,"index":indices,"clips":clips,"clipPath":[[0.009,-0.016,0.],[-0.007,-0.018,0.],[-0.011,-0.009,0.],[-0.011,0.014,0.],[0.,0.021,0.],[0.009,0.014,0.]]}),
-    )
+    Ok(json!({"position":vertices,"uv":uvs,"index":indices,"clips":clips,"clipPath":clip_path()}))
 }
 
 #[cfg(test)]
