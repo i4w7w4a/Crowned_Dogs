@@ -1,7 +1,7 @@
 //! The creation bay. The persona-bay picture is projected back from the camera that took it onto
-//! a sheet laid over a rough box of the hall, so the creation camera can really move through it:
-//! seen from the projector it is the picture itself, closer in the columns slide past the back
-//! wall. A podium stands over the floor ring; cold rim light, a light shaft, glowing lamps and
+//! a sheet laid over the hall's floor, walls and ceiling, so the creation camera can really move
+//! through it: seen from the projector it is the picture itself, closer in the hall grows and
+//! tilts like a room. A podium stands over the floor ring; cold rim light, a light shaft, glowing lamps and
 //! slow dust keep the bay alive. A second, nearer shot of the bay is projected onto the same sheet
 //! from its own camera, fitted to the first picture, and takes over as the camera closes on the
 //! face: the hall gains detail in place instead of one picture giving way to another.
@@ -26,21 +26,17 @@ const PODIUM: f64 = 0.66;
 pub const BODY_TOP: f64 = 0.262;
 pub const BODY_BOTTOM: f64 = -0.31;
 
-/// Boxes of the hall in metres, floor at 0, the ring's centre at the origin.
-const HALL: [([f64; 3], [f64; 3]); 9] = [
-    // Floor, ceiling, back wall and side walls of the bay.
+/// The hall as the sheet takes it, in metres, floor at 0, the ring's centre at the origin: floor,
+/// ceiling, side walls and one wall across at the face of the two machine columns. The bay
+/// behind the columns lies flat on that wall: the face view stands far from both projectors,
+/// and a sheet that dropped from a column to the back wall smeared the picture along its edge.
+const HALL: [([f64; 3], [f64; 3]); 5] = [
     ([-7.0, -0.05, -8.5], [7.0, 0.0, 6.0]),
     ([-7.0, 5.7, -8.5], [7.0, 5.75, 6.0]),
-    ([-7.0, 0.0, -8.6], [7.0, 9.5, -8.5]),
-    ([-2.65, 0.0, -8.5], [-2.6, 5.7, 6.0]),
-    ([2.6, 0.0, -8.5], [2.65, 5.7, 6.0]),
-    // The two machine columns, the pipe beam over them and the cases along the walls.
-    ([-1.52, 0.0, -4.75], [-0.82, 4.2, -4.05]),
-    ([0.85, 0.0, -4.75], [1.70, 4.2, -4.05]),
-    ([-2.6, 4.2, -4.75], [2.6, 4.55, -4.05]),
-    ([-2.6, 0.0, -5.2], [-1.95, 0.72, -2.5]),
+    ([-7.0, 0.0, -4.15], [7.0, 9.5, -4.05]),
+    ([-2.65, 0.0, -4.05], [-2.6, 5.7, 6.0]),
+    ([2.6, 0.0, -4.05], [2.65, 5.7, 6.0]),
 ];
-const CASES: ([f64; 3], [f64; 3]) = ([1.95, 0.0, -5.2], [2.6, 0.72, -2.5]);
 /// Lamps of the picture, as (pixel x, pixel y, the wall they hang on: axis and place, glow
 /// size in metres, colour): the top bar, the columns' tubes, the far wall lights, the tanks.
 const LAMPS: [(f64, f64, usize, f64, f64, u32); 13] = [
@@ -276,10 +272,9 @@ fn enter(eye: [f64; 3], dir: [f64; 3], lo: [f64; 3], hi: [f64; 3]) -> Option<f64
     (near <= far && near > 1e-6).then_some(near)
 }
 /// The hall as one sheet seen from where the picture was taken: each vertex lies where its ray
-/// through the picture first meets the hall's boxes. The boxes themselves tear apart along every
-/// column's outline once the camera leaves the projector, and show a cut there; the sheet only
-/// stretches across, and the picture with it. It reaches past the picture's edges, where the
-/// picture mirrors, for wide frames and the close-up.
+/// through the picture first meets the hall's boxes. The boxes are flat walls only, so the sheet
+/// never tears nor stretches. It reaches past the picture's edges, where the picture mirrors,
+/// for wide frames and the close-up.
 fn hall_sheet() -> (Vec<f32>, Vec<u32>) {
     const COLUMNS: usize = 256;
     const ROWS: usize = 320;
@@ -287,7 +282,6 @@ fn hall_sheet() -> (Vec<f32>, Vec<u32>) {
     const DOWN: [f64; 2] = [-0.3, 1.3];
     let boxes: Vec<([f64; 3], [f64; 3])> = HALL
         .iter()
-        .chain(std::iter::once(&CASES))
         .map(|(lo, hi)| ([lo[0], lo[1], lo[2] + BACK], [hi[0], hi[1], hi[2] + BACK]))
         .collect();
     let t = TILT.to_radians();

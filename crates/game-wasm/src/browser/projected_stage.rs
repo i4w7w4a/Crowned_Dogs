@@ -418,9 +418,12 @@ async fn load_assets(
     };
     let loader = make(&three, "TextureLoader", &[]);
     let keys = ["clean", "equipment", "floor", "wall", "roof"];
+    // Devices that draw the backdrop sharp take the double-size pictures where there are any.
+    let sharp = super::platform::sharp_pictures();
     let mut urls = vec![];
     for key in keys {
-        let file = manifest_data["textures"][key].as_str().unwrap_or("");
+        let double = manifest_data["textures2x"][key].as_str().filter(|_| sharp);
+        let file = double.unwrap_or(manifest_data["textures"][key].as_str().unwrap_or(""));
         urls.push(if file.is_empty() {
             None
         } else {
