@@ -5,7 +5,9 @@ from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
 from mathutils.kdtree import KDTree
 
-C = Vector((0.0, 0.02, 1.585))          # cranium centre (world, rest pose)
+# PERSONA=male: the male base scene (base_male.blend, heads m1-m4); he stands 12 cm taller
+MALE = os.environ.get("PERSONA") == "male"
+C = Vector((0.003, -0.008, 1.700)) if MALE else Vector((0.0, 0.02, 1.585))   # cranium centre (world, rest pose)
 DOWN = Vector((0, 0, -1))
 
 
@@ -45,7 +47,9 @@ def mesh_world(obj, dg):
 
 
 class Head:
-    def __init__(self, head="Head_f1", body=("FemBody", "Buff", "Suit")):
+    def __init__(self, head=None, body=None):
+        head = head or ("Head_m1" if MALE else "Head_f1")
+        body = body or (("MaleBody", "Buff", "Suit") if MALE else ("FemBody", "Buff", "Suit"))
         dg = bpy.context.evaluated_depsgraph_get()
         self.verts, self.tris = mesh_world(bpy.data.objects[head], dg)
         self.bvh = BVHTree.FromPolygons(self.verts, self.tris)
@@ -546,7 +550,8 @@ def save_grid(imgs, out, cols):
     bpy.data.images.remove(im)
 
 
-def render_views(prefix, views=("front", "back", "left", "right"), target=(0.0, 0.018, 1.565), dist=0.95, lens=85):
+def render_views(prefix, views=("front", "back", "left", "right"), target=None, dist=0.95, lens=85):
+    target = target or ((0.003, -0.01, 1.68) if MALE else (0.0, 0.018, 1.565))
     sc = bpy.context.scene
     cam = bpy.data.objects["Review_camera"]
     cam.data.type = 'PERSP'

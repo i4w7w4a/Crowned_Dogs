@@ -129,7 +129,8 @@ pub fn step_markup_with_beards(look: &JsValue, step: usize, beards_ready: bool) 
             } else {
                 segment("Причёска", "hair", &hairs, &pick("hair"))
             };
-            if boolean(&own, "hairColor") {
+            // the male scan's buzz cut is baked into the head and keeps its own colour
+            if boolean(&own, "hairColor") && pick("hair") != "buzz" {
                 out.push_str(&swatches(
                     "Цвет волос",
                     "hairColor",
@@ -187,7 +188,6 @@ pub fn tabs(step: usize, male: bool) -> String {
         .enumerate()
         .map(|(i, (id, name, _))| {
             let label = if male && *id == "hair" { "Волосы и борода" } else { *name };
-            let name = if male && *id == "hair" { "Борода" } else { *name };
             format!(
                 "<button class=\"glass\" type=\"button\" role=\"tab\" data-step=\"{i}\" aria-selected=\"{}\" aria-label=\"{label}\">{}<span>{name}</span></button>",
                 i == step,

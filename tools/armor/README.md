@@ -23,6 +23,9 @@
    - `research/carry-fit/boots/elbowsmooth.mjs IN OUT Ryvok l|r` — сглаживание локтя «Рывка».
    Жилеты (`Vest`, `Plita4`) держатся только на корпусе; костюм под ними прячется маской, но рукав — никогда
    (`dress_gear.py`, иначе в позе с рукой на бедре от рукава остаётся лента).
+   - `node morph_suit.mjs IN.glb OUT.glb` — последним шагом: морфы `vest` и `plita4` на костюмах поджимают куртку
+     под надетый жилет (игра включает их в `sceneDress`). Маска прячет только треугольники, закрытые жилетом целиком,
+     иначе крупные треугольники у края жилета оставляли дырку до пояса.
 6. Превью для Снаряжения: `preview_gear.py -- GEAR.glb RECOLOUR_DIR OUT.glb`, затем meshopt, resize 512,
    webp 85 и base64 в `apps/web/public/preview/gear.json`. Предмет показывает свою часть через `gear#Имя` в
    `models()` (`crates/game-client/src/workshop.rs`).

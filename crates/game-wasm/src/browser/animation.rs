@@ -29,8 +29,10 @@ fn soften(clip: &JsValue) {
         let is_quaternion = string(&get(&track, "ValueTypeName")) == "quaternion";
         let mut input = vec![
             num(&call(&track, "getValueSize", &[])),
-            0.55,
-            2.5,
+            // A third of the authored sway, blurred over ~0.25 s: at 0.55 and 0.1 s the chest
+            // jerked forward every loop (the enemy while you pick a move, your elbows in first person).
+            0.3,
+            6.,
             f64::from(is_quaternion),
         ];
         input.extend(numbers(&data));

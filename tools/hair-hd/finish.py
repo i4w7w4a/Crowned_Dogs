@@ -1,6 +1,7 @@
-"""Alpha modes on the exported hair pack, like the old female cards: strips cut at 0.15, all double-sided.
+"""Alpha modes on the exported hair pack, like the old female cards: strips cut at 0.15, the crop's stubble
+at 0.5, all double-sided.
 
-usage: python -I finish.py output/hair-hd/raw/hair-female.glb
+usage: python -I finish.py output/hair-hd/raw/hair-<sex>.glb
 """
 import json, struct, sys
 from pathlib import Path
@@ -13,6 +14,8 @@ for m in j['materials']:
     m['doubleSided'] = True
     if m['name'] == 'M_Hair_Cards':
         m['alphaMode'] = 'MASK'; m['alphaCutoff'] = 0.15
+    elif m['name'] == 'M_Hair_Fade':
+        m['alphaMode'] = 'MASK'; m['alphaCutoff'] = 0.5
     else:
         m.pop('alphaMode', None); m.pop('alphaCutoff', None)
 data = json.dumps(j, separators=(',', ':')).encode(); data += b' ' * ((-len(data)) % 4)

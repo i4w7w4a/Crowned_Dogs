@@ -108,6 +108,10 @@ impl RustHoldOut {
             input.extend(components(&keep));
             input.extend(components(&arm.forearm));
             input.push(weight);
+            // Out of the body on the right: from the left shoulder to the right one.
+            let side = world_position(three, &arm.upper);
+            call(&side, "sub", &[world_position(three, &self.arms[0].upper)]);
+            input.extend(components(&side));
             let pole = math("wristPole", &input);
             let at = world_position(three, &arm.hand);
             rig_reach(

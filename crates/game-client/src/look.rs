@@ -45,10 +45,14 @@ const EYES: [Choice; 14] = [
     ("blue", "Синие", 0x00a3ff),
 ];
 /// (sex, id, name, hair cap, hair cards). The male scan has its buzz cut baked into the head.
-/// Pixie, bob and braid are their own meshes in the hair pack (`Hair_<id>_*`), not the long
-/// hair's cap and cards; the renderer shows them by the paint's `hair` id.
-const HAIRS: [(&str, &str, &str, bool, bool); 6] = [
+/// The others (female pixie, bob, braid; male crop, slick, medium) are their own meshes in the
+/// Persona's hair pack (`Hair_<id>_*`), not the long hair's cap and cards; the renderer shows them
+/// by the paint's `hair` id.
+const HAIRS: [(&str, &str, &str, bool, bool); 9] = [
     ("male", "buzz", "Ёжик", false, false),
+    ("male", "crop", "Короткая", false, false),
+    ("male", "slick", "Зачёс назад", false, false),
+    ("male", "medium", "Средняя", false, false),
     ("female", "long", "Длинные", true, true),
     ("female", "pixie", "Пикси", false, false),
     ("female", "bob", "Боб", false, false),
@@ -257,7 +261,7 @@ pub fn options() -> Value {
                 .map(|f| json!({"id": f.1, "name": f.2})).collect::<Vec<_>>(),
             "hairs": HAIRS.iter().filter(|h| h.0 == sex)
                 .map(|h| json!({"id": h.1, "name": h.2})).collect::<Vec<_>>(),
-            "hairColor": sex == "female",
+            "hairColor": true,
             "beards": if sex == "male" { BEARDS.iter().map(|(id, name)| json!({"id": id, "name": name})).collect::<Vec<_>>() } else { vec![] },
         })
     };
@@ -504,6 +508,19 @@ mod tests {
             assert_eq!(p["cap"], false);
             look["sex"] = json!("male");
             assert_eq!(normalize(&look)["hair"], "buzz");
+        }
+    }
+    #[test]
+    fn male_hairstyles_stay_male() {
+        for id in ["crop", "slick", "medium"] {
+            let mut look = finished("male");
+            look["hair"] = json!(id);
+            let p = paint(&normalize(&look));
+            assert_eq!(p["hair"], id);
+            assert_eq!(p["cards"], false);
+            assert_eq!(p["cap"], false);
+            look["sex"] = json!("female");
+            assert_eq!(normalize(&look)["hair"], "long");
         }
     }
     #[test]

@@ -256,9 +256,9 @@ export class Pose {
   restore(): void { for (const b of this.bones) { b.o.position.copy(b.p); b.o.quaternion.copy(b.q); } }
 }
 
-/** Calms a looping stance from the video mocap: every track keeps 55% of its sway about its average and is
- *  smoothed over about a fifth of a second, around the loop so its seam stops twitching too. */
-function soften(clip: THREE.AnimationClip, keep = 0.55, sigma = 2.5): void {
+/** Calms a looping stance from the video mocap: every track keeps 30% of its sway about its average and is
+ *  smoothed over about half a second, around the loop so its seam stops twitching too. */
+function soften(clip: THREE.AnimationClip, keep = 0.3, sigma = 6): void {
   const R = Math.ceil(sigma * 3), wts = Array.from({ length: 2 * R + 1 }, (_, i) => Math.exp(-((i - R) ** 2) / (2 * sigma * sigma)));
   for (const tr of clip.tracks) {
     const k = tr.getValueSize(), v = tr.values, n = v.length / k;

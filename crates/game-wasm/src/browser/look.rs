@@ -206,15 +206,15 @@ pub fn first_person(model: JsValue, on: bool, look: JsValue) {
     }
 }
 
-/// A female hairstyle from the hair pack (`Hair_<style>_*` under the head bone): its prefix,
-/// whether it shows now, and whether the pack has it. Without it the long hair stands in.
+/// A hairstyle from the Persona's hair pack (`Hair_<style>_*` under the head bone): its prefix,
+/// whether it shows now, and whether the pack has it. Without it the long hair (female) or the
+/// scan's buzz cut (male) stands in.
 fn hair_selection(model: &JsValue, paint: &JsValue) -> (String, bool, bool) {
     let style = string(&get(paint, "hair"));
     let prefix = format!("Hair_{style}_");
-    let packed = super::beards::HAIR_STYLES.contains(&style.as_str())
+    let packed = super::beards::hair_styles(&string(&get(paint, "sex"))).contains(&style.as_str())
         && present(&call(model, "getObjectByName", &[format!("{prefix}cards").into()]));
     let visible = packed
-        && string(&get(paint, "sex")) == "female"
         && !boolean(&get(&get(model, "userData"), "cdBeardFirstPerson"))
         && !closed_helmet(model);
     (prefix, visible, packed)
@@ -279,6 +279,10 @@ pub fn apply(model: JsValue, look: JsValue) {
                 let m = own_material(&model, &node, "M_Hair_Cap");
                 let c = rgb(&get(&paint, "hairCap"));
                 call(&get(&m, "color"), "setRGB", &[c[0].into(), c[1].into(), c[2].into()]);
+            } else if mesh.ends_with("_fade") {
+                // the crop's clipper fade and the slick's hairline lie on the skull and tile round it: no strip hook, whose
+                // clamped texture would smear the first column into stripes
+                tint(&material, rgb(&get(&paint, "hairCards")));
             } else if mesh.ends_with("_tie") {
                 let m = own_material(&model, &node, "M_Hair_Tie");
                 call(&get(&m, "color"), "setRGB", &[0.012.into(), 0.012.into(), 0.013.into()]);

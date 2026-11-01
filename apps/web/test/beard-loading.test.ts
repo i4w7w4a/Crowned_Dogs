@@ -88,7 +88,8 @@ test("animated beard pack follows the existing head bone and leaves the original
     assert.deepEqual(main.old[i]!.disposed, { geometry: 0, material: 0, texture: 0, image: 0 });
   }
   assert.equal(beards.disposed.geometry, 0);
-  assert.deepEqual(requested, [url, `${base}models/beards-male.json`]);
+  // then the male hairstyles pack, missing here: he keeps the scan's buzz cut
+  assert.deepEqual(requested, [url, `${base}models/beards-male.json`, `${base}models/hair-male.json`]);
 });
 
 test("authored beard pack keeps its exported transform under the static figure", async t => {
@@ -126,7 +127,8 @@ test("a duplicated fit cannot stand in for a missing head/style and rejected res
   assert.equal(main.root.userData.beardsReady, false);
   assert.equal(beards.root.parent, null);
   assert.deepEqual(beards.disposed, { geometry: 1, material: 1, texture: 1, image: 1 });
-  assert.deepEqual(requested, [url, `${base}models/beards-male.json`]);
+  // then the male hairstyles pack, missing here: he keeps the scan's buzz cut
+  assert.deepEqual(requested, [url, `${base}models/beards-male.json`, `${base}models/hair-male.json`]);
 });
 
 test("female and unrelated assets never request beard packs; a main-model failure still rejects", async t => {
@@ -150,4 +152,19 @@ test("the female hairstyles pack hangs hidden under the head bone", async t => {
   assert.equal(pack.parent, anchor);
   pack.traverse(node => { if ((node as THREE.Mesh).isMesh) assert.equal(node.visible, false); });
   assert.equal(root.userData.beardsReady, undefined);
+});
+
+test("the male hairstyles pack hangs hidden under his head bone, next to the beards", async t => {
+  const { root, anchor } = figure(), beards = beardPack(), url = `${base}models/persona-male.json`;
+  const pack = new THREE.Group(), owned = resources();
+  for (const style of ["crop", "slick", "medium"]) for (const part of ["cards", "cap"]) {
+    const node = new THREE.Mesh(owned.geometry, owned.material);
+    node.name = `Hair_${style}_${part}`; pack.add(node);
+  }
+  const { host } = network(t, new Map([[url, root], [`${base}models/beards-male.json`, beards.root], [`${base}models/hair-male.json`, pack]]));
+  await sceneLoadModel(host, url);
+  assert.equal(pack.parent, anchor);
+  assert.equal(beards.root.parent, anchor);
+  pack.traverse(node => { if ((node as THREE.Mesh).isMesh) assert.equal(node.visible, false); });
+  assert.equal(root.userData.beardsReady, true);
 });
