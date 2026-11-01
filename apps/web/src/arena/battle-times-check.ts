@@ -1,12 +1,14 @@
 /** Dev-only GPU review with real renderer, assets, catalogue and deterministic rules. No audio is imported. */
 import { createMatch, kitFighter, starterLoadout, validateLoadout, weaponSpec, hitChance, resolveTurn, guardShare, type Match, type TimeOfDay, type Loadout, type Order } from "@crowned-dogs/core";
 import { Arena } from "./arena.ts";
-import { FRAMES } from "./frames.ts";
+import { callRust } from "../../../../packages/runtime/src/index.ts";
+import { FRAMES, type Frame } from "./frames.ts";
 import { QUALITY, type QualityId } from "./quality.ts";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const qa = $("qa"), status = $("status"), report = $("report"), errors = $("errors");
 const canvas = $<HTMLCanvasElement>("gl"), plate = $<HTMLImageElement>("plate");
+const map = $<HTMLSelectElement>("map");
 const kit = $<HTMLSelectElement>("kit"), quality = $<HTMLSelectElement>("quality"), fp = $<HTMLInputElement>("fp");
 const controls = [...document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("button,input,select")];
 const query = new URLSearchParams(location.search);
@@ -14,9 +16,11 @@ const reviewSeed = query.get("seed") ?? "battle-times-gpu-review";
 const reviewURL = new URL(location.href);
 reviewURL.searchParams.set("muted", "1"); reviewURL.searchParams.set("motionDebug", "1");
 history.replaceState(null, "", reviewURL);
-const validTimes = ["morning", "day", "evening", "night"] as const;
-let time: TimeOfDay = validTimes.find(value => value === query.get("time")) ?? "day";
-document.querySelector<HTMLInputElement>(`input[name=time][value=${time}]`)!.checked = true;
+const maps = callRust<{ id: string; name: string }[]>("client.conditions.maps", [FRAMES]);
+for (const choice of maps) map.add(new Option(choice.name, choice.id));
+let chosen = callRust<Frame>("client.conditions.initial", [FRAMES, query.get("time"), query.get("frame"), null, false, query.get("map"), null]);
+let time: TimeOfDay = chosen.time;
+map.value = chosen.mapId;
 if ([...kit.options].some(option => option.value === query.get("kit"))) kit.value = query.get("kit")!;
 if (query.get("q") && query.get("q")! in QUALITY) quality.value = query.get("q")!;
 let closed = false;
@@ -39,6 +43,15 @@ const arena = new Arena(canvas);
 let match: Match;
 let generation = 0;
 let modelsReady = false;
+function availableTimes() {
+  const choices = callRust<{ id: TimeOfDay }[]>("client.conditions.choices", [FRAMES, chosen.mapId]);
+  document.querySelectorAll<HTMLInputElement>("input[name=time]").forEach(input => {
+    const available = choices.some(choice => choice.id === input.value);
+    input.closest("label")!.hidden = !available;
+    input.disabled = !available || qa.dataset.ready !== "true";
+    input.checked = input.value === time;
+  });
+}
 function loadout(): Loadout {
   const value = starterLoadout("rifle");
   if (kit.value.includes("nvg")) value.head = "head-sych";
@@ -53,11 +66,15 @@ observer.observe($("viewport"));
 
 function describe() {
   const weapon = weaponSpec(match, 0, match.fighters[0].weapon);
+  qa.dataset.mapId = match.config.mapId;
+  qa.dataset.maxDistance = String(match.map.maxDistance);
+  qa.dataset.frameId = chosen.id;
   qa.dataset.time = match.config.time;
   qa.dataset.kit = kit.value;
   qa.dataset.nightVision = String(match.config.time === "night" && !!match.fighters[0].gear.nvg);
   qa.dataset.suppressed = String(weapon.suppressor);
   report.textContent = JSON.stringify({
+    mapId: match.config.mapId, mapName: match.map.name, frameId: chosen.id, maxDistance: match.map.maxDistance,
     time: match.config.time, weather: match.config.weather, turn: match.turn, distance: match.distance,
     nvgEquipped: !!match.fighters[0].gear.nvg,
     nvgActive: match.config.time === "night" && !!match.fighters[0].gear.nvg,
@@ -70,14 +87,20 @@ function describe() {
 async function reset() {
   const request = ++generation;
   controls.forEach(button => { button.disabled = true; });
-  qa.dataset.ready = "false"; status.textContent = "Загружаю выбранное время…";
-  const chosen = FRAMES.find(frame => frame.time === time && frame.weather === "clear")!;
+  qa.dataset.ready = "false"; status.textContent = "Загружаю выбранную карту…";
+  chosen = callRust<Frame>("client.conditions.select", [FRAMES, { mapId: map.value, time, weather: "clear" }]);
+  map.value = chosen.mapId; time = chosen.time;
+  availableTimes();
+  const nextURL = new URL(location.href);
+  nextURL.searchParams.set("map", chosen.mapId); nextURL.searchParams.set("time", chosen.time);
+  history.replaceState(null, "", nextURL);
   const own = loadout();
   match = createMatch({
     seed: reviewSeed, mapId: chosen.mapId, weather: chosen.weather, time: chosen.time,
     fighters: [kitFighter("qa-me", "Оператор", own), kitFighter("qa-enemy", "Искра", starterLoadout("rifle"))], startDistance: 7,
   });
   plate.src = quality.value === "low" ? chosen.src : chosen.src2x ?? chosen.src;
+  plate.alt = chosen.name;
   arena.setFrame(chosen); arena.setQuality(QUALITY[quality.value as QualityId]); arena.setFirstPerson(fp.checked);
   resize(); arena.resume();
   if (!modelsReady) {
@@ -90,7 +113,7 @@ async function reset() {
   await arena.warm();
   if (request !== generation) return;
   await arena.drawn();
-  await new Promise<void>((resolve, reject) => {
+  if (chosen.projectedStage) await new Promise<void>((resolve, reject) => {
     const deadline = performance.now() + 30_000;
     const check = () => {
       if (request !== generation) { resolve(); return; }
@@ -104,6 +127,7 @@ async function reset() {
   if (Number(qa.dataset.errorCount) === 0) {
     qa.dataset.ready = "true"; status.textContent = "Готово · сцена отрисована на GPU · без звука";
     controls.forEach(button => { button.disabled = false; });
+    availableTimes();
   }
 }
 function turn(move: 0 | 2) {
@@ -116,6 +140,7 @@ function turn(move: 0 | 2) {
   describe();
 }
 document.querySelectorAll<HTMLInputElement>("input[name=time]").forEach(input => input.addEventListener("change", () => { if (input.checked) { time = input.value as TimeOfDay; void reset().catch(fail); } }, eventOptions));
+map.addEventListener("change", () => { void reset().catch(fail); }, eventOptions);
 kit.addEventListener("change", () => { void reset().catch(fail); }, eventOptions);
 quality.addEventListener("change", () => { void reset().catch(fail); }, eventOptions);
 fp.addEventListener("change", () => { arena.setFirstPerson(fp.checked); arena.setConditions(match); }, eventOptions);

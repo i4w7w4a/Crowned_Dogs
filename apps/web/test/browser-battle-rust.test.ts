@@ -53,7 +53,8 @@ function deferred() {
 }
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 
-async function harness(run: (h: ReturnType<typeof createHarness>) => Promise<void>, options: { search?: string; time?: string } = {}) {
+type HarnessOptions = { search?: string; time?: string; map?: string };
+async function harness(run: (h: ReturnType<typeof createHarness>) => Promise<void>, options: HarnessOptions = {}) {
   const h = createHarness(options);
   const before = Object.fromEntries(Object.keys(h.globals).map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   for (const [key, value] of Object.entries(h.globals)) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
@@ -64,7 +65,7 @@ async function harness(run: (h: ReturnType<typeof createHarness>) => Promise<voi
     Reflect.deleteProperty(globalThis, "__cd");
   }
 }
-function createHarness(options: { search?: string; time?: string } = {}) {
+function createHarness(options: HarnessOptions = {}) {
   const clock = new Clock(), elements = new Map<string, Element>(), events = new EventTarget(), doc = new EventTarget();
   const calls: { name: string; at: number; args: unknown[] }[] = [];
   const record = (name: string, args: unknown[] = []) => calls.push({ name, at: clock.now, args });
@@ -112,13 +113,14 @@ function createHarness(options: { search?: string; time?: string } = {}) {
   const data = callRust<{ TIMING: { ourAttack: number; enemyAttack: number; knifeLands: number } }>("client.data", []);
   const stored = new Map<string, string>();
   if (options.time) stored.set("cd-time", options.time);
+  if (options.map) stored.set("cd-map", options.map);
   const bindings = { Arena: FakeArena, LocalDuel: SeededDuel, FightLog, gameAudio: audio, liquidGlass: () => {}, icon: () => "<svg/>",
     store: { get: (key: string) => stored.get(key) ?? null, set: (key: string, value: string) => stored.set(key, value) },
     startQuality: () => ({ id: "low", picked: true }),
-    frames: ["day", "morning", "evening", "night"].map(time => ({
+    frames: [...["day", "morning", "evening", "night"].map(time => ({
       id: time === "day" ? "hall1" : `hall-${time}`, name: "Соляной цех", src: `${time}.png`,
       w: 941, h: 1672, top: 0, mapId: "saltHall", weather: "clear", time,
-    })),
+    })), { id: "blocks-day", name: "Пятиэтажки", src: "blocks.png", w: 941, h: 1672, top: 0, mapId: "blocks", weather: "clear", time: "day" }],
     weaponIds: WEAPON_IDS, weapons: WEAPONS, veteranKits: VETERAN_KITS, playlist: [], tracks: {}, timing: data.TIMING,
     myModel: "me.json", foeModel: "enemy.json",
   };
@@ -255,3 +257,44 @@ test("saved time is restored when a direct link does not override it", async () 
   h.click("moreBtn");
   assert.match(h.element("conditionNote").textContent, /Солнце перед/);
 }, { time: "evening" }));
+
+test("a blocks link cannot invent a night plate and starts on the real map dimensions", async () => harness(async h => {
+  assert.equal(h.duel().match.config.mapId, "blocks");
+  assert.equal(h.duel().match.config.time, "day");
+  const frame = h.calls.find(c => c.name === "arena.frame")!.args[0] as { id: string; mapId: string; time: string };
+  assert.deepEqual([frame.id, frame.mapId, frame.time], ["blocks-day", "blocks", "day"]);
+  assert.equal(h.duel().match.map.maxDistance, 12);
+  assert.equal(h.duel().match.distance, 7);
+}, { search: "?muted=1&map=blocks&time=night", time: "night", map: "saltHall" }));
+
+test("map changes preserve the fitted kit and expose only the chosen map's available times", async () => harness(async h => {
+  const kit = { ...starterLoadout("rifle"), head: "head-sych" };
+  const start = h.battle!.start(kit, () => {}, async () => {}, undefined); await h.ready(); await start;
+  h.click("moreBtn");
+  assert.equal(h.element("mapSeg").children.length, 2);
+  assert.equal(h.element("frameSeg").children.length, 4);
+  const first = h.duel();
+  h.element("mapSeg").children[1]!.click();
+  assert.notEqual(h.duel(), first);
+  assert.deepEqual(h.duel().fighters[0].kit, kit);
+  assert.equal(h.duel().match.fighters[0].gear.nvg, true);
+  assert.equal(h.duel().match.config.mapId, "blocks");
+  assert.equal(h.duel().match.config.time, "day");
+  assert.equal(h.duel().match.map.maxDistance, 12);
+  assert.equal(h.stored.get("cd-map"), "blocks");
+  assert.equal(h.stored.get("cd-time"), "day");
+  h.click("moreBtn");
+  assert.equal(h.element("frameSeg").children.length, 1);
+  assert.match(h.element("frameSeg").children[0]!.innerHTML, /День/);
+  assert.equal(h.element("mapSeg").children[1]!.getAttribute("aria-pressed"), "true");
+  h.element("mapSeg").children[0]!.click();
+  assert.equal(h.duel().match.config.mapId, "saltHall");
+  assert.equal(h.duel().match.config.time, "day");
+  h.click("moreBtn");
+  assert.equal(h.element("frameSeg").children.length, 4);
+}, { time: "night" }));
+
+test("saved blocks map restores with its available day instead of a stale saved night", async () => harness(async h => {
+  assert.equal(h.duel().match.config.mapId, "blocks");
+  assert.equal(h.duel().match.config.time, "day");
+}, { map: "blocks", time: "night" }));

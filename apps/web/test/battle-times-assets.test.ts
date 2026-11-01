@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { createMatch } from "@crowned-dogs/core";
+import { callRust } from "../../../packages/runtime/src/index.ts";
+import type { Frame } from "../src/arena/frames.ts";
 
 // Frame calibration reads this one browser setting at module initialization.
 const previous = Object.getOwnPropertyDescriptor(globalThis, "location");
@@ -33,4 +36,16 @@ test("all four battle times have complete plates and preserve the shared spatial
       }
     }
   }
+});
+
+test("real map frames route a blocks night request to its available day with the catalogue's field size", () => {
+  const chosen = callRust<Frame>("client.conditions.initial", [FRAMES, "night", null, null, false, "blocks", null]);
+  assert.equal(chosen.id, "blocks-day");
+  assert.equal(chosen.mapId, "blocks");
+  assert.equal(chosen.time, "day");
+  assert.deepEqual(callRust<{ id: string }[]>("client.conditions.choices", [FRAMES, chosen.mapId]).map(choice => choice.id), ["day"]);
+  const match = createMatch({ seed: "blocks-real-frame", mapId: chosen.mapId, weather: chosen.weather, time: chosen.time,
+    fighters: [{ id: "a", name: "Тень", weapon: "rifle" }, { id: "b", name: "Искра", weapon: "rifle" }] });
+  assert.equal(match.map.maxDistance, 12);
+  assert.equal(match.distance, 7);
 });

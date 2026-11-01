@@ -202,6 +202,8 @@ impl RustBattle {
                 call(&params, "get", &["frame".into()]),
                 store_get(&state, "cd-time"),
                 call(&params, "has", &["cal".into()]),
+                call(&params, "get", &["map".into()]),
+                store_get(&state, "cd-map"),
             ],
         );
         if present(&selected) {
@@ -1160,6 +1162,21 @@ fn option(parent: &JsValue, content: &str, selected: bool, action: impl FnMut(Js
     listen(&b, "click", action);
     call(parent, "appendChild", &[b]);
 }
+fn choose_conditions(s: &JsValue, map: &str, time: &str) {
+    let config = object(&[
+        ("mapId", map.into()),
+        ("weather", get(&get(&match_(s), "config"), "weather")),
+        ("time", time.into()),
+    ]);
+    let frame = core("client.conditions.select", &[get(s, "frames"), config]);
+    if !present(&frame) {
+        return;
+    }
+    store_set(s, "cd-map", &word(&frame, "mapId"));
+    store_set(s, "cd-time", &word(&frame, "time"));
+    set_frame(s, &frame);
+    restart(s, false);
+}
 fn render_menu(s: &JsValue) {
     let bindings = get(s, "host");
     let held = word(&at(&get(&duel(s), "fighters"), 0), "weapon");
@@ -1267,15 +1284,34 @@ fn render_menu(s: &JsValue) {
             }
         ),
     );
-    let choices = values(&core("client.conditions.choices", &[]));
+    let current_config = get(&match_(s), "config");
+    let current_map = word(&current_config, "mapId");
+    let time = word(&current_config, "time");
+    let maps = values(&core("client.conditions.maps", &[get(s, "frames")]));
+    let ms = segment("mapSeg", maps.len());
+    for choice in maps {
+        let wanted = word(&choice, "id");
+        let current = wanted == current_map;
+        let state = s.clone();
+        let time = time.clone();
+        option(&ms, &word(&choice, "name"), current, move |_| {
+            if !current {
+                choose_conditions(&state, &wanted, &time);
+            }
+        });
+    }
+    let choices = values(&core(
+        "client.conditions.choices",
+        &[get(s, "frames"), current_map.clone().into()],
+    ));
     let fs = segment("frameSeg", choices.len());
     hide(&id("frameLabel"), false);
     hide(&fs, false);
-    let time = word(&get(&match_(s), "config"), "time");
     for choice in choices {
         let wanted = word(&choice, "id");
         let current = wanted == time;
         let state = s.clone();
+        let current_map = current_map.clone();
         option(
             &fs,
             &format!(
@@ -1286,18 +1322,7 @@ fn render_menu(s: &JsValue) {
             current,
             move |_| {
                 if !current {
-                    let config = object(&[
-                        ("mapId", get(&get(&match_(&state), "config"), "mapId")),
-                        ("weather", get(&get(&match_(&state), "config"), "weather")),
-                        ("time", wanted.clone().into()),
-                    ]);
-                    let frame = core(
-                        "client.conditions.frame",
-                        &[get(&state, "frames"), config, JsValue::NULL],
-                    );
-                    store_set(&state, "cd-time", &wanted);
-                    set_frame(&state, &frame);
-                    restart(&state, false);
+                    choose_conditions(&state, &current_map, &wanted);
                 }
             },
         );
@@ -1396,6 +1421,7 @@ fn watch_speed(s: &JsValue) {
 fn set_frame(s: &JsValue, frame: &JsValue) {
     set(s, "frame", frame);
     set(&id("bg"), "src", &get(frame, "src"));
+    set(&id("bg"), "alt", &format!("Арена: {}", word(frame, "name")).into());
     arena(s, "setFrame", &[frame.clone()]);
     layout(s);
 }

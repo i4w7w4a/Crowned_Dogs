@@ -23,19 +23,56 @@ fn frame_for(frames: &[Value], config: &Value, preferred: &str) -> Value {
                 .filter(matches)
                 .find(|f| f["weather"] == config["weather"])
         })
-        .or_else(|| frames.iter().find(matches))
-        .or_else(|| frames.first());
+        .or_else(|| frames.iter().find(matches));
     let Some(mut frame) = selected.cloned() else {
         return Value::Null;
     };
     // Weather may have no dedicated plate. Keep the actual match weather for
     // atmospheric effects instead of silently making a fog battle clear.
-    for key in ["mapId", "time", "weather"] {
-        if !config[key].is_null() {
-            frame[key] = config[key].clone();
-        }
+    if !config["weather"].is_null() {
+        frame["weather"] = config["weather"].clone();
     }
     frame
+}
+
+/// Local selection may fall back, but the selected plate supplies BOTH map and
+/// time. Never label a daytime picture as a nonexistent night variant.
+fn select_frame(frames: &[Value], config: &Value) -> Value {
+    let available: Vec<Value> = frames
+        .iter()
+        .filter(|f| f["id"] != "cal")
+        .cloned()
+        .collect();
+    let map = text(&config["mapId"]);
+    let Some(first) = available.iter().find(|f| text(&f["mapId"]) == map) else {
+        return available.first().cloned().unwrap_or(Value::Null);
+    };
+    let requested =
+        json!({"mapId":first["mapId"],"time":config["time"],"weather":config["weather"]});
+    let exact = frame_for(&available, &requested, "");
+    if exact.is_null() {
+        first.clone()
+    } else {
+        exact
+    }
+}
+
+fn time_choices(frames: Option<&Vec<Value>>, map: &str) -> Value {
+    let choices = json!([
+        {"id":"morning","name":"Утро","icon":"i-morning"},
+        {"id":"day","name":"День","icon":"i-day"},
+        {"id":"evening","name":"Вечер","icon":"i-evening"},
+        {"id":"night","name":"Ночь","icon":"i-night"}
+    ]);
+    json!(choices
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|choice| frames.is_none_or(|frames| frames
+            .iter()
+            .any(|f| text(&f["mapId"]) == map && f["time"] == choice["id"] && f["id"] != "cal")))
+        .cloned()
+        .collect::<Vec<_>>())
 }
 
 pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
@@ -45,36 +82,60 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             let requested = text(&args[1]);
             let frame_id = text(&args[2]);
             let saved = text(&args[3]);
-            if TIMES.contains(&requested) {
-                frame_for(
-                    frames,
-                    &json!({"mapId":"saltHall","weather":"clear","time":requested}),
-                    "",
-                )
-            } else if let Some(frame) = named_frame(frames, frame_id) {
-                frame
-            } else if truth(&args[4]) {
+            // The last two arguments are optional for old callers.
+            let requested_map = text(&args[5]);
+            let saved_map = text(&args[6]);
+            let named = named_frame(frames, frame_id);
+            if requested_map.is_empty() && !TIMES.contains(&requested) && named.is_some() {
+                named.unwrap()
+            } else if requested_map.is_empty() && !TIMES.contains(&requested) && truth(&args[4]) {
                 frames.first().cloned().unwrap_or(Value::Null)
             } else {
-                let time = if TIMES.contains(&saved) { saved } else { "day" };
-                frame_for(
-                    frames,
-                    &json!({"mapId":"saltHall","weather":"clear","time":time}),
-                    "",
-                )
+                let map = if !requested_map.is_empty() {
+                    requested_map
+                } else if let Some(frame) = &named {
+                    text(&frame["mapId"])
+                } else if !saved_map.is_empty() {
+                    saved_map
+                } else {
+                    "saltHall"
+                };
+                let time = if !requested.is_empty() {
+                    requested
+                } else if let Some(frame) = &named {
+                    text(&frame["time"])
+                } else if TIMES.contains(&saved) {
+                    saved
+                } else {
+                    "day"
+                };
+                select_frame(frames, &json!({"mapId":map,"weather":"clear","time":time}))
             }
         }
+        "client.conditions.select" => select_frame(
+            args[0].as_array().ok_or("Conditions require frames")?,
+            &args[1],
+        ),
+        "client.conditions.maps" => {
+            let frames = args[0].as_array().ok_or("Conditions require frames")?;
+            let mut result = Vec::<Value>::new();
+            for frame in frames {
+                let map = text(&frame["mapId"]);
+                if !result.iter().any(|m| m["id"] == map) && frame["id"] != "cal" {
+                    let name = game_core::constants()["MAPS"][map]["name"].clone();
+                    if !name.is_null() {
+                        result.push(json!({"id":map,"name":name}));
+                    }
+                }
+            }
+            json!(result)
+        }
+        "client.conditions.choices" => time_choices(args[0].as_array(), text(&args[1])),
         "client.conditions.frame" => frame_for(
             args[0].as_array().ok_or("Conditions require frames")?,
             &args[1],
             text(&args[2]),
         ),
-        "client.conditions.choices" => json!([
-            {"id":"morning","name":"Утро","icon":"i-morning"},
-            {"id":"day","name":"День","icon":"i-day"},
-            {"id":"evening","name":"Вечер","icon":"i-evening"},
-            {"id":"night","name":"Ночь","icon":"i-night"}
-        ]),
         "client.conditions.description" => {
             let m = &args[0];
             json!(match text(&m["config"]["time"]) {
@@ -103,7 +164,8 @@ mod tests {
             {"id":"hall-morning","mapId":"saltHall","time":"morning","weather":"clear","src":"morning.jpg"},
             {"id":"hall-evening","mapId":"saltHall","time":"evening","weather":"clear","src":"evening.jpg"},
             {"id":"hall-night","mapId":"saltHall","time":"night","weather":"clear","src":"night.jpg"},
-            {"id":"hall2","mapId":"saltHall","time":"day","weather":"fog","src":"fog.jpg"}
+            {"id":"hall2","mapId":"saltHall","time":"day","weather":"fog","src":"fog.jpg"},
+            {"id":"blocks-day","mapId":"blocks","time":"day","weather":"clear","src":"blocks.jpg"}
         ])
     }
     #[test]
@@ -159,6 +221,58 @@ mod tests {
         )
         .unwrap();
         assert_eq!(fog["id"], "hall2");
+    }
+    #[test]
+    fn only_available_map_and_time_pairs_can_be_selected() {
+        let maps = dispatch("client.conditions.maps", json!([frames()])).unwrap();
+        assert_eq!(
+            maps.as_array()
+                .unwrap()
+                .iter()
+                .map(|m| text(&m["id"]))
+                .collect::<Vec<_>>(),
+            vec!["saltHall", "blocks"]
+        );
+        assert_eq!(maps[1]["name"], "Пятиэтажки");
+        let choices = dispatch("client.conditions.choices", json!([frames(), "blocks"])).unwrap();
+        assert_eq!(choices.as_array().unwrap().len(), 1);
+        assert_eq!(choices[0]["id"], "day");
+        assert_eq!(
+            dispatch("client.conditions.choices", json!([]))
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .len(),
+            4,
+            "old callers still receive all four times"
+        );
+        for config in [
+            json!({"mapId":"blocks","time":"night","weather":"clear"}),
+            json!({"mapId":"unknown","time":"night","weather":"clear"}),
+        ] {
+            assert!(
+                dispatch("client.conditions.frame", json!([frames(), config, ""]))
+                    .unwrap()
+                    .is_null(),
+                "a canonical match must never relabel an unsupported plate"
+            );
+            let selected = dispatch("client.conditions.select", json!([frames(), config])).unwrap();
+            assert_eq!(selected["time"], "day");
+            assert!(selected["id"] == "blocks-day" || selected["id"] == "hall1");
+        }
+    }
+    #[test]
+    fn map_links_and_saved_maps_fall_back_atomically_to_available_daytime() {
+        for args in [
+            json!([frames(), "night", "", "night", false, "blocks", "saltHall"]),
+            json!([frames(), "", "", "night", false, "", "blocks"]),
+            json!([frames(), "", "blocks-day", "night", false]),
+        ] {
+            let selected = dispatch("client.conditions.initial", args).unwrap();
+            assert_eq!(selected["mapId"], "blocks");
+            assert_eq!(selected["time"], "day");
+            assert_eq!(selected["src"], "blocks.jpg");
+        }
     }
     #[test]
     fn explanations_follow_the_actual_side_and_equipment() {

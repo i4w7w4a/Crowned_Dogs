@@ -66,29 +66,29 @@
       "path": "apps/web/public/img/battle-times/night/hall.png",
       "width": 941,
       "height": 1672,
-      "bytes": 2844256,
-      "sha256": "c399207d2b7f894bd34da54ff52335f492a112b5bf7fc26321c4aeb6229b59c7"
+      "bytes": 2065974,
+      "sha256": "9e7a06b059bbbd922eb7021a5113f23ccdba33990358ecc8b5ea81935e4642d8"
     },
     {
       "path": "apps/web/public/img/battle-times/night/hall.webp",
       "width": 941,
       "height": 1672,
-      "bytes": 515322,
-      "sha256": "54acac2eb68a7ec60b6d23e7948d7699e74367e00740e31c097c1157bf1d57ec"
+      "bytes": 287952,
+      "sha256": "81940c31c1417330a28da9ce8293c382eb0891d568fb489385bc8638e9d674e1"
     },
     {
       "path": "apps/web/public/img/battle-times/night/clean.png",
       "width": 941,
       "height": 1672,
-      "bytes": 2791486,
-      "sha256": "998ca25bf66a0907e584d06e3ff42d50e8af55d4a6b84b5de1ee7042e62f3e14"
+      "bytes": 1962274,
+      "sha256": "b18a4832b1bd27649924d3fad57d7d3e7452f83670483d9f08b9b55d46513ee1"
     },
     {
       "path": "apps/web/public/img/battle-times/night/clean.webp",
       "width": 941,
       "height": 1672,
-      "bytes": 508526,
-      "sha256": "fb67f339bdfbdacbc6adb1fe97d79ce3e161400ac0450b5b00016808b2a0d494"
+      "bytes": 245918,
+      "sha256": "382d093af5f6b50ca3f32ca7cd05e9b3d3a5d448832c7ff0977a855d0f872ae8"
     }
   ]
 }

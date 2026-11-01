@@ -423,6 +423,16 @@ async function testTimePresentation() {
     match.config.time="evening"; match.fighters[0].facesSun=true; arena.setConditions(match);
     assert.equal(h.lenses[0].glare, true);
     match.fighters[0].facesSun=false; arena.setConditions(match); assert.equal(h.lenses[0].glare, false);
+    arena.setQuality(quality.high);
+    arena.setFrame({ ...frame, id:"blocks-day", look:{...frame.look,reflection:false} });
+    h.renderers[0].loop(300);
+    let reflection;
+    h.renderers[0].scene.traverse(object => { if (object.scale.y === -1) reflection=object.parent.parent; });
+    assert.ok(reflection,"the fixture must contain the actual inverted fighter hierarchy");
+    assert.equal(reflection.visible,false,"dry courtyard suppresses the wet-ground reflection");
+    arena.setQuality(quality.ultra); assert.equal(reflection.visible,false,"a quality change must not make dry ground reflective");
+    arena.setFrame({ ...frame, id:"hall1" }); assert.equal(reflection.visible,true,"returning to the hall restores its reflection");
+    arena.setQuality(quality.low); assert.equal(reflection.visible,false,"low quality still omits reflections");
   } finally { arena.dispose(); arena.free(); }
 }
 

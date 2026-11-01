@@ -25,6 +25,8 @@ export interface Calibration {
 
 export interface Look {
   exposure: number;
+  /** Dry surfaces have no planar fighter reflection, regardless of quality. */
+  reflection?: boolean;
   /** The low light from behind the enemy, the narrow spot on the enemy, the haze colour. */
   rim: number;
   fill: number;
@@ -106,17 +108,28 @@ const EVENING_LOOK: Look = {
   lens: { ...GREY_HALL.look.lens, contrast: 0.28, glow: 0.40, saturation: 0.64, tint: 0xf5e6d5, rays: 0.58, haze: 0.019, hazeColor: 0xc9b094 },
 };
 const NIGHT_LOOK: Look = {
-  exposure: 0.76, rim: 0xa7c8eb, fill: 0x8b9eaf, fog: 0x28313d, sky: 0x7d9ab7, ground: 0x161c25, puddle: 0,
-  lighting: { sky: 0.21, rim: 1.45, fill: 0.75, key: 1.6 }, sun: [0.5, 0.66, -1],
-  lens: { ...GREY_HALL.look.lens, contrast: 0.19, vignette: 0.90, glow: 0.18, saturation: 0.48, tint: 0xc7d8ea, rays: 0.06, haze: 0.009, hazeColor: 0x7a91a7 },
+  exposure: 0.68, rim: 0xa7b9cb, fill: 0x8b98a5, fog: 0x141a21, sky: 0x6a7c8e, ground: 0x0b0e12, puddle: 0,
+  lighting: { sky: 0.075, rim: 0.48, fill: 0.24, key: 0.52 }, sun: [0.5, 0.66, -1],
+  lens: { ...GREY_HALL.look.lens, contrast: 0.19, vignette: 0.90, glow: 0.08, saturation: 0.40, tint: 0xd5dce3, rays: 0.015, haze: 0.003, hazeColor: 0x505d6a },
+};
+
+/** First courtyard variant from the White Yar concept. Other times remain unavailable until authored. */
+const BLOCKS_LOOK: Look = {
+  reflection: false,
+  exposure: 0.98, rim: 0xf1e7d3, fill: 0xb6c2cc, fog: 0x9d9b93, sky: 0xc8d0d7, ground: 0x36332e, puddle: 0,
+  lighting: { sky: 0.75, rim: 3.4, fill: 1.65, key: 4.4 }, sun: [0.10, 0.96, -0.5],
+  lens: { ...GREY_HALL.look.lens, saturation: 0.58, tint: 0xe7eaf0, rays: 0.22, glow: 0.22, haze: 0.014, hazeColor: 0xc2c0b9 },
 };
 
 export const FRAMES: Frame[] = [
   { ...GREY_HALL, id: "hall1", name: "Соляной цех", src: "img/grey-hall-1.jpg", src2x: "img/grey-hall-1@2x.jpg", depth: "img/grey-hall-1.depth.png", weather: "clear", projectedStage: { manifest: "img/battle-stage/manifest.json" } },
   { ...GREY_HALL, id: "hall-morning", name: "Соляной цех", src: "img/battle-times/morning/hall.webp", src2x: "img/battle-times/morning/hall.png", depth: "img/grey-hall-1.depth.png", weather: "clear", time: "morning", look: MORNING_LOOK, projectedStage: stage("morning", 0xc2d4ec, 0.64) },
   { ...GREY_HALL, id: "hall-evening", name: "Соляной цех", src: "img/battle-times/evening/hall.webp", src2x: "img/battle-times/evening/hall.png", depth: "img/grey-hall-1.depth.png", weather: "clear", time: "evening", look: EVENING_LOOK, projectedStage: stage("evening", 0xe7c09a, 0.65) },
-  { ...GREY_HALL, id: "hall-night", name: "Соляной цех", src: "img/battle-times/night/hall.webp", src2x: "img/battle-times/night/hall.png", depth: "img/grey-hall-1.depth.png", weather: "clear", time: "night", look: NIGHT_LOOK, projectedStage: stage("night", 0x8da9c8, 0.32) },
+  { ...GREY_HALL, id: "hall-night", name: "Соляной цех", src: "img/battle-times/night/hall.webp", src2x: "img/battle-times/night/hall.png", depth: "img/grey-hall-1.depth.png", weather: "clear", time: "night", look: NIGHT_LOOK, projectedStage: stage("night", 0x788898, 0.10) },
   { ...GREY_HALL, id: "hall2", name: "Цех в дымке", src: "img/grey-hall-2.jpg", src2x: "img/grey-hall-2@2x.jpg", depth: "img/grey-hall-2.depth.png", weather: "fog" },
+  { ...GREY_HALL, id: "blocks-day", name: "Пятиэтажки", mapId: "blocks", time: "day", weather: "clear",
+    src: "img/blocks-day/hall.webp", src2x: "img/blocks-day/hall.png", look: BLOCKS_LOOK,
+    projectedStage: { manifest: "img/blocks-stage/manifest.json", extensionTint: 0xa9a99e, extensionExposure: 0.80 } },
 ];
 
 /** Art's fight screen with a painted soldier: the live enemy must cover him exactly. Open with ?cal. */

@@ -1735,7 +1735,7 @@ impl ArenaState {
             }
         }
         if let Some(mirror) = &self.mirror {
-            set(&mirror.group, "visible", &get(&q, "mirror"));
+            set(&mirror.group, "visible", &self.reflection_enabled().into());
             for m in mirror.mats.borrow().iter() {
                 sdk(
                     &self.host,
@@ -1871,7 +1871,14 @@ impl ArenaState {
             );
         }
         self.apply_lighting();
+        if let Some(mirror) = &self.mirror {
+            set(&mirror.group, "visible", &self.reflection_enabled().into());
+        }
         self.k = Some(k);
+    }
+    fn reflection_enabled(&self) -> bool {
+        boolean(&get(&self.quality, "mirror"))
+            && get(&get(&self.frame, "look"), "reflection").as_bool() != Some(false)
     }
     fn light_intensity(&self, key: &str, fallback: f64) -> f64 {
         let value = get(&get(&get(&self.frame, "look"), "lighting"), key);
