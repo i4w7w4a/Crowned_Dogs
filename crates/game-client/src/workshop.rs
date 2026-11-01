@@ -6,6 +6,8 @@ const SLOTS: [&str; 5] = ["optic", "muzzle", "rail", "mag", "stock"];
 /// Only items with a model of their own are offered (Art, 2026-11-01); the night-vision helmets
 /// stay on the K-6 and «Сфера» shells for now.
 fn models() -> Value {
+    // Temporary, explicitly approved placeholder: Sych keeps its own rules and
+    // catalogue icon, but uses the ordinary helmet until its model is ready.
     json!({"head-k6":"tripo-helmet","head-sych":"tripo-helmet","head-marevo":"tripo-helmet",
         "head-cap":"gear#Cap","head-sfera":"gear#Sfera","head-filin":"gear#Sfera",
         "body-plita2":"tripo-vest","body-plita4":"gear#Plita4",
@@ -391,6 +393,18 @@ mod tests {
                 );
             }
         }
+    }
+    #[test]
+    fn sych_uses_only_the_approved_helmet_placeholder_and_keeps_night_vision() {
+        let sych = core("getItem", json!(["head-sych"])).unwrap();
+        assert!(available(&sych, ""));
+        assert_eq!(models()["head-sych"], models()["head-k6"]);
+        assert_eq!(models()["head-sych"], "tripo-helmet");
+        let mut kit = core("starterLoadout", json!(["rifle"])).unwrap();
+        kit["head"] = json!("head-sych");
+        assert_eq!(core("compileKit", json!([kit])).unwrap()["nvg"], true);
+        // Batch-2 gear now has authored models in main. Its availability is
+        // covered by only_modelled_and_explicit_exceptions_are_offered above.
     }
     #[test]
     fn mods_are_offered_only_where_their_gun_has_the_mesh() {

@@ -9,5 +9,6 @@ apps/web/dist/
 __pycache__/
 target/
 release-local/
+output/beards/
 packages/runtime/wasm/
 apps/desktop/gen/

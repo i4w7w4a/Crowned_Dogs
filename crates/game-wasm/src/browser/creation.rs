@@ -66,13 +66,17 @@ fn swatch_color(key: &str, hex: &str) -> String {
     format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
 }
 fn segment(label: &str, key: &str, items: &[JsValue], current: &str) -> String {
+    segment_ready(label, key, items, current, true)
+}
+fn segment_ready(label: &str, key: &str, items: &[JsValue], current: &str, ready: bool) -> String {
     let mut out = format!(
         "<div class=\"cd-create-row\" role=\"group\" aria-label=\"{label}\"><div class=\"cd-create-seg\">"
     );
     for item in items {
         let id = text(&get(item, "id"));
+        let disabled = if !ready && id != "none" { " disabled" } else { "" };
         out.push_str(&format!(
-            "<button class=\"glass\" type=\"button\" data-look=\"{key}\" data-value=\"{id}\" aria-pressed=\"{}\">{}<span>{}</span></button>",
+            "<button class=\"glass\" type=\"button\" data-look=\"{key}\" data-value=\"{id}\" aria-pressed=\"{}\"{disabled}>{}<span>{}</span></button>",
             id == current,
             icon(if key == "face" { "face" } else { &id }),
             text(&get(item, "name"))
@@ -107,7 +111,8 @@ fn swatches(label: &str, key: &str, items: &[JsValue], current: &str) -> String 
 }
 
 /// The choices of one creation step; hair and faces follow the chosen sex.
-pub fn step_markup(look: &JsValue, step: usize) -> String {
+/// Beard choices stay unavailable until the current model has its actual fitted pack.
+pub fn step_markup_with_beards(look: &JsValue, step: usize, beards_ready: bool) -> String {
     let options = rust("client.look.options", &[]);
     let sex = text(&get(look, "sex"));
     let own = get(&options, &sex);
@@ -118,7 +123,12 @@ pub fn step_markup(look: &JsValue, step: usize) -> String {
         "skin" => swatches("Кожа", "skin", &list(&options, "skins"), &pick("skin")),
         "eyes" => swatches("Глаза", "eyes", &list(&options, "eyes"), &pick("eyes")),
         "hair" => {
-            let mut out = segment("Причёска", "hair", &list(&own, "hairs"), &pick("hair"));
+            let hairs = list(&own, "hairs");
+            let mut out = if sex == "male" && hairs.len() <= 1 {
+                String::new()
+            } else {
+                segment("Причёска", "hair", &hairs, &pick("hair"))
+            };
             if boolean(&own, "hairColor") {
                 out.push_str(&swatches(
                     "Цвет волос",
@@ -126,6 +136,15 @@ pub fn step_markup(look: &JsValue, step: usize) -> String {
                     &list(&options, "hairColors"),
                     &pick("hairColor"),
                 ));
+            }
+            if sex == "male" {
+                out.push_str("<span class=\"cd-overline\">Борода</span>");
+                out.push_str(&segment_ready("Борода", "beard", &list(&own, "beards"), &pick("beard"), beards_ready));
+                if !beards_ready {
+                    out.push_str("<span class=\"cd-create-picked\" role=\"status\">Бороды пока недоступны</span>");
+                } else if pick("beard") != "none" {
+                    out.push_str(&swatches("Цвет бороды", "beardColor", &list(&options, "beardColors"), &pick("beardColor")));
+                }
             }
             out
         }
@@ -138,6 +157,11 @@ pub fn step_markup(look: &JsValue, step: usize) -> String {
 /// icons: things are solid silhouettes with cut-outs, actions and signs stay thin lines.
 fn icon_paths(id: &str) -> &'static str {
     match id {
+        "none" => "<path d=\"M5 6.5c0 8 2.2 13 7 13s7-5 7-13M8 12h2m4 0h2M9 16c2 1 4 1 6 0\"/>",
+        "boxed" => "<path fill=\"currentColor\" stroke=\"none\" d=\"M5 7l3 4v4l4 3 4-3v-4l3-4v9l-7 5-7-5zM8 12l4-2 4 2-1 2-3-1-3 1z\"/>",
+        "goatee" => "<path fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\" d=\"M8 11l4-2 4 2 1 6-5 4-5-4zM9 14v2l3 2 3-2v-2l-3 1z\"/>",
+        "full" => "<path fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\" d=\"M4 6l4 5 4-2 4 2 4-5v9c0 4-4 7-8 7s-8-3-8-7zM9 14v2h6v-2z\"/>",
+        "tapered" => "<path fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\" d=\"M4 6l4 5 4-2 4 2 4-5-1 9-7 8-7-8zM9 14v2h6v-2z\"/>",
         "body" => "<g fill=\"currentColor\" stroke=\"none\" fill-rule=\"evenodd\"><path d=\"M9.2 4.4a2.8 2.8 0 1 0 5.6 0a2.8 2.8 0 1 0-5.6 0z\"/><path d=\"M7.5 8.1h9c1.4 0 2.4 1.2 2.1 2.6l-1.3 5.2h-1.8v6.1h-2.6v-6h-1.8v6H8.5v-6.1H6.7l-1.3-5.2c-.3-1.4.7-2.6 2.1-2.6z\"/></g>",
         "next" => "<path d=\"M14 5.5l6.5 6.5-6.5 6.5M20 12H3.5\"/>",
         "save" => "<path d=\"M4.5 12.5l5 5 10-11\"/>",
@@ -156,13 +180,15 @@ fn icon_paths(id: &str) -> &'static str {
 }
 
 /// Step tabs: an icon over a short name; the current one is pressed.
-pub fn tabs(step: usize) -> String {
+pub fn tabs(step: usize, male: bool) -> String {
     STEPS
         .iter()
         .enumerate()
         .map(|(i, (id, name, _))| {
+            let label = if male && *id == "hair" { "Волосы и борода" } else { *name };
+            let name = if male && *id == "hair" { "Борода" } else { *name };
             format!(
-                "<button class=\"glass\" type=\"button\" role=\"tab\" data-step=\"{i}\" aria-selected=\"{}\" aria-label=\"{name}\">{}<span>{name}</span></button>",
+                "<button class=\"glass\" type=\"button\" role=\"tab\" data-step=\"{i}\" aria-selected=\"{}\" aria-label=\"{label}\">{}<span>{name}</span></button>",
                 i == step,
                 icon(id)
             )

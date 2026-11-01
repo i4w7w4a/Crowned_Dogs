@@ -83,6 +83,7 @@ pub fn load_model(host: JsValue, url: String) -> Promise {
                 set(&node, "visible", &false.into());
             }
         }
+        super::beards::install(&host, &get(&gltf, "scene"), &url).await;
         let _ = install_relief_async(host, get(&gltf, "scene"), url).await;
         Ok(gltf)
     })

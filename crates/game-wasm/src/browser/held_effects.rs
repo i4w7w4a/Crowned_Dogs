@@ -110,7 +110,14 @@ impl RustHoldOut {
             input.push(weight);
             let pole = math("wristPole", &input);
             let at = world_position(three, &arm.hand);
-            rig_reach(three, &arm.upper, &arm.lower, &arm.hand, &at, &vector(three, &pole));
+            rig_reach(
+                three,
+                &arm.upper,
+                &arm.lower,
+                &arm.hand,
+                &at,
+                &vector(three, &pole),
+            );
             rig_set_world_quat(three, &arm.hand, &keep);
         }
         let mount = get(hand, "mount");
@@ -163,6 +170,7 @@ pub struct RustFlash {
     trace: f64,
     puff: f64,
     fired: bool,
+    suppressed: bool,
     disposed: bool,
 }
 #[wasm_bindgen]
@@ -238,6 +246,7 @@ impl RustFlash {
             trace: 0.,
             puff: 0.,
             fired: false,
+            suppressed: false,
             disposed: false,
         }
     }
@@ -256,12 +265,20 @@ impl RustFlash {
         self.fired
     }
     /// Starts a shot of `rounds` rounds toward `target` (a world point, or null for no tracer).
-    pub fn fire(&mut self, hand: JsValue, size: f64, rounds: u32, target: JsValue) {
+    pub fn fire(
+        &mut self,
+        hand: JsValue,
+        size: f64,
+        rounds: u32,
+        target: JsValue,
+        suppressed: Option<bool>,
+    ) {
         if self.disposed {
             return;
         }
         self.hand = hand;
         self.size = size;
+        self.suppressed = suppressed.unwrap_or(false);
         self.rounds = rounds.max(1);
         self.gap = 0.;
         if present(&target) {
@@ -291,7 +308,8 @@ impl RustFlash {
         let frame = math("flash", &[self.life, dt, self.size]);
         self.life = frame[0];
         let k = frame[1];
-        let visible = k > 0.
+        let visible = !self.suppressed
+            && k > 0.
             && present(&self.hand)
             && boolean(&call(
                 &self.hand,
@@ -374,7 +392,11 @@ impl RustFlash {
         self.puff = (self.puff - dt).max(0.);
         let k = self.puff / SMOKE_LIFE;
         let position = get(&self.smoke, "position");
-        set(&position, "y", &(num(&get(&position, "y")) + dt * 0.12).into());
+        set(
+            &position,
+            "y",
+            &(num(&get(&position, "y")) + dt * 0.12).into(),
+        );
         call(
             &get(&self.smoke, "scale"),
             "setScalar",

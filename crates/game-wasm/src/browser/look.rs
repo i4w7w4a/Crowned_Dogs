@@ -162,12 +162,55 @@ fn tick(node: &JsValue, uniforms: &JsValue) {
     set(node, "onBeforeRender", &update);
 }
 
+/// The closed Sfera/Filin shell hides facial hair while equipped. Read the actual
+/// mesh state after dressing: the saved beard stays intact and returns on removal.
+fn closed_helmet(model: &JsValue) -> bool {
+    nodes(model).into_iter().any(|node| {
+        if !boolean(&get(&node, "isMesh")) || string(&get(&node, "name")) != "Sfera" {
+            return false;
+        }
+        let mut current = node;
+        while present(&current) && !js_sys::Object::is(&current, model) {
+            if get(&current, "visible").as_bool() == Some(false) {
+                return false;
+            }
+            current = get(&current, "parent");
+        }
+        true
+    })
+}
+
+fn beard_selection(model: &JsValue, paint: &JsValue) -> (String, bool) {
+    let prefix = format!("Beard_{}_{}_", string(&get(paint, "face")), string(&get(paint, "beard")));
+    let visible = string(&get(paint, "sex")) == "male"
+        && string(&get(paint, "beard")) != "none"
+        && !boolean(&get(&get(model, "userData"), "cdBeardOccluded"))
+        && !boolean(&get(&get(model, "userData"), "cdBeardFirstPerson"))
+        && !closed_helmet(model);
+    (prefix, visible)
+}
+
+/// Beard packs are rigid head children, so the skinned-arms cutter does not see
+/// them. Toggle only this player's facial hair, never the shared head bone.
+#[wasm_bindgen(js_name=sceneSetBeardFirstPerson)]
+pub fn first_person(model: JsValue, on: bool, look: JsValue) {
+    set(&get(&model, "userData"), "cdBeardFirstPerson", &on.into());
+    let (prefix, visible) = beard_selection(&model, &paint(&look));
+    for node in nodes(&model) {
+        let name = string(&get(&node, "name"));
+        if boolean(&get(&node, "isMesh")) && name.starts_with("Beard_") {
+            set(&node, "visible", &(visible && name.starts_with(&prefix)).into());
+        }
+    }
+}
+
 /// Paints `look` onto `model`. Safe to call again after every change.
 #[wasm_bindgen(js_name=sceneApplyLook)]
 pub fn apply(model: JsValue, look: JsValue) {
     let paint = paint(&look);
     let skin = rgb(&get(&paint, "skin"));
     let face = format!("{HEAD}{}", string(&get(&paint, "face")));
+    let (beard, beard_on) = beard_selection(&model, &paint);
     let mut cap_material = get(&get(&model, "userData"), "cdCap");
     for node in nodes(&model) {
         if !boolean(&get(&node, "isMesh")) {
@@ -176,6 +219,16 @@ pub fn apply(model: JsValue, look: JsValue) {
         let material = get(&node, "material");
         let name = string(&get(&material, "name"));
         let mesh = string(&get(&node, "name"));
+        if mesh.starts_with("Beard_") {
+            // Keep only the style fitted to this head. Materials can be shared across
+            // variants, so visibility belongs to the mesh, not to its material.
+            set(&node, "visible", &(beard_on && mesh.starts_with(&beard)).into());
+            tint(&material, rgb(&get(&paint, "beardColor")));
+            if name.starts_with("M_Beard_Cards") {
+                hair_hook(&material);
+            }
+            continue;
+        }
         if mesh.starts_with("FemHairCap") {
             // The arena swaps untextured parts for a shared body colour; hair needs its own.
             if name != CAP {

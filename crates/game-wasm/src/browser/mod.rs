@@ -38,3 +38,4 @@ pub mod sound_settings;
 pub mod textures;
 pub mod view_utils;
 pub mod weapon;
+mod beards;
