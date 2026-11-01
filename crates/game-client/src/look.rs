@@ -58,6 +58,21 @@ const HAIR_COLORS: [Choice; 6] = [
     ("blond", "Светлые", 0xc2a57a),
     ("grey", "Седые", 0xa9a6a2),
 ];
+const BEARDS: [(&str, &str); 5] = [
+    ("none", "Без бороды"),
+    ("boxed", "Короткая"),
+    ("goatee", "Эспаньолка"),
+    ("full", "Полная"),
+    ("tapered", "Клиновидная"),
+];
+const BEARD_COLORS: [Choice; 6] = [
+    ("black", "Чёрный", 0x1e1b1a),
+    ("dark", "Тёмно-русый", 0x3e2f25),
+    ("brown", "Каштановый", 0x674d3a),
+    ("light", "Русый", 0x9a7d5c),
+    ("blond", "Светлый", 0xc2a57a),
+    ("grey", "Седой", 0xa9a6a2),
+];
 const SUITS: [Choice; 6] = [
     ("graphite", "Графит", 0x524b46),
     ("olive", "Олива", 0x4a4d38),
@@ -68,6 +83,8 @@ const SUITS: [Choice; 6] = [
 ];
 /// Average sRGB of the baked hair cards and suit textures; picks are scaled against them.
 const HAIR_BASE: [f64; 3] = [0.406, 0.304, 0.229];
+/// Beard atlas colour contract; independent of the existing female hair atlas.
+const BEARD_BASE: [f64; 3] = [0.406, 0.304, 0.229];
 const SUIT_BASE: [f64; 3] = [0.322, 0.295, 0.270];
 pub const CALLSIGN_MAX: usize = 16;
 
@@ -139,6 +156,8 @@ fn defaults(sex: &str) -> Value {
         "eyes": "grey",
         "hair": if female { "long" } else { "buzz" },
         "hairColor": "brown",
+        "beard": "none",
+        "beardColor": "brown",
         "suit": "graphite",
     })
 }
@@ -157,10 +176,16 @@ pub fn normalize(look: &Value) -> Value {
     if let Some(v) = pick("hair", &|v| HAIRS.iter().any(|h| h.0 == sex && h.1 == v)) {
         out["hair"] = json!(v);
     }
+    if sex == "male" {
+        if let Some(v) = pick("beard", &|v| BEARDS.iter().any(|b| b.0 == v)) {
+            out["beard"] = json!(v);
+        }
+    }
     for (key, list) in [
         ("skin", &SKINS[..]),
         ("eyes", &EYES[..]),
         ("hairColor", &HAIR_COLORS[..]),
+        ("beardColor", &BEARD_COLORS[..]),
         ("suit", &SUITS[..]),
     ] {
         if let Some(v) = pick(key, &|v| find(list, v).is_some()) {
@@ -204,6 +229,8 @@ pub fn paint(look: &Value) -> Value {
         "suit": round(scale(find(&SUITS, text(&look["suit"])).unwrap_or(SUITS[0]).2, SUIT_BASE, SUITS[0].2)),
         "hairCards": round(scale(hair_color.2, HAIR_BASE, HAIR_COLORS[2].2)),
         "hairCap": round(cap),
+        "beard": look["beard"],
+        "beardColor": round(scale(find(&BEARD_COLORS, text(&look["beardColor"])).unwrap_or(BEARD_COLORS[2]).2, BEARD_BASE, BEARD_COLORS[2].2)),
         "cap": hair.3,
         "cards": hair.4,
         "iris": round(lin(srgb(eyes.2))),
@@ -219,6 +246,7 @@ pub fn options() -> Value {
             "hairs": HAIRS.iter().filter(|h| h.0 == sex)
                 .map(|h| json!({"id": h.1, "name": h.2})).collect::<Vec<_>>(),
             "hairColor": sex == "female",
+            "beards": if sex == "male" { BEARDS.iter().map(|(id, name)| json!({"id": id, "name": name})).collect::<Vec<_>>() } else { vec![] },
         })
     };
     json!({
@@ -228,6 +256,7 @@ pub fn options() -> Value {
         "skins": choices(&SKINS),
         "eyes": choices(&EYES),
         "hairColors": choices(&HAIR_COLORS),
+        "beardColors": choices(&BEARD_COLORS),
         "suits": choices(&SUITS),
         "callsignMax": CALLSIGN_MAX,
     })
@@ -247,14 +276,23 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
                 .as_str()
                 .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
                 .unwrap_or(Value::Null);
-            Ok(if saved["version"] == 1 && valid(&saved["look"]) {
-                saved["look"].clone()
+            let mut look = saved["look"].clone();
+            if saved["version"] == 1 {
+                // Keep the existing storage key and identity. Only fill the new fields;
+                // malformed legacy data still fails the same strict validation below.
+                if let Some(fields) = look.as_object_mut() {
+                    fields.entry("beard").or_insert(json!("none"));
+                    fields.entry("beardColor").or_insert(json!("brown"));
+                }
+            }
+            Ok(if (saved["version"] == 1 || saved["version"] == 2) && valid(&look) {
+                look
             } else {
                 Value::Null
             })
         }
         "client.look.save" => Ok(if valid(&args[0]) {
-            json!({"version": 1, "look": args[0]})
+            json!({"version": 2, "look": args[0]})
         } else {
             Value::Null
         }),
@@ -280,6 +318,48 @@ mod tests {
             let raw = serde_json::to_string(&saved).unwrap();
             assert_eq!(dispatch("client.look.load", json!([raw])).unwrap(), look);
         }
+    }
+    #[test]
+    fn legacy_identity_and_all_picks_survive_beard_migration() {
+        for sex in ["male", "female"] {
+            let mut old = finished(sex);
+            old["face"] = json!(if sex == "male" { "m3" } else { "f4" });
+            old["skin"] = json!("olive");
+            old["eyes"] = json!("ember");
+            old["hairColor"] = json!("grey");
+            old["suit"] = json!("navy");
+            let expected = old.clone();
+            old.as_object_mut().unwrap().remove("beard");
+            old.as_object_mut().unwrap().remove("beardColor");
+            let loaded = dispatch("client.look.load", json!([json!({"version": 1, "look": old}).to_string()])).unwrap();
+            assert_eq!(loaded, expected);
+            let saved = dispatch("client.look.save", json!([loaded])).unwrap();
+            assert_eq!(saved["version"], 2);
+            assert_eq!(dispatch("client.look.load", json!([saved.to_string()])).unwrap(), expected);
+        }
+    }
+    #[test]
+    fn beard_is_independent_of_face_and_hair_and_only_exists_on_male() {
+        for (style, _) in BEARDS {
+            for face in ["m1", "m2", "m3", "m4"] {
+                let mut look = finished("male");
+                look["face"] = json!(face);
+                look["beard"] = json!(style);
+                look["beardColor"] = json!("grey");
+                assert!(valid(&look));
+                let painted = paint(&look);
+                assert_eq!(painted["beard"], style);
+                assert_eq!(painted["face"], face);
+                assert_eq!(look["hairColor"], "brown");
+                look["sex"] = json!("female");
+                assert_eq!(normalize(&look)["beard"], "none");
+            }
+        }
+        let mut look = finished("male");
+        look["beard"] = json!("not-a-style");
+        assert!(!valid(&look));
+        assert_eq!(normalize(&look)["beard"], "none");
+        assert!(dispatch("client.look.load", json!([json!({"version": 99, "look": finished("male")}).to_string()])).unwrap().is_null());
     }
     #[test]
     fn missing_or_broken_storage_means_no_persona_yet() {
