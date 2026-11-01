@@ -264,35 +264,17 @@ impl RustOperatorRegistry {
         if present(&known) {
             return Ok(known);
         }
-        let picks = Array::new();
         let custom_now = get(&self.opts, "now");
         let now = if present(&custom_now) {
             apply(&custom_now, &JsValue::UNDEFINED, &[])?
         } else {
             js_sys::Date::now().into()
         };
-        let result = loop {
-            let list = array(&map_values(&self.operators));
-            let result = engine(
-                "server.operators.sign",
-                &[
-                    list.into(),
-                    telegram_id.into(),
-                    name.into(),
-                    now.clone(),
-                    picks.clone().into(),
-                ],
-            )?;
-            if !boolean(&get(&result, "needsPick")) {
-                break result;
-            }
-            let pick = get(&self.opts, "pick");
-            picks.push(&if present(&pick) {
-                apply(&pick, &JsValue::UNDEFINED, &[])?
-            } else {
-                try_call(&self.host, "randomInt", &[1_000_000.into()])?
-            });
-        };
+        let list = array(&map_values(&self.operators));
+        let result = engine(
+            "server.operators.sign",
+            &[list.into(), telegram_id.into(), name.into(), now],
+        )?;
         let operator = get(&result, "operator");
         self.operators.set(&get(&operator, "telegramId"), &operator);
         self.save()?;

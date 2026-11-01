@@ -226,8 +226,7 @@ pub fn pick(look: &JsValue, key: &str, value: &str) -> JsValue {
     rust("client.look.normalize", &[next.into()])
 }
 
-/// A fresh tag of the form K-XXX-XXX, issued when the contract is signed.
+/// A fresh tag K-<call-up>-<order>, issued when the contract is signed (`game-core/src/tag.rs`).
 pub fn issue_tag() -> JsValue {
-    let n = (js_sys::Math::random() * 1_000_000.0).floor().min(999_999.0);
-    rust("core.formatTag", &[number(n)])
+    rust("core.localTag", &[number(js_sys::Date::now())])
 }
