@@ -11,11 +11,21 @@ fn move_command(n: f64) -> Value {
     }
 }
 fn setup(id: &str, f: &Value) -> Result<Value, String> {
-    if f.get("kit").is_some_and(|k| !k.is_null()) {
-        core("kitFighter", json!([id, f["name"], f["kit"]]))
-    } else {
-        Ok(json!({"id":id,"name":f["name"],"weapon":f["weapon"]}))
+    let kit = f.get("kit").filter(|k| !k.is_null());
+    let skills = f.get("skills").filter(|p| !p.is_null());
+    if kit.is_none() && skills.is_none() {
+        return Ok(json!({"id":id,"name":f["name"],"weapon":f["weapon"]}));
     }
+    // Synchronisation sits on a compiled kit; without gear that is the starter kit, which plays as the plain rules.
+    let loadout = match kit {
+        Some(k) => k.clone(),
+        None => core("starterLoadout", json!([f["weapon"]]))?,
+    };
+    let mut fighter = core("kitFighter", json!([id, f["name"], loadout]))?;
+    if let Some(p) = skills {
+        fighter["kit"] = core("syncApply", json!([fighter["kit"], p]))?;
+    }
+    Ok(fighter)
 }
 fn create(opts: &Value) -> Result<Value, String> {
     let seed = text(&opts["seed"]);

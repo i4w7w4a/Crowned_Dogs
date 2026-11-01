@@ -2,8 +2,8 @@
 //! event routing, timing, loading, and screen state are owned here.
 use super::bridge::*;
 use js_sys::{Function, Promise, Reflect};
-use wasm_bindgen::{JsCast, UnwrapThrowExt, prelude::*};
-use wasm_bindgen_futures::{JsFuture, future_to_promise};
+use wasm_bindgen::{prelude::*, JsCast, UnwrapThrowExt};
+use wasm_bindgen_futures::{future_to_promise, JsFuture};
 
 const ZONES: [&str; 4] = ["head", "body", "groin", "legs"];
 const QUALITY_IDS: [&str; 4] = ["low", "medium", "high", "ultra"];
@@ -355,12 +355,28 @@ fn abort_check(signal: &JsValue) -> Result<(), JsValue> {
     }
     Ok(())
 }
+/// The operator's synchronisation (level, stats, mastery) as stored on this device.
+fn sync_profile(s: &JsValue) -> JsValue {
+    let saved = store_get(s, "cd-sync")
+        .as_string()
+        .and_then(|raw| js_sys::JSON::parse(&raw).ok())
+        .unwrap_or(JsValue::NULL);
+    core("syncClean", &[saved])
+}
 fn new_duel(s: &JsValue) -> JsValue {
     let ids = get(&get(s, "host"), "weaponIds");
     let foe = at(
         &ids,
         (js_sys::Math::random() * number(&ids, "length")) as usize,
     );
+    // Nothing spent yet plays the plain rules; the bot mirrors what the operator has.
+    let profile = sync_profile(s);
+    let skills = if core("syncPlays", &[profile.clone()]).as_bool() == Some(true) {
+        profile.clone()
+    } else {
+        JsValue::NULL
+    };
+    let bot_skills = core("syncBot", &[profile, foe.clone()]);
     let frame = get(s, "frame");
     let fitted = get(s, "fitted");
     let kit = if present(&fitted) {
@@ -383,9 +399,17 @@ fn new_duel(s: &JsValue) -> JsValue {
                     ("tag", "K-417-093".into()),
                     ("weapon", get(s, "weapon")),
                     ("kit", kit),
+                    ("skills", skills),
                 ]),
             ),
-            ("bot", object(&[("name", "Искра".into()), ("weapon", foe)])),
+            (
+                "bot",
+                object(&[
+                    ("name", "Искра".into()),
+                    ("weapon", foe),
+                    ("skills", bot_skills),
+                ]),
+            ),
         ])],
     )
 }
@@ -899,11 +923,7 @@ fn arm_both(s: &JsValue) {
         arena(
             s,
             "arm",
-            &[
-                who,
-                get(&f, "weapon"),
-                get(&get(&kit, "weapon1"), "mods"),
-            ],
+            &[who, get(&f, "weapon"), get(&get(&kit, "weapon1"), "mods")],
         );
     }
 }
@@ -996,11 +1016,37 @@ fn strike(s: &JsValue, r: &JsValue, side: usize) {
                     call(&el, "remove", &[]);
                 });
             }
+            // Shotgun pellets that caught a neighbouring zone get their own small number there.
+            let splash = get(&a, "splash");
+            let pellets = if present(&splash) {
+                number(&splash, "length") as u32
+            } else {
+                0
+            };
+            let mut main = number(&a, "damage");
+            for i in 0..pellets {
+                let h = at(&splash, i as usize);
+                main -= number(&h, "damage");
+                if ours {
+                    let (px, py) = point(s, &word(&h, "zone"));
+                    floating(
+                        px - 30.,
+                        py + 8.,
+                        if flag(&h, "blocked") {
+                            "blocked"
+                        } else {
+                            "dmg"
+                        },
+                        &format!("−{}", number(&h, "damage")),
+                        "дробь",
+                    );
+                }
+            }
             floating(
                 x + if ours { 36. } else { 0. },
                 y - if ours { 14. } else { 0. },
                 if blocked { "blocked" } else { "dmg" },
-                &format!("−{}", number(&a, "damage")),
+                &format!("−{}", if ours { main } else { number(&a, "damage") }),
                 if blocked { "Зонт" } else { &label },
             );
             let kind = if word(&a, "weapon") == "grenade" {
@@ -1059,6 +1105,21 @@ fn finish(s: &JsValue) {
     html(
         &id("endStats"),
         &string(&core("ui.finishStats", &[history])),
+    );
+    // Experience and mastery go to the capsule's synchronisation.
+    let gained = core("syncGain", &[sync_profile(s), m.clone(), 0.into()]);
+    if let Some(raw) = js_sys::JSON::stringify(&get(&gained, "profile"))
+        .ok()
+        .and_then(|v| v.as_string())
+    {
+        store_set(s, "cd-sync", &raw);
+    }
+    html(
+        &id("endSync"),
+        &values(&get(&gained, "lines"))
+            .iter()
+            .map(|l| format!("<span>{}</span>", string(l)))
+            .collect::<String>(),
     );
     html(
         &id("endBadge"),
@@ -1161,19 +1222,28 @@ fn option(parent: &JsValue, content: &str, selected: bool, action: impl FnMut(Js
     call(parent, "appendChild", &[b]);
 }
 /// The game clock picks the map's hour and weather. Address keys (`time`,
-/// `weather`, `frame`, `map`, `cal`) pin them for checks and screenshots.
+/// `weather`, `frame`, `map`, `cal`) pin them for checks and screenshots; the
+/// menu's test pickers pin time and weather until "По часам" is chosen again.
 fn live_frame(s: &JsValue, map: Option<&str>) -> JsValue {
     let params = construct(
         &get(&global(), "URLSearchParams"),
         &[get(&get(&global(), "location"), "search")],
     );
     let param = |key: &str| call(&params, "get", &[key.into()]);
+    let pinned = |key: &str, stored: &str| {
+        let value = param(key);
+        if value.is_null() {
+            store_get(s, stored)
+        } else {
+            value
+        }
+    };
     core(
         "client.conditions.live",
         &[
             get(s, "frames"),
             object(&[
-                ("time", param("time")),
+                ("time", pinned("time", "cd-test-time")),
                 (
                     "frame",
                     if map.is_some() {
@@ -1185,7 +1255,7 @@ fn live_frame(s: &JsValue, map: Option<&str>) -> JsValue {
                 ("cal", call(&params, "has", &["cal".into()])),
                 ("map", map.map_or_else(|| param("map"), JsValue::from)),
                 ("savedMap", store_get(s, "cd-map")),
-                ("weather", param("weather")),
+                ("weather", pinned("weather", "cd-test-weather")),
                 ("now", js_sys::Date::now().into()),
             ]),
         ],
@@ -1393,6 +1463,34 @@ fn render_menu(s: &JsValue) {
     }
     let c = clock_of(&current_map);
     hide(&id("frameLabel"), false);
+    // Test pickers: a choice holds until "По часам" and starts a new fight with the same kit.
+    let picks = core(
+        "client.conditions.picks",
+        &[get(s, "frames"), current_map.as_str().into()],
+    );
+    let mut manual = false;
+    for (seg, key, list) in [
+        ("timeSeg", "cd-test-time", "times"),
+        ("weatherSeg", "cd-test-weather", "weathers"),
+    ] {
+        let chosen = store_get(s, key).as_string().unwrap_or_default();
+        let options = values(&get(&picks, list));
+        let known = options.iter().any(|o| word(o, "id") == chosen);
+        manual |= known && !chosen.is_empty();
+        let row = segment(seg, options.len());
+        for choice in options {
+            let wanted = word(&choice, "id");
+            let current = wanted == chosen || (!known && wanted.is_empty());
+            let state = s.clone();
+            let map = current_map.clone();
+            option(&row, &word(&choice, "name"), current, move |_| {
+                if !current {
+                    store_set(&state, key, &wanted);
+                    choose_map(&state, &map);
+                }
+            });
+        }
+    }
     let weather_next = if word(&c, "nextWeather") == word(&c, "weather") {
         format!(
             "{} ещё {}",
@@ -1406,9 +1504,15 @@ fn render_menu(s: &JsValue) {
             word(&c, "nextWeatherName")
         )
     };
-    text(
-        &id("clockNote"),
-        &format!(
+    let note = if manual {
+        format!(
+            "Часы на этой карте отключены вашим выбором. По часам сейчас было бы {}, {}, {}.",
+            word(&c, "clock"),
+            word(&c, "timeName"),
+            word(&c, "weatherName")
+        )
+    } else {
+        format!(
             "Сейчас {}, {}, {}. Через {} {}, {}. В регионе: {}.",
             word(&c, "clock"),
             word(&c, "timeName"),
@@ -1417,8 +1521,9 @@ fn render_menu(s: &JsValue) {
             word(&c, "nextTimeName"),
             weather_next,
             word(&c, "eventName").to_lowercase()
-        ),
-    );
+        )
+    };
+    text(&id("clockNote"), &note);
     text(
         &id("conditionNote"),
         &string(&core("client.conditions.description", &[match_(s)])),
@@ -1513,7 +1618,11 @@ fn watch_speed(s: &JsValue) {
 fn set_frame(s: &JsValue, frame: &JsValue) {
     set(s, "frame", frame);
     set(&id("bg"), "src", &get(frame, "src"));
-    set(&id("bg"), "alt", &format!("Арена: {}", word(frame, "name")).into());
+    set(
+        &id("bg"),
+        "alt",
+        &format!("Арена: {}", word(frame, "name")).into(),
+    );
     arena(s, "setFrame", &[frame.clone()]);
     layout(s);
 }

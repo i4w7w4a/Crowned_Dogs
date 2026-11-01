@@ -256,12 +256,22 @@ pub fn expected(m: &Value, side: usize, id: &str, zone: &str, d: f64) -> f64 {
     let w = weapon(m, side, id);
     let target = &m["fighters"][1 - side];
     let crit = 1.0 + crit(m, id, Some(side)) * (1.47 + n(&w["critBonus"]) - 1.0);
-    let armor = armor_factor(n(&target["armor"][zone]), 0.04, n(&w["flatPen"]), 0.04);
+    let armor = armor_factor(n(&target["armor"][zone]), 0.04, pen(m, side, &w), 0.04);
     base_damage(&w, d)
         * n(&constants()["ZONE_MULT"][zone])
         * crit
         * armor
         * (1.0 + n(&w["doubleShot"]))
+}
+/// Armour piercing left after the target's Cooling (synchronisation) takes its share.
+fn pen(m: &Value, side: usize, w: &Value) -> f64 {
+    let pen = n(&w["flatPen"]);
+    let anti = n(&m["config"]["fighters"][1 - side]["kit"]["antiPen"]);
+    if pen > 0.0 && anti > 0.0 {
+        (pen - anti).max(0.0)
+    } else {
+        pen
+    }
 }
 fn strike(
     m: &Value,
@@ -279,13 +289,13 @@ fn strike(
     if critical {
         damage *= 1.47 + n(&w["critBonus"]);
     }
-    damage *= armor_factor(n(&target["armor"][zone]), 0.04, n(&w["flatPen"]), 0.04);
+    damage *= armor_factor(n(&target["armor"][zone]), 0.04, pen(m, side, &w), 0.04);
     let blocked = contains(defend, zone) && n(&target["shieldOff"]) <= 0.0;
     let mut broken = false;
     if blocked {
         let mut share = guard(m, side, id);
         if s(&m["config"]["time"]) == "day" && !b(&target["gear"]["heatProof"]) {
-            share += 0.04;
+            share += 0.04 * (1.0 - n(&m["config"]["fighters"][1 - side]["kit"]["heatResist"]));
         }
         if roll(rng, 0.07) {
             share += (1.0 - 0.26) * 0.27;
@@ -294,6 +304,50 @@ fn strike(
         damage *= share;
     }
     json!({"damage":damage.floor(),"crit":critical,"blocked":blocked,"shieldBroken":broken})
+}
+/// Shotgun pellets that leave the aimed zone can still catch the zones next to it (head–body–groin–legs)
+/// for part of the damage: no crit, the neighbour's armour and a shield on it still count.
+fn spread(
+    m: &Value,
+    side: usize,
+    id: &str,
+    zone: &str,
+    d: f64,
+    defend: &Value,
+    rng: &mut State,
+) -> Vec<Value> {
+    let sp = &constants()["SPREAD"][id];
+    let Some(i) = ZONES.iter().position(|z| *z == zone) else {
+        return vec![];
+    };
+    if sp.is_null() {
+        return vec![];
+    }
+    let chance = (n(&sp["chance"]) + n(&sp["perStep"]) * d).min(n(&sp["max"]));
+    let w = weapon(m, side, id);
+    let target = &m["fighters"][1 - side];
+    let mut out = vec![];
+    for near in [i.checked_sub(1), Some(i + 1)]
+        .into_iter()
+        .flatten()
+        .filter_map(|j| ZONES.get(j))
+    {
+        if !roll(rng, chance) {
+            continue;
+        }
+        let mut damage = base_damage(&w, d)
+            * n(&constants()["ZONE_MULT"][*near])
+            * n(&sp["share"])
+            * armor_factor(n(&target["armor"][*near]), 0.04, pen(m, side, &w), 0.04);
+        let blocked = contains(defend, near) && n(&target["shieldOff"]) <= 0.0;
+        if blocked {
+            damage *= guard(m, side, id);
+        }
+        if damage.floor() > 0.0 {
+            out.push(json!({"zone":near,"damage":damage.floor(),"blocked":blocked}));
+        }
+    }
+    out
 }
 fn attack(
     m: &Value,
@@ -348,6 +402,12 @@ fn attack(
         report["crit"] = json!(b(&report["crit"]) || b(&second["crit"]));
         report["shieldBroken"] = json!(b(&report["shieldBroken"]) || b(&second["shieldBroken"]));
         report["double"] = json!(true);
+    }
+    let splash = spread(m, side, id, zone, d, defend, rng);
+    if !splash.is_empty() {
+        let extra: f64 = splash.iter().map(|h| n(&h["damage"])).sum();
+        report["damage"] = num(n(&report["damage"]) + extra);
+        report["splash"] = json!(splash);
     }
     report
 }
@@ -417,6 +477,11 @@ pub fn resolve(input: &Value, orders: &Value) -> Result<Value, String> {
         let kind = s(&final_orders[side]["action"]["type"]);
         if !incoming.is_null() {
             f["hp"] = num((n(&f["hp"]) - n(&incoming["damage"])).max(0.0));
+        }
+        // Cooling (synchronisation) mends a little every turn the Persona is still standing.
+        let regen = n(&m["config"]["fighters"][side]["kit"]["regen"]);
+        if regen > 0.0 && n(&f["hp"]) > 0.0 {
+            f["hp"] = num((n(&f["hp"]) + regen).min(n(&f["maxHp"])));
         }
         f["shieldOff"] = num(if s(&incoming["effect"]) == "emp" {
             1.0

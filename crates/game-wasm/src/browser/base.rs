@@ -1,5 +1,5 @@
 //! Base and fitting-room navigation, catalogue interaction and asynchronous viewer lifecycle.
-use super::{creation, dom_support::*, platform, scroll::BrowserScroll};
+use super::{capsule, creation, dom_support::*, platform, scroll::BrowserScroll};
 use js_sys::{Array, Promise};
 use std::{
     cell::RefCell,
@@ -102,6 +102,10 @@ impl Base {
         }
         let was = std::mem::replace(&mut self.view, view.into());
         hidden(&self.home, view != "base");
+        hidden(&query(&self.root, ".cd-sync"), view != "sync");
+        if view == "sync" {
+            self.render_sync();
+        }
         hidden(&self.fitting, !self.staged());
         toggle(&self.fitting, "cd-creating", view == "persona");
         if view != "persona" {
@@ -139,6 +143,9 @@ impl Base {
             "setActive",
             &[flag(self.active && self.staged())],
         );
+    }
+    fn render_sync(&self) {
+        html(&query(&self.root, ".cd-sync-body"), &capsule::markup());
     }
     /// Views that show the Persona on its stand.
     fn staged(&self) -> bool {
@@ -870,7 +877,7 @@ impl Base {
         toggle(&self.home, "cd-travelling", false);
         attr(&self.home, "aria-busy", "false");
         style(&self.home, "--cd-travel-fade", "0");
-        for selector in [".cd-enter", ".cd-to-fitting", ".cd-to-persona", ".cd-operator"] {
+        for selector in [".cd-enter", ".cd-to-fitting", ".cd-to-sync", ".cd-to-persona", ".cd-operator"] {
             set(&query(&self.home, selector), "disabled", &flag(false));
         }
         if self.home_ready {
@@ -1204,6 +1211,9 @@ fn bind(state: &Rc<RefCell<Base>>) {
         (query(&root, ".cd-to-fitting"), "click", "fitting"),
         (query(&root, ".cd-operator"), "click", "persona"),
         (query(&root, ".cd-to-persona"), "click", "persona"),
+        (query(&root, ".cd-to-sync"), "click", "sync"),
+        (query(&root, ".cd-sync-back"), "click", "base"),
+        (query(&root, ".cd-sync-body"), "click", "syncSpend"),
         (query(&root, ".cd-briefing-next"), "click", "briefNext"),
         (query(&root, ".cd-briefing-skip"), "click", "briefSkip"),
         (query(&root, ".cd-create-steps"), "click", "step"),
@@ -1262,7 +1272,17 @@ fn bind(state: &Rc<RefCell<Base>>) {
                 return;
             }
             match action {
-                "base" | "fitting" | "persona" => s.navigate(action, weak.clone()),
+                "base" | "fitting" | "persona" | "sync" => s.navigate(action, weak.clone()),
+                "syncSpend" => {
+                    let plus = closest(&event, "[data-stat]");
+                    if exists(&plus) && capsule::spend(&data(&plus, "stat")) {
+                        s.render_sync();
+                        let again = query(&s.root, &format!(".cd-sync-plus[data-stat=\"{}\"]", data(&plus, "stat")));
+                        if !boolean(&again, "disabled") {
+                            focus(&again);
+                        }
+                    }
+                }
                 "briefNext" => s.brief_next(),
                 "briefSkip" => s.brief_skip(),
                 "step" => {
@@ -1548,7 +1568,7 @@ fn begin_home_transition(state: &Rc<RefCell<Base>>, target: &str) {
             ));
             toggle(&s.home, "cd-travelling", true);
             attr(&s.home, "aria-busy", "true");
-            for selector in [".cd-enter", ".cd-to-fitting", ".cd-to-persona", ".cd-operator"] {
+            for selector in [".cd-enter", ".cd-to-fitting", ".cd-to-sync", ".cd-to-persona", ".cd-operator"] {
                 set(&query(&s.home, selector), "disabled", &flag(true));
             }
             // Load the Persona during the tunnel journey, while the base remains visible.

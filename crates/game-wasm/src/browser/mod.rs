@@ -7,6 +7,7 @@ pub mod base;
 pub mod bay;
 pub mod battle;
 pub mod bridge;
+pub mod capsule;
 pub mod collapse;
 pub mod dom_support;
 pub mod first_person;
