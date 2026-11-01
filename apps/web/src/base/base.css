@@ -230,3 +230,10 @@ button.cd-operator { width: 100%; border: 0; border-bottom: 1px solid #e1e6dd2b;
 @keyframes cd-stamp { from { opacity: 0; transform: scale(1.35); letter-spacing: .3em; } to { opacity: 1; transform: none; } }
 @media (max-height: 720px) { .cd-fitting { --cd-sheet: min(270px, 43%); } .cd-create { gap: 8px; padding-top: 10px; } .cd-create-seg button { min-height: 60px; } .cd-swatch { width: 32px; height: 32px; } .cd-briefing-line { font-size: 15px; } }
 @media (prefers-reduced-motion: reduce) { .cd-briefing-line span { animation: none; opacity: 1; } }
+
+/* the worn piece's colour, above its catalogue */
+.cd-paint { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 12px; margin: 0 0 6px; }
+.cd-paint-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+.cd-paint .cd-swatch { width: 32px; height: 32px; }
+.cd-paint-word { min-height: 34px; padding: 0 12px; border-radius: 17px; font-size: 12px; color: var(--cd-secondary); }
+.cd-paint-word[aria-pressed="true"] { color: #fff; box-shadow: inset 0 1px 1px rgba(255,255,255,.3), inset 0 0 14px rgba(255,255,255,.16); }

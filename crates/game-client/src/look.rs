@@ -95,6 +95,12 @@ const HAIR_BASE: [f64; 3] = [0.406, 0.304, 0.229];
 /// Beard atlas colour contract; independent of the existing female hair atlas.
 const BEARD_BASE: [f64; 3] = [0.406, 0.304, 0.229];
 const SUIT_BASE: [f64; 3] = [0.322, 0.295, 0.270];
+/// Suit fabrics: their colour is the suit colour itself.
+const SUIT_MATERIALS: [&str; 4] = ["M_Suit", "M_Solonchak", "M_Ten", "M_Ryvok"];
+/// Other worn pieces; their textures are neutral greys like the suit's, so a colour shifts them by the suit's factor.
+const GEAR_MATERIALS: [&str; 7] = ["M_Cap", "M_Buff", "M_Boots", "M_Helmet", "M_Sfera", "M_Plita4", "M_Vest"];
+/// Starter cloth pieces wear the suit's colour unless given one of their own.
+const FOLLOW_SUIT: [&str; 3] = ["M_Cap", "M_Buff", "M_Boots"];
 pub const CALLSIGN_MAX: usize = 16;
 
 fn hex(c: u32) -> String {
@@ -272,9 +278,59 @@ pub fn options() -> Value {
     })
 }
 
+/// Colours a worn piece can take: as the suit, as made, or one of the suit colours.
+pub fn gear_colors() -> Value {
+    let mut list = vec![
+        json!({"id": "suit", "name": "Как костюм"}),
+        json!({"id": "own", "name": "Родной"}),
+    ];
+    list.extend(choices(&SUITS).as_array().cloned().unwrap_or_default());
+    json!(list)
+}
+pub fn gear_color(id: &str) -> bool {
+    id == "suit" || id == "own" || find(&SUITS, id).is_some()
+}
+
+/// Linear factors for every worn material: `colors` maps a material to `suit`, `own` or a suit colour id.
+/// Unset, the suit fabrics and the starter cloth wear the suit colour; hard pieces stay as made.
+pub fn gear_tints(look: &Value, colors: &Value) -> Value {
+    let look = normalize(look);
+    let pick = |m: &str| colors[m].as_str().filter(|c| gear_color(c));
+    let persona = text(&look["suit"]).to_string();
+    // the suit actually worn sets "as the suit" for the rest
+    let worn = SUIT_MATERIALS
+        .iter()
+        .find_map(|m| pick(m).filter(|c| *c != "suit" && *c != "own"))
+        .unwrap_or(&persona)
+        .to_string();
+    let suit = |id: &str| scale(find(&SUITS, id).unwrap_or(SUITS[0]).2, SUIT_BASE, SUITS[0].2);
+    let mut out = serde_json::Map::new();
+    for m in SUIT_MATERIALS {
+        let factor = match pick(m) {
+            Some("own") => [1.; 3],
+            Some("suit") | None => suit(&persona),
+            Some(id) => suit(id),
+        };
+        out.insert(m.into(), round(factor));
+    }
+    for m in GEAR_MATERIALS {
+        let id = match pick(m) {
+            Some("own") => None,
+            Some("suit") => Some(worn.as_str()),
+            None if FOLLOW_SUIT.contains(&m) => Some(worn.as_str()),
+            None => None,
+            Some(id) => Some(id),
+        };
+        out.insert(m.into(), round(id.map_or([1.; 3], suit)));
+    }
+    Value::Object(out)
+}
+
 pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
     match method {
         "client.look.options" => Ok(options()),
+        "client.look.gearTints" => Ok(gear_tints(&args[0], &args[1])),
+        "client.look.gearColors" => Ok(gear_colors()),
         "client.look.normalize" => Ok(normalize(&args[0])),
         "client.look.paint" => Ok(paint(&args[0])),
         "client.look.callsign" => Ok(match callsign(text(&args[0])) {
@@ -322,6 +378,23 @@ mod tests {
         look["callsign"] = json!("Сыч");
         look["tag"] = json!("K-417-093");
         look
+    }
+    #[test]
+    fn starter_cloth_follows_the_suit_and_hard_pieces_keep_their_own_colour() {
+        let mut look = finished("male");
+        look["suit"] = json!("olive");
+        let olive = paint(&look)["suit"].clone();
+        let tints = gear_tints(&look, &json!({}));
+        for m in ["M_Suit", "M_Cap", "M_Buff", "M_Boots"] {
+            assert_eq!(tints[m], olive, "{m}");
+        }
+        assert_eq!(tints["M_Plita4"], json!([1.0, 1.0, 1.0]));
+        // a suit painted in the kit takes the cloth with it; a piece of its own keeps its pick
+        let tints = gear_tints(&look, &json!({"M_Suit": "navy", "M_Boots": "own", "M_Plita4": "suit"}));
+        assert_eq!(tints["M_Cap"], tints["M_Suit"]);
+        assert_eq!(tints["M_Plita4"], tints["M_Suit"]);
+        assert_eq!(tints["M_Boots"], json!([1.0, 1.0, 1.0]));
+        assert_ne!(tints["M_Suit"], olive);
     }
     #[test]
     fn a_finished_look_round_trips_through_storage() {

@@ -68,12 +68,37 @@ fn frozen_sniper_rail(method: &str, args: &Value) -> bool {
             && method == "client.equipWeaponMod"
             && args[2] == "rail-kulak")
 }
+/// Concept gear without a model left the catalogue (01.11.2026); cases built on it are skipped.
+const CONCEPTS: [&str; 13] = [
+    "body-light",
+    "body-bastion",
+    "suit-leshy",
+    "boots-sprint",
+    "boots-hodok",
+    "boots-saper",
+    "knife-shtyk",
+    "knife-zhalo",
+    "knife-kogot",
+    "knife-iskra",
+    "grenade-grad",
+    "grenade-emp",
+    "grenade-smoke",
+];
+fn concept_gear(args: &Value) -> bool {
+    let text = args.to_string();
+    CONCEPTS
+        .iter()
+        .any(|id| text.contains(&format!("\"{id}\"")))
+}
 #[test]
 fn client_behavior_matches_the_pre_migration_game() {
     let cases: Vec<Value> = serde_json::from_str(include_str!("../fixtures/oracle.json")).unwrap();
     for (index, case) in cases.iter().enumerate() {
         let method = case["method"].as_str().unwrap();
-        if frozen_sniper_rail(method, &case["args"]) {
+        if frozen_sniper_rail(method, &case["args"])
+            || concept_gear(&case["args"])
+            || concept_gear(&case["value"])
+        {
             continue;
         }
         let mut actual = game_client::dispatch(method, case["args"].clone())

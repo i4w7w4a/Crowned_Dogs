@@ -3,13 +3,15 @@
 usage: blender -b -P dress_gear.py -- ANIM_ARMOR.blend FITDIR PREFIX CUT OUT.glb
 
 ANIM_ARMOR.blend is the game animation file already wearing kit A (armor-game/male-armor-anim.blend or
-fem-armor-anim.blend); FITDIR holds PREFIX-{ryvok,cap,sfera,plita4,boots}.blend.
+fem-armor-anim.blend); FITDIR holds PREFIX-{ryvok,cap,sfera,plita4,vest,boots}.blend; the refitted Vest (Plita-2) replaces kit A's.
 - The field suit is cut straight across at CUT metres (its boots go; boots are their own item now).
 - Ryvok, Cap, Sfera, Plita4, Boots and the hair squeezed under each hat (FemHair*_Cap, _Sfera) move onto the
   animation armature; whatever rides the head bone follows it where that bone sits elsewhere (female: 2 cm).
 - Each fitted body's hide_<NAME> group becomes the point attribute _<name> on the game body (nearest vertex).
   Suit and Ryvok stop hiding the body below CUT + 2 cm, so bare feet show when no boots are worn.
 - Pieces are thinned to phone sizes and their materials named M_<NAME>.
+- A hard vest (OVER) is fitted as modelled; the suit (and Ryvok) gets its point attribute `_plita4` = 1 where it pokes
+  through the vest or sits in its shell, so the game hides those suit faces while the vest is worn.
 OUT.glb gets the armature, the body (for its masks) and the cut suit plus the new pieces, without animations;
 merge_gear.mjs then joins them into the game model.
 """
@@ -20,9 +22,10 @@ from mathutils.kdtree import KDTree
 args = sys.argv[sys.argv.index('--') + 1:]
 anim_p, fitdir, px, cut, out_p = args[:5]
 CUT = float(cut)
-ITEMS = [('ryvok', 'Ryvok'), ('cap', 'Cap'), ('sfera', 'Sfera'), ('plita4', 'Plita4'), ('boots', 'Boots')]
-TRIS = {'Ryvok': 16000, 'Cap': 5000, 'Sfera': 9000, 'Plita4': 12000, 'Boots': 10000}
+ITEMS = [('ryvok', 'Ryvok'), ('cap', 'Cap'), ('sfera', 'Sfera'), ('plita4', 'Plita4'), ('vest', 'Vest'), ('boots', 'Boots')]
+TRIS = {'Ryvok': 16000, 'Cap': 5000, 'Sfera': 9000, 'Plita4': 12000, 'Vest': 12000, 'Boots': 10000}
 HATS = ('Cap', 'Sfera')
+OVER = {'Plita4': 0.004, 'Vest': 0.004}  # hard vests: suit within this far below their surface counts as poking through
 
 bpy.ops.wm.open_mainfile(filepath=anim_p)
 arm = bpy.data.objects['Armature']
@@ -31,6 +34,12 @@ for pb in arm.pose.bones: pb.matrix_basis.identity()
 body = next(o for o in arm.children if o.type == 'MESH' and o.name in ('MaleBody', 'FemBody'))
 coll = body.users_collection[0]
 tris = lambda o: sum(len(p.vertices) - 2 for p in o.data.polygons)
+# kit A's soft-fitted vest gives way to the rigid refit
+for o in [o for o in arm.children if o.name.split('.')[0] == 'Vest']:
+    d = o.data; mats = [m for m in d.materials if m]
+    bpy.data.objects.remove(o, do_unlink=True); bpy.data.meshes.remove(d)
+    for m in mats:
+        if not m.users: m.name = 'old_' + m.name  # the refit's own material takes the name M_Vest
 
 # ---- the field suit ends at the ankle
 suit = bpy.data.objects['Suit']
@@ -112,6 +121,42 @@ for tag, name in ITEMS:
     ad, bd = src_arm.data, src_body.data
     bpy.data.objects.remove(src_body, do_unlink=True); bpy.data.objects.remove(src_arm, do_unlink=True)
     bpy.data.meshes.remove(bd); bpy.data.armatures.remove(ad)
+
+# a hard vest stays as modelled: suit faces that poke through it (or sit in its shell) hide while it is worn
+from mathutils.bvhtree import BVHTree
+LIMBS = ('upperarm', 'lowerarm', 'hand', 'thigh', 'calf', 'foot')
+ARMS = ('upperarm', 'lowerarm', 'hand', 'thumb', 'index', 'middle', 'ring', 'pinky')
+for vest in [o for o in pieces if o.name in OVER]:
+    # it rides the torso only: side panels weighted to an arm flared out after the elbow
+    limb = {g.index for g in vest.vertex_groups if any(k in g.name.lower() for k in LIMBS)}
+    torso = vest.vertex_groups.get('spine_02') or vest.vertex_groups.new(name='spine_02')
+    moved = 0
+    for v in vest.data.vertices:
+        drop = [e.group for e in v.groups if e.group in limb and e.weight > 0]
+        if not drop: continue
+        moved += 1
+        for g in drop: vest.vertex_groups[g].remove([v.index])
+        left = sum(e.weight for e in v.groups if e.group not in limb)
+        if left < 1e-4: torso.add([v.index], 1.0, 'REPLACE')
+        else:
+            for e in v.groups: e.weight /= left
+    print('TORSO ONLY', vest.name, moved, 'verts lost their limb weights')
+    vb = bmesh.new(); vb.from_mesh(vest.data); vb.transform(vest.matrix_world)
+    tree = BVHTree.FromBMesh(vb); vb.free()
+    for s in [o for o in [suit] + pieces if o.name in ('Suit', 'Ryvok')]:
+        Ws, N = s.matrix_world, s.matrix_world.to_3x3().inverted().transposed()
+        # the sleeve leaves the vest as soon as the arm moves: hidden, it tears into a strip in a bent-arm pose
+        arms = {g.index for g in s.vertex_groups if any(k in g.name.lower() for k in ARMS)}
+        vals = []
+        for v in s.data.vertices:
+            if sum(e.weight for e in v.groups if e.group in arms) >= 0.3: vals.append(0.0); continue
+            p = Ws @ v.co; n = (N @ v.normal).normalized()
+            hit = tree.ray_cast(p + n * OVER[vest.name], -n, OVER[vest.name] + 0.06)[0]
+            vals.append(1.0 if hit is not None else 0.0)
+        key = '_' + vest.name.lower()
+        a = s.data.attributes.get(key) or s.data.attributes.new(key, 'FLOAT', 'POINT')
+        a.data.foreach_set('value', vals)
+        print('UNDER', vest.name, s.name, int(sum(vals)), 'of', len(vals), 'hide')
 
 low = [(Wt @ v.co).z < CUT + 0.02 for v in body.data.vertices]
 suit_mask = body.data.attributes['_suit']

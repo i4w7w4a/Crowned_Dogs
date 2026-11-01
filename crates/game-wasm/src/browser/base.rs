@@ -592,12 +592,14 @@ impl Base {
             );
             choices.push(&choice);
         }
+        let paint = self.paint_row(&selected);
         html(
             &self.catalog,
-            &text(&rust(
-                "ui.catalog",
-                &[js(&self.selected), selected.clone(), choices.into()],
-            )),
+            &(paint
+                + &text(&rust(
+                    "ui.catalog",
+                    &[js(&self.selected), selected.clone(), choices.into()],
+                ))),
         );
         set(
             &get(&self.catalog, "parentElement"),
@@ -749,7 +751,66 @@ impl Base {
             focus(item);
         }
     }
+    /// The worn piece's colour: as the suit, as made, or one of the suit colours.
+    fn paint_row(&self, item: &JsValue) -> String {
+        if !["head", "body", "suit", "boots"].contains(&self.selected.as_str()) || !exists(item) {
+            return String::new();
+        }
+        let current = text(&rust("client.itemColor", &[self.loadout.clone(), item.clone()]));
+        let colors = elements(&rust("client.gearColors", &[]));
+        // a suit "as the suit" wears the colour picked for the Persona
+        let name = |c: &JsValue| match text(&get(c, "id")).as_str() {
+            "suit" if self.selected == "suit" => "Как в Персоне".to_string(),
+            _ => text(&get(c, "name")),
+        };
+        let picked = colors
+            .iter()
+            .find(|c| text(&get(c, "id")) == current)
+            .map(name)
+            .unwrap_or_default();
+        let mut out = format!(
+            "<div class=\"cd-paint\" role=\"group\" aria-label=\"Цвет\"><span class=\"cd-overline\">Цвет</span><span class=\"cd-create-picked\">{picked}</span><div class=\"cd-paint-row\">"
+        );
+        for c in &colors {
+            let id = text(&get(c, "id"));
+            let hex = text(&get(c, "color"));
+            out.push_str(&if hex.is_empty() {
+                format!(
+                    "<button class=\"glass cd-paint-word\" type=\"button\" data-paint=\"{id}\" aria-pressed=\"{}\">{}</button>",
+                    id == current,
+                    name(c)
+                )
+            } else {
+                format!(
+                    "<button class=\"cd-swatch\" type=\"button\" data-paint=\"{id}\" aria-pressed=\"{on}\" aria-label=\"{label}\" title=\"{label}\" style=\"--swatch:{hex}\"></button>",
+                    on = id == current,
+                    label = name(c),
+                )
+            });
+        }
+        out.push_str("</div></div>");
+        out
+    }
+    fn paint_click(&mut self, button: JsValue) {
+        let item = self.equipped(&self.selected);
+        let Ok(loadout) = try_rust(
+            "client.paintItem",
+            &[self.loadout.clone(), item, js(&data(&button, "paint"))],
+        ) else {
+            return;
+        };
+        self.loadout = loadout;
+        let saved = call(&self.host, "saveLocalLoadout", &[self.loadout.clone()]).as_bool() == Some(true);
+        hidden(&query(&self.root, ".cd-save-status"), saved);
+        self.refresh();
+        self.render_catalog(None);
+    }
     fn catalog_click(&mut self, event: JsValue) {
+        let paint = closest(&event, "[data-paint]");
+        if exists(&paint) {
+            self.paint_click(paint);
+            return;
+        }
         let button = closest(&event, "[data-item]");
         if !exists(&button) {
             return;

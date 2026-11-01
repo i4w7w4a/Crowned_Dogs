@@ -27,6 +27,10 @@ fn valid(v: &Value) -> bool {
         && o.get("weapon2")
             .is_some_and(|w| w.is_null() || weapon_shape(w))
         && GEAR[2..].iter().all(|slot| v[*slot].is_string())
+        && o.get("colors").is_none_or(|c| {
+            c.as_object()
+                .is_some_and(|c| c.values().all(|v| v.as_str().is_some_and(crate::look::gear_color)))
+        })
         && core("validateLoadout", json!([v])).is_ok_and(|e| e.is_null())
 }
 fn clone_weapon(v: &Value) -> Value {
@@ -52,6 +56,10 @@ fn clone_kit(v: &Value) -> Value {
     );
     for k in &GEAR[2..] {
         o.insert((*k).into(), v[*k].clone());
+    }
+    // each worn piece's own colour, by item id
+    if v["colors"].as_object().is_some_and(|c| !c.is_empty()) {
+        o.insert("colors".into(), v["colors"].clone());
     }
     Value::Object(o)
 }
@@ -92,6 +100,19 @@ fn weapon_for_mod(kit: &Value, slot: &str) -> Result<Value, String> {
     }
     Ok(weapon)
 }
+/// Worn gear that left the catalogue (concept items without a model) goes back to the starter piece.
+fn gear_left_catalogue(kit: &Value) -> Value {
+    let mut kit = kit.clone();
+    let Ok(starter) = core("starterLoadout", json!(["rifle"])) else {
+        return kit;
+    };
+    for slot in &GEAR[2..] {
+        if kit[*slot].as_str().is_some_and(|id| core("getItem", json!([id])).is_err()) {
+            kit[*slot] = starter[*slot].clone();
+        }
+    }
+    kit
+}
 pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
     let kit = &args[0];
     let slot = text(&args[1]);
@@ -101,8 +122,11 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
         "client.load" => {
             if let Some(raw) = args[0].as_str() {
                 if let Ok(saved) = serde_json::from_str::<Value>(raw) {
-                    if saved["version"] == 1 && valid(&saved["loadout"]) {
-                        return Ok(clone_kit(&saved["loadout"]));
+                    if saved["version"] == 1 {
+                        let kit = gear_left_catalogue(&saved["loadout"]);
+                        if valid(&kit) {
+                            return Ok(clone_kit(&kit));
+                        }
                     }
                 }
             }
@@ -149,6 +173,33 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             }
             Ok(next)
         }
+        "client.gearColors" => Ok(crate::look::gear_colors()),
+        "client.itemColor" => {
+            // unset, cloth wears the suit colour and hard pieces stay as made (look::gear_tints)
+            let item = text(&args[1]);
+            let cloth = item == "head-cap" || item.starts_with("suit-") || item.starts_with("boots-");
+            Ok(kit["colors"][item]
+                .as_str()
+                .map_or(json!(if cloth { "suit" } else { "own" }), |c| json!(c)))
+        }
+        "client.paintItem" => {
+            if !valid(kit) {
+                return Err("Некорректный комплект снаряжения".into());
+            }
+            let item = text(&args[1]);
+            if !GEAR[2..].iter().any(|s| kit[*s] == item) {
+                return Err("Предмет не надет".into());
+            }
+            let color = text(&args[2]);
+            if !crate::look::gear_color(color) {
+                return Err("Нет такого цвета".into());
+            }
+            let mut next = clone_kit(kit);
+            let mut colors = next["colors"].as_object().cloned().unwrap_or_default();
+            colors.insert(item.into(), json!(color));
+            next["colors"] = Value::Object(colors);
+            Ok(next)
+        }
         "client.weaponModsForSlot" => {
             let weapon = weapon_for_mod(kit, slot)?;
             core("modsFor", json!([weapon["weapon"], slot]))
@@ -192,5 +243,19 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             Ok(next)
         }
         _ => Err(format!("Unknown loadout operation: {method}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_saved_kit_keeps_its_guns_when_worn_gear_left_the_catalogue() {
+        let mut kit = core("starterLoadout", json!(["sniper"])).unwrap();
+        kit["body"] = json!("body-light");
+        let saved = json!({"version": 1, "loadout": kit}).to_string();
+        let back = dispatch("client.load", json!([saved])).unwrap();
+        assert!(back["weapon1"]["item"].as_str().unwrap().starts_with("sniper"));
+        assert_eq!(back["body"], core("starterLoadout", json!(["rifle"])).unwrap()["body"]);
     }
 }

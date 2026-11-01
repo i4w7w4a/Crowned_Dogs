@@ -12,8 +12,6 @@ thread_local! {
 /// Every face is a head mesh of its own; only the chosen one shows.
 const HEAD: &str = "M_Head_";
 const BODIES: [&str; 2] = ["M_Male_Body", "M_Fem_Body"];
-/// Every suit takes the chosen colour over its own fabric; the scan colour leaves each as made.
-const SUITS: [&str; 4] = ["M_Suit", "M_Solonchak", "M_Ten", "M_Ryvok"];
 const CAP: &str = "M_Fem_HairCap";
 
 /// Shader hook for a head material, if it has one.
@@ -245,6 +243,12 @@ fn own_material(model: &JsValue, node: &JsValue, name: &str) -> JsValue {
 #[wasm_bindgen(js_name=sceneApplyLook)]
 pub fn apply(model: JsValue, look: JsValue) {
     let paint = paint(&look);
+    // dress() repaints the worn pieces with this look when the kit's colours change
+    set(&get(&model, "userData"), "cdLook", &look);
+    let gear = super::dom_support::rust(
+        "client.look.gearTints",
+        &[look.clone(), get(&get(&model, "userData"), "cdColors")],
+    );
     let skin = rgb(&get(&paint, "skin"));
     let face = format!("{HEAD}{}", string(&get(&paint, "face")));
     let (beard, beard_on) = beard_selection(&model, &paint);
@@ -309,8 +313,9 @@ pub fn apply(model: JsValue, look: JsValue) {
             tick(&node, &uniforms);
         } else if BODIES.contains(&name.as_str()) {
             tint(&material, skin);
-        } else if SUITS.contains(&name.as_str()) {
-            tint(&material, rgb(&get(&paint, "suit")));
+        } else if present(&get(&gear, &name)) {
+            // suits, the cloth that follows them and every worn piece given a colour in the kit
+            tint(&material, rgb(&get(&gear, &name)));
         } else if name == "M_Fem_HairCards" {
             tint(&material, rgb(&get(&paint, "hairCards")));
             hair_hook(&material);
