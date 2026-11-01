@@ -25,8 +25,6 @@ pub struct RustViewmodel {
     placed: bool,
     trigger: JsValue,
     pistol_right: JsValue,
-    /// Shoulder stocks folded away while seen from the eyes, with the scale to give back.
-    folded: Vec<(JsValue, JsValue)>,
 }
 #[wasm_bindgen]
 impl RustViewmodel {
@@ -79,7 +77,6 @@ impl RustViewmodel {
             placed: false,
             trigger: json(&trigger),
             pistol_right: json(&pistol_right),
-            folded: Vec::new(),
         }
     }
     pub fn shot(&mut self) {
@@ -95,11 +92,16 @@ impl RustViewmodel {
         camera: &JsValue,
         aim: &JsValue,
     ) {
-        let stance_index = ["pistol", "rifle", "shotgun", "sniper"]
-            .iter()
-            .position(|s| *s == stance)
-            .map(|n| n as f64)
-            .unwrap_or(-1.);
+        let stocked = stance == "pistol" && on && self.stocked();
+        let stance_index = if stocked {
+            4.
+        } else {
+            ["pistol", "rifle", "shotgun", "sniper"]
+                .iter()
+                .position(|s| *s == stance)
+                .map(|n| n as f64)
+                .unwrap_or(-1.)
+        };
         let frame = math(
             "viewmodel",
             &[
@@ -133,7 +135,6 @@ impl RustViewmodel {
         call(&offset, "applyQuaternion", &[get(&mount, "quaternion")]);
         copy(&get(&mount, "position"), &self.base);
         call(&get(&mount, "position"), "add", &[offset]);
-        self.fold_stocks(on && stance == "pistol" && self.weight > 0.5);
         if self.arms.is_none() || self.weight < 0.01 {
             self.placed = false;
             return;
@@ -204,32 +205,21 @@ impl RustViewmodel {
     pub fn off(&mut self) {
         self.weight = 0.;
         self.placed = false;
-        self.fold_stocks(false);
         copy(&get(&get(&self.hand, "mount"), "position"), &self.base);
     }
 }
 impl RustViewmodel {
-    /// A pistol held out at arm's length never reaches the shoulder, so a shoulder stock on it
-    /// (the holster-stock) hung through the hands and forearms; grip panels stay.
-    fn fold_stocks(&mut self, fold: bool) {
-        if !fold {
-            for (node, scale) in self.folded.drain(..) {
-                copy(&get(&node, "scale"), &scale);
-            }
-            return;
-        }
-        for node in super::view_utils::nodes(&get(&self.hand, "mount"), true) {
-            let data = get(&node, "userData");
-            if string(&get(&data, "slot")) != "stock"
-                || get(&data, "factory").as_bool() != Some(false)
-                || self.folded.iter().any(|(n, _)| *n == node)
-                || !shoulder_stock(&node)
-            {
-                continue;
-            }
-            self.folded.push((node.clone(), clone_value(&get(&node, "scale"))));
-            call(&get(&node, "scale"), "setScalar", &[1e-4.into()]);
-        }
+    /// A pistol with a shoulder stock on (the polymer stock clamped under the grip heel) is held
+    /// as its own stance: butt in the shoulder, gun at the eye, instead of out at arm's length.
+    fn stocked(&self) -> bool {
+        super::view_utils::nodes(&get(&self.hand, "mount"), true)
+            .iter()
+            .any(|node| {
+                let data = get(node, "userData");
+                string(&get(&data, "slot")) == "stock"
+                    && get(&data, "factory").as_bool() == Some(false)
+                    && shoulder_stock(node)
+            })
     }
     fn place(&self, side: usize, matrix: &[f64], camera: &JsValue, (bend, spread): (f64, f64)) {
         let [upper, lower, hand] = &self.arms.as_ref().unwrap()[side];
