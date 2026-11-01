@@ -6,7 +6,7 @@ use wasm_bindgen::prelude::*;
 /// Female hairstyles in models/hair-female.glb, each a set of `Hair_<style>_*` meshes.
 pub(super) const HAIR_STYLES: [&str; 3] = ["pixie", "bob", "braid"];
 /// Male hairstyles in models/hair-male.glb, the same way.
-pub(super) const MALE_HAIR_STYLES: [&str; 3] = ["crop", "slick", "medium"];
+pub(super) const MALE_HAIR_STYLES: [&str; 4] = ["crop", "slick", "medium", "ponytail"];
 
 /// The pack styles of one Persona.
 pub(super) fn hair_styles(sex: &str) -> &'static [&'static str] {

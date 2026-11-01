@@ -13,7 +13,7 @@ args = sys.argv[sys.argv.index('--') + 1:]
 game_dir, tex_p = Path(args[0]), args[1]
 ROOT = Path(__file__).resolve().parents[2]
 SEX = args[2] if len(args) > 2 else 'female'
-STYLES = {'female': ('pixie', 'bob', 'braid'), 'male': ('crop', 'slick', 'medium')}[SEX]
+STYLES = {'female': ('pixie', 'bob', 'braid'), 'male': ('crop', 'slick', 'medium', 'ponytail')}[SEX]
 
 raw = (ROOT / f'apps/web/models/persona-{SEX}.glb').read_bytes()
 jn = struct.unpack_from('<I', raw, 12)[0]

@@ -45,14 +45,15 @@ const EYES: [Choice; 14] = [
     ("blue", "Синие", 0x00a3ff),
 ];
 /// (sex, id, name, hair cap, hair cards). The male scan has its buzz cut baked into the head.
-/// The others (female pixie, bob, braid; male crop, slick, medium) are their own meshes in the
+/// The others (female pixie, bob, braid; male crop, slick, medium, ponytail) are their own meshes in the
 /// Persona's hair pack (`Hair_<id>_*`), not the long hair's cap and cards; the renderer shows them
 /// by the paint's `hair` id.
-const HAIRS: [(&str, &str, &str, bool, bool); 9] = [
+const HAIRS: [(&str, &str, &str, bool, bool); 10] = [
     ("male", "buzz", "Ёжик", false, false),
     ("male", "crop", "Короткая", false, false),
     ("male", "slick", "Зачёс назад", false, false),
     ("male", "medium", "Средняя", false, false),
+    ("male", "ponytail", "Низкий хвост", false, false),
     ("female", "long", "Длинные", true, true),
     ("female", "pixie", "Пикси", false, false),
     ("female", "bob", "Боб", false, false),
@@ -512,7 +513,7 @@ mod tests {
     }
     #[test]
     fn male_hairstyles_stay_male() {
-        for id in ["crop", "slick", "medium"] {
+        for id in ["crop", "slick", "medium", "ponytail"] {
             let mut look = finished("male");
             look["hair"] = json!(id);
             let p = paint(&normalize(&look));
