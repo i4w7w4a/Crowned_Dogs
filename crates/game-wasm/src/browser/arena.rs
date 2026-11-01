@@ -58,6 +58,17 @@ fn meshes(root: &JsValue) -> Vec<JsValue> {
         .filter(|o| boolean(&get(o, "isMesh")))
         .collect()
 }
+fn stage_source(frame: &JsValue) -> Option<(String, JsValue)> {
+    let descriptor = get(frame, "projectedStage");
+    let manifest = string(&get(&descriptor, "manifest"));
+    if !manifest.is_empty() {
+        Some((manifest, descriptor))
+    } else if string(&get(frame, "id")) == "hall1" {
+        Some(("img/battle-stage/manifest.json".into(), JsValue::NULL))
+    } else {
+        None
+    }
+}
 fn soft_texture(host: &JsValue, stops: &[(f64, &str)]) -> JsValue {
     let canvas = call(&document(), "createElement", &["canvas".into()]);
     set(&canvas, "width", &64.into());
@@ -183,6 +194,7 @@ struct ArenaState {
     rim: JsValue,
     fill: JsValue,
     me_key: JsValue,
+    back_light: JsValue,
     bounce: JsValue,
     spark: JsValue,
     /// The «Зонт» domes that show a blocked hit: the enemy's in the far pass, mine in the near one.
@@ -220,6 +232,7 @@ struct ArenaState {
     spark_life: f64,
     spark_max: f64,
     flash_of: Option<bool>,
+    suppressed: [bool; 2],
     view_at: [f64; 3],
     view_tilt: f64,
     view_set: bool,
@@ -262,6 +275,7 @@ pub struct RustArena {
 impl RustArena {
     #[wasm_bindgen(constructor)]
     pub fn new(host: JsValue, canvas: JsValue, options: JsValue) -> Self {
+        console_error_panic_hook::set_once();
         let renderer = make(
             &host,
             "WebGLRenderer",
@@ -475,6 +489,7 @@ impl RustArena {
             rim,
             fill,
             me_key,
+            back_light: back,
             bounce,
             spark,
             enemy_shield,
@@ -511,6 +526,7 @@ impl RustArena {
             spark_life: 0.,
             spark_max: 0.18,
             flash_of: None,
+            suppressed: [false; 2],
             view_at: [0.; 3],
             view_tilt: 0.,
             view_set: false,
@@ -626,7 +642,7 @@ impl RustArena {
             set(&me.blob, "visible", &(!s.fp).into());
             s.arms_only = sdk(&s.host, "armsOnly", &[s.me.as_ref().unwrap().model.clone()]);
             invoke(&s.arms_only, &[s.fp.into()]);
-            set(&s.me_key, "intensity", &n(if s.fp { s.fp_key } else { 5. }));
+            s.apply_lighting();
             s.mirror = Some(s.make_mirror(&foe));
             s.give_weapons(&mine, &foe, &guns);
             let own = s.me.as_ref().unwrap().model.clone();
@@ -678,7 +694,11 @@ impl RustArena {
         if !get(&s.renderer, "compileAsync").is_function() {
             return Promise::resolve(&JsValue::UNDEFINED);
         }
-        match try_call(&s.renderer, "compileAsync", &[s.scene.clone(), s.camera.clone()]) {
+        match try_call(
+            &s.renderer,
+            "compileAsync",
+            &[s.scene.clone(), s.camera.clone()],
+        ) {
             Ok(p) => future_to_promise(async move {
                 let _ = JsFuture::from(Promise::resolve(&p)).await;
                 Ok(JsValue::UNDEFINED)
@@ -714,6 +734,54 @@ impl RustArena {
         };
         load_stage(&self.state);
         make_env(&self.state, src);
+    }
+    /// Presentation follows the exact match used for accuracy and shield rules.
+    /// Local play is side 0; a future network view can pass its own side explicitly.
+    #[wasm_bindgen(js_name=setConditions)]
+    pub fn set_conditions(&self, match_state: JsValue, side: Option<u32>) {
+        let mut s = self.state.borrow_mut();
+        if s.disposed {
+            return;
+        }
+        let m = data(&match_state);
+        let own = side.unwrap_or(0).min(1) as usize;
+        let night_vision = m["config"]["time"].as_str() == Some("night")
+            && m["fighters"][own]["gear"]["nvg"].as_bool() == Some(true);
+        if get(&s.lens, "setNightVision").is_function() {
+            call(&s.lens, "setNightVision", &[night_vision.into()]);
+        }
+        if get(&s.lens, "setBattleAtmosphere").is_function() && s.k.is_some() {
+            let heat = m["config"]["time"].as_str() == Some("day")
+                && m["config"]["weather"].as_str() == Some("clear");
+            let glare = m["config"]["time"].as_str() == Some("evening")
+                && m["fighters"][own]["facesSun"].as_bool() == Some(true);
+            call(
+                &s.lens,
+                "setBattleAtmosphere",
+                &[
+                    heat.into(),
+                    glare.into(),
+                    n(1. / s.depth_of(8.)),
+                    n(1. / s.depth_of(12.)),
+                ],
+            );
+        }
+        for (slot, fighter) in [own, 1 - own].into_iter().enumerate() {
+            let spec = game_core::dispatch(
+                "weaponSpec",
+                serde_json::json!([m, fighter, m["fighters"][fighter]["weapon"]]),
+            )
+            .unwrap_or_default();
+            s.suppressed[slot] = spec["suppressor"].as_bool() == Some(true);
+        }
+        let dataset = get(&get(&s.renderer, "domElement"), "dataset");
+        if present(&dataset) {
+            set(
+                &dataset,
+                "nightVision",
+                &(if night_vision { "on" } else { "off" }).into(),
+            );
+        }
     }
     pub fn resize(&self, width: f64, height: f64, view: JsValue) {
         self.state.borrow_mut().resize(width, height, view);
@@ -1332,6 +1400,18 @@ impl ArenaState {
         for (position, index) in positions.iter().zip([0, 4, 8, 11, 14, 17, 20, 23, 26]) {
             vec_set(position, &q[index..index + 3]);
         }
+        let authored_sun = get(&get(&self.frame, "look"), "sun");
+        if js_sys::Array::is_array(&authored_sun) && values(&authored_sun).len() == 3 {
+            let sun = xyz(&self.sun_dir);
+            vec_set(
+                &get(&self.rim, "position"),
+                &[
+                    q[11] + sun[0] * 14.,
+                    q[12] + sun[1] * 14.,
+                    q[13] + sun[2] * 14.,
+                ],
+            );
+        }
         set(&get(&enemy.group, "rotation"), "y", &n(q[3]));
         set(&get(&me.group, "rotation"), "y", &n(q[7]));
     }
@@ -1495,6 +1575,7 @@ impl ArenaState {
                     json(&self.muzzle["size"][&kind]),
                     n(rounds as f64),
                     self.aim.clone(),
+                    self.suppressed[usize::from(!is_me)].into(),
                 ],
             );
             self.flash_of = Some(is_me);
@@ -1669,7 +1750,7 @@ impl ArenaState {
         let env = boolean(&get(&q, "env"));
         let environment = if env { self.env.clone() } else { JsValue::NULL };
         set(&self.scene, "environment", &environment);
-        set(&self.hemi, "intensity", &n(if env { 0.22 } else { 0.6 }));
+        self.apply_lighting();
         call(&self.dust, "setCount", &[get(&q, "dust")]);
         let id = string(&get(&q, "id"));
         self.enemy_shield.set_quality(&id);
@@ -1702,7 +1783,7 @@ impl ArenaState {
             }
         }
         if let Some(mirror) = &self.mirror {
-            set(&mirror.group, "visible", &get(&q, "mirror"));
+            set(&mirror.group, "visible", &self.reflection_enabled().into());
             for m in mirror.mats.borrow().iter() {
                 sdk(
                     &self.host,
@@ -1729,7 +1810,7 @@ impl ArenaState {
         let changed = string(&get(&self.frame, "id")) != string(&get(&f, "id"));
         self.frame = f.clone();
         self.stage_load_generation = self.stage_load_generation.wrapping_add(1);
-        self.stage_enabled = string(&get(&f, "id")) == "hall1" && present(&self.projected_stage);
+        self.stage_enabled = stage_source(&f).is_some() && present(&self.projected_stage);
         if !self.stage_enabled {
             self.stage_loading = Promise::resolve(&JsValue::UNDEFINED);
         }
@@ -1773,6 +1854,10 @@ impl ArenaState {
         copy(&inverse, &get(&self.camera, "projectionMatrix"));
         call(&inverse, "invert", &[]);
         let look = get(&f, "look");
+        if get(&self.lens, "setNightVision").is_function() {
+            call(&self.lens, "setNightVision", &[false.into()]);
+        }
+        self.suppressed = [false; 2];
         set(
             &self.renderer,
             "toneMappingExposure",
@@ -1807,7 +1892,87 @@ impl ArenaState {
             "set",
             &[get(&look, "fog")],
         );
+        let authored_sun = get(&look, "sun");
+        let sun: Vec<f64> = if js_sys::Array::is_array(&authored_sun) {
+            values(&authored_sun).iter().map(num).collect()
+        } else {
+            vec![]
+        };
+        if sun.len() == 3
+            && sun.iter().all(|v| v.is_finite())
+            && sun.iter().map(|v| v * v).sum::<f64>() > 0.001
+        {
+            vec_set(&self.sun_dir, &sun);
+            call(&self.sun_dir, "normalize", &[]);
+        } else {
+            vec_set(&self.sun_dir, &[0., 0.5, -1.]);
+        }
+        if get(&self.lens, "setWorldSun").is_function() {
+            call(
+                &self.lens,
+                "setWorldSun",
+                &[if sun.len() == 3 {
+                    self.sun_dir.clone()
+                } else {
+                    JsValue::NULL
+                }],
+            );
+        }
+        self.apply_lighting();
+        if let Some(mirror) = &self.mirror {
+            set(&mirror.group, "visible", &self.reflection_enabled().into());
+        }
         self.k = Some(k);
+    }
+    fn reflection_enabled(&self) -> bool {
+        boolean(&get(&self.quality, "mirror"))
+            && get(&get(&self.frame, "look"), "reflection").as_bool() != Some(false)
+    }
+    fn light_intensity(&self, key: &str, fallback: f64) -> f64 {
+        let value = get(&get(&get(&self.frame, "look"), "lighting"), key);
+        if value.as_f64().is_some_and(f64::is_finite) {
+            num(&value).clamp(0., 20.)
+        } else {
+            fallback
+        }
+    }
+    fn apply_lighting(&self) {
+        let key = self.light_intensity("key", 5.);
+        set(&self.rim, "intensity", &n(self.light_intensity("rim", 3.4)));
+        set(
+            &self.fill,
+            "intensity",
+            &n(self.light_intensity("fill", 2.4)),
+        );
+        set(
+            &self.me_key,
+            "intensity",
+            &n(if self.fp { self.fp_key * key / 5. } else { key }),
+        );
+        set(&self.back_light, "intensity", &n(key * 0.09));
+        let sky = self.light_intensity("sky", 0.6);
+        set(
+            &self.hemi,
+            "intensity",
+            &n(sky
+                * if boolean(&get(&self.quality, "env")) {
+                    0.22 / 0.6
+                } else {
+                    1.
+                }),
+        );
+        if present(&get(&get(&self.frame, "look"), "lighting")) {
+            let look = get(&self.frame, "look");
+            call(&get(&self.me_key, "color"), "set", &[get(&look, "fill")]);
+            call(&get(&self.back_light, "color"), "set", &[get(&look, "sky")]);
+        } else {
+            call(&get(&self.me_key, "color"), "set", &[n(0xb4b4b0 as f64)]);
+            call(
+                &get(&self.back_light, "color"),
+                "set",
+                &[n(0x8ea3b5 as f64)],
+            );
+        }
     }
     fn resize(&mut self, width: f64, height: f64, view: JsValue) {
         self.width = width;
@@ -1892,11 +2057,7 @@ impl ArenaState {
         if present(&self.arms_only) {
             invoke(&self.arms_only, &[on.into()]);
         }
-        set(
-            &self.me_key,
-            "intensity",
-            &n(if on { self.fp_key } else { 5. }),
-        );
+        self.apply_lighting();
         self.view_set = false;
         if !on {
             set(&me.group, "visible", &true.into());
@@ -2011,7 +2172,11 @@ impl ArenaState {
         // Last frame's matrices, read as they are: updating them here would move the camera
         // and the figures out of step with the frame that is drawn next.
         let placed = |object: &JsValue| {
-            call(&self.tmp_a, "setFromMatrixPosition", &[get(object, "matrixWorld")]);
+            call(
+                &self.tmp_a,
+                "setFromMatrixPosition",
+                &[get(object, "matrixWorld")],
+            );
             xyz(&self.tmp_a)
         };
         let top = placed(&get(&target.bones, "top"));
@@ -2200,11 +2365,14 @@ fn load_stage(state: &Rc<RefCell<ArenaState>>) {
             return;
         }
         (
-            try_call(
-                &s.projected_stage,
-                "load",
-                &["img/battle-stage/manifest.json".into()],
-            ),
+            try_call(&s.projected_stage, "load", &{
+                let (manifest, variant) = stage_source(&s.frame).unwrap();
+                if present(&variant) {
+                    vec![manifest.into(), variant]
+                } else {
+                    vec![manifest.into()]
+                }
+            }),
             s.stage_load_generation,
         )
     };
@@ -2217,10 +2385,7 @@ fn load_stage(state: &Rc<RefCell<ArenaState>>) {
         if let Err(error) = result {
             if let Some(state) = weak.upgrade() {
                 let mut s = state.borrow_mut();
-                if !s.disposed
-                    && s.stage_load_generation == generation
-                    && string(&get(&s.frame, "id")) == "hall1"
-                {
+                if !s.disposed && s.stage_load_generation == generation && s.stage_enabled {
                     s.stage_enabled = false;
                     call(&s.lens, "setStage", &[JsValue::NULL]);
                     let _ = try_call(

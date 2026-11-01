@@ -1,0 +1,413 @@
+[
+  {
+    "label": "night-nvg-high",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "on",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "ready": "true",
+    "report": {
+      "time": "night",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": true,
+      "nvgActive": true,
+      "suppressor": false,
+      "facesSun": false,
+      "hitChance10": 0.51,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "night-plain-high",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "off",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "ready": "true",
+    "report": {
+      "time": "night",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": false,
+      "nvgActive": false,
+      "suppressor": false,
+      "facesSun": false,
+      "hitChance10": 0.36499999999999994,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "night-plain-shot",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "off",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "ready": "true",
+    "report": {
+      "time": "night",
+      "weather": "clear",
+      "turn": 2,
+      "distance": 7,
+      "nvgEquipped": false,
+      "nvgActive": false,
+      "suppressor": false,
+      "facesSun": false,
+      "hitChance10": 0.46499999999999997,
+      "shield": 0.26,
+      "revealedByFlash": true,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "night-suppressed-high",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "off",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "ready": "true",
+    "report": {
+      "time": "night",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": false,
+      "nvgActive": false,
+      "suppressor": true,
+      "facesSun": false,
+      "hitChance10": 0.3425,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "night-suppressed-shot",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "off",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "ready": "true",
+    "report": {
+      "time": "night",
+      "weather": "clear",
+      "turn": 2,
+      "distance": 7,
+      "nvgEquipped": false,
+      "nvgActive": false,
+      "suppressor": true,
+      "facesSun": false,
+      "hitChance10": 0.4425,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "night-nvg-suppressed-high",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "on",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "ready": "true",
+    "report": {
+      "time": "night",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": true,
+      "nvgActive": true,
+      "suppressor": true,
+      "facesSun": false,
+      "hitChance10": 0.48000000000000004,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "evening-sun-high",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "off",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "ready": "true",
+    "report": {
+      "time": "evening",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": true,
+      "nvgActive": false,
+      "suppressor": false,
+      "facesSun": true,
+      "hitChance10": 0.452,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "day-nvg-gated-high",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "off",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "ready": "true",
+    "report": {
+      "time": "day",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": true,
+      "nvgActive": false,
+      "suppressor": false,
+      "facesSun": false,
+      "hitChance10": 0.452,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "morning-nvg-gated-high",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "off",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "ready": "true",
+    "report": {
+      "time": "morning",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": true,
+      "nvgActive": false,
+      "suppressor": false,
+      "facesSun": false,
+      "hitChance10": 0.51,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "morning-low-fresh",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "off",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "quality": "low",
+    "ready": "true",
+    "report": {
+      "time": "morning",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": true,
+      "nvgActive": false,
+      "suppressor": false,
+      "facesSun": false,
+      "hitChance10": 0.51,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "morning-low-to-high",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "off",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "quality": "high",
+    "ready": "true",
+    "report": {
+      "time": "morning",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": true,
+      "nvgActive": false,
+      "suppressor": false,
+      "facesSun": false,
+      "hitChance10": 0.51,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "evening-after-quality-cycle",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "off",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "quality": "high",
+    "ready": "true",
+    "report": {
+      "time": "evening",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": true,
+      "nvgActive": false,
+      "suppressor": false,
+      "facesSun": true,
+      "hitChance10": 0.452,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "day-after-evening-quality-cycle",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "off",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "quality": "high",
+    "ready": "true",
+    "report": {
+      "time": "day",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": true,
+      "nvgActive": false,
+      "suppressor": false,
+      "facesSun": false,
+      "hitChance10": 0.452,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "evening-day-morning-high-to-low",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "off",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "quality": "low",
+    "ready": "true",
+    "report": {
+      "time": "morning",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": true,
+      "nvgActive": false,
+      "suppressor": false,
+      "facesSun": false,
+      "hitChance10": 0.51,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  },
+  {
+    "label": "night-nvg-low",
+    "canvas": {
+      "enemyDepth": "7.176499",
+      "engine": "three.js r186",
+      "nightVision": "on",
+      "projectedStage": "true",
+      "stageTravel": "0.000000",
+      "walking": "false"
+    },
+    "errors": "",
+    "quality": "low",
+    "ready": "true",
+    "report": {
+      "time": "night",
+      "weather": "clear",
+      "turn": 1,
+      "distance": 7,
+      "nvgEquipped": true,
+      "nvgActive": true,
+      "suppressor": false,
+      "facesSun": false,
+      "hitChance10": 0.51,
+      "shield": 0.26,
+      "revealedByFlash": false,
+      "gpuErrors": 0
+    }
+  }
+]

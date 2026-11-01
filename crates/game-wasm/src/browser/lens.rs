@@ -61,11 +61,17 @@ struct LensState {
     stage: JsValue,
     depth_map: JsValue,
     sun: JsValue,
+    world_sun: JsValue,
     one: String,
     two: Option<String>,
     depth_src: String,
     loading: String,
     horizon: f64,
+    night_vision: bool,
+    heat: bool,
+    sun_glare: bool,
+    heat_depth: [f64; 2],
+    shader_features: u8,
     px: [f64; 2],
     css: [f64; 2],
     view: [f64; 4],
@@ -236,11 +242,17 @@ impl RustLens {
                 stage: JsValue::NULL,
                 depth_map: JsValue::NULL,
                 sun,
+                world_sun: JsValue::NULL,
                 one: String::new(),
                 two: None,
                 depth_src: String::new(),
                 loading: String::new(),
                 horizon: 0.4,
+                night_vision: false,
+                heat: false,
+                sun_glare: false,
+                heat_depth: [0.2, 0.1],
+                shader_features: 0,
                 px: [1., 1.],
                 css: [1., 1.],
                 view: [0., 0., 1., 1.],
@@ -354,6 +366,49 @@ impl RustLens {
         }
         put(&s.haze_mat, "density", get(&look, "haze"));
     }
+    /// White-phosphor gain is available only when the canonical match grants NVG.
+    /// Keep the normal shader byte-for-byte intact when it is switched off.
+    #[wasm_bindgen(js_name = setNightVision)]
+    pub fn set_night_vision(&self, enabled: bool) {
+        let mut s = self.state.borrow_mut();
+        if s.disposed || s.night_vision == enabled {
+            return;
+        }
+        s.night_vision = enabled;
+        s.refresh_battle_shader();
+    }
+    #[wasm_bindgen(js_name = setWorldSun)]
+    pub fn set_world_sun(&self, direction: JsValue) {
+        let mut s = self.state.borrow_mut();
+        s.world_sun = if present(&direction) {
+            call(&direction, "clone", &[])
+        } else {
+            JsValue::NULL
+        };
+    }
+    #[wasm_bindgen(js_name = setBattleAtmosphere)]
+    pub fn set_battle_atmosphere(
+        &self,
+        heat: bool,
+        sun_glare: bool,
+        near_depth: f64,
+        far_depth: f64,
+    ) {
+        let mut s = self.state.borrow_mut();
+        if s.disposed {
+            return;
+        }
+        s.heat = heat;
+        s.sun_glare = sun_glare;
+        if near_depth.is_finite()
+            && far_depth.is_finite()
+            && near_depth > far_depth
+            && far_depth > 0.
+        {
+            s.heat_depth = [near_depth, far_depth];
+        }
+        s.refresh_battle_shader();
+    }
 
     #[wasm_bindgen(getter)]
     pub fn dof(&self) -> f64 {
@@ -376,6 +431,7 @@ impl RustLens {
                 dispose(&s.near);
             }
             s.quality = q.clone();
+            s.refresh_battle_shader();
             let rt = || {
                 make(
                     &s.three,
@@ -517,6 +573,30 @@ impl RustLens {
         };
         let has_bg = present(&s.bg) || present(&stage);
         call(&s.clock, "update", &[]);
+        if s.shader_features & 2 != 0 {
+            put(
+                &s.compose,
+                "cdBattleTime",
+                call(&s.clock, "getElapsed", &[]),
+            );
+        }
+        if present(&s.world_sun) {
+            let point = make(&s.three, "Vector3", &[]);
+            call(&camera, "getWorldPosition", &[point.clone()]);
+            call(&point, "addScaledVector", &[s.world_sun.clone(), n(100.)]);
+            call(&point, "project", &[camera.clone()]);
+            call(
+                &s.sun,
+                "set",
+                &[
+                    n(prop(&point, "x") * 0.5 + 0.5),
+                    n(prop(&point, "y") * 0.5 + 0.5),
+                ],
+            );
+        }
+        if s.shader_features & 4 != 0 {
+            call(&uniform(&s.compose, "cdGlareSun"), "copy", &[s.sun.clone()]);
+        }
         call(&layers, "set", &[n(0.)]);
         if present(&stage) {
             let projected = try_call(
@@ -665,6 +745,84 @@ fn set_defines(material: &JsValue, defines: JsValue) {
 }
 
 impl LensState {
+    fn refresh_battle_shader(&mut self) {
+        let heat = self.heat
+            && !self.night_vision
+            && present(&self.quality)
+            && string(&get(&self.quality, "id")) != "low";
+        let features =
+            u8::from(self.night_vision) | (u8::from(heat) << 1) | (u8::from(self.sun_glare) << 2);
+        if features == self.shader_features {
+            if heat {
+                call(
+                    &uniform(&self.compose, "cdHeatDepth"),
+                    "set",
+                    &[n(self.heat_depth[0]), n(self.heat_depth[1])],
+                );
+            }
+            return;
+        }
+        self.shader_features = features;
+        let original = include_str!("shaders/composeShader.glsl");
+        let mut fragment = original.to_string();
+        let uniforms = get(&self.compose, "uniforms");
+        for key in ["cdBattleTime", "cdHeatDepth", "cdGlareSun"] {
+            let _ = js_sys::Reflect::delete_property(
+                &js_sys::Object::from(uniforms.clone()),
+                &key.into(),
+            );
+        }
+        let mut declarations = String::new();
+        if heat {
+            declarations.push_str("uniform float cdBattleTime;\nuniform vec2 cdHeatDepth;\n");
+            set(&uniforms, "cdBattleTime", &object(&[("value", n(0.))]));
+            set(
+                &uniforms,
+                "cdHeatDepth",
+                &object(&[(
+                    "value",
+                    make(
+                        &self.three,
+                        "Vector2",
+                        &[n(self.heat_depth[0]), n(self.heat_depth[1])],
+                    ),
+                )]),
+            );
+            fragment = fragment.replace(
+                "vec3 bg = hasBg > 0.5 ? focused(vUv) : vec3(0.0);",
+                include_str!("shaders/battleHeat.glsl"),
+            );
+        }
+        if self.sun_glare {
+            declarations.push_str("uniform vec2 cdGlareSun;\n");
+            set(
+                &uniforms,
+                "cdGlareSun",
+                &object(&[("value", make(&self.three, "Vector2", &[n(0.7), n(0.75)]))]),
+            );
+            fragment = fragment.replace("gl_FragColor = vec4(c, max(a, n.a));", "vec2 glareDelta = (vUv - cdGlareSun) * vec2(bgSize.x / max(bgSize.y, 1.0), 1.0);\n  float glare = exp(-length(glareDelta) * 5.5);\n  c += vec3(1.0, 0.83, 0.62) * glare * 0.14;\n  gl_FragColor = vec4(c, max(a, n.a));");
+        }
+        if self.night_vision {
+            // Daylight ACES subtracts a black offset and clamps faint HDR
+            // radiance to zero before the intensifier can amplify it. Preserve
+            // that signal for both fighters and the first-person weapon only
+            // in the NVG shader; unaided exposure keeps the original ACES path.
+            fragment = fragment.replace(
+                "vec3 c = toSRGB(aces(lin));",
+                "vec3 c = toSRGB(max(lin, vec3(0.0)));",
+            );
+            fragment = fragment.replace(
+                "gl_FragColor = vec4(c, max(a, n.a));",
+                include_str!("shaders/nightVision.glsl"),
+            );
+        }
+        set(
+            &self.compose,
+            "fragmentShader",
+            &format!("{declarations}{fragment}").into(),
+        );
+        set(&self.compose, "needsUpdate", &true.into());
+    }
     fn dispose(&mut self) {
         if self.disposed {
             return;
@@ -715,6 +873,11 @@ impl LensState {
         call(&self.quad, "render", &[self.renderer.clone()]);
     }
     fn sun_direction(&self, camera: &JsValue, out: &JsValue) {
+        if present(&self.world_sun) {
+            call(out, "copy", &[self.world_sun.clone()]);
+            call(out, "normalize", &[]);
+            return;
+        }
         call(
             out,
             "set",

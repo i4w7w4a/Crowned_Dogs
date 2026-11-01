@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "source": "Built-in image_gen, lighting-weather edit of the approved salt hall",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/battle-times/morning/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3059559,
+      "sha256": "12e956bc59904d510d1796d749e7280f15da8b5bf25c3836ac2bb222f5058e45"
+    },
+    {
+      "path": "apps/web/public/img/battle-times/morning/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 577158,
+      "sha256": "e67d7890e277f55de9babe75315608b0e630ad53c45d9c5944f2d1c93648177a"
+    },
+    {
+      "path": "apps/web/public/img/battle-times/morning/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3129619,
+      "sha256": "1b052e9880d53481bc4f20c771cc0d97553f916a7f3ec556dc27c88c9807c4f4"
+    },
+    {
+      "path": "apps/web/public/img/battle-times/morning/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 608158,
+      "sha256": "3f81c3862aa5b3c6379ffb3db292ec5387732ba73b0d500b2e84e4e790e81e0f"
+    },
+    {
+      "path": "apps/web/public/img/battle-times/evening/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3111523,
+      "sha256": "24abfca60267edf68da1c9ff5c707c81572959bcc263c34c755b5a0b86472408"
+    },
+    {
+      "path": "apps/web/public/img/battle-times/evening/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 620534,
+      "sha256": "c1234265d1467069ed345f26237dd1ed8c99ce0995892b37e2c9079f86aa7d10"
+    },
+    {
+      "path": "apps/web/public/img/battle-times/evening/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3246548,
+      "sha256": "532cc82cd7572c5af6b6a051d47bbb723ed65bdc36dd6a9beee2764b21a1fa88"
+    },
+    {
+      "path": "apps/web/public/img/battle-times/evening/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 681176,
+      "sha256": "4612d2f523e3c91bb9f8b557ee62c4670cfbf06d8f78d6d2ccb3e654b0a5bf29"
+    },
+    {
+      "path": "apps/web/public/img/battle-times/night/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2065974,
+      "sha256": "9e7a06b059bbbd922eb7021a5113f23ccdba33990358ecc8b5ea81935e4642d8"
+    },
+    {
+      "path": "apps/web/public/img/battle-times/night/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 287952,
+      "sha256": "81940c31c1417330a28da9ce8293c382eb0891d568fb489385bc8638e9d674e1"
+    },
+    {
+      "path": "apps/web/public/img/battle-times/night/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 1962274,
+      "sha256": "b18a4832b1bd27649924d3fad57d7d3e7452f83670483d9f08b9b55d46513ee1"
+    },
+    {
+      "path": "apps/web/public/img/battle-times/night/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 245918,
+      "sha256": "382d093af5f6b50ca3f32ca7cd05e9b3d3a5d448832c7ff0977a855d0f872ae8"
+    }
+  ]
+}
