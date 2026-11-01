@@ -279,6 +279,10 @@ pub fn apply(model: JsValue, look: JsValue) {
                 let m = own_material(&model, &node, "M_Hair_Cap");
                 let c = rgb(&get(&paint, "hairCap"));
                 call(&get(&m, "color"), "setRGB", &[c[0].into(), c[1].into(), c[2].into()]);
+            } else if mesh.ends_with("_fade") {
+                // the crop's clipper fade and the slick's hairline lie on the skull and tile round it: no strip hook, whose
+                // clamped texture would smear the first column into stripes
+                tint(&material, rgb(&get(&paint, "hairCards")));
             } else if mesh.ends_with("_tie") {
                 let m = own_material(&model, &node, "M_Hair_Tie");
                 call(&get(&m, "color"), "setRGB", &[0.012.into(), 0.012.into(), 0.013.into()]);

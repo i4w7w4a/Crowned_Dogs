@@ -42,11 +42,14 @@
 Референс `research/hair-ref/hair-male-ref.webp`, сцена `3d\hair-hd\base_male.blend` (головы `Head_m1`–`Head_m4`),
 запуск с `PERSONA=male`. Скрипты: `male.py` (линия роста, кадры референса), `male_short.py` (m1 короткая),
 `male_slick.py` (m2 зачёс назад), `male_medium.py` (m3 средняя). HD: `3d\hair-hd\male_*.blend`, лист для Арта
-`research/hair-ref/male-hd-v1.jpg`. Дреды (m4) Арт отменил; вместо них будет низкий хвост по его эскизу.
+`research/hair-ref/male-hd-v1.jpg`. Дреды (m4) Арт отменил; вместо них низкий хвост по его эскизу: `male_ponytail.py`
+(хвост с резинкой на затылке, свисает до лопаток), HD `3d\hair-hd\male_ponytail.blend`, лист
+`research/hair-ref/male-ponytail-v1.jpg`, ждёт Арта; игровой версии пока нет.
 
 В игре они называются `crop` «Короткая», `slick` «Зачёс назад», `medium` «Средняя» (пакет `hair-male.glb`),
 «Ёжик» остаётся. У короткой бока «под машинку» — не полоски, а слой `Hair_crop_fade` с текстурой щетины
-`hair-fade.png` (`fade_texture.py`): к уху и шее реже, наверху сплошная.
+`hair-fade.png` (`fade_texture.py`): к уху и шее реже, наверху сплошная. У зачёса тот же слой `Hair_slick_fade`
+под всей шапкой, плотность по корням: у линии роста редкие волоски, иначе концы полосок торчали зубцами на коже.
 
 ## Игровые версии (`apps/web/models/hair-female.glb`, `hair-male.glb`)
 

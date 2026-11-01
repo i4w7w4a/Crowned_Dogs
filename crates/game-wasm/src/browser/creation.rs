@@ -188,7 +188,6 @@ pub fn tabs(step: usize, male: bool) -> String {
         .enumerate()
         .map(|(i, (id, name, _))| {
             let label = if male && *id == "hair" { "Волосы и борода" } else { *name };
-            let name = if male && *id == "hair" { "Борода" } else { *name };
             format!(
                 "<button class=\"glass\" type=\"button\" role=\"tab\" data-step=\"{i}\" aria-selected=\"{}\" aria-label=\"{label}\">{}<span>{name}</span></button>",
                 i == step,

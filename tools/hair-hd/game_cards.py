@@ -109,6 +109,10 @@ for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
     roots.append(R[:, 0])
     feat = np.concatenate([R[:, 0], R[:, SEG // 3] * 0.8, R[:, 2 * SEG // 3] * 0.6, R[:, -1] * 0.4], 1)
     lab = kmeans(feat, K)
+    # roots per 8 mm round each root: low at the hairline
+    from mathutils.kdtree import KDTree
+    kd = KDTree(len(R)); [kd.insert(tuple(r), i) for i, r in enumerate(R[:, 0])]; kd.balance()
+    rdens = np.array([len(kd.find_range(tuple(r), 0.008)) for r in R[:, 0]]); rmed = np.median(rdens)
     t = np.linspace(0, 1, SEG + 1)
     verts, faces, uvs, normals = [], [], [], []
     for j in range(K):
@@ -130,11 +134,12 @@ for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
         off = grp - centre[None]
         wa = np.percentile(np.abs(np.einsum('skc,kc->sk', off, across)), 80, axis=0)
         wn = np.percentile(np.abs(np.einsum('skc,kc->sk', off, nrm)), 80, axis=0)
-        half = np.clip(smooth(wa, 2) * 1.3, wmin, wmax) * (1 - (0.1 if style == 'slick' else 0.35) * t ** 2)
+        taper = {'slick': 0.1, 'medium': 0.75}.get(style, 0.35)   # the medium's fringe ends in points, not a cut line
+        half = np.clip(smooth(wa, 2) * 1.3, wmin, wmax) * (1 - taper * t ** 2)
         # blunt strip roots stacked along the hairline read as dark steps: they start narrow
         # (the slick lies flat and every strip root shows on the back of the head: narrow roots and a
-        # second layer there stacked into rows of scales)
-        if style != 'slick':
+        # second layer there stacked into rows of scales, so there only the hairline's strips narrow)
+        if style != 'slick' or np.percentile(rdens[lab == j], 20) < 0.55 * rmed:
             half = half * (0.3 + 0.7 * np.clip(t * SEG / 1.5, 0, 1) ** 0.7)
         thick = np.clip(smooth(wn, 2), 0, 0.01)
         n = unit(0.7 * nrm + 0.3 * out) if suffix != 'plait' else nrm
@@ -202,6 +207,28 @@ for i, r in enumerate(rk):
     kr.insert(tuple(r), i)
 kr.balance()
 dens = np.array([len(kr.find_range(tuple(v), 0.008)) for v in cv])
+if style == 'slick':
+    # the slick's hairline: strips there stood as teeth on bare skin (Art's game, 2026-11-02). The
+    # whole HD cap gets the fade's dashes, v by root density: sparse at the hairline, a solid pile
+    # under the strips, so the hairline thins out the way fine hairs do
+    Ch = np.array([0.003, -0.008, 1.700])
+    d = cv - Ch
+    az = np.degrees(np.arctan2(d[:, 0], -d[:, 1]))
+    fu = (az + 180) / 360 * 14
+    fv = 0.04 + 0.86 * np.clip(dens / np.median(dens), 0, 1) ** 0.8
+    fp = cv + unit(d) * 0.0004
+    me = bpy.data.meshes.new('Hair_slick_fade'); me.from_pydata([tuple(v) for v in fp], [], cf); me.shade_smooth()
+    uv = me.uv_layers.new(name='UVMap')
+    for poly in me.polygons:
+        us = [fu[me.loops[li].vertex_index] for li in poly.loop_indices]
+        wrap = max(us) - min(us) > 7
+        for li in poly.loop_indices:
+            vi = me.loops[li].vertex_index
+            uv.data[li].uv = (fu[vi] + (14 if wrap and fu[vi] < 7 else 0), fv[vi])
+    me.normals_split_custom_set_from_vertices([tuple(n) for n in unit(d)])
+    me.update()
+    out_objs.append(bpy.data.objects.new('Hair_slick_fade', me))
+    print('FADE', len(fp), 'verts')
 dense = dens >= 0.5 * np.median(dens)
 cf = [f for f in cf if dense[list(f)].all()]
 used = sorted({i for f in cf for i in f}); remap = {o: n for n, o in enumerate(used)}
