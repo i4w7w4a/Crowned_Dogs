@@ -44,6 +44,29 @@ FIT=Matrix(((S,0,0,-.00429309),(0,S,0,-.00425317),(0,0,S,.17305149),(0,0,0,1)))
 # FIT is authored transformation expressed in Blender axes: glTF(x,y,z)->Blender(x,-z,y).
 CONFIG={'m1':(1.608,1.562),'m2':(1.6148,1.572),'m3':(1.614,1.565),'m4':(1.6078,1.559)}
 STYLES=['boxed','goatee','full','tapered','stubble']
+# Lip outline of each head, measured from the redness of its own skin texture: (x, upper border, lower border)
+# in mm from the centre and from `mouth`, out to the corner of the mouth. m4's lower lip is too pale to measure,
+# so it follows m2's shape one millimetre lower.
+LIPS={'m1':[(0,5.6,-13.0),(2,6.0,-13.0),(4,6.6,-13.0),(6,7.6,-12.8),(8,7.9,-12.5),(10,7.1,-11.8),(12,6.3,-11.0),(14,5.3,-10.2),(16,4.1,-9.2),(18,2.5,-8.6),(20,.3,-7.6),(22,-1.7,-6.5),(24,-3.0,-5.1),(25.5,-4.0,-4.0)],
+ 'm2':[(0,8.0,-5.6),(2,7.8,-5.3),(4,8.2,-5.1),(6,8.0,-4.8),(8,8.0,-4.2),(10,7.7,-3.0),(12,6.6,-1.9),(14,5.8,-1.2),(16,5.1,-1.2),(18,3.9,-.7),(20,3.3,-.2),(22,2.6,.2),(24,1.9,1.4),(26.2,1.6,1.6)],
+ 'm3':[(0,7.6,-8.8),(2,7.6,-8.3),(4,8.3,-8.3),(6,9.3,-7.8),(8,9.0,-7.5),(10,8.4,-6.7),(12,7.1,-6.6),(14,6.0,-5.9),(16,4.8,-5.7),(18,3.4,-5.1),(20,1.7,-3.8),(22,.1,-3.2),(24,-.5,-2.7),(25.8,-1.6,-1.6)],
+ 'm4':[(0,6.4,-6.6),(2,6.7,-6.3),(4,7.4,-6.1),(6,8.0,-5.8),(8,8.1,-5.2),(10,7.8,-4.0),(12,6.5,-2.9),(14,5.8,-2.6),(16,5.2,-2.6),(18,3.9,-2.2),(20,3.0,-1.5),(22,2.2,-1.2),(24,1.5,-.6),(26.5,1.0,1.0)]}
+# Height of the nose base (subnasale) above `mouth`, from each head's mid-line profile: the moustache reaches it.
+NOSE={'m1':.0195,'m2':.0250,'m3':.0230,'m4':.0230}
+def lip_at(x,face):
+ """Upper and lower lip border (mm from `mouth`) at |x| metres, or the corner height past the corner."""
+ rows=LIPS[face];xm=x*1000
+ if xm>=rows[-1][0]:return rows[-1][1],rows[-1][2]
+ i=max(j for j in range(len(rows)-1) if rows[j][0]<=xm);a,b=rows[i],rows[i+1];t=(xm-a[0])/(b[0]-a[0])
+ return a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t
+def lip_gap(x,z,face):
+ """Metres from the vermilion border, zero or less on the lips."""
+ top,bottom=lip_at(x,face);xm=x*1000;zm=(z-CONFIG[face][0])*1000;corner=LIPS[face][-1][0]
+ if xm>=corner:return math.hypot(xm-corner,zm-top)/1000
+ return max(zm-top,bottom-zm)/1000
+def above_lip(p,face):
+ top,bottom=lip_at(abs(p.x),face)
+ return (p.z-CONFIG[face][0])*1000>(top+bottom)/2
 # Native, authored texture: narrow fibers with varied curvature/opacity, generated from fixed seeds.
 W,H=512,1024
 pix=[0.0]*(W*H*4);rnd=random.Random(311)
@@ -85,7 +108,7 @@ def m4_rear(z):
  # cheek plane. Front-camera rays must not turn that patch into a beard shelf.
  t=max(0,min(1,(z-1.598)/.027));t=t*t*(3-2*t)
  return -.046+.009*t
-def region(p,n,face,style):
+def region(p,n,face,style,lips=True):
  mouth,chin=CONFIG[face];x=abs(p.x);z=p.z
  if n.y>.05 or p.y>-.018 or x>.082 or z<chin+.0005:return 0
  rear=-.018-.019*max(0,min(1,(x-.058)/.024))
@@ -94,29 +117,32 @@ def region(p,n,face,style):
  # Cheek-to-sideburn line rises outwards, with a soft physical root boundary.
  top=mouth+.005+max(0,x-.030)*.68
  if x<.044:top=max(top,mouth+.021-.16*x-max(0,x-.034)*.65)
+ # Under the nose the moustache climbs to the nose base and ends with a short fade, not a straight shaded band.
+ philtrum=max(0,min(1,(.022-x)/.012));philtrum=philtrum*philtrum*(3-2*philtrum)
+ top+=(mouth+NOSE[face]-.0012-top)*philtrum if mouth+NOSE[face]-.0012>top else 0
  if z>top:return 0
  jaw=chin+.044*(x/.080)**1.8
  if z<jaw:return 0
- # Exact lip opening; moustache stays above, connected at the corners.
- if (x/.033)**2+((z-mouth)/.0085)**2<1:return 0
- if x<.018 and z>mouth+.018:return 0
- # Preserve the natural clean patches beside the soul patch.
- patch=math.exp(-((x-.018)/.010)**2-((z-(mouth-.017))/.008)**2)
+ # Hair grows up to the lips' own outline: roots start half a millimetre off the vermilion border.
+ gap=lip_gap(x,z,face)
+ if lips and gap<.0005:return 0
+ # Thinner natural patches beside the soul patch; stubble covers them evenly.
+ patch=0 if style=='stubble' else .45*math.exp(-((x-.018)/.010)**2-((z-(mouth-.017))/.008)**2)
  if style=='goatee':
   limit=.029+.012*math.exp(-((z-(mouth-.002))/.023)**2)
   if x>limit:return 0
   if z>mouth+.020:return 0
- lip=math.sqrt((x/.033)**2+((z-mouth)/.0085)**2)
  # Stubble fades out over a wider band, so its border never reads as a drawn line.
  soft=2.4 if style=='stubble' else 1
- edge=min((top-z)/(.006*soft),(z-jaw)/(.004*soft),(.082-x)/(.008*soft),(lip-1)/(.18 if style=='goatee' else .32),(rear-p.y)/(.010*soft))
+ topfade=.006*soft+(.0025-.006*soft)*philtrum
+ edge=min((top-z)/topfade,(z-jaw)/(.004*soft),(.082-x)/(.008*soft),(gap-.0005)/(.0012 if style=='goatee' else .0016) if lips else 1,(rear-p.y)/(.010*soft))
  if style=='goatee':edge=min(edge,(limit-x)/.004)
- return max(0,min(1,edge))*(1-.85*patch)
+ return max(0,min(1,edge))*(1-patch)
 def strand_length(p,face,style):
  mouth,chin=CONFIG[face];x=abs(p.x)
  # Light stubble, the default look: the full beard area, sparse fibre under 1.5 mm.
  if style=='stubble':return .0014
- if p.z>mouth+.007 and x<.034:return .0045
+ if above_lip(p,face) and x<.034:return .0045
  jaw=chin+.044*(x/.080)**1.8
  low=max(0,min(1,(mouth+.012-p.z)/max(.010,mouth+.012-jaw)))
  if style=='boxed':return .0045+.003*low
@@ -144,12 +170,17 @@ for face in (['m1'] if PILOT else ['m4'] if REPAIR_M4 else CONFIG):
     z=chin-.005+iz*step
     p,n,_,_=bvh.ray_cast(Vector((x,-.5,z)),Vector((0,1,0)))
     weight=region(p,n,face,style) if p is not None else 0
-    if weight<=0:continue
+    if weight<=0:
+     # A ring of clear points on the lip border lets the shade fade into the lips instead of ending in grid steps.
+     if p is None or lip_gap(abs(p.x),p.z,face)<-.0012 or region(p,n,face,style,lips=False)<=0:continue
+     weight=0
     grid[(ix,iz)]=len(rv)
     jaw=chin+.044*(abs(x)/.080)**1.8
     bulk=strand_length(p,face,style)*max(0,min(1,(mouth+.012-z)/max(.01,mouth+.012-jaw)))*1.08
     if style=='boxed':bulk*=.2
     if style=='stubble':bulk=0
+    # By the lips the shade stays on the skin; pushed down with the beard's bulk it would bare a band under the lower lip.
+    bulk*=max(0,min(1,(lip_gap(abs(p.x),p.z,face)-.0005)/.014))
     rv.append(clear_collar(p+n*(.00055+bulk*.40)+Vector((0,0,-bulk*.60))));ra.append(weight*(.5 if style=='stubble' else .88))
   for (ix,iz),a in grid.items():
    if all(k in grid for k in [(ix+1,iz),(ix+1,iz+1),(ix,iz+1)]):
@@ -177,7 +208,7 @@ for face in (['m1'] if PILOT else ['m4'] if REPAIR_M4 else CONFIG):
   for p,n in roots:
    length=strand_length(p,face,style)*rng.uniform(.78,1.12)*(.45+.55*math.sqrt(region(p,n,face,style)))
    down=Vector((rng.uniform(-.27,.27),0,-1))
-   if p.z>CONFIG[face][0]+.006 and abs(p.x)<.034:down=Vector((math.copysign(.65,p.x),0,-.35))
+   if above_lip(p,face) and abs(p.x)<.034:down=Vector((math.copysign(.65,p.x),0,-.35))
    tangent=(down-n*down.dot(n)).normalized()
    if tangent.length<.3:tangent=Vector((0,-1,-.3)).normalized()
    side=tangent.cross(n).normalized();width=rng.uniform(.0009,.0016) if style=='stubble' else rng.uniform(.0025,.0045)
