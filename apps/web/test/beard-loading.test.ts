@@ -133,6 +133,21 @@ test("female and unrelated assets never request beard packs; a main-model failur
   const female = new THREE.Group(), url = `${base}models/persona-female.json`;
   const { host, requested } = network(t, new Map([[url, female]]));
   assert.equal((await sceneLoadModel(host, url)).scene, female);
-  assert.deepEqual(requested, [url]);
+  // only the hair pack, which is missing here: the Persona loads with her long hair
+  assert.deepEqual(requested, [url, `${base}models/hair-female.json`]);
   await assert.rejects(sceneLoadModel(host, `${base}models/missing.json`));
+});
+
+test("the female hairstyles pack hangs hidden under the head bone", async t => {
+  const { root, anchor } = figure(), url = `${base}models/persona-female.json`;
+  const pack = new THREE.Group(), owned = resources();
+  for (const style of ["pixie", "bob", "braid"]) for (const part of ["cards", "cap"]) {
+    const node = new THREE.Mesh(owned.geometry, owned.material);
+    node.name = `Hair_${style}_${part}`; pack.add(node);
+  }
+  const { host } = network(t, new Map([[url, root], [`${base}models/hair-female.json`, pack]]));
+  await sceneLoadModel(host, url);
+  assert.equal(pack.parent, anchor);
+  pack.traverse(node => { if ((node as THREE.Mesh).isMesh) assert.equal(node.visible, false); });
+  assert.equal(root.userData.beardsReady, undefined);
 });

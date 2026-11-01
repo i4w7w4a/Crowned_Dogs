@@ -22,12 +22,15 @@ Keys:
   inside=        how far the reference points sit inside the garment surface (0.012 suit; negative = outside the
                  lining of a hollow piece; over a base garment the points are that garment's torso vertices)
   push=soft      move dents together with everything within soft_r0=0.015..soft_r1=0.04 m (default for vests and
-                 helmets; push=hard moves only the vertices that are inside, default for a dressed figure)
+                 helmets; push=hard moves only the vertices that are inside, default for a dressed figure;
+                 push=none leaves a hard piece as modelled, push=smooth moves it in one slow field: plates and
+                 pouches warp under a soft push)
   base=          an earlier OUT.blend to add this garment to (vest over suit); garments already in it count as
                  surfaces this one must stay outside of
   pair=1         boots: the download is one right boot (toe to -Y); make a right and a mirrored left boot, each turned
                  and centred on its bare foot, the boot `toe_room=0.04` longer than the foot (sole at floor=-SOLE)
   slab=z0,z1     align=feet: centre the garment on the body between these heights (default 55..72 % of the Persona)
+  lock_z=1       refine keeps the piece's height (top_z) and only scales and moves it front to back
   ref_zmax=      refine only against body points below this height (boots: the shaft top)
 
 What it does (body mode): uniform scale + offset so the garment wraps the body; the Persona's arm and leg
@@ -219,6 +222,7 @@ def refine(points, inside, prior, label, aniso=False, lock_x=False):
     def split(x):
         s, t = (np.array(x[:3]), np.array(x[3:], float)) if aniso else (np.full(3, x[0]), np.array(x[1:], float))
         if lock_x: t[0] = 0.0
+        if opt.get('lock_z') == '1': t[2] = 0.0  # keep top_z: the fit would slide a short vest down the back
         return s, t
 
     def cost(x):
@@ -543,6 +547,36 @@ else:  # rigid piece on one bone (helmet on the head)
 update()
 # hair volumes (hidden helper meshes, cards) are not pushed against: they hang over the collar
 under = [body] + [h for h in heads if 'hair' not in h.name.lower()] + old_garments if MODE == 'body' else [skull_obj]
+if opt.get('push') in ('none', 'smooth'):
+    if opt['push'] == 'smooth':
+        # a hard piece (plate carrier): the push becomes one slow field over the piece, so plates and pouches move
+        # whole instead of denting; each round pushes what still cuts in, smoothed over smooth_r metres
+        from scipy.spatial import cKDTree
+        g = gco(); R = float(opt.get('smooth_r', 0.06)); kd = cKDTree(g)
+        trees = []
+        for o in under:
+            oco, onr, otri = evaluated(o)
+            trees.append((bvh(oco, otri), oco, onr, otri, CLEAR if o is body or o in heads else CLEAR * 1.5))
+        for rnd in range(int(opt.get('smooth_rounds', 24))):
+            need = np.zeros_like(g); deep = 0
+            for tree, oco, onr, otri, lim in trees:
+                for i, p in enumerate(g):
+                    q, n, ti, d = tree.find_nearest(Vector(p), float(opt.get('push_search', 0.15)))
+                    if q is None: continue
+                    n = smooth_normal(q, ti, oco, onr, otri)
+                    sd = (Vector(p) - q).dot(n)
+                    if sd < lim and np.linalg.norm(need[i]) < lim - sd: need[i] = np.array(n) * (lim - sd)
+            mag = np.linalg.norm(need, axis=1); hit = np.where(mag > 1e-4)[0]
+            if not len(hit): break
+            D = np.zeros_like(g); wsum = np.zeros(len(g))
+            for j, near in zip(hit, kd.query_ball_point(g[hit], R)):
+                near = np.array(near); w = np.exp(-(np.linalg.norm(g[near] - g[j], axis=1) / (0.5 * R)) ** 2)
+                D[near] += w[:, None] * need[j]; wsum[near] += w
+            D /= np.maximum(wsum, 1.0)[:, None]
+            g = g + D
+            print(f'smooth push round {rnd}: {len(hit)} verts cut in, deepest {mag.max():.4f} m')
+        set_gco(g)
+    under = []  # push=none: the piece stays as modelled (refine with pen_w keeps it out)
 g = gco()
 moved = 0
 SOFT = opt.get('push', 'hard' if (MODE == 'body' and ALIGN == 'feet') else 'soft') == 'soft'

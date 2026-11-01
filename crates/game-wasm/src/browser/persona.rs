@@ -648,7 +648,9 @@ fn dress_figure(s: &JsValue) {
     super::scene_assets::dress(
         get(s, "host"),
         figure.clone(),
-        options(&["head", "body", "suit", "boots"].map(|k| (k, wear(k)))),
+        options(&["head", "body", "suit", "boots"].map(|k| (k, wear(k))).into_iter()
+            .chain([("colors", if exists(&kit) { get(&kit, "colors") } else { JsValue::UNDEFINED })])
+            .collect::<Vec<_>>()),
     );
     super::look::first_person(figure, false, get(s, "look"));
     set(&get(s, "equipment"), "visible", &flag(!bare));

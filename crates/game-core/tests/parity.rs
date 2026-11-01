@@ -67,6 +67,28 @@ fn frozen_sniper_rail(method: &str, args: &Value) -> bool {
             && method == "client.equipWeaponMod"
             && args[2] == "rail-kulak")
 }
+/// Concept gear without a model left the catalogue (01.11.2026); cases built on it are skipped.
+const CONCEPTS: [&str; 13] = [
+    "body-light",
+    "body-bastion",
+    "suit-leshy",
+    "boots-sprint",
+    "boots-hodok",
+    "boots-saper",
+    "knife-shtyk",
+    "knife-zhalo",
+    "knife-kogot",
+    "knife-iskra",
+    "grenade-grad",
+    "grenade-emp",
+    "grenade-smoke",
+];
+fn concept_gear(args: &Value) -> bool {
+    let text = args.to_string();
+    CONCEPTS
+        .iter()
+        .any(|id| text.contains(&format!("\"{id}\"")))
+}
 fn oracle() -> Value {
     serde_json::from_str(include_str!("oracle.json")).unwrap()
 }
@@ -87,7 +109,10 @@ fn every_export_matches_typescript_oracle() {
                 }
             })
             .collect();
-        if frozen_sniper_rail(method, &json!(args)) {
+        if frozen_sniper_rail(method, &json!(args))
+            || concept_gear(&json!(args))
+            || concept_gear(&case["expected"])
+        {
             continue;
         }
         let result = dispatch(method, json!(args));

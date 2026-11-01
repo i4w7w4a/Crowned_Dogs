@@ -530,26 +530,20 @@ fn front_of(host: &JsValue, gun: &JsValue) -> JsValue {
 }
 
 /// Worn item id to its mesh in the Persona models; items without a mesh of their own wear a close one.
-const GEAR: [(&str, &str); 19] = [
+const GEAR: [(&str, &str); 13] = [
     ("head-k6", "Helmet"),
     ("head-sych", "Helmet"),
     ("head-marevo", "Helmet"),
     ("head-cap", "Cap"),
     ("head-sfera", "Sfera"),
     ("head-filin", "Sfera"),
-    ("body-light", "Vest"),
     ("body-plita2", "Vest"),
     ("body-plita4", "Plita4"),
-    ("body-bastion", "Plita4"),
     ("suit-field", "Suit"),
-    ("suit-leshy", "Suit"),
     ("suit-solonchak", "Solonchak"),
     ("suit-ten", "Ten"),
     ("suit-ryvok", "Ryvok"),
     ("boots-bertsy", "Boots"),
-    ("boots-sprint", "Boots"),
-    ("boots-hodok", "Boots"),
-    ("boots-saper", "Boots"),
 ];
 /// Each slot's meshes; the first is worn for `true` and when the model lacks the item's own.
 const SLOTS: [(&str, &[&str]); 4] = [
@@ -602,6 +596,20 @@ pub fn dress(host: JsValue, model: JsValue, wear: JsValue) {
         .iter()
         .filter_map(|(slot, meshes)| worn(&model, &wear, slot, meshes))
         .collect::<Vec<_>>();
+    // the kit's colours (by item id) for the materials actually worn
+    let picked = get(&wear, "colors");
+    let colors = object(&[]);
+    for (slot, meshes) in SLOTS {
+        let item = get(&wear, slot);
+        if let (Some(id), Some(mesh)) = (item.as_string(), worn(&model, &wear, slot, meshes)) {
+            let color = get(&picked, &id);
+            if present(&color) {
+                set(&colors, &format!("M_{mesh}"), &color);
+            }
+        }
+    }
+    let data = get(&model, "userData");
+    set(&data, "cdColors", &colors);
     let head = SLOTS[0].1;
     let hat = on.iter().find(|m| head.contains(&m.as_str())).cloned();
     for node in nodes(&model) {
@@ -611,7 +619,10 @@ pub fn dress(host: JsValue, model: JsValue, wear: JsValue) {
         let name = string(&get(&node, "name"));
         if SLOTS.iter().any(|(_, meshes)| meshes.contains(&name.as_str())) {
             set(&node, "visible", &on.contains(&name).into());
-            continue;
+            // a suit cuts where it pokes through a hard vest, like the body under its clothes
+            if !on.contains(&name) {
+                continue;
+            }
         }
         // Hair squeezed under a hat is `<hair>_<hat>`; the free hair shows when no variant fits.
         if let Some(under) = head.iter().find(|m| name.ends_with(&format!("_{m}"))) {
@@ -688,6 +699,10 @@ pub fn dress(host: JsValue, model: JsValue, wear: JsValue) {
                 &[Uint32Array::from(kept.as_slice()).into(), 1.into()],
             )],
         );
+    }
+    let look = get(&data, "cdLook");
+    if present(&look) {
+        super::look::apply(model, look);
     }
 }
 

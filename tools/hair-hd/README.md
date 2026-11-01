@@ -16,6 +16,7 @@
 - `pixie2.py` (01 пикси), `bob3.py` (02 боб), `braid.py` (03 коса сбоку у левого уха), `shag.py` (04 игровая «Длинные», черновик).
 - `render_fem.py`: рендер текущей игровой причёски Арта из `project-files/crowned-dogs/3d/persona-female/fem.blend` (только чтение).
 - `cmp.py`: лист «игровая сверху | новая снизу». `saveonly.py`: сохранить без рендера.
+- `game_cards.py`, `pack.py`, `finish.py`: игровые версии (ниже).
 
 Запуск (пример, превью):
 
@@ -34,6 +35,23 @@
 - Игровая «Длинные» (`shag.py`): черновик, Арт попросил отложить. Сейчас форма — гладкий «шлем»;
   нужно: рваные пряди по всей голове, конический затылок без ступеньки, острые кончики, торчащие волоски,
   тонкая рваная чёлка. Сравнение: `previews/shag-wip.jpg` (сверху игра, снизу новая).
-- Потом, после одобрения Арта: LOD/игровые карты, пакет hair-female.glb (как бороды), показ в игре.
+- Пикси, боб и коса в игре с 2026-11-01 (см. ниже). Игровая «Длинные» осталась старой.
+
+## Игровые версии (`apps/web/models/hair-female.glb`)
+
+Каждая причёска: пряди-полоски `Hair_<id>_cards` (коса ещё `Hair_braid_plait` и резинка `Hair_braid_tie`)
+и тёмная подложка `Hair_<id>_cap`. Пакет висит на кости `head`, как бороды; показ, цвет, скрытие от первого
+лица и под закрытым шлемом: `crates/game-wasm/src/browser/look.rs`, список причёсок: `crates/game-client/src/look.rs`.
+Одна причёска на все 4 лица: где череп f2–f4 выходит из подложки, подложка и пряди отодвигаются (до 11 мм).
+
+```bash
+B="/c/Program Files/Blender Foundation/Blender 5.2/blender.exe"
+for s in pixie bob braid; do "$B" -b 3d/hair-hd/$s.blend --python tools/hair-hd/game_cards.py -- $s <tmp>/game_$s.blend x; done
+"$B" -b --factory-startup --python tools/hair-hd/pack.py -- <tmp> <полный путь>/tools/hair-hd/hair-strands.png
+python -I tools/hair-hd/finish.py output/hair-hd/raw/hair-female.glb
+npx @gltf-transform/cli@4.5.1 meshopt output/hair-hd/raw/hair-female.glb apps/web/models/hair-female.glb --quantize-position 16 --quantize-normal 12 --quantize-texcoord 14
+```
+
+`hair-strands.png`: текстура прядей старых женских волос (та же, что в persona-female.glb).
 
 `previews/`: уменьшенные листы для быстрого просмотра.

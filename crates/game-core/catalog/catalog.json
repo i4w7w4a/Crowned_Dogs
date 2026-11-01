@@ -1544,20 +1544,6 @@
       }
     },
     {
-      "id": "body-light",
-      "kind": "body",
-      "name": "Разгрузка «Лёгкая»",
-      "tier": 1,
-      "note": "Тонкая плита и много подсумков.",
-      "effects": {
-        "armor": {
-          "body": 10
-        },
-        "grenades": 1,
-        "dodge": 0.02
-      }
-    },
-    {
       "id": "body-plita2",
       "kind": "body",
       "name": "Бронежилет «Плита-2»",
@@ -1585,21 +1571,6 @@
       }
     },
     {
-      "id": "body-bastion",
-      "kind": "body",
-      "name": "Бронежилет «Бастион»",
-      "tier": 3,
-      "note": "Тяжёлая штурмовая броня. В ней тяжело бегать.",
-      "effects": {
-        "armor": {
-          "body": 32,
-          "groin": 15
-        },
-        "dodge": -0.03,
-        "dashEvade": -0.03
-      }
-    },
-    {
       "id": "suit-field",
       "kind": "suit",
       "name": "Полевой костюм",
@@ -1615,19 +1586,6 @@
       "note": "Светлая ткань с охлаждением: щит не перегревается днём.",
       "effects": {
         "heatProof": true
-      }
-    },
-    {
-      "id": "suit-leshy",
-      "kind": "suit",
-      "name": "Маскхалат «Леший»",
-      "tier": 2,
-      "note": "Издали теряешься на фоне руин. В рывке цепляется.",
-      "effects": {
-        "camo": {
-          "far": 0.06
-        },
-        "dashEvade": -0.03
       }
     },
     {
@@ -1670,90 +1628,12 @@
       }
     },
     {
-      "id": "boots-sprint",
-      "kind": "boots",
-      "name": "Кроссовки «Спринт»",
-      "tier": 1,
-      "note": "Лёгкие, без защиты: быстрее уходишь из-под выстрела.",
-      "effects": {
-        "dodge": 0.02,
-        "dashEvade": 0.05
-      }
-    },
-    {
-      "id": "boots-hodok",
-      "kind": "boots",
-      "name": "Ботинки «Ходок»",
-      "tier": 2,
-      "note": "Защита голени и цепкая подошва для рывка.",
-      "effects": {
-        "armor": {
-          "legs": 10
-        },
-        "dashEvade": 0.05
-      }
-    },
-    {
-      "id": "boots-saper",
-      "kind": "boots",
-      "name": "Сапоги «Сапёр»",
-      "tier": 3,
-      "note": "Бронированные сапоги. Тяжёлые.",
-      "effects": {
-        "armor": {
-          "legs": 20
-        },
-        "dodge": -0.01
-      }
-    },
-    {
       "id": "knife-std",
       "kind": "knife",
       "name": "Штатный нож",
       "tier": 1,
       "note": "Обычный армейский нож.",
       "effects": {}
-    },
-    {
-      "id": "knife-shtyk",
-      "kind": "knife",
-      "name": "Штык-нож",
-      "tier": 1,
-      "note": "Узкий клинок проходит между пластинами.",
-      "effects": {
-        "pen": 8
-      }
-    },
-    {
-      "id": "knife-zhalo",
-      "kind": "knife",
-      "name": "Нож «Жало»",
-      "tier": 2,
-      "note": "Тяжёлый клинок: урон выше.",
-      "effects": {
-        "power": 5
-      }
-    },
-    {
-      "id": "knife-kogot",
-      "kind": "knife",
-      "name": "Керамбит «Коготь»",
-      "tier": 2,
-      "note": "Изогнутый клинок: чаще попадает в уязвимое место.",
-      "effects": {
-        "crit": 0.12
-      }
-    },
-    {
-      "id": "knife-iskra",
-      "kind": "knife",
-      "name": "Термонож «Искра»",
-      "tier": 3,
-      "note": "Раскалённое лезвие плохо держит щит.",
-      "effects": {
-        "guard": 0.1,
-        "power": 2
-      }
     },
     {
       "id": "grenade-rg1",
@@ -1768,51 +1648,6 @@
         "armorPen": 0.24,
         "minDistance": 2,
         "maxDistance": 8
-      }
-    },
-    {
-      "id": "grenade-grad",
-      "kind": "grenade",
-      "name": "Граната «Град»",
-      "tier": 2,
-      "note": "Тяжёлая осколочная: урон выше, но летит только на 3–7 шагов.",
-      "effects": {},
-      "grenade": {
-        "type": "frag",
-        "base": 42,
-        "armorPen": 0.3,
-        "minDistance": 3,
-        "maxDistance": 7
-      }
-    },
-    {
-      "id": "grenade-emp",
-      "kind": "grenade",
-      "name": "ЭМИ-граната «Затмение»",
-      "tier": 2,
-      "note": "Урон слабее осколочной, но щит врага выключен на следующий ход.",
-      "effects": {},
-      "grenade": {
-        "type": "emp",
-        "base": 22,
-        "armorPen": 0.24,
-        "minDistance": 2,
-        "maxDistance": 8
-      }
-    },
-    {
-      "id": "grenade-smoke",
-      "kind": "grenade",
-      "name": "Дымовая «Завеса»",
-      "tier": 1,
-      "note": "Дым под ноги: в этот и следующий ход по тебе трудно попасть. Можно подойти или уйти.",
-      "effects": {},
-      "grenade": {
-        "type": "smoke",
-        "base": 0,
-        "armorPen": 0,
-        "minDistance": 1,
-        "maxDistance": 99
       }
     }
   ],

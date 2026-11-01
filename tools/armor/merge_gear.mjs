@@ -1,6 +1,6 @@
 // Joins armour batch 2 (dress_gear.py's export) into a game Persona GLB.
 //
-// usage: node merge_gear.mjs GAME.glb GEAR.glb OUT.glb [SUIT_RECOLOURS_DIR]
+// usage: node merge_gear.mjs GAME.glb GEAR.glb OUT.glb [SUIT_RECOLOURS_DIR] [ONLY=Name,Name]
 //
 // - Each piece of GEAR.glb joins GAME bound to GAME's own joints (matched by name), keeping its own inverse bind
 //   matrices; a GAME mesh of the same name (the old full-length Suit) goes. Both files must share the rest pose.
@@ -9,6 +9,8 @@
 //   a copy of its material wearing that colour map (Solonchak, Ten).
 // - Hair under a hat (FemHair*_Cap, _Sfera) gets the offset GAME's free hair has against GEAR's (the hair was
 //   moved in the game model after the fitting).
+// - ONLY=Plita4: only those pieces replace the game's; every other GEAR piece just lends its `_name` attributes to
+//   the game mesh of its name (and the Suit's to its recolours), so later fixes in the game model stay.
 // Then meshopt as the game models have it.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,7 +19,9 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { mergeDocuments, meshopt, prune, unpartition } from '@gltf-transform/functions';
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer';
 
-const [gamePath, gearPath, outPath, recolours] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const only = args.find((a) => a.startsWith('ONLY='))?.slice(5).split(',');
+const [gamePath, gearPath, outPath, recolours] = args.filter((a) => !a.startsWith('ONLY='));
 await MeshoptDecoder.ready;
 await MeshoptEncoder.ready;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
@@ -113,6 +117,21 @@ for (const node of theirs) {
   const name = node.getName();
   if (BODIES.includes(name)) { theirBody = node; continue; }
   if (gearHair.has(name)) { const m = node.getMesh(); node.dispose(); m.dispose(); continue; } // only the hair offset's reference
+  if (only && !only.includes(name)) {
+    const targets = [name, ...(name === 'Suit' ? ['Solonchak', 'Ten'] : [])].map(named).filter((n) => n && n !== node);
+    const tp = node.getMesh().listPrimitives()[0];
+    for (const target of targets) {
+      const near = nearest(bindPositions(node), bindPositions(target));
+      for (const semantic of tp.listSemantics().filter((k) => k.startsWith('_'))) {
+        const src = tp.getAttribute(semantic), e = [];
+        const values = Float32Array.from(near.index, (i) => src.getElement(i, e)[0]);
+        for (const gp of target.getMesh().listPrimitives())
+          gp.setAttribute(semantic, doc.createAccessor(semantic).setType('SCALAR').setArray(values).setBuffer(root.listBuffers()[0]));
+        console.log(`LENT ${semantic} to ${target.getName()}: ${values.filter((v) => v >= 0.5).length} of ${values.length}, farthest ${(near.far * 1000).toFixed(1)} mm`);
+      }
+    }
+    const m = node.getMesh(); node.dispose(); m.dispose(); continue;
+  }
   for (const p of node.getMesh().listPrimitives()) {
     const m = own.get(p.getMaterial()?.getName());
     if (m) p.setMaterial(m);
@@ -169,6 +188,8 @@ if (recolours) {
   const suit = named('Suit');
   for (const file of fs.readdirSync(recolours).filter((f) => /^M_\w+\.color\.1024\.webp$/.test(f))) {
     const name = file.split('.')[0].slice(2);
+    const old = named(name);  // a game model merged before already wears this recolour
+    if (old) { const m = old.getMesh(); old.dispose(); m.dispose(); }
     const mat = suit.getMesh().listPrimitives()[0].getMaterial().clone().setName(`M_${name}`);
     const tex = doc.createTexture(`M_${name}.color`).setImage(fs.readFileSync(path.join(recolours, file))).setMimeType('image/webp');
     mat.setBaseColorTexture(tex);
