@@ -129,7 +129,8 @@ pub fn step_markup_with_beards(look: &JsValue, step: usize, beards_ready: bool) 
             } else {
                 segment("Причёска", "hair", &hairs, &pick("hair"))
             };
-            if boolean(&own, "hairColor") {
+            // the male scan's buzz cut is baked into the head and keeps its own colour
+            if boolean(&own, "hairColor") && pick("hair") != "buzz" {
                 out.push_str(&swatches(
                     "Цвет волос",
                     "hairColor",

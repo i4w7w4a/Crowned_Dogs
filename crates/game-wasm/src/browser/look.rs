@@ -208,15 +208,15 @@ pub fn first_person(model: JsValue, on: bool, look: JsValue) {
     }
 }
 
-/// A female hairstyle from the hair pack (`Hair_<style>_*` under the head bone): its prefix,
-/// whether it shows now, and whether the pack has it. Without it the long hair stands in.
+/// A hairstyle from the Persona's hair pack (`Hair_<style>_*` under the head bone): its prefix,
+/// whether it shows now, and whether the pack has it. Without it the long hair (female) or the
+/// scan's buzz cut (male) stands in.
 fn hair_selection(model: &JsValue, paint: &JsValue) -> (String, bool, bool) {
     let style = string(&get(paint, "hair"));
     let prefix = format!("Hair_{style}_");
-    let packed = super::beards::HAIR_STYLES.contains(&style.as_str())
+    let packed = super::beards::hair_styles(&string(&get(paint, "sex"))).contains(&style.as_str())
         && present(&call(model, "getObjectByName", &[format!("{prefix}cards").into()]));
     let visible = packed
-        && string(&get(paint, "sex")) == "female"
         && !boolean(&get(&get(model, "userData"), "cdBeardFirstPerson"))
         && !closed_helmet(model);
     (prefix, visible, packed)

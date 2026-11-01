@@ -1,6 +1,6 @@
 """Game version of one HD hairstyle: hair cards and a scalp cap from the strands.
 
-usage: blender -b 3d/hair-hd/<style>.blend --python game_cards.py -- STYLE OUT.blend TEXTURE.png
+usage: blender -b 3d/hair-hd/<groom>.blend --python game_cards.py -- STYLE OUT.blend TEXTURE.png
 The HD groom has 60-75 thousand strands; a phone draws a few hundred textured strips instead.
 The strands are grouped by shape (root, middle, tip) into clumps; each clump becomes one strip
 that follows the clump's median strand, as wide as the clump, lying flat on the hair volume, plus
@@ -20,7 +20,12 @@ PLAN = {
     'bob': [('Hair_bob', 'cards', 520, 10, (0.0045, 0.02))],
     'braid': [('Hair_braid_scalp', 'cards', 440, 10, (0.0045, 0.02)),
               ('Hair_braid_plait', 'plait', 90, 18, (0.003, 0.012))],
+    # male: the HD grooms in male_short/slick/medium.blend
+    'crop': [('Hair_short', 'cards', 480, 4, (0.0045, 0.014))],
+    'slick': [('Hair_slick', 'cards', 420, 8, (0.006, 0.02))],
+    'medium': [('Hair_medium', 'cards', 520, 10, (0.0045, 0.018))],
 }[style]
+FACES = [f'Head_{"m" if style in ("crop", "slick", "medium") else "f"}{i}' for i in range(1, 5)]
 rng = np.random.default_rng(7)
 dg = bpy.context.evaluated_depsgraph_get()
 
@@ -87,7 +92,7 @@ def kmeans(X, k, iters=10):
     return assign(X.astype(np.float32))
 
 
-head = bpy.data.objects['Head_f1']
+head = bpy.data.objects[FACES[0]]
 hv, _ = world_mesh(head)
 zt = hv[:, 2].max(); top = hv[hv[:, 2] > zt - 0.06]
 C = np.array([top[:, 0].mean(), top[:, 1].mean(), zt - 0.095])
@@ -97,7 +102,9 @@ roots = []
 for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
     S = strands(bpy.data.objects[obj_name])
     R, L = resample(S, SEG)
-    keep = L > 0.004
+    # the crop's faded sides are a few millimetres of stubble: as strips they read as scattered dots, so
+    # only the top gets strips and the male head's own baked buzz shows the fade
+    keep = L > (0.014 if style == 'crop' else 0.004)
     R, L = R[keep], L[keep]
     roots.append(R[:, 0])
     feat = np.concatenate([R[:, 0], R[:, SEG // 3] * 0.8, R[:, 2 * SEG // 3] * 0.6, R[:, -1] * 0.4], 1)
@@ -123,12 +130,16 @@ for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
         off = grp - centre[None]
         wa = np.percentile(np.abs(np.einsum('skc,kc->sk', off, across)), 80, axis=0)
         wn = np.percentile(np.abs(np.einsum('skc,kc->sk', off, nrm)), 80, axis=0)
-        half = np.clip(smooth(wa, 2) * 1.3, wmin, wmax) * (1 - 0.35 * t ** 2)
+        half = np.clip(smooth(wa, 2) * 1.3, wmin, wmax) * (1 - (0.1 if style == 'slick' else 0.35) * t ** 2)
         # blunt strip roots stacked along the hairline read as dark steps: they start narrow
-        half = half * (0.3 + 0.7 * np.clip(t * SEG / 1.5, 0, 1) ** 0.7)
+        # (the slick lies flat and every strip root shows on the back of the head: narrow roots and a
+        # second layer there stacked into rows of scales)
+        if style != 'slick':
+            half = half * (0.3 + 0.7 * np.clip(t * SEG / 1.5, 0, 1) ** 0.7)
         thick = np.clip(smooth(wn, 2), 0, 0.01)
         n = unit(0.7 * nrm + 0.3 * out) if suffix != 'plait' else nrm
-        for layer in (0, 1):
+        vtip = 0.8 if style == 'slick' else 1.0   # the slick's strips end bluntly, short of the texture's tips
+        for layer in ((0,) if style == 'slick' else (0, 1)):
             k = 1.0 if layer == 0 else 0.65
             shift = 0.0 if layer == 0 else rng.uniform(-0.35, 0.35)
             lift = (0.0 if layer == 0 else 0.6) * thick + 0.0006 * layer
@@ -138,7 +149,7 @@ for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
                 c = centre[i] + nrm[i] * lift[i] + across[i] * shift * half[i]
                 for side in (-1, 1):
                     verts.append(tuple(c + across[i] * side * half[i] * k))
-                    uvs.append((u0 + (0.5 + 0.5 * side) * 0.5, t[i]))
+                    uvs.append((u0 + (0.5 + 0.5 * side) * 0.5, t[i] * vtip))
                     normals.append(tuple(n[i]))
             for i in range(SEG):
                 a = base + 2 * i
@@ -159,6 +170,29 @@ for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
 
 # the groom's dark cap, and the braid's tie
 cv, cf = world_mesh(bpy.data.objects['Scalp_cap'])
+if style == 'crop':
+    # the faded sides: the whole HD cap, a hair above it, textured with hair-fade.png (fade_texture.py):
+    # u runs round the head and tiles every 4 cm, v climbs from sparse stubble at the hairline to a
+    # solid pile under the strips, by elevation like the HD fade
+    Ch = np.array([0.003, -0.008, 1.700])   # hairgen's male cranium centre: elevations match the groom
+    d = cv - Ch
+    az = np.degrees(np.arctan2(d[:, 0], -d[:, 1]))
+    el = np.degrees(np.arctan2(d[:, 2], np.hypot(d[:, 0], d[:, 1])))
+    fu = (az + 180) / 360 * 14
+    fv = np.clip((el + 30) / 70, 0.02, 0.98)   # off the edges: the texture repeats, the far edge would bleed in
+    fp = cv + unit(d) * 0.0004
+    me = bpy.data.meshes.new('Hair_crop_fade'); me.from_pydata([tuple(v) for v in fp], [], cf); me.shade_smooth()
+    uv = me.uv_layers.new(name='UVMap')
+    for poly in me.polygons:
+        us = [fu[me.loops[li].vertex_index] for li in poly.loop_indices]
+        wrap = max(us) - min(us) > 7   # a face across the nape seam: keep its u continuous
+        for li in poly.loop_indices:
+            vi = me.loops[li].vertex_index
+            uv.data[li].uv = (fu[vi] + (14 if wrap and fu[vi] < 7 else 0), fv[vi])
+    me.normals_split_custom_set_from_vertices([tuple(n) for n in unit(d)])
+    me.update()
+    out_objs.append(bpy.data.objects.new('Hair_crop_fade', me))
+    print('FADE', len(fp), 'verts', sum(len(f) - 2 for f in cf), 'tris')
 # the HD cap reaches the thin hairline, where fine strands hid it; strips there are sparse and its
 # edge showed as dark teeth at the temples. It keeps the faces where roots are at least half as
 # dense as on the crown (roots within 8 mm of every corner).
@@ -180,12 +214,12 @@ if 'Braid_tie' in bpy.data.objects:
     me = bpy.data.meshes.new(f'Hair_{style}_tie'); me.from_pydata([tuple(v) for v in tv], [], tf); me.shade_smooth(); me.update()
     out_objs.append(bpy.data.objects.new(f'Hair_{style}_tie', me))
 
-# faces f1-f4 against the cap: one hairstyle serves all four heads, so wherever a skull stands
+# faces 1-4 against the cap: one hairstyle serves all four heads, so wherever a skull stands
 # out of the cap (rays from outside in, towards the skull centre), the cap and the strips over it
 # move out by that much plus a millimetre, fading out over 3 cm away from the cap.
 from mathutils.kdtree import KDTree
 heads = []
-for face in ('Head_f1', 'Head_f2', 'Head_f3', 'Head_f4'):
+for face in FACES:
     V, F = world_mesh(bpy.data.objects[face])
     heads.append((face, BVHTree.FromPolygons([tuple(v) for v in V], F)))
 

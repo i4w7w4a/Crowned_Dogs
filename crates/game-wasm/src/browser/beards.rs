@@ -1,16 +1,30 @@
-//! Optional male beard geometry, shared by authored preview and animated arena, and the female
-//! hairstyles pack: rigid children of the head bone, hidden until a look picks one.
+//! Optional male beard geometry, shared by authored preview and animated arena, and the hairstyle
+//! packs: rigid children of the head bone, hidden until a look picks one.
 use super::bridge::*;
 use wasm_bindgen::prelude::*;
 
 /// Female hairstyles in models/hair-female.glb, each a set of `Hair_<style>_*` meshes.
 pub(super) const HAIR_STYLES: [&str; 3] = ["pixie", "bob", "braid"];
+/// Male hairstyles in models/hair-male.glb, the same way.
+pub(super) const MALE_HAIR_STYLES: [&str; 3] = ["crop", "slick", "medium"];
+
+/// The pack styles of one Persona.
+pub(super) fn hair_styles(sex: &str) -> &'static [&'static str] {
+    if sex == "male" { &MALE_HAIR_STYLES } else { &HAIR_STYLES }
+}
 
 pub(super) async fn install(host: &JsValue, scene: &JsValue, source: &str) {
     if let Some(base) = source.strip_suffix("models/persona-female.json") {
-        install_hair(host, scene, base).await;
+        install_hair(host, scene, base, "female").await;
         return;
     }
+    install_beards(host, scene, source).await;
+    if let Some(base) = source.strip_suffix("models/persona-male.json") {
+        install_hair(host, scene, base, "male").await;
+    }
+}
+
+async fn install_beards(host: &JsValue, scene: &JsValue, source: &str) {
     let (base, asset, animated) = if let Some(base) = source.strip_suffix("models/persona-male.json") {
         (base, "beards-male", true)
     } else if let Some(base) = source.strip_suffix("preview/persona-authored.json") {
@@ -43,10 +57,11 @@ pub(super) async fn install(host: &JsValue, scene: &JsValue, source: &str) {
     set(&get(scene, "userData"), "beardsReady", &true.into());
 }
 
-/// Without the pack, or with a style missing, a look with a new hairstyle shows the long hair.
-async fn install_hair(host: &JsValue, scene: &JsValue, base: &str) {
+/// Without the pack, or with a style missing, a look with a new hairstyle shows the long hair
+/// (female) or the scan's own buzz cut (male).
+async fn install_hair(host: &JsValue, scene: &JsValue, base: &str, sex: &str) {
     let loaded = super::scene_assets::await_value(
-        super::scene_assets::load_model(host.clone(), format!("{base}models/hair-female.json")).into(),
+        super::scene_assets::load_model(host.clone(), format!("{base}models/hair-{sex}.json")).into(),
     ).await;
     let Ok(gltf) = loaded else { return; };
     let pack = get(&gltf, "scene");
@@ -54,7 +69,7 @@ async fn install_hair(host: &JsValue, scene: &JsValue, base: &str) {
     let names: Vec<String> = super::scene_assets::nodes(&pack).iter()
         .filter(|node| boolean(&get(node, "isMesh")))
         .map(|node| string(&get(node, "name"))).collect();
-    let complete = HAIR_STYLES.iter().all(|style| names.iter().any(|name| *name == format!("Hair_{style}_cards")));
+    let complete = hair_styles(sex).iter().all(|style| names.iter().any(|name| *name == format!("Hair_{style}_cards")));
     if !present(&anchor) || !complete {
         super::view_utils::dispose(&pack, &[], true);
         return;
