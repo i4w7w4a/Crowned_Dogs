@@ -283,6 +283,7 @@ pub fn compute(kind: &str, v: &[f64]) -> Result<Vec<f64>, String> {
             let camera = matrix(v, 19);
             // The elbow bends between where a straight wrist puts it and straight down the screen:
             // the first alone swings the forearms across the view, the second alone kinks the wrists.
+            // `v[36]` is the arm's side (+1 right, -1 left) times how far out to that side the elbow goes.
             let shoulder = vec(v, 41);
             let axis = normalized(target - shoulder);
             let middle = (shoulder + target) * 0.5;
