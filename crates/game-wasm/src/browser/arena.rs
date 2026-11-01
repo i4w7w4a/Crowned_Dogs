@@ -685,11 +685,20 @@ impl RustArena {
     /// Repaints the player's figure after the look was edited between battles.
     #[wasm_bindgen(js_name=applyLook)]
     pub fn apply_look(&self) {
-        let state = self.state.borrow();
-        if let Some(me) = state.me.as_ref() {
-            super::look::first_person(me.model.clone(), state.fp, super::platform::current_look());
-            super::look::apply(me.model.clone(), super::platform::current_look());
+        let mut state = self.state.borrow_mut();
+        let s = &mut *state;
+        let Some(model) = s.me.as_ref().map(|me| me.model.clone()) else {
+            return;
+        };
+        // The first-person cut hides the head by visibility, and the repaint shows the face again:
+        // lift the cut, repaint, then cut the new look (else the camera sits inside the head).
+        if get(&s.arms_only, "dispose").is_function() {
+            let _ = try_call(&s.arms_only, "dispose", &[]);
         }
+        super::look::first_person(model.clone(), s.fp, super::platform::current_look());
+        super::look::apply(model.clone(), super::platform::current_look());
+        s.arms_only = sdk(&s.host, "armsOnly", &[model]);
+        invoke(&s.arms_only, &[s.fp.into()]);
     }
     /// Compiles every shader of the scene ahead of the first frame.
     pub fn warm(&self) -> Promise {

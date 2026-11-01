@@ -25,6 +25,8 @@ pub struct RustViewmodel {
     placed: bool,
     trigger: JsValue,
     pistol_right: JsValue,
+    /// Shoulder stocks folded away while seen from the eyes, with the scale to give back.
+    folded: Vec<(JsValue, JsValue)>,
 }
 #[wasm_bindgen]
 impl RustViewmodel {
@@ -77,6 +79,7 @@ impl RustViewmodel {
             placed: false,
             trigger: json(&trigger),
             pistol_right: json(&pistol_right),
+            folded: Vec::new(),
         }
     }
     pub fn shot(&mut self) {
@@ -130,6 +133,7 @@ impl RustViewmodel {
         call(&offset, "applyQuaternion", &[get(&mount, "quaternion")]);
         copy(&get(&mount, "position"), &self.base);
         call(&get(&mount, "position"), "add", &[offset]);
+        self.fold_stocks(on && stance == "pistol" && self.weight > 0.5);
         if self.arms.is_none() || self.weight < 0.01 {
             self.placed = false;
             return;
@@ -200,10 +204,33 @@ impl RustViewmodel {
     pub fn off(&mut self) {
         self.weight = 0.;
         self.placed = false;
+        self.fold_stocks(false);
         copy(&get(&get(&self.hand, "mount"), "position"), &self.base);
     }
 }
 impl RustViewmodel {
+    /// A pistol held out at arm's length never reaches the shoulder, so a shoulder stock on it
+    /// (the holster-stock) hung through the hands and forearms; grip panels stay.
+    fn fold_stocks(&mut self, fold: bool) {
+        if !fold {
+            for (node, scale) in self.folded.drain(..) {
+                copy(&get(&node, "scale"), &scale);
+            }
+            return;
+        }
+        for node in super::view_utils::nodes(&get(&self.hand, "mount"), true) {
+            let data = get(&node, "userData");
+            if string(&get(&data, "slot")) != "stock"
+                || get(&data, "factory").as_bool() != Some(false)
+                || self.folded.iter().any(|(n, _)| *n == node)
+                || !shoulder_stock(&node)
+            {
+                continue;
+            }
+            self.folded.push((node.clone(), clone_value(&get(&node, "scale"))));
+            call(&get(&node, "scale"), "setScalar", &[1e-4.into()]);
+        }
+    }
     fn place(&self, side: usize, matrix: &[f64], camera: &JsValue, (bend, spread): (f64, f64)) {
         let [upper, lower, hand] = &self.arms.as_ref().unwrap()[side];
         let mut input = matrix.to_vec();
@@ -232,4 +259,26 @@ impl RustViewmodel {
         upload(&rotation, &math("worldBlend", &input));
         rig_set_world_quat(&self.three, hand, &rotation);
     }
+}
+/// Longer than 20 cm: a stock to shoulder, not panels on the grip (checked once per node).
+fn shoulder_stock(node: &JsValue) -> bool {
+    let data = get(node, "userData");
+    let known = get(&data, "shoulderStock");
+    if let Some(known) = known.as_bool() {
+        return known;
+    }
+    let mut radius: f64 = 0.;
+    for mesh in super::view_utils::nodes(node, false) {
+        let geometry = get(&mesh, "geometry");
+        if !present(&geometry) {
+            continue;
+        }
+        call(&geometry, "computeBoundingSphere", &[]);
+        radius = radius.max(num(&get(&get(&geometry, "boundingSphere"), "radius")));
+    }
+    let scale = get(&get(node, "matrixWorld"), "elements");
+    let scale = num(&call(&scale, "at", &[0.into()])).hypot(num(&call(&scale, "at", &[1.into()]))).hypot(num(&call(&scale, "at", &[2.into()])));
+    let long = radius * scale > 0.1;
+    set(&data, "shoulderStock", &long.into());
+    long
 }
