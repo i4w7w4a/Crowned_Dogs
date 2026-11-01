@@ -239,4 +239,18 @@ function flash(useRust) {
   } finally { Math.random = random; }
 }
 equal(flash(true), flash(false), "muzzle-flash lifetime");
+// A suppressor hides light, not the actual shot: recoil, rounds and tracer live on.
+{
+  const effect = new RustFlash(THREE, new THREE.Texture(), 0);
+  let kicks = 0;
+  const hand = { muzzle: out => { out.set(0,1.4,-2); return true; }, kick:()=>{kicks++;}, settle(){} };
+  try {
+    effect.fire(hand,.3,2,new THREE.Vector3(0,1.4,-7),true);
+    assert.equal(effect.update(.001),0); assert.equal(effect.sprite.visible,false); assert.equal(effect.fired,true); assert.equal(kicks,1);
+    assert.ok(effect.parts[2].visible,"the suppressed projectile still travels");
+    effect.update(.101); assert.equal(effect.sprite.visible,false); assert.equal(kicks,2);
+    effect.stop(); effect.fire(hand,.3,1,null,false);
+    assert.ok(effect.update(.001)>0); assert.equal(effect.sprite.visible,true);
+  } finally { effect.dispose(); effect.free(); }
+}
 console.log("Motion orchestration: 9 Three.js parity, grip and lifecycle suites passed (silent).");

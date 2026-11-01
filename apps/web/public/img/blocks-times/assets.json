@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "source": "Built-in image_gen: lighting-weather edits of approved blocks-day full/clean plates",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/blocks-times/morning/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3088570,
+      "sha256": "fc3aa5b0da79a6edbac15b5892cca7cd34aff31ec190620ec2ed6ed15055c744"
+    },
+    {
+      "path": "apps/web/public/img/blocks-times/morning/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 573034,
+      "sha256": "2e462bcd68eff1fb48f04c5b28376b846cf6ad49b758b58d95510bfbf66ab1ba"
+    },
+    {
+      "path": "apps/web/public/img/blocks-times/morning/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3253965,
+      "sha256": "17a149429bbec626fa90787b69ab1cf025dce5d19252435eb58bf58c91429ccd"
+    },
+    {
+      "path": "apps/web/public/img/blocks-times/morning/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 642756,
+      "sha256": "cbf1d815f43968ee70962745d273407ad71a0f4193cb67dbeba4e6308447123c"
+    },
+    {
+      "path": "apps/web/public/img/blocks-times/evening/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3302621,
+      "sha256": "c4ea0da92d2d37c2559e2958500bbb3d32dfc420003019da353e94167af3776e"
+    },
+    {
+      "path": "apps/web/public/img/blocks-times/evening/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 675958,
+      "sha256": "c2cb71f7eab28d4a327738281fea610d371ab181ca7ca1acce6c6585433877a0"
+    },
+    {
+      "path": "apps/web/public/img/blocks-times/evening/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3359564,
+      "sha256": "1c96b06389a04840eb89e91022a51ddc591acf320a8ec796c42466698465af6a"
+    },
+    {
+      "path": "apps/web/public/img/blocks-times/evening/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 684766,
+      "sha256": "593543fa2f310f19e8bd57178bc28785fb08a4b368e17273a150a81a8f56f4f3"
+    },
+    {
+      "path": "apps/web/public/img/blocks-times/night/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2253933,
+      "sha256": "142f3eb563d4175f38d522cb3f7c904448b98fea83b442ad3092375ff97f83ba"
+    },
+    {
+      "path": "apps/web/public/img/blocks-times/night/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 300010,
+      "sha256": "29007fc62dee252ba910e5ff4a71abae00552fe98f1f182bfb61f489f4d18d07"
+    },
+    {
+      "path": "apps/web/public/img/blocks-times/night/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2306220,
+      "sha256": "7217d6334f5989e7637ef41ae7cbf9564cd0cd58214ca6e9900b2f242e879b51"
+    },
+    {
+      "path": "apps/web/public/img/blocks-times/night/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 327038,
+      "sha256": "fc10adbe82d6a010a3263ae2569687afa54e3133d4ffc6140f37e1c07d05723e"
+    }
+  ]
+}

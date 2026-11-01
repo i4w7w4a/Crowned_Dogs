@@ -1,6 +1,6 @@
 // Read-only geometry/export checks. Writes only its JSON evidence report.
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { Matrix4, Quaternion, Vector3, Box3 } from 'three';
@@ -76,7 +76,8 @@ function open(name, file = join(models, `${name}.glb`)) {
   return { name, data, accessor, world, points, sha256: createHash('sha256').update(bytes).digest('hex') };
 }
 const game = open('persona-male'), male = open('beards-male'), authored = open('beards-authored');
-const skin = open('beards-skin');
+// The clean head companion is switched off in the game (Art, 2026-11-01); check it only when present.
+const skin = existsSync(join(models, 'beards-skin.glb')) ? open('beards-skin') : null;
 const authoredGame = open('persona-authored', join(repo, 'apps/web/public/preview/persona-authored.json'));
 const headIndex = game.data.nodes.findIndex(n => n.name === 'head');
 assert.ok(headIndex >= 0, 'current game head bone exists');
@@ -85,11 +86,12 @@ const scale = .9630493809698595;
 const fit = new Matrix4().makeScale(scale, scale, scale).setPosition(-.00429309, .17305149, .00425317);
 const box = points => new Box3().setFromPoints(points);
 const plainBox = b => ({ min: b.min.toArray(), max: b.max.toArray() });
-const report = { sources: Object.fromEntries([game, authoredGame, male, authored, skin].map(p => [p.name, p.sha256])), headRestMatrix: head.toArray(), assertions: [], repairs: [], fits: [] };
+const report = { sources: Object.fromEntries([game, authoredGame, male, authored, skin].filter(Boolean).map(p => [p.name, p.sha256])), headRestMatrix: head.toArray(), assertions: [], repairs: [], fits: [] };
 const expectedSkinNodes = ['CleanHead_m2', 'CleanHead_m4', 'CleanNormals_m2', 'CleanNormals_m4', 'CleanNormalsAuthored_m2', 'CleanNormalsAuthored_m4'];
+const repairedGame = new Map();
+if (skin) {
 assert.deepEqual(skin.data.nodes.filter(n => n.mesh !== undefined).map(n => n.name).sort(), [...expectedSkinNodes].sort());
 assert.equal(skin.data.skins?.length || 0, 0, 'skin companions are data only');
-const repairedGame = new Map();
 for (const source of [game, authoredGame]) for (const id of ['m2', 'm4']) {
   const name = `${source === game ? 'CleanNormals' : 'CleanNormalsAuthored'}_${id}`;
   const carrierIndex = skin.data.nodes.findIndex(n => n.name === name), carrier = skin.data.nodes[carrierIndex];
@@ -140,6 +142,7 @@ for (const source of [game, authoredGame]) for (const id of ['m2', 'm4']) {
   if (source === game) repairedGame.set(`Head_${id}`, repaired.map(p => new Vector3(...p)));
   report.repairs.push({ source: source.name, head: id, vertices: repaired.length, maxMatchErrorM, maxDeclaredDeltaM, maxAppliedDeltaM });
 }
+}
 for (const pack of [male, authored]) {
   assert.equal(pack.data.skins?.length || 0, 0, `${pack.name} must use the existing head transform`);
   assert.equal(pack.data.animations?.length || 0, 0);
@@ -180,7 +183,7 @@ for (let face = 1; face <= 4; face++) {
     report.fits.push({ face: `m${face}`, style, headBounds: plainBox(headBounds), beardBounds: plainBox(bounds), parts: paired });
   }
 }
-report.assertions = ['16 face/style fits with roots and cards in both packs', 'No independent skins, skeleton or animations', 'Finite accessors and node transforms', 'Cards MASK / roots BLEND / double-sided materials', 'Animated pack stays in repaired head bounds +45mm at rest', 'Authored export matches FIT × current-head-rest × animated export within 0.25mm', 'All four normal/position companions match actual animated and authored heads within 2µm (measured Blender drift <0.75µm)', 'Applied scan seam position repairs stay within 2mm and preserve source topology'];
+report.assertions = ['16 face/style fits with roots and cards in both packs', 'No independent skins, skeleton or animations', 'Finite accessors and node transforms', 'Cards MASK / roots BLEND / double-sided materials', 'Animated pack stays in repaired head bounds +45mm at rest', 'Authored export matches FIT × current-head-rest × animated export within 0.25mm', ...(skin ? ['All four normal/position companions match actual animated and authored heads within 2µm (measured Blender drift <0.75µm)', 'Applied scan seam position repairs stay within 2mm and preserve source topology'] : [])];
 mkdirSync(dirname(output), { recursive: true });
 writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
 console.log(`PASS: ${report.fits.length} fits, 2 packs; ${output}`);

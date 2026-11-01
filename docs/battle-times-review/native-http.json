@@ -1,0 +1,9 @@
+{
+  "server": "unchanged native Windows launcher 5197",
+  "phase": "initial package before standalone panic diagnostic hook",
+  "wasmSha256": "7020e26942d7285d7f7a351673c01397f33693ec721f939b0bb10d4f3226f8ed",
+  "visited": 507,
+  "wasmType": "application/wasm",
+  "failures": [],
+  "finalNativeRecheck": "port 5197 subsequently occupied by another process; left untouched"
+}

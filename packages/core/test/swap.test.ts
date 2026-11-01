@@ -67,8 +67,11 @@ test("the order draft has a swap button that toggles", () => {
 });
 
 test("the grenade toast names the range of the grenade the Persona carries", () => {
-  const far = sniperMatch(9);
-  assert.equal(grenadeRefusal(far, 0), "Граната летит на 3–7 шагов", "the veteran sniper carries a «Град»");
+  const far = createMatch({
+    seed: "swap", mapId: "saltHall", weather: "clear", time: "day", startDistance: 9,
+    fighters: [kitFighter("a", "Тень", { ...VETERAN_KITS.sniper, grenade: "grenade-grad" }), kitFighter("b", "Соль", starterLoadout("shotgun"))],
+  });
+  assert.equal(grenadeRefusal(far, 0), "Граната летит на 3–7 шагов", "this sniper carries a «Град»");
   assert.equal(grenadeRefusal(far, 1), "Граната летит на 2–8 шагов");
 });
 

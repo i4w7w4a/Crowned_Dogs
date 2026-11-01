@@ -48,6 +48,26 @@ function press(d: DuelService, who: string, duelId: string, cmds: Command[]) {
 
 const plainShot: Command[] = [{ type: "zone", zone: "body" }, { type: "guard", zone: "head" }, { type: "guard", zone: "body" }];
 
+test("server duels keep the authoritative time and weather through a turn for all four times", () => {
+  for (const time of ["morning", "day", "evening", "night"] as const) {
+    const clock = fakeClock();
+    const duels = new DuelService({
+      clock: clock.clock, onEvent: () => {}, seed: () => `conditions-${time}`,
+      setting: { mapId: "saltHall", weather: "fog", time },
+    });
+    try {
+      const duel = duels.startVsBot(ann);
+      assert.equal(duel.match.config.time, time);
+      assert.equal(duel.match.config.weather, "fog");
+      const after = press(duels, ann.id, duel.id, plainShot);
+      assert.equal(after.match.turn, 2);
+      assert.equal(after.match.config.time, time);
+      assert.equal(after.match.config.weather, "fog");
+    } finally { duels.close(); }
+    assert.equal(clock.pending(), 0);
+  }
+});
+
 test("event delivery can reenter the Rust service without losing live references or timers", () => {
   const clock = fakeClock();
   let sequence = 0;

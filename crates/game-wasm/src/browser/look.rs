@@ -12,6 +12,8 @@ thread_local! {
 /// Every face is a head mesh of its own; only the chosen one shows.
 const HEAD: &str = "M_Head_";
 const BODIES: [&str; 2] = ["M_Male_Body", "M_Fem_Body"];
+/// Every suit takes the chosen colour over its own fabric; the scan colour leaves each as made.
+const SUITS: [&str; 4] = ["M_Suit", "M_Solonchak", "M_Ten", "M_Ryvok"];
 const CAP: &str = "M_Fem_HairCap";
 
 /// Shader hook for a head material, if it has one.
@@ -252,7 +254,7 @@ pub fn apply(model: JsValue, look: JsValue) {
             tick(&node, &uniforms);
         } else if BODIES.contains(&name.as_str()) {
             tint(&material, skin);
-        } else if name == "M_Suit" {
+        } else if SUITS.contains(&name.as_str()) {
             tint(&material, rgb(&get(&paint, "suit")));
         } else if name == "M_Fem_HairCards" {
             tint(&material, rgb(&get(&paint, "hairCards")));

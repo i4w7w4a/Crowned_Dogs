@@ -190,6 +190,25 @@ impl RustBattle {
         .map(|v| flag(&v, "matches"))
         .unwrap_or(false);
         set(&state, "reduceMotion", &reduced.into());
+        let params = construct(
+            &get(&global(), "URLSearchParams"),
+            &[get(&get(&global(), "location"), "search")],
+        );
+        let selected = core(
+            "client.conditions.initial",
+            &[
+                get(&state, "frames"),
+                call(&params, "get", &["time".into()]),
+                call(&params, "get", &["frame".into()]),
+                store_get(&state, "cd-time"),
+                call(&params, "has", &["cal".into()]),
+                call(&params, "get", &["map".into()]),
+                store_get(&state, "cd-map"),
+            ],
+        );
+        if present(&selected) {
+            set(&state, "frame", &selected);
+        }
         set(&state, "duel", &new_duel(&state));
         let log = construct(
             &get(&bindings, "FightLog"),
@@ -335,7 +354,11 @@ async fn settle(arena: &JsValue, method: &str, ms: f64) {
     let timeout = Promise::new(&mut |resolve, _| {
         call(&global(), "setTimeout", &[resolve.into(), ms.into()]);
     });
-    let _ = JsFuture::from(Promise::race(&array(&[Promise::resolve(&p).into(), timeout.into()]))).await;
+    let _ = JsFuture::from(Promise::race(&array(&[
+        Promise::resolve(&p).into(),
+        timeout.into(),
+    ])))
+    .await;
 }
 fn abort_check(signal: &JsValue) -> Result<(), JsValue> {
     if present(signal) {
@@ -552,6 +575,7 @@ fn pressed(el: &JsValue, on: bool) {
     attr(el, "aria-pressed", if on { "true" } else { "false" });
 }
 fn render(s: &JsValue) {
+    arena(s, "setConditions", &[match_(s)]);
     let m = match_(s);
     let d = draft(s);
     let me = at(&get(&m, "fighters"), 0);
@@ -1077,6 +1101,17 @@ fn restart(s: &JsValue, keep_sheet: bool) {
     set(s, "duel", &new_duel(s));
     set(s, "busy", &false.into());
     let m = match_(s);
+    let canonical = core(
+        "client.conditions.frame",
+        &[
+            get(s, "frames"),
+            get(&m, "config"),
+            get(&get(s, "frame"), "id"),
+        ],
+    );
+    if present(&canonical) {
+        set_frame(s, &canonical);
+    }
     let fighters = get(&m, "fighters");
     set(
         s,
@@ -1130,6 +1165,21 @@ fn option(parent: &JsValue, content: &str, selected: bool, action: impl FnMut(Js
     attr(&b, "aria-pressed", if selected { "true" } else { "false" });
     listen(&b, "click", action);
     call(parent, "appendChild", &[b]);
+}
+fn choose_conditions(s: &JsValue, map: &str, time: &str) {
+    let config = object(&[
+        ("mapId", map.into()),
+        ("weather", get(&get(&match_(s), "config"), "weather")),
+        ("time", time.into()),
+    ]);
+    let frame = core("client.conditions.select", &[get(s, "frames"), config]);
+    if !present(&frame) {
+        return;
+    }
+    store_set(s, "cd-map", &word(&frame, "mapId"));
+    store_set(s, "cd-time", &word(&frame, "time"));
+    set_frame(s, &frame);
+    restart(s, false);
 }
 fn render_menu(s: &JsValue) {
     let bindings = get(s, "host");
@@ -1238,20 +1288,53 @@ fn render_menu(s: &JsValue) {
             }
         ),
     );
-    let frames = values(&get(s, "frames"));
-    let fs = segment("frameSeg", frames.len());
-    hide(&id("frameLabel"), true);
-    hide(&fs, true);
-    for frame in frames {
-        let current = frame == get(s, "frame");
+    let current_config = get(&match_(s), "config");
+    let current_map = word(&current_config, "mapId");
+    let time = word(&current_config, "time");
+    let maps = values(&core("client.conditions.maps", &[get(s, "frames")]));
+    let ms = segment("mapSeg", maps.len());
+    for choice in maps {
+        let wanted = word(&choice, "id");
+        let current = wanted == current_map;
         let state = s.clone();
-        option(&fs, &word(&frame, "name"), current, move |_| {
+        let time = time.clone();
+        option(&ms, &word(&choice, "name"), current, move |_| {
             if !current {
-                set_frame(&state, &frame);
-                restart(&state, false);
+                choose_conditions(&state, &wanted, &time);
             }
         });
     }
+    let choices = values(&core(
+        "client.conditions.choices",
+        &[get(s, "frames"), current_map.clone().into()],
+    ));
+    let fs = segment("frameSeg", choices.len());
+    hide(&id("frameLabel"), false);
+    hide(&fs, false);
+    for choice in choices {
+        let wanted = word(&choice, "id");
+        let current = wanted == time;
+        let state = s.clone();
+        let current_map = current_map.clone();
+        option(
+            &fs,
+            &format!(
+                "{}<span>{}</span>",
+                string(&host(s, "icon", &[get(&choice, "icon")])),
+                word(&choice, "name")
+            ),
+            current,
+            move |_| {
+                if !current {
+                    choose_conditions(&state, &current_map, &wanted);
+                }
+            },
+        );
+    }
+    text(
+        &id("conditionNote"),
+        &string(&core("client.conditions.description", &[match_(s)])),
+    );
     host(s, "liquidGlass", &[id("infoVeil")]);
 }
 fn volume_id(kind: &str) -> &'static str {
@@ -1342,6 +1425,7 @@ fn watch_speed(s: &JsValue) {
 fn set_frame(s: &JsValue, frame: &JsValue) {
     set(s, "frame", frame);
     set(&id("bg"), "src", &get(frame, "src"));
+    set(&id("bg"), "alt", &format!("Арена: {}", word(frame, "name")).into());
     arena(s, "setFrame", &[frame.clone()]);
     layout(s);
 }
@@ -1508,15 +1592,7 @@ fn prepare_arena(s: &JsValue) -> Promise {
             (get(&bindings, "myModel"), get(&bindings, "foeModel"))
         };
         let result = async {
-            let loading = try_call(
-                &a,
-                "load",
-                &[
-                    mine,
-                    theirs,
-                    get(&match_(s), "distance"),
-                ],
-            )?;
+            let loading = try_call(&a, "load", &[mine, theirs, get(&match_(s), "distance")])?;
             JsFuture::from(Promise::resolve(&loading)).await?;
             if !flag(&a, "ready") {
                 return Err(js_sys::Error::new("Арена ещё не готова").into());

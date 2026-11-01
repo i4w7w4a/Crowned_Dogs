@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import ts from "typescript";
 import * as Three from "three";
-import { RustArena, RustLens, RustTextureTiers, callRust, motionCompute } from "../packages/runtime/src/index.ts";
+import { RustArena, RustLens, RustTextureTiers, RustProjectedStage, callRust, motionCompute } from "../packages/runtime/src/index.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const shaders = await import(pathToFileURL(resolve(root, "crates/game-wasm/reference/browser/lens-shaders.ts")).href);
@@ -133,6 +133,44 @@ async function testTextureTiers() {
   await failed; assert.equal(tiers.current, 1024); assert.equal(material.map, albedo); assert.equal(material.map.anisotropy, 2);
 }
 
+async function testBattleOptics() {
+  const h = makeHost(), renderer = new h.THREE.WebGLRenderer();
+  const lens = new RustLens(h, renderer);
+  const camera = new Three.PerspectiveCamera(55, 9/16, .1, 80), scene = new Three.Scene();
+  const draw = () => {
+    lens.render(scene, camera, 1, { enemyDepth: 7 });
+    return h.passes.filter(p => p.shader.includes("vec3 RRTAndODTFit")).at(-1);
+  };
+  try {
+    lens.setSize(720, 1280, 720, 1280, { x:0,y:0,w:1,h:1 });
+    lens.setQuality(quality.medium); lens.setLook(look, 1.05);
+    const base = draw().shader;
+    lens.setBattleAtmosphere(true, false, .2, .1);
+    const heat = draw();
+    assert.ok(heat.shader.includes("float distant ="));
+    assert.deepEqual(heat.uniforms.cdHeatDepth, [.2,.1]);
+    assert.equal(typeof heat.uniforms.cdBattleTime, "number");
+    assert.ok(heat.shader.includes("texture(tFig, vUv)"), "heat never moves fighter samples");
+    lens.setQuality(quality.low); assert.equal(draw().shader, base, "low quality omits heat");
+    lens.setQuality(quality.medium); assert.ok(draw().shader.includes("float distant ="));
+    lens.setBattleAtmosphere(false, true, .2, .1);
+    lens.setWorldSun(new Three.Vector3(.3,.1,-1).normalize());
+    const glare = draw();
+    assert.ok(glare.shader.includes("float glare ="));
+    assert.ok(glare.uniforms.cdGlareSun[0] > .5);
+    assert.ok(!glare.shader.includes("float distant ="));
+    lens.setBattleAtmosphere(false, false, .2, .1);
+    lens.setNightVision(true);
+    const intensified = draw().shader;
+    assert.ok(intensified.includes("vec3 phosphor ="));
+    assert.ok(intensified.includes("toSRGB(max(lin, vec3(0.0)))"),"NVG must receive weak HDR figure and weapon signals before daylight black clipping");
+    assert.ok(!intensified.includes("aces(lin)"),"daylight ACES must not erase faint radiance before intensification");
+    lens.setNightVision(false); assert.equal(draw().shader, base);
+    const restored = draw().uniforms;
+    assert.ok(!("cdGlareSun" in restored)); assert.ok(!("cdHeatDepth" in restored));
+  } finally { lens.dispose(); lens.free(); }
+}
+
 function arenaHost() {
   const h = makeHost();
   const events = [];
@@ -240,10 +278,16 @@ async function exerciseArena(useRust) {
 // oracle. Keep the original fixture and parity assertions unchanged above.
 function projectedArenaHost(gate = Promise.resolve()) {
   const h = arenaHost(), stages = [], lenses = [];
+  const flashes = [], PaintedFlash = h.Flash;
+  class TimeFlash extends PaintedFlash {
+    constructor(...args) { super(...args); flashes.push(this); }
+    fire(...args) { this.suppressed = args[4] ?? false; super.fire(...args); }
+  }
   class ProjectedStage {
-    constructor() { this.ready = false; this.travel = 0; this.directionX = 0; this.moves = []; this.loads = []; this.disposals = 0; stages.push(this); }
-    load(url) {
+    constructor() { this.ready = false; this.travel = 0; this.directionX = 0; this.moves = []; this.loads = []; this.variants = []; this.disposals = 0; stages.push(this); }
+    load(url, variant) {
       this.loads.push(url);
+      this.variants.push(variant);
       return gate.then(() => { if (!this.disposals) this.ready = true; });
     }
     setTravel(metres, directionX = 0) { this.travel = metres; this.directionX = directionX; this.moves.push([metres, directionX]); }
@@ -253,8 +297,10 @@ function projectedArenaHost(gate = Promise.resolve()) {
   class StageLens extends PaintedLens {
     constructor(renderer) { super(renderer); this.stage = null; lenses.push(this); }
     setStage(stage) { this.stage = stage; }
+    setNightVision(enabled) { this.nightVision = enabled; }
+    setBattleAtmosphere(heat, glare) { this.heat = heat; this.glare = glare; }
   }
-  Object.assign(h, { ProjectedStage, Lens: StageLens, stages, lenses });
+  Object.assign(h, { ProjectedStage, Lens: StageLens, Flash:TimeFlash, stages, lenses, flashes });
   return h;
 }
 
@@ -346,6 +392,90 @@ async function testProjectedArenaLifecycle() {
   } finally { painted.free(); }
 }
 
+async function testTimePresentation() {
+  const h = projectedArenaHost(), arena = new RustArena(h, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  const variant = { manifest: "img/battle-stage/manifest.json", textures: { clean:"night-clean.webp", equipment:"night.webp" } };
+  const night = { ...frame, id:"hall-night", time:"night", projectedStage:variant,
+    look:{ ...frame.look, lighting:{sky:.21,rim:1.45,fill:.75,key:1.6}, sun:[.1,.3,-1] } };
+  const match = callRust("createMatch", [{ seed:"time-render",mapId:"saltHall",weather:"clear",time:"night",fighters:[{id:"a",name:"A",weapon:"rifle",gear:{nvg:true}},{id:"b",name:"B",weapon:"rifle"}] }]);
+  try {
+    arena.setFrame(night); arena.setFirstPerson(true); arena.resume(); await arena.load("same.glb", "same.glb", 7);
+    arena.setConditions(match); h.renderers[0].loop(100);
+    assert.deepEqual(h.stages[0].variants[0], variant);
+    assert.equal(h.lenses[0].nightVision, true);
+    assert.equal(h.lenses[0].heat, false);
+    match.fighters[0].gear.nvg=false; arena.setConditions(match); assert.equal(h.lenses[0].nightVision,false);
+    match.fighters[0].gear.nvg=true; arena.setConditions(match); assert.equal(h.lenses[0].nightVision,true);
+    const quiet = callRust("starterLoadout", ["rifle"]);
+    quiet.weapon1={item:"rifle-varyag",mods:{muzzle:"muzzle-tishina"}};
+    quiet.weapon2={item:"pistol-pustelga"};
+    match.config.fighters[0].kit=callRust("compileKit",[quiet]);
+    arena.arm("me","rifle",{}); arena.setConditions(match); arena.attack("me","rifle",.01); h.renderers[0].loop(116);
+    assert.equal(h.flashes[1].suppressed,true,"the equipped suppressor controls the muzzle effect");
+    match.fighters[0].weapon="pistol"; match.fighters[0].sidearm=true;
+    arena.arm("me","pistol",{}); arena.setConditions(match); arena.attack("me","pistol",.01); h.renderers[0].loop(132);
+    assert.equal(h.flashes[1].suppressed,false,"the sidearm must not inherit the primary gun's suppressor");
+    const lights = h.renderers[0].scene.children.filter(o=>o.isLight);
+    const key = lights.find(o=>o.isSpotLight && o.angle < .27), rim = lights.find(o=>o.isDirectionalLight && o.castShadow);
+    assert.ok(Math.abs(key.intensity - .8) < 1e-10); assert.equal(rim.intensity,1.45);
+    arena.setQuality(quality.low); assert.ok(Math.abs(key.intensity - .8) < 1e-10);
+    arena.setFirstPerson(false); assert.equal(key.intensity, 1.6);
+    arena.setFrame({ ...frame, id:"hall1" });
+    match.config.time="day"; arena.setConditions(match); h.renderers[0].loop(200);
+    assert.equal(key.color.getHex(),0xb4b4b0,"returning to day restores the original key color");
+    assert.equal(h.lenses[0].nightVision, false); assert.equal(h.lenses[0].heat, true);
+    match.config.time="evening"; match.fighters[0].facesSun=true; arena.setConditions(match);
+    assert.equal(h.lenses[0].glare, true);
+    match.fighters[0].facesSun=false; arena.setConditions(match); assert.equal(h.lenses[0].glare, false);
+    arena.setQuality(quality.high);
+    arena.setFrame({ ...frame, id:"blocks-day", look:{...frame.look,reflection:false} });
+    h.renderers[0].loop(300);
+    let reflection;
+    h.renderers[0].scene.traverse(object => { if (object.scale.y === -1) reflection=object.parent.parent; });
+    assert.ok(reflection,"the fixture must contain the actual inverted fighter hierarchy");
+    assert.equal(reflection.visible,false,"dry courtyard suppresses the wet-ground reflection");
+    arena.setQuality(quality.ultra); assert.equal(reflection.visible,false,"a quality change must not make dry ground reflective");
+    arena.setFrame({ ...frame, id:"hall1" }); assert.equal(reflection.visible,true,"returning to the hall restores its reflection");
+    arena.setQuality(quality.low); assert.equal(reflection.visible,false,"low quality still omits reflections");
+  } finally { arena.dispose(); arena.free(); }
+}
+
+async function testProjectedSideLighting() {
+  const previousDocument=globalThis.document, previousFetch=globalThis.fetch;
+  // This material test is headless. Do not let the 2D canvas stub masquerade
+  // as the throwaway WebGL2 context used by the device-quality probe.
+  globalThis.document={baseURI:"http://stage.test/"};
+  globalThis.fetch=async()=>new Response(JSON.stringify({
+    version:1, calibration:{fov:55,aspect:941/1672,camHeight:2,horizon:.37244444444444447},
+    textures:{clean:"clean.png",equipment:"hall.png"},
+    meshes:[{name:"closed-wall-side",material:"side",color:[.25,.235,.21],positions:[0,0,-2,1,0,-2,0,1,-2],indices:[0,1,2]}],
+  }));
+  const h=makeHost();
+  h.THREE.TextureLoader=class { async loadAsync(url){return texture(url);} };
+  const renderer=new h.THREE.WebGLRenderer();
+  renderer.getRenderTarget=()=>renderer.target??null;
+  const stage=new RustProjectedStage({THREE:h.THREE},renderer),camera=new Three.PerspectiveCamera();
+  const surface=()=>{
+    stage.drawToScreen(camera);
+    return renderer.scene.getObjectByName("closed-wall-side").material.uniforms;
+  };
+  try {
+    await stage.load("manifest.json",{sideTint:0x7f8790,sideExposure:.06});
+    const night=surface();
+    assert.equal(night.sideTint.value.getHex(),0x7f8790);
+    assert.equal(night.sideExposure.value,.06);
+    const tint=night.sideTint.value;
+    assert.ok((tint.r*.2126+tint.g*.7152+tint.b*.0722)*night.sideExposure.value<.02,"unseen sides must not retain daylight luminance at night");
+    await stage.load("manifest.json");
+    const day=surface();
+    assert.equal(day.sideTint.value.getHex(),0xffffff,"an old manifest with no variant must restore its authored side colours");
+    assert.equal(day.sideExposure.value,1);
+    assert.deepEqual(day.sideColor.value.toArray(),[.25,.235,.21]);
+  } finally {
+    stage.dispose();stage.free();globalThis.document=previousDocument;globalThis.fetch=previousFetch;
+  }
+}
+
 async function testTeardown() {
   const h = makeHost(), renderer = new h.THREE.WebGLRenderer();
   const lens = new RustLens(h, renderer);
@@ -392,12 +522,17 @@ try {
   await testTeardown();
   await testProjectedArenaMovement();
   await testProjectedArenaLifecycle();
+  await testBattleOptics();
+  await testTimePresentation();
+  await testProjectedSideLighting();
   console.log("PASS Rust lens: identical shaders, quality targets, passes, uniforms, projection, async backdrop cancellation");
   console.log("PASS Rust texture tiers: shared maps, shrink, stale completion, failed tier fallback, atomic restoration");
   console.log("PASS Rust arena: lifecycle, quality, first-person framing, walking, firing, hit/fall, reflection, callback reentry");
   console.log("PASS Rust teardown: idempotent disposal, cancelled late loads, no renderer callback after Rust owner drops");
   console.log("PASS Rust projected combat: animated own step/retreat/rush, enemy-only movement, interrupted camera change, reset and blocked advance");
   console.log("PASS Rust projected lifecycle: independent hall switching, cancelled teardown and usable painted fallback");
+  console.log("PASS Rust time presentation: canonical NVG/glare, depth-limited heat, quality transitions, variant projection and daylight color restoration");
+  console.log("PASS Rust projected side lighting: dark night sides and exact legacy daylight restoration");
   if (process.env.CD_RENDER_BENCH === "1") {
     console.log("CPU-only orchestration benchmark (ms/frame, stub renderer, no GPU):", { rust: await benchmarkArena(true), typescript: await benchmarkArena(false) });
   }

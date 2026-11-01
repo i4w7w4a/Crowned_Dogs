@@ -1866,10 +1866,10 @@
       },
       "weapon2": null,
       "head": "head-k6",
-      "body": "body-light",
+      "body": "body-plita2",
       "suit": "suit-ryvok",
-      "boots": "boots-hodok",
-      "knife": "knife-zhalo",
+      "boots": "boots-bertsy",
+      "knife": "knife-std",
       "grenade": "grenade-rg1"
     },
     "shotgun": {
@@ -1887,8 +1887,8 @@
       "head": "head-k6",
       "body": "body-plita4",
       "suit": "suit-ryvok",
-      "boots": "boots-hodok",
-      "knife": "knife-zhalo",
+      "boots": "boots-bertsy",
+      "knife": "knife-std",
       "grenade": "grenade-rg1"
     },
     "rifle": {
@@ -1906,7 +1906,7 @@
       "head": "head-sfera",
       "body": "body-plita4",
       "suit": "suit-solonchak",
-      "boots": "boots-hodok",
+      "boots": "boots-bertsy",
       "knife": "knife-std",
       "grenade": "grenade-rg1"
     },
@@ -1930,8 +1930,8 @@
       "body": "body-plita2",
       "suit": "suit-ten",
       "boots": "boots-bertsy",
-      "knife": "knife-iskra",
-      "grenade": "grenade-grad"
+      "knife": "knife-std",
+      "grenade": "grenade-rg1"
     }
   },
   "DEFAULT_BOT": {

@@ -1,0 +1,9 @@
+{
+  "sourceCommit": "7bad19c762a4daccd7824ea0d936ae5e2e409438",
+  "filesHashed": 583,
+  "httpAssets": 580,
+  "httpStatus": 200,
+  "wasmMime": "application/wasm",
+  "nativeGuiOpened": false,
+  "review": "Production browser build: both maps at all four times; unchanged Windows launchers reused; native GUI not reopened."
+}
