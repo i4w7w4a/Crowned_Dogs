@@ -807,7 +807,7 @@ impl Base {
         toggle(&self.home, "cd-travelling", false);
         attr(&self.home, "aria-busy", "false");
         style(&self.home, "--cd-travel-fade", "0");
-        for selector in [".cd-enter", ".cd-to-fitting"] {
+        for selector in [".cd-enter", ".cd-to-fitting", ".cd-to-persona", ".cd-operator"] {
             set(&query(&self.home, selector), "disabled", &flag(false));
         }
         if self.home_ready {
@@ -831,7 +831,7 @@ impl Base {
         let mut completed = None;
         if self.view == "base" && self.home_ready {
             let (target, progress) = if let Some((target, start)) = &self.home_motion {
-                let duration = if target == "battle" { 2100. } else { 2400. };
+                let duration = 1200.;
                 (target.clone(), ((now - start) / duration).clamp(0., 1.))
             } else {
                 ("base".into(), 0.)
@@ -858,7 +858,7 @@ impl Base {
             if w <= 0.0 {
                 continue;
             }
-            if drift.flat && self.home_ready {
+            if drift.flat {
                 let iw = (h * drift.ratio).max(w);
                 let ih = (w / drift.ratio).max(h);
                 for ring in &drift.rings {
@@ -1187,7 +1187,7 @@ fn bind(state: &Rc<RefCell<Base>>) {
             let Some(state) = weak.upgrade() else {
                 return;
             };
-            if action == "battle" || action == "fitting" {
+            if action == "battle" || action == "fitting" || action == "persona" {
                 begin_home_transition(&state, action);
                 return;
             }
@@ -1482,11 +1482,11 @@ fn begin_home_transition(state: &Rc<RefCell<Base>>, target: &str) {
             ));
             toggle(&s.home, "cd-travelling", true);
             attr(&s.home, "aria-busy", "true");
-            for selector in [".cd-enter", ".cd-to-fitting"] {
+            for selector in [".cd-enter", ".cd-to-fitting", ".cd-to-persona", ".cd-operator"] {
                 set(&query(&s.home, selector), "disabled", &flag(true));
             }
             // Load the Persona during the tunnel journey, while the base remains visible.
-            if target == "fitting" {
+            if target == "fitting" || target == "persona" {
                 s.ensure_viewer(Rc::downgrade(state));
             }
             true
@@ -1505,7 +1505,7 @@ fn finish_home_transition(state: &Rc<RefCell<Base>>, target: &str) {
     if target == "battle" {
         enter_battle(state);
     } else {
-        state.borrow_mut().navigate("fitting", Rc::downgrade(state));
+        state.borrow_mut().navigate(target, Rc::downgrade(state));
     }
 }
 fn setup_home_stage(state: &Rc<RefCell<Base>>) {
@@ -1516,7 +1516,7 @@ fn setup_home_stage(state: &Rc<RefCell<Base>>) {
     let canvas = query(&state.borrow().home, ".cd-home-projection");
     // Hidden canvases have no layout size: reveal it only once textures are ready.
     let url = format!(
-        "{}img/base-stage/manifest.json",
+        "{}img/base-depth/manifest.json",
         text(&get(&host, "baseUrl"))
     );
     let Ok(stage) = construct(&host, "HomeStage", &[canvas.clone(), js(&url)]) else {
@@ -1543,7 +1543,7 @@ fn setup_home_stage(state: &Rc<RefCell<Base>>) {
         }
         s.home_ready = true;
         hidden(&query(&s.home, "img.cd-backdrop"), true);
-        attr(&canvas, "data-projected-base", "true");
+        attr(&canvas, "data-depth-base", "true");
     });
 }
 fn enter_battle(state: &Rc<RefCell<Base>>) {
@@ -1646,6 +1646,12 @@ fn setup_drift(state: &Rc<RefCell<Base>>, home: &JsValue, ratio: f64, flat: bool
         lean: args(&[number(0.0), number(0.0)]).into(),
         want: args(&[number(0.0), number(0.0)]).into(),
     });
+    if flat {
+        // The home photograph stays registered until a destination is chosen.
+        // Do not request device orientation or introduce a second CSS movement.
+        style(&query(home, ".cd-backdrop"), "transform", "none");
+        return;
+    }
     let weak = Rc::downgrade(state);
     let listener = Listener::new(home, "pointermove", move |event| {
         if let Some(state) = weak.upgrade() {

@@ -265,15 +265,18 @@ async fn fetch_size(
     let mut indices = HashMap::<String, usize>::new();
     let mut requested = vec![[None; 4]; materials.len()];
     for (index, material) in materials.iter().enumerate() {
-        let base = string(&get(
+        // One base for every map, or {color, normal, orm} bases (a recolour shares the other maps).
+        let entry = get(
             &get(manifest, "materials"),
             &string(&get(&material.object, "name")),
-        ));
-        if base.is_empty() {
-            continue;
-        }
+        );
         for (slot, (_, kind)) in SLOTS.iter().enumerate() {
-            if !present(&material.own[slot]) {
+            let base = if entry.is_object() {
+                string(&get(&entry, kind))
+            } else {
+                string(&entry)
+            };
+            if base.is_empty() || !present(&material.own[slot]) {
                 continue;
             }
             let url = format!("{base}.{kind}.{size}.webp");

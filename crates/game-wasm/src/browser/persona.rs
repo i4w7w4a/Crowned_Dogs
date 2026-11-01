@@ -295,6 +295,7 @@ impl RustPersonaViewer {
     pub fn update_loadout(&self, loadout: JsValue) -> JsValue {
         let s = &self.state;
         set(s, "loadout", &loadout);
+        dress_figure(s);
         apply_weapon(s);
         render(s);
         graphics(
@@ -515,18 +516,8 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
     for n in nodes(&figure, false) {
         if yes(&n, "isMesh") {
             // Blender object names; the loader may swap spaces for underscores.
-            let name = string(&n, "name");
-            for (prefix, slot) in [
-                ("Бронежилет", "body"),
-                ("Каска", "head"),
-                ("Костюм", "suit"),
-                ("Vest", "body"),
-                ("Helmet", "head"),
-                ("Suit", "suit"),
-            ] {
-                if name.starts_with(prefix) {
-                    set(&n, "userData.slot", &text(slot));
-                }
+            if let Some(slot) = super::scene_assets::gear_slot(&string(&n, "name")) {
+                set(&n, "userData.slot", &text(slot));
             }
             set(&n, "frustumCulled", &flag(false));
             set(&n, "castShadow", &flag(true));
@@ -613,28 +604,38 @@ fn hold(mixer: &JsValue, clip: &JsValue) {
     call(&call(mixer, "clipAction", &[clip.clone()]), "play", &[]);
     call(mixer, "setTime", &[num(0.0)]);
 }
-/// The figure's box as it stands (skinned meshes follow their bones).
+/// The box of the plain kit as the figure stands (skinned meshes follow their bones).
 fn lowest_box(h: &JsValue, figure: &JsValue) -> JsValue {
     call(figure, "updateMatrixWorld", &[flag(true)]);
     let box3 = make(h, "THREE.Box3", &[]);
-    call(&box3, "setFromObject", &[figure.clone(), flag(true)]);
+    for n in nodes(figure, false) {
+        if yes(&n, "isMesh") && super::scene_assets::plain_kit(&string(&n, "name")) {
+            call(&box3, "expandByObject", &[n, flag(true)]);
+        }
+    }
     box3
 }
-/// Shows the worn kit, or only the suit while the look is being chosen.
+/// Shows the worn kit, or only suit and boots while the look is being chosen.
 fn dress_figure(s: &JsValue) {
     let figure = get(s, "figure");
     if !exists(&figure) {
         return;
     }
     let bare = yes(s, "bare");
+    let kit = get(s, "loadout");
+    let wear = |slot: &str| {
+        if bare && (slot == "head" || slot == "body") {
+            JsValue::NULL
+        } else if exists(&kit) {
+            get(&kit, slot)
+        } else {
+            flag(true)
+        }
+    };
     super::scene_assets::dress(
         get(s, "host"),
-        figure,
-        options(&[
-            ("suit", flag(true)),
-            ("body", flag(!bare)),
-            ("head", flag(!bare)),
-        ]),
+        figure.clone(),
+        options(&["head", "body", "suit", "boots"].map(|k| (k, wear(k)))),
     );
     set(&get(s, "equipment"), "visible", &flag(!bare));
 }
