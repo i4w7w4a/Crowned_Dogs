@@ -196,7 +196,8 @@ test("free without dispose cancels base RAF, global tilt listeners and owned vie
     });
     const back = root.querySelector(".cd-back");
     assert.equal(frames.size, 1);
-    assert.equal(getEventListeners(events, "deviceorientation").length, 2);
+    // Only the fitting room follows device tilt; the base photograph stays fixed.
+    assert.equal(getEventListeners(events, "deviceorientation").length, 1);
     assert.equal(getEventListeners(back, "click").length, 1);
     base.free();
     assert.equal(frames.size, 0);

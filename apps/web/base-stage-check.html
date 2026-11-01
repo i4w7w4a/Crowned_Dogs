@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>База — проверка проездов</title>
+<title>База — проверка мягкого приближения</title>
 <style>
 body{margin:0;background:#090b0c;color:#ddd;font:13px system-ui;display:grid;grid-template-columns:1fr var(--review-width,min(56.3vh,480px)) 1fr;min-height:100dvh}
 canvas,iframe{grid-column:2;width:100%;height:var(--review-height,100dvh);display:block;border:0}iframe[hidden],canvas[hidden]{display:none}nav{position:fixed;left:12px;top:12px;padding:12px;background:#171b1dea;border:1px solid #ffffff30;border-radius:12px;display:flex;flex-direction:column;gap:8px;max-width:180px}
 button{color:inherit;background:#2b3033;border:1px solid #ffffff25;border-radius:7px;padding:8px;cursor:pointer}output{font-variant-numeric:tabular-nums}a{color:#d9e5ed}
 @media(max-width:680px){body{display:block}canvas{width:100vw;height:100dvh}nav{top:auto;bottom:8px;left:8px;max-width:none;right:8px;display:grid;grid-template-columns:repeat(3,1fr);padding:8px;font-size:11px}input,output{grid-column:span 3}}
 </style>
-<canvas id="base" aria-label="Проекционная база"></canvas>
+<canvas id="base" aria-label="База с картой глубины"></canvas>
 <iframe id="game" title="Игра в проверяемом размере" hidden></iframe>
 <nav><button id="crown">К короне</button><button id="tunnel">В туннель</button><button id="play">Проиграть</button><button id="start">Начало</button><button id="middle">Середина</button><button id="end">Конец</button><label for="progress">Положение камеры</label><input id="progress" type="range" min="0" max="1000" value="0"><output id="status">Загрузка…</output><label for="size">Размер сцены</label><select id="size"><option value="auto">По размеру окна</option><option value="390x844">Телефон 390×844</option><option value="480x688">Панель 480×688</option></select><label><input id="live" type="checkbox">Игра в рамке</label><a href="/?muted=1#base">Открыть игру без звука</a></nav>
 <script type="module" src="/src/base/base-stage-check.ts"></script>

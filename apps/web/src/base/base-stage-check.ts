@@ -3,7 +3,7 @@ import { HomeStage } from "./home-stage.ts";
 const canvas=document.querySelector<HTMLCanvasElement>("#base")!;
 const progress=document.querySelector<HTMLInputElement>("#progress")!;
 const status=document.querySelector<HTMLOutputElement>("#status")!;
-const stage=new HomeStage(canvas,"/img/base-stage/manifest.json");
+const stage=new HomeStage(canvas,"/img/base-depth/manifest.json");
 let route="battle",value=0,frame=0;
 function draw(){stage.draw(route,value);status.value=`${route==="battle"?"Корона":"Туннель"} · ${Math.round(value*100)}%`;}
 function stop(){cancelAnimationFrame(frame);frame=0;}
@@ -31,7 +31,7 @@ live.onchange=()=>{
 };
 document.querySelector<HTMLButtonElement>("#play")!.onclick=()=>{
   stop();const start=performance.now();
-  const tick=(now:number)=>{value=Math.min(1,(now-start)/(route==="battle"?2100:2400));progress.value=String(value*1000);draw();if(value<1)frame=requestAnimationFrame(tick);};
+  const tick=(now:number)=>{value=Math.min(1,(now-start)/1200);progress.value=String(value*1000);draw();if(value<1)frame=requestAnimationFrame(tick);};
   frame=requestAnimationFrame(tick);
 };
 addEventListener("resize",draw);
