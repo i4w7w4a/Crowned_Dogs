@@ -16,6 +16,13 @@
 4. `recolour_suit.py SUIT_COLOR.webp OUT...` — «Солончак» и «Тень» из цвета полевого костюма.
 5. `node merge_gear.mjs GAME.glb GEAR.glb OUT.glb RECOLOUR_DIR` — вливает вещи в игровую модель. GAME берите из
    git (`git show HEAD:apps/web/models/persona-male.glb`), а не уже слитый файл.
+   Затем подтяжки (запускать из папки, где стоят `@gltf-transform/core`, `extensions` и `meshoptimizer`):
+   - `node tuck_hems.mjs IN.glb OUT.glb` — штанины костюма и «Рывка» заправляются в берцы (мерит голенище
+     по углу и высоте, выше края даёт напуск);
+   - `node tuck_hair.mjs IN.glb OUT.glb` — волосы под кепкой и «Сферой» убираются внутрь шапки (только женская);
+   - `research/carry-fit/boots/elbowsmooth.mjs IN OUT Ryvok l|r` — сглаживание локтя «Рывка».
+   Жилеты (`Vest`, `Plita4`) держатся только на корпусе; костюм под ними прячется маской, но рукав — никогда
+   (`dress_gear.py`, иначе в позе с рукой на бедре от рукава остаётся лента).
 6. Превью для Снаряжения: `preview_gear.py -- GEAR.glb RECOLOUR_DIR OUT.glb`, затем meshopt, resize 512,
    webp 85 и base64 в `apps/web/public/preview/gear.json`. Предмет показывает свою часть через `gear#Имя` в
    `models()` (`crates/game-client/src/workshop.rs`).

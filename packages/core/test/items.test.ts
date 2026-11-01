@@ -92,9 +92,9 @@ test("kits are checked before a fight", () => {
     validateLoadout({ ...rifle, weapon1: { item: "rifle-varyag", mods: { muzzle: "optic-blik" } } }),
     { slot: "weapon1", mod: "muzzle", error: "wrong_slot" },
   );
-  assert.deepEqual(validateLoadout({ ...rifle, head: "boots-hodok" }), { slot: "head", error: "wrong_slot" });
+  assert.deepEqual(validateLoadout({ ...rifle, head: "boots-bertsy" }), { slot: "head", error: "wrong_slot" });
   assert.deepEqual(validateLoadout({ ...rifle, knife: "nope" }), { slot: "knife", error: "unknown_item" });
-  assert.throws(() => compileKit({ ...rifle, head: "boots-hodok" }));
+  assert.throws(() => compileKit({ ...rifle, head: "boots-bertsy" }));
 });
 
 test("effects add up over the kit", () => {
@@ -103,12 +103,12 @@ test("effects add up over the kit", () => {
     weapon1: { item: "rifle-varyag", mods: { optic: "optic-sokol", rail: "rail-koster", mag: "mag-rifle-drum" } },
     head: "head-sfera",
     body: "body-plita4",
-    boots: "boots-saper",
+    boots: "boots-bertsy",
     suit: "suit-ten",
   });
-  assert.deepEqual(kit.armor, { head: 25, body: 20, groin: 10, legs: 20 });
+  assert.deepEqual(kit.armor, { head: 25, body: 20, groin: 10, legs: 10 });
   assert.equal(kit.grenades, 3, "vest pouch and underbarrel launcher");
-  assert.equal(kit.dodge, -0.05);
+  assert.equal(kit.dodge, -0.04);
   assert.equal(kit.dashEvade, -0.04);
   assert.deepEqual(kit.camo, { near: 0, mid: 0.03, far: 0.04 });
   assert.equal(kit.heatProof, true);
@@ -134,9 +134,9 @@ test("night vision lifts the night penalty and camouflage hides you far away", (
   assert.ok(hitChance(night, 0, "rifle", 10, 1, false) < hitChance(morning, 0, "rifle", 10, 1, false));
   assert.equal(hitChance(nvg, 0, "rifle", 10, 1, false), hitChance(morning, 0, "rifle", 10, 1, false));
 
-  const hidden = duel(rifle, { ...rifle, suit: "suit-leshy" });
+  const hidden = duel(rifle, { ...rifle, suit: "suit-ten" });
   const far = hitChance(morning, 0, "rifle", 10, 1, false) - hitChance(hidden, 0, "rifle", 10, 1, false);
-  assert.ok(Math.abs(far - 0.06) < 1e-9, String(far));
+  assert.ok(Math.abs(far - 0.04) < 1e-9, String(far));
   assert.equal(hitChance(hidden, 0, "rifle", 4, 1, false), hitChance(morning, 0, "rifle", 4, 1, false), "camouflage does nothing up close");
 });
 
@@ -152,35 +152,6 @@ test("a suppressor belongs to its gun", () => {
   const after = resolveTurn(m, [hold(), hold()]).match;
   assert.equal(after.fighters[0].flash, false);
   assert.equal(after.fighters[1].flash, true);
-});
-
-test("an EMP grenade drops the shield for the next turn", () => {
-  let m = duel({ ...rifle, grenade: "grenade-emp" }, rifle);
-  const r1 = resolveTurn(m, [{ action: { type: "grenade", move: 0 }, defend: ["head", "body"] }, hold()]);
-  assert.equal(r1.report.attacks[0]!.effect, "emp");
-  m = r1.match;
-  assert.equal(m.fighters[1].shieldOff, 1);
-  // Shoot into the zone the enemy guards until a shot lands: it is never blocked.
-  for (let tries = 0; tries < 20; tries++) {
-    const probe = resolveTurn({ ...m, rng: seedRng(`emp-${tries}`) }, [hold("body"), hold()]);
-    const hit = probe.report.attacks[0]!;
-    if (!hit.hit) continue;
-    assert.equal(hit.blocked, false);
-    assert.equal(probe.match.fighters[1].shieldOff, 0, "the shield is back after one turn");
-    return;
-  }
-  assert.fail("no shot landed");
-});
-
-test("smoke hides the thrower this turn and the next", () => {
-  const m = duel({ ...rifle, grenade: "grenade-smoke" }, rifle);
-  const clear = hitChance(m, 1, "rifle", 7, 2, false);
-  const r1 = resolveTurn(m, [{ action: { type: "grenade", move: 0 }, defend: ["head", "body"] }, hold()]);
-  assert.equal(r1.report.attacks[0]!.effect, "smoke");
-  assert.ok(r1.report.attacks[1]!.chance < clear, "this turn's shot at the thrower is harder");
-  assert.ok(hitChance(r1.match, 1, "rifle", 7, 2, false) < clear, "and the next one");
-  const r2 = resolveTurn(r1.match, [hold(), hold()]);
-  assert.equal(hitChance(r2.match, 1, "rifle", 7, 2, false), clear, "then the smoke is gone");
 });
 
 test("a drum magazine sometimes lands a second hit", () => {

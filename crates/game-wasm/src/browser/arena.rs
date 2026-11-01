@@ -817,10 +817,11 @@ impl RustArena {
         if !s.ready || !kit.is_object() {
             return;
         }
-        let wear = object(&["head", "body", "suit", "boots"].map(|k| (k, get(&kit, k))));
+        let wear = object(&["head", "body", "suit", "boots", "colors"].map(|k| (k, get(&kit, k))));
         let key = ["head", "body", "suit", "boots"]
             .map(|k| get(&kit, k).as_string().unwrap_or_default())
-            .join("|");
+            .join("|")
+            + &js_sys::JSON::stringify(&get(&kit, "colors")).ok().and_then(|t| t.as_string()).unwrap_or_default();
         let enemy = who == "enemy";
         let s = &mut *s;
         let f = if enemy { s.enemy.as_mut() } else { s.me.as_mut() }.unwrap();
