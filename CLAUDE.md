@@ -1,6 +1,6 @@
 # Crowned Dogs: rules for Claude
 
-Read `HANDOFF.md` first: it has the state of every area, where the files are and what is open. Older notes and decisions are in `docs/` (see the list at the end of HANDOFF.md).
+Read `HANDOFF.md` first: it has the state of every area, where the files are and what is open. When your work closes or changes an item in its section 6 («Что осталось сделать»), edit that list in the same commit; a dated note at the top of the file does not update it. Older notes and decisions are in `docs/` (see the list at the end of HANDOFF.md).
 
 ## Talking to Art
 
