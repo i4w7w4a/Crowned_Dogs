@@ -14,6 +14,7 @@ pub struct RustViewmodel {
     /// Each forearm's line in its hand's frame at bind (left, right): a wrist on it is straight.
     forearms: [JsValue; 2],
     spine: JsValue,
+    clavicle: JsValue,
     weight: f64,
     aiming: f64,
     since: f64,
@@ -65,6 +66,7 @@ impl RustViewmodel {
             arms,
             forearms,
             spine: find(model, &["spine_03"]),
+            clavicle: find(model, &["clavicle_l"]),
             weight: 0.,
             aiming: 0.,
             since: -1.,
@@ -170,6 +172,21 @@ impl RustViewmodel {
             let held = if stance_index < 0. { 1. } else { stance_index };
             input.extend([held, f64::from(foregrip)]);
             let grip = math("support", &input);
+            // A left arm too short for the pump or the forend brings its shoulder forward, as seen
+            // from the side; squared to the camera it hung in the air beside the pump.
+            if present(&self.clavicle) {
+                let [upper, lower, hand] = &self.arms.as_ref().unwrap()[0];
+                let mut input = grip[..16].to_vec();
+                input.push(self.weight);
+                for bone in [&self.clavicle, upper, lower, hand] {
+                    input.extend(components(&world_position(&self.three, bone)));
+                }
+                input.extend(components(&world_quat(&self.three, hand)));
+                input.extend([0., 0., 0., 1.]);
+                let reach = math("supportArm", &input);
+                let (from, to) = (vector(&self.three, &reach[..3]), vector(&self.three, &reach[3..6]));
+                rig_turn(&self.three, &self.clavicle, &from, &to);
+            }
             self.place(0, &grip[..16], camera, pole);
             self.left.close(&cupped(grip[16], grip[17]), self.weight);
         }

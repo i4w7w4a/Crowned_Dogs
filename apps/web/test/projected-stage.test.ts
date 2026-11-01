@@ -3,7 +3,7 @@ import { test, type TestContext } from "node:test";
 import * as THREE from "three";
 import { ProjectedStage } from "../src/arena/projected-stage.ts";
 
-async function fixture(t: TestContext, autoLoad = true) {
+async function fixture(t: TestContext, autoLoad = true, manifestOverrides: Record<string, unknown> = {}) {
   const documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
   Object.defineProperty(globalThis, "document", { configurable: true, value: { baseURI: "http://stage.test/" } });
   t.after(() => {
@@ -19,6 +19,7 @@ async function fixture(t: TestContext, autoLoad = true) {
       { ...triangle, name: "wet-floor", material: "floor", occludesFigures: false },
       { ...triangle, name: "near-machine", material: "equipment" },
     ],
+    ...manifestOverrides,
   })));
   const images: Array<{ url: string; texture: THREE.Texture; disposed: boolean }> = [];
   t.mock.method(THREE.TextureLoader.prototype, "loadAsync", async (url: string) => {
@@ -31,6 +32,7 @@ async function fixture(t: TestContext, autoLoad = true) {
   });
   const draws: string[][] = [];
   const scenes: THREE.Scene[] = [];
+  const drawnMeshes: THREE.Mesh[][] = [];
   let target: THREE.WebGLRenderTarget | null = null;
   const renderer = {
     capabilities: { getMaxAnisotropy: () => 4 },
@@ -43,14 +45,16 @@ async function fixture(t: TestContext, autoLoad = true) {
     render: (scene: THREE.Scene, camera: THREE.Camera) => {
       scenes.push(scene);
       const names: string[] = [];
-      scene.traverseVisible((object) => { if (object instanceof THREE.Mesh && object.layers.test(camera.layers)) names.push(object.name); });
+      const meshes: THREE.Mesh[] = [];
+      scene.traverseVisible((object) => { if (object instanceof THREE.Mesh && object.layers.test(camera.layers)) { names.push(object.name); meshes.push(object); } });
       draws.push(names);
+      drawnMeshes.push(meshes);
     },
   };
   const stage = new ProjectedStage(renderer as unknown as THREE.WebGLRenderer);
   t.after(() => stage.dispose());
   if (autoLoad) await stage.load("manifest.json");
-  return { stage, renderer, draws, images, scenes, camera: new THREE.PerspectiveCamera() };
+  return { stage, renderer, draws, images, scenes, drawnMeshes, camera: new THREE.PerspectiveCamera() };
 }
 
 test("wet floor remains in photo/depth passes but does not hide the reflected fighter", async (t) => {
@@ -162,4 +166,67 @@ test("a late time variant cannot overwrite the newly selected time or leak its i
   stage.render(camera, 64, 128);
   const mesh = scenes[0]!.getObjectByName("near-machine") as THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   assert.equal(mesh.material.uniforms.photo!.value.userData.url, "http://stage.test/night.webp");
+});
+
+test("Blender atlas UVs stay on the mesh and leave legacy parts on photographic projection", async (t) => {
+  const part = { positions: [0, 0, -2, 1, 0, -2, 0, 1, -2], indices: [0, 1, 2], material: "equipment" };
+  const uv = [.125, .25, .75, .25, .5, .875];
+  const { stage, drawnMeshes, camera } = await fixture(t, false, {
+    bakedTexture: "bakes/atlas.webp",
+    meshes: [{ ...part, name: "baked-capsule", uvs: uv }, { ...part, name: "legacy-equipment" }],
+  });
+  const images = new Map<string, THREE.Texture>();
+  let disposed = 0;
+  t.mock.method(THREE.TextureLoader.prototype, "loadAsync", async (url: string) => {
+    const texture = new THREE.Texture();
+    texture.addEventListener("dispose", () => disposed++);
+    images.set(url, texture);
+    return texture;
+  });
+  await stage.load("manifest.json");
+  stage.drawToScreen(camera);
+  const [baked, legacy] = drawnMeshes.at(-1)!;
+  assert.deepEqual(Array.from(baked!.geometry.getAttribute("uv").array), uv);
+  const material = baked!.material as THREE.ShaderMaterial;
+  const atlas = images.get("http://stage.test/bakes/atlas.webp");
+  assert.ok(atlas);
+  assert.equal(material.uniforms.useBakedUv!.value, 1);
+  assert.equal(material.uniforms.bakedTexture!.value, atlas);
+  assert.equal(atlas.colorSpace, THREE.NoColorSpace);
+  assert.equal(atlas.wrapS, THREE.ClampToEdgeWrapping);
+  assert.equal(atlas.wrapT, THREE.ClampToEdgeWrapping);
+  assert.equal((legacy!.material as THREE.ShaderMaterial).uniforms.useBakedUv!.value, 0);
+  assert.equal(legacy!.geometry.getAttribute("uv"), undefined);
+  stage.dispose();
+  assert.equal(disposed, 3, "the atlas joins ordinary texture lifecycle management");
+});
+
+test("invalid atlas declarations and UV counts fail before allocating textures", async (t) => {
+  for (const overrides of [
+    { bakedTexture: " " },
+    { bakedTexture: 1 },
+    { bakedTexture: "atlas.webp", meshes: [{ material: "equipment", positions: [0, 0, -2, 1, 0, -2, 0, 1, -2], indices: [0, 1, 2], uvs: [0, 0] }] },
+    { bakedTexture: "atlas.webp", meshes: [{ material: "equipment", positions: [0, 0, -2, 1, 0, -2, 0, 1, -2], indices: [0, 1, 2], uvs: [0, 0, 1, 0, "bad", 1] }] },
+  ]) {
+    const { stage } = await fixture(t, false, overrides);
+    let texturesLoaded = 0;
+    t.mock.method(THREE.TextureLoader.prototype, "loadAsync", async () => { texturesLoaded++; return new THREE.Texture(); });
+    await assert.rejects(stage.load("manifest.json"), /Invalid projected stage manifest/);
+    assert.equal(texturesLoaded, 0);
+    stage.dispose();
+  }
+});
+
+test("a failed atlas load releases the other completed images", async (t) => {
+  const { stage } = await fixture(t, false, { bakedTexture: "missing-atlas.webp" });
+  let disposed = 0;
+  t.mock.method(THREE.TextureLoader.prototype, "loadAsync", async (url: string) => {
+    if (url.endsWith("missing-atlas.webp")) throw new Error("atlas unavailable");
+    const texture = new THREE.Texture();
+    texture.addEventListener("dispose", () => disposed++);
+    return texture;
+  });
+  await assert.rejects(stage.load("manifest.json"), /atlas unavailable/);
+  assert.equal(disposed, 2);
+  assert.equal(stage.ready, false);
 });

@@ -8,9 +8,18 @@ uniform float isSide;
 uniform float surfaceKind;
 uniform vec3 extensionTint;
 uniform float extensionExposure;
+uniform sampler2D bakedTexture;
+uniform float useBakedUv;
 varying vec4 sourceClip;
 varying vec3 sourcePosition;
+varying vec2 stageUv;
 void main() {
+  // Blender has already resolved projection, hidden surfaces and material seams.
+  // The atlas uses the same display-referred bytes as the legacy photo path.
+  if (useBakedUv > .5) {
+    gl_FragColor = vec4(texture2D(bakedTexture, stageUv).rgb, 1.0);
+    return;
+  }
   float sourceW = sourceClip.w < 0.0 ? min(sourceClip.w, -.00001) : max(sourceClip.w, .00001);
   vec2 uv = sourceClip.xy / sourceW * .5 + .5;
   // Clamp to the clean plate at overscan edges, never reveal a transparent tear.
