@@ -1775,5 +1775,103 @@
     "cautionBehind": 1.2,
     "temperature": 3
   },
+  "SPREAD": {
+    "shotgun": {
+      "chance": 0.2,
+      "perStep": 0.04,
+      "max": 0.5,
+      "share": 0.35
+    }
+  },
+  "SYNC": {
+    "start": 3,
+    "perLevel": 3,
+    "maxLevel": 30,
+    "half": 6,
+    "levelXp": {
+      "base": 100,
+      "step": 50
+    },
+    "xp": {
+      "win": 100,
+      "draw": 60,
+      "loss": 40,
+      "perDamage": 0.5,
+      "damageCap": 50
+    },
+    "stats": {
+      "power": {
+        "name": "Мощность",
+        "about": "урон, сила крита, пробитие брони",
+        "max": {
+          "damage": 0.25,
+          "critMult": 0.3,
+          "pen": 8
+        }
+      },
+      "cooling": {
+        "name": "Охлаждение",
+        "about": "защита от пробития, восстановление за ход, жара",
+        "max": {
+          "antiPen": 8,
+          "regen": 4,
+          "heat": 1
+        }
+      },
+      "instinct": {
+        "name": "Инстинкт",
+        "about": "шанс крита, двойного выстрела и продавливания щита",
+        "max": {
+          "crit": 0.12,
+          "doubleShot": 0.08,
+          "guard": 0.08
+        }
+      },
+      "reflexes": {
+        "name": "Рефлексы",
+        "about": "уклонение, уклонение в рывке",
+        "max": {
+          "dodge": 0.1,
+          "dashEvade": 0.1
+        }
+      }
+    },
+    "mastery": {
+      "from": 74,
+      "to": 100,
+      "acc": 0.06,
+      "crit": 0.03,
+      "perHit": 0.3,
+      "hitCap": 5,
+      "win": 0.5,
+      "slow": 0.6
+    },
+    "botStats": {
+      "pistol": {
+        "reflexes": 0.4,
+        "instinct": 0.3,
+        "power": 0.2,
+        "cooling": 0.1
+      },
+      "shotgun": {
+        "power": 0.4,
+        "reflexes": 0.3,
+        "cooling": 0.2,
+        "instinct": 0.1
+      },
+      "rifle": {
+        "power": 0.35,
+        "cooling": 0.3,
+        "instinct": 0.2,
+        "reflexes": 0.15
+      },
+      "sniper": {
+        "instinct": 0.4,
+        "power": 0.3,
+        "cooling": 0.2,
+        "reflexes": 0.1
+      }
+    }
+  },
   "TAG_COUNT": 1000000
 }

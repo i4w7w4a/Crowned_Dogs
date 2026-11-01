@@ -2,8 +2,8 @@
 //! event routing, timing, loading, and screen state are owned here.
 use super::bridge::*;
 use js_sys::{Function, Promise, Reflect};
-use wasm_bindgen::{JsCast, UnwrapThrowExt, prelude::*};
-use wasm_bindgen_futures::{JsFuture, future_to_promise};
+use wasm_bindgen::{prelude::*, JsCast, UnwrapThrowExt};
+use wasm_bindgen_futures::{future_to_promise, JsFuture};
 
 const ZONES: [&str; 4] = ["head", "body", "groin", "legs"];
 const QUALITY_IDS: [&str; 4] = ["low", "medium", "high", "ultra"];
@@ -355,12 +355,28 @@ fn abort_check(signal: &JsValue) -> Result<(), JsValue> {
     }
     Ok(())
 }
+/// The operator's synchronisation (level, stats, mastery) as stored on this device.
+fn sync_profile(s: &JsValue) -> JsValue {
+    let saved = store_get(s, "cd-sync")
+        .as_string()
+        .and_then(|raw| js_sys::JSON::parse(&raw).ok())
+        .unwrap_or(JsValue::NULL);
+    core("syncClean", &[saved])
+}
 fn new_duel(s: &JsValue) -> JsValue {
     let ids = get(&get(s, "host"), "weaponIds");
     let foe = at(
         &ids,
         (js_sys::Math::random() * number(&ids, "length")) as usize,
     );
+    // Nothing spent yet plays the plain rules; the bot mirrors what the operator has.
+    let profile = sync_profile(s);
+    let skills = if core("syncPlays", &[profile.clone()]).as_bool() == Some(true) {
+        profile.clone()
+    } else {
+        JsValue::NULL
+    };
+    let bot_skills = core("syncBot", &[profile, foe.clone()]);
     let frame = get(s, "frame");
     let fitted = get(s, "fitted");
     let kit = if present(&fitted) {
@@ -383,9 +399,17 @@ fn new_duel(s: &JsValue) -> JsValue {
                     ("tag", "K-417-093".into()),
                     ("weapon", get(s, "weapon")),
                     ("kit", kit),
+                    ("skills", skills),
                 ]),
             ),
-            ("bot", object(&[("name", "Искра".into()), ("weapon", foe)])),
+            (
+                "bot",
+                object(&[
+                    ("name", "Искра".into()),
+                    ("weapon", foe),
+                    ("skills", bot_skills),
+                ]),
+            ),
         ])],
     )
 }
@@ -899,11 +923,7 @@ fn arm_both(s: &JsValue) {
         arena(
             s,
             "arm",
-            &[
-                who,
-                get(&f, "weapon"),
-                get(&get(&kit, "weapon1"), "mods"),
-            ],
+            &[who, get(&f, "weapon"), get(&get(&kit, "weapon1"), "mods")],
         );
     }
 }
@@ -996,11 +1016,37 @@ fn strike(s: &JsValue, r: &JsValue, side: usize) {
                     call(&el, "remove", &[]);
                 });
             }
+            // Shotgun pellets that caught a neighbouring zone get their own small number there.
+            let splash = get(&a, "splash");
+            let pellets = if present(&splash) {
+                number(&splash, "length") as u32
+            } else {
+                0
+            };
+            let mut main = number(&a, "damage");
+            for i in 0..pellets {
+                let h = at(&splash, i as usize);
+                main -= number(&h, "damage");
+                if ours {
+                    let (px, py) = point(s, &word(&h, "zone"));
+                    floating(
+                        px - 30.,
+                        py + 8.,
+                        if flag(&h, "blocked") {
+                            "blocked"
+                        } else {
+                            "dmg"
+                        },
+                        &format!("−{}", number(&h, "damage")),
+                        "дробь",
+                    );
+                }
+            }
             floating(
                 x + if ours { 36. } else { 0. },
                 y - if ours { 14. } else { 0. },
                 if blocked { "blocked" } else { "dmg" },
-                &format!("−{}", number(&a, "damage")),
+                &format!("−{}", if ours { main } else { number(&a, "damage") }),
                 if blocked { "Зонт" } else { &label },
             );
             let kind = if word(&a, "weapon") == "grenade" {
@@ -1059,6 +1105,21 @@ fn finish(s: &JsValue) {
     html(
         &id("endStats"),
         &string(&core("ui.finishStats", &[history])),
+    );
+    // Experience and mastery go to the capsule's synchronisation.
+    let gained = core("syncGain", &[sync_profile(s), m.clone(), 0.into()]);
+    if let Some(raw) = js_sys::JSON::stringify(&get(&gained, "profile"))
+        .ok()
+        .and_then(|v| v.as_string())
+    {
+        store_set(s, "cd-sync", &raw);
+    }
+    html(
+        &id("endSync"),
+        &values(&get(&gained, "lines"))
+            .iter()
+            .map(|l| format!("<span>{}</span>", string(l)))
+            .collect::<String>(),
     );
     html(
         &id("endBadge"),
@@ -1557,7 +1618,11 @@ fn watch_speed(s: &JsValue) {
 fn set_frame(s: &JsValue, frame: &JsValue) {
     set(s, "frame", frame);
     set(&id("bg"), "src", &get(frame, "src"));
-    set(&id("bg"), "alt", &format!("Арена: {}", word(frame, "name")).into());
+    set(
+        &id("bg"),
+        "alt",
+        &format!("Арена: {}", word(frame, "name")).into(),
+    );
     arena(s, "setFrame", &[frame.clone()]);
     layout(s);
 }
