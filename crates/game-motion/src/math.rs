@@ -354,7 +354,16 @@ pub fn compute(kind: &str, v: &[f64]) -> Result<Vec<f64>, String> {
         "wristPole" => {
             // A pole that puts the elbow where the forearm runs straight into the hand.
             let (shoulder, lower, hand) = (vec(v, 0), vec(v, 3), vec(v, 6));
-            let elbow = hand - normalized(quat(v, 9) * vec(v, 13)) * lower.distance(hand);
+            let mut elbow = hand - normalized(quat(v, 9) * vec(v, 13)) * lower.distance(hand);
+            // `v[17..20]`, when given, points out of the body on this arm's side: a low-ready wrist
+            // put the elbow in the middle of the chest, so it stays at most 3 cm inside the shoulder.
+            if v.len() >= 20 {
+                let side = normalized(vec(v, 17));
+                let inside = -0.03 - (elbow - shoulder).dot(side);
+                if inside > 0.0 {
+                    elbow += side * inside;
+                }
+            }
             let pole = elbow + (elbow - (shoulder + hand) * 0.5);
             lower.lerp(pole, v[16]).to_array().to_vec()
         }
