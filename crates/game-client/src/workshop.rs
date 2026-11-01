@@ -3,15 +3,15 @@ use crate::{core, loadout, num, text, truth};
 use serde_json::{json, Value};
 const SLOTS: [&str; 5] = ["optic", "muzzle", "rail", "mag", "stock"];
 /// Item id to preview model. `file#Prefix` shows only that file's meshes named with the prefix.
+/// Only items with a model of their own are offered (Art, 2026-11-01); the night-vision helmets
+/// stay on the K-6 and «Сфера» shells for now.
 fn models() -> Value {
     json!({"head-k6":"tripo-helmet","head-sych":"tripo-helmet","head-marevo":"tripo-helmet",
         "head-cap":"gear#Cap","head-sfera":"gear#Sfera","head-filin":"gear#Sfera",
-        "body-light":"tripo-vest","body-plita2":"tripo-vest","body-plita4":"gear#Plita4","body-bastion":"gear#Plita4",
-        "suit-field":"gear#Suit","suit-leshy":"gear#Suit","suit-solonchak":"gear#Solonchak","suit-ten":"gear#Ten",
-        "suit-ryvok":"gear#Ryvok","boots-bertsy":"gear#Boots","boots-sprint":"gear#Boots","boots-hodok":"gear#Boots",
-        "boots-saper":"gear#Boots",
-        "knife":"knife","knife-std":"knife","knife-iskra":"knife","knife-kogot":"knife","knife-shtyk":"knife","knife-zhalo":"knife",
-        "grenade-rg1":"grenade","grenade-grad":"grenade","grenade-emp":"grenade","grenade-smoke":"grenade",
+        "body-plita2":"tripo-vest","body-plita4":"gear#Plita4",
+        "suit-field":"gear#Suit","suit-solonchak":"gear#Solonchak","suit-ten":"gear#Ten",
+        "suit-ryvok":"gear#Ryvok","boots-bertsy":"gear#Boots",
+        "knife":"knife","knife-std":"knife","grenade-rg1":"grenade",
         "pistol-pustelga":"pustelga","shotgun-taran":"taran","rifle-varyag":"varyag","sniper-berkut":"berkut"})
 }
 /// Mods with a mesh inside each gun class's model. The mesh node is the id with `_` for `-`.
@@ -102,7 +102,6 @@ fn modelled_class(class: &Value) -> bool {
 /// Whether the item can be picked; for a mod, on a gun of `class` (empty: on any gun).
 fn available(item: &Value, class: &str) -> bool {
     match text(&item["kind"]) {
-        "knife" | "grenade" | "boots" => true,
         "mod" => {
             (truth(&item["isStock"])
                 && item["fits"]
@@ -388,8 +387,7 @@ mod tests {
         for i in game_core::constants()["ITEMS"].as_array().unwrap() {
             if available(i, "") {
                 assert!(
-                    models().get(text(&i["id"])).is_some()
-                        || ["knife", "grenade", "boots", "mod"].contains(&text(&i["kind"]))
+                    models().get(text(&i["id"])).is_some() || text(&i["kind"]) == "mod"
                 );
             }
         }

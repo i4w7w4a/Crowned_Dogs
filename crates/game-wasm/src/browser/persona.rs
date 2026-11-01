@@ -541,16 +541,11 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
 /// Heights on the stand, with the helmet; the male as the authored Blender scene he replaced.
 const FEMALE_HEIGHT: f64 = 1.72;
 const MALE_HEIGHT: f64 = 1.8;
-/// Art's poses (models/persona-poses, retargeted from his Mixamo files, 2026-11-01). The male
-/// idles in "Neutral Idle" while his look is made and stands in the first frame of "Standing
-/// Idle" in the fitting room, where the kit is hung on that frame; the female keeps her one pose.
+/// Art's poses (models/persona-poses, retargeted from his Mixamo files, 2026-11-01). Each figure
+/// stands upright in its own clip: it plays while the look is made (the female breathes), and the
+/// fitting room holds its first frame, where the kit is hung.
 fn pose_name(s: &JsValue) -> String {
-    let sex = string(s, "figureSex");
-    if sex == "male" && yes(s, "creating") {
-        "male_idle".into()
-    } else {
-        format!("{sex}_stand")
-    }
+    format!("{}_stand", string(s, "figureSex"))
 }
 /// Puts the figure in the pose for the screen, feet on the platform; the game's first idle
 /// frame when the poses did not load.
