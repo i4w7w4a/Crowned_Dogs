@@ -36,6 +36,20 @@ export interface Look {
   puddle: number;
   /** The bodycam lens over the whole frame, and how the live figures are graded to sit in the painting. */
   lens: LensLook;
+  /** Intensities belong to the physical lights, independently of their colours. */
+  lighting?: { sky?: number; rim?: number; fill?: number; key?: number };
+  /** Direction towards the distant source in the shared battle coordinates. */
+  sun?: [number, number, number];
+}
+
+export interface StageProjection {
+  manifest: string;
+  /** Optional plate overrides are page-relative; geometry stays in the shared manifest. */
+  textures?: Partial<Record<"clean" | "equipment" | "floor" | "wall" | "roof", string>>;
+  textures2x?: Partial<Record<"clean" | "equipment" | "floor" | "wall" | "roof", string>>;
+  /** Only the real surfaces outside the photographed frustum use these. */
+  extensionTint?: number;
+  extensionExposure?: number;
 }
 
 /** The bodycam of Art's style: sharp middle, rainbow smear and a fisheye bend towards the edges, dark corners. */
@@ -44,7 +58,7 @@ const BODYCAM = { smear: 0.045, soft: 0.0025, barrel: 0, vignette: 0.97, glow: 0
 export interface Frame {
   id: string;
   name: string;
-  /** Picture, relative to the page, and a double-size copy for the high graphics levels. */
+  /** Picture, relative to the page, and its best available copy for high graphics. */
   src: string;
   src2x?: string;
   /** Its depth map (1/z, made with Depth Anything and fitted to the painted floor), for the blur behind the enemy. */
@@ -58,6 +72,7 @@ export interface Frame {
   time: TimeOfDay;
   cal: Calibration;
   look: Look;
+  projectedStage?: StageProjection;
 }
 
 const BACK = Number(new URLSearchParams(location.search).get("back") ?? 0.45);
@@ -73,8 +88,34 @@ const GREY_HALL = {
   },
 } satisfies Omit<Frame, "id" | "name" | "src" | "weather">;
 
+const stage = (time: "morning" | "evening" | "night", extensionTint: number, extensionExposure: number): StageProjection => ({
+  manifest: "img/battle-stage/manifest.json",
+  textures: { clean: `img/battle-times/${time}/clean.webp`, equipment: `img/battle-times/${time}/hall.webp` },
+  textures2x: { clean: `img/battle-times/${time}/clean.png`, equipment: `img/battle-times/${time}/hall.png` },
+  extensionTint, extensionExposure,
+});
+
+const MORNING_LOOK: Look = {
+  exposure: 0.94, rim: 0xc9ddf2, fill: 0xafc1d5, fog: 0x6d7b8a, sky: 0xabc2d8, ground: 0x222831, puddle: 0,
+  lighting: { sky: 0.42, rim: 2.8, fill: 1.7, key: 3.7 }, sun: [-0.65, 0.27, -1],
+  lens: { ...GREY_HALL.look.lens, contrast: 0.27, glow: 0.30, saturation: 0.58, tint: 0xdfeaf6, rays: 0.28, haze: 0.018, hazeColor: 0xa7bacd },
+};
+const EVENING_LOOK: Look = {
+  exposure: 0.95, rim: 0xffd3a0, fill: 0xaebdca, fog: 0x928274, sky: 0xc4beb5, ground: 0x302a26, puddle: 0,
+  lighting: { sky: 0.35, rim: 4.2, fill: 1.6, key: 3.4 }, sun: [0.74, 0.15, -1],
+  lens: { ...GREY_HALL.look.lens, contrast: 0.28, glow: 0.40, saturation: 0.64, tint: 0xf5e6d5, rays: 0.58, haze: 0.019, hazeColor: 0xc9b094 },
+};
+const NIGHT_LOOK: Look = {
+  exposure: 0.76, rim: 0xa7c8eb, fill: 0x8b9eaf, fog: 0x28313d, sky: 0x7d9ab7, ground: 0x161c25, puddle: 0,
+  lighting: { sky: 0.21, rim: 1.45, fill: 0.75, key: 1.6 }, sun: [0.5, 0.66, -1],
+  lens: { ...GREY_HALL.look.lens, contrast: 0.19, vignette: 0.90, glow: 0.18, saturation: 0.48, tint: 0xc7d8ea, rays: 0.06, haze: 0.009, hazeColor: 0x7a91a7 },
+};
+
 export const FRAMES: Frame[] = [
-  { ...GREY_HALL, id: "hall1", name: "Соляной цех", src: "img/grey-hall-1.jpg", src2x: "img/grey-hall-1@2x.jpg", depth: "img/grey-hall-1.depth.png", weather: "clear" },
+  { ...GREY_HALL, id: "hall1", name: "Соляной цех", src: "img/grey-hall-1.jpg", src2x: "img/grey-hall-1@2x.jpg", depth: "img/grey-hall-1.depth.png", weather: "clear", projectedStage: { manifest: "img/battle-stage/manifest.json" } },
+  { ...GREY_HALL, id: "hall-morning", name: "Соляной цех", src: "img/battle-times/morning/hall.webp", src2x: "img/battle-times/morning/hall.png", depth: "img/grey-hall-1.depth.png", weather: "clear", time: "morning", look: MORNING_LOOK, projectedStage: stage("morning", 0xc2d4ec, 0.64) },
+  { ...GREY_HALL, id: "hall-evening", name: "Соляной цех", src: "img/battle-times/evening/hall.webp", src2x: "img/battle-times/evening/hall.png", depth: "img/grey-hall-1.depth.png", weather: "clear", time: "evening", look: EVENING_LOOK, projectedStage: stage("evening", 0xe7c09a, 0.65) },
+  { ...GREY_HALL, id: "hall-night", name: "Соляной цех", src: "img/battle-times/night/hall.webp", src2x: "img/battle-times/night/hall.png", depth: "img/grey-hall-1.depth.png", weather: "clear", time: "night", look: NIGHT_LOOK, projectedStage: stage("night", 0x8da9c8, 0.32) },
   { ...GREY_HALL, id: "hall2", name: "Цех в дымке", src: "img/grey-hall-2.jpg", src2x: "img/grey-hall-2@2x.jpg", depth: "img/grey-hall-2.depth.png", weather: "fog" },
 ];
 

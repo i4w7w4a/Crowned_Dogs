@@ -65,7 +65,7 @@ impl RustHomeStage {
             &[n(FOV), n(ASPECT), n(0.05), n(100.)],
         );
         let stage = RustProjectedStage::new(host, renderer.clone());
-        let ready = stage.load(url);
+        let ready = stage.load(url, None);
         Ok(Self {
             canvas,
             renderer,

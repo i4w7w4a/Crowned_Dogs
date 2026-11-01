@@ -53,8 +53,8 @@ function deferred() {
 }
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 
-async function harness(run: (h: ReturnType<typeof createHarness>) => Promise<void>) {
-  const h = createHarness();
+async function harness(run: (h: ReturnType<typeof createHarness>) => Promise<void>, options: { search?: string; time?: string } = {}) {
+  const h = createHarness(options);
   const before = Object.fromEntries(Object.keys(h.globals).map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   for (const [key, value] of Object.entries(h.globals)) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
   try { h.battle = new RustBattle(h.bindings); await run(h); }
@@ -64,7 +64,7 @@ async function harness(run: (h: ReturnType<typeof createHarness>) => Promise<voi
     Reflect.deleteProperty(globalThis, "__cd");
   }
 }
-function createHarness() {
+function createHarness(options: { search?: string; time?: string } = {}) {
   const clock = new Clock(), elements = new Map<string, Element>(), events = new EventTarget(), doc = new EventTarget();
   const calls: { name: string; at: number; args: unknown[] }[] = [];
   const record = (name: string, args: unknown[] = []) => calls.push({ name, at: clock.now, args });
@@ -84,7 +84,9 @@ function createHarness() {
     async load() { record("arena.load"); await loading(); this.ready = true; }
     setFirstPerson(...args: unknown[]) { record("arena.camera", args); }
     setQuality(...args: unknown[]) { record("arena.quality", args); }
-    setFrame() {} resize() {} zoneOnScreen() { return [0.6, 0.4]; }
+    setFrame(...args: unknown[]) { record("arena.frame", args); }
+    setConditions(...args: unknown[]) { record("arena.conditions", args); }
+    resize() {} zoneOnScreen() { return [0.6, 0.4]; }
     arm(...args: unknown[]) { record("arena.arm", args); }
     reset(...args: unknown[]) { record("arena.reset", args); }
     resume() { record("arena.resume"); } pause() { record("arena.pause"); }
@@ -109,14 +111,18 @@ function createHarness() {
   };
   const data = callRust<{ TIMING: { ourAttack: number; enemyAttack: number; knifeLands: number } }>("client.data", []);
   const stored = new Map<string, string>();
+  if (options.time) stored.set("cd-time", options.time);
   const bindings = { Arena: FakeArena, LocalDuel: SeededDuel, FightLog, gameAudio: audio, liquidGlass: () => {}, icon: () => "<svg/>",
     store: { get: (key: string) => stored.get(key) ?? null, set: (key: string, value: string) => stored.set(key, value) },
     startQuality: () => ({ id: "low", picked: true }),
-    frames: [{ id: "hall", name: "Цех", src: "hall.png", w: 941, h: 1672, top: 0, mapId: "saltHall", weather: "clear", time: "day" }],
+    frames: ["day", "morning", "evening", "night"].map(time => ({
+      id: time === "day" ? "hall1" : `hall-${time}`, name: "Соляной цех", src: `${time}.png`,
+      w: 941, h: 1672, top: 0, mapId: "saltHall", weather: "clear", time,
+    })),
     weaponIds: WEAPON_IDS, weapons: WEAPONS, veteranKits: VETERAN_KITS, playlist: [], tracks: {}, timing: data.TIMING,
     myModel: "me.json", foeModel: "enemy.json",
   };
-  const globals = { document: fakeDocument, location: { hash: "", search: "" }, matchMedia: () => ({ matches: false }),
+  const globals = { document: fakeDocument, location: { hash: "", search: options.search ?? "" }, matchMedia: () => ({ matches: false }),
     ResizeObserver: class { observe() {} }, addEventListener: events.addEventListener.bind(events),
     setTimeout: (cb: () => void, delay: number) => clock.schedule(cb, delay), clearTimeout: clock.clear,
     setInterval: (cb: () => void, delay: number) => clock.schedule(cb, delay, delay), clearInterval: clock.clear,
@@ -204,3 +210,48 @@ test("Rust battle displays health on strike beats and invalidates abandoned turn
   selectOrder(); h.click("goBtn"); h.click("baseInfoBtn"); const callsAtExit = h.calls.length; h.clock.advance(3000);
   assert.equal(h.element("app").hidden, true); assert.equal(h.calls.slice(callsAtExit).some(c => ["arena.hit", "log.add", "audio.newFight"].includes(c.name)), false);
 }));
+
+test("time links choose matching art and rules before the first fight, overriding saved time", async () => {
+  for (const time of ["morning", "day", "evening", "night"]) {
+    await harness(async h => {
+      assert.equal(h.duel().match.config.time, time);
+      assert.equal((h.calls.find(c => c.name === "arena.frame")!.args[0] as { time: string }).time, time);
+      const start = h.battle!.start(starterLoadout("rifle"), () => {}, async () => {}, undefined);
+      await h.ready(); await start;
+      const config = h.duel().match.config;
+      const rendered = h.calls.filter(c => c.name === "arena.conditions").at(-1)!.args[0] as { config: typeof config };
+      assert.deepEqual(rendered.config, config, "renderer receives the actual match, including sun and gear");
+      assert.equal(config.time, time);
+      assert.ok(h.element("condText").textContent);
+    }, { search: `?muted=1&time=${time}`, time: "night" });
+  }
+});
+
+test("time selection starts a new local fight with the fitted kit and persists the chosen conditions", async () => harness(async h => {
+  const kit = starterLoadout("rifle");
+  const start = h.battle!.start(kit, () => {}, async () => {}, undefined); await h.ready(); await start;
+  const initial = h.duel();
+  h.click("moreBtn");
+  assert.equal(h.element("frameLabel").hidden, false);
+  const choices = h.element("frameSeg");
+  assert.equal(choices.children.length, 4);
+  choices.children[3]!.click();
+  assert.notEqual(h.duel(), initial);
+  assert.equal(h.duel().match.config.time, "night");
+  assert.deepEqual(h.duel().fighters[0].kit, kit);
+  assert.equal(h.stored.get("cd-time"), "night");
+  assert.equal(h.element("infoVeil").hidden, true);
+  assert.equal((h.calls.filter(c => c.name === "arena.frame").at(-1)!.args[0] as { time: string }).time, "night");
+  h.click("moreBtn");
+  assert.equal(h.element("frameSeg").children[3]!.getAttribute("aria-pressed"), "true");
+  assert.match(h.element("conditionNote").textContent, /−25%.*4 шагов/);
+  h.click("restartBtn");
+  assert.equal(h.duel().match.config.time, "night", "New fight keeps its selected time");
+}));
+
+test("saved time is restored when a direct link does not override it", async () => harness(async h => {
+  assert.equal(h.duel().match.config.time, "evening");
+  const start = h.battle!.start(starterLoadout("rifle"), () => {}, async () => {}, undefined); await h.ready(); await start;
+  h.click("moreBtn");
+  assert.match(h.element("conditionNote").textContent, /Солнце перед/);
+}, { time: "evening" }));

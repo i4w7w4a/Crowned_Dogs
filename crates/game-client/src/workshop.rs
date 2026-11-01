@@ -4,7 +4,9 @@ use serde_json::{json, Value};
 const SLOTS: [&str; 5] = ["optic", "muzzle", "rail", "mag", "stock"];
 /// Item id to preview model. `file#Prefix` shows only that file's meshes named with the prefix.
 fn models() -> Value {
-    json!({"head-k6":"tripo-helmet","body-plita2":"tripo-vest","suit-field":"persona-authored#Костюм",
+    // Temporary, explicitly approved placeholder: Sych keeps its own rules and
+    // catalogue icon, but uses the ordinary helmet until its model is ready.
+    json!({"head-k6":"tripo-helmet","head-sych":"tripo-helmet","body-plita2":"tripo-vest","suit-field":"persona-authored#Костюм",
         "pistol-pustelga":"pustelga","shotgun-taran":"taran","rifle-varyag":"varyag","sniper-berkut":"berkut"})
 }
 /// Mods with a mesh inside each gun class's model. The mesh node is the id with `_` for `-`.
@@ -385,6 +387,19 @@ mod tests {
                         || ["knife", "grenade", "boots", "mod"].contains(&text(&i["kind"]))
                 );
             }
+        }
+    }
+    #[test]
+    fn sych_uses_only_the_approved_helmet_placeholder_and_keeps_night_vision() {
+        let sych = core("getItem", json!(["head-sych"])).unwrap();
+        assert!(available(&sych, ""));
+        assert_eq!(models()["head-sych"], models()["head-k6"]);
+        assert_eq!(models()["head-sych"], "tripo-helmet");
+        let mut kit = core("starterLoadout", json!(["rifle"])).unwrap();
+        kit["head"] = json!("head-sych");
+        assert_eq!(core("compileKit", json!([kit])).unwrap()["nvg"], true);
+        for id in ["head-cap", "head-sfera", "head-marevo", "head-filin", "body-light", "body-plita4", "body-bastion", "suit-leshy", "suit-ryvok", "suit-ten", "suit-solonchak"] {
+            assert!(!available(&core("getItem", json!([id])).unwrap(), ""), "{id} must remain hidden");
         }
     }
     #[test]

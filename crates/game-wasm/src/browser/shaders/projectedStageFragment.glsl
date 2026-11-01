@@ -6,6 +6,8 @@ uniform float useRepair;
 uniform vec3 sideColor;
 uniform float isSide;
 uniform float surfaceKind;
+uniform vec3 extensionTint;
+uniform float extensionExposure;
 varying vec4 sourceClip;
 varying vec3 sourcePosition;
 void main() {
@@ -21,7 +23,7 @@ void main() {
     // Independent 4-metre tiles extend the actual surfaces outside the source photograph.
     // They remain anchored to the original world, with no mirrored image or screen-space stretching.
     vec2 tileUv = surfaceKind > 1.5 && surfaceKind < 2.5 ? sourcePosition.zy * .25 : sourcePosition.xz * .25;
-    vec3 extension = texture2D(surfaceTile, tileUv).rgb;
+    vec3 extension = texture2D(surfaceTile, tileUv).rgb * extensionTint * extensionExposure;
     float photograph = smoothstep(0.0, .08, uv.y) * smoothstep(0.0, .08, 1.0 - uv.y)
       * smoothstep(0.0, .08, uv.x) * smoothstep(0.0, .08, 1.0 - uv.x) * step(0.0, sourceClip.w);
     color = mix(extension, color, photograph);

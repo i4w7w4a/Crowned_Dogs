@@ -4,6 +4,7 @@ use std::sync::OnceLock;
 
 mod arena;
 mod audio;
+mod conditions;
 mod dsp;
 mod duel;
 mod lens;
@@ -54,6 +55,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
         _ if method.starts_with("server.view.") => server_view::dispatch(method, args),
         _ if method.starts_with("server.") => server::dispatch(method, args),
         _ if method.starts_with("client.arena.") => arena::dispatch(method, args),
+        _ if method.starts_with("client.conditions.") => conditions::dispatch(method, args),
         _ if method.starts_with("client.workshop.") || method.starts_with("client.models.") => {
             workshop::dispatch(method, args)
         }

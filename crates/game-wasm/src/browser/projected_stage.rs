@@ -53,6 +53,7 @@ struct StageState {
     ready: bool,
     request: u64,
     loading: Option<Promise>,
+    source: String,
     abort: Option<web_sys::AbortController>,
     three: JsValue,
     renderer: JsValue,
@@ -131,6 +132,7 @@ impl RustProjectedStage {
                 ready: false,
                 request: 0,
                 loading: None,
+                source: String::new(),
                 abort: None,
                 three,
                 renderer,
@@ -152,18 +154,28 @@ impl RustProjectedStage {
         self.state.borrow().ready
     }
 
-    pub fn load(&self, url: String) -> Promise {
+    pub fn load(&self, url: String, variant: Option<JsValue>) -> Promise {
+        let variant = variant.unwrap_or(JsValue::NULL);
+        let descriptor = data(&variant);
+        let source = format!("{url}|{descriptor}");
         let (request, signal) = {
             let mut s = self.state.borrow_mut();
             if s.disposed {
                 return Promise::reject(&error("Projected stage has been disposed"));
             }
-            if s.ready {
+            if s.source == source && s.ready {
                 return Promise::resolve(&JsValue::UNDEFINED);
             }
-            if let Some(promise) = &s.loading {
-                return promise.clone();
+            if s.source == source {
+                if let Some(promise) = &s.loading {
+                    return promise.clone();
+                }
             }
+            if let Some(abort) = s.abort.take() {
+                abort.abort();
+            }
+            s.clear_assets();
+            s.source = source;
             s.request += 1;
             s.abort = web_sys::AbortController::new().ok();
             (
@@ -173,7 +185,7 @@ impl RustProjectedStage {
         };
         let weak = Rc::downgrade(&self.state);
         let promise = future_to_promise(async move {
-            let result = load_assets(&weak, request, &url, signal).await;
+            let result = load_assets(&weak, request, &url, &descriptor, signal).await;
             if let Some(state) = weak.upgrade() {
                 let mut s = state.borrow_mut();
                 if s.request == request {
@@ -316,6 +328,19 @@ impl Drop for RustProjectedStage {
     }
 }
 impl StageState {
+    fn clear_assets(&mut self) {
+        self.ready = false;
+        for mesh in self.meshes.drain(..) {
+            release(&get(&mesh, "geometry"));
+            release(&get(&mesh, "material"));
+        }
+        call(&self.root, "clear", &[]);
+        for texture in self.textures.drain(..) {
+            release(&texture);
+        }
+        set(&self.scene, "background", &JsValue::NULL);
+        self.backdrop = JsValue::NULL;
+    }
     fn dispose(&mut self) {
         if self.disposed {
             return;
@@ -327,16 +352,7 @@ impl StageState {
         if let Some(abort) = self.abort.take() {
             abort.abort();
         }
-        for mesh in self.meshes.drain(..) {
-            release(&get(&mesh, "geometry"));
-            release(&get(&mesh, "material"));
-        }
-        call(&self.root, "clear", &[]);
-        for texture in self.textures.drain(..) {
-            release(&texture);
-        }
-        set(&self.scene, "background", &JsValue::NULL);
-        self.backdrop = JsValue::NULL;
+        self.clear_assets();
         for value in [
             &self.depth_material,
             &self.occlusion_material,
@@ -376,6 +392,7 @@ async fn load_assets(
     state: &Weak<RefCell<StageState>>,
     request: u64,
     url: &str,
+    variant: &serde_json::Value,
     signal: Option<JsValue>,
 ) -> Result<(), JsValue> {
     let manifest_url = resolved_url(url, &string(&get(&document(), "baseURI")))?;
@@ -412,12 +429,25 @@ async fn load_assets(
     let sharp = super::platform::sharp_pictures();
     let mut urls = vec![];
     for key in keys {
+        // Variant paths are page-relative, just like Frame.src. The shared
+        // geometry's default materials remain relative to its own manifest.
+        let replacement = variant["textures2x"][key]
+            .as_str()
+            .filter(|_| sharp)
+            .or_else(|| variant["textures"][key].as_str());
         let double = manifest_data["textures2x"][key].as_str().filter(|_| sharp);
-        let file = double.unwrap_or(manifest_data["textures"][key].as_str().unwrap_or(""));
+        let file = replacement.unwrap_or_else(|| {
+            double.unwrap_or(manifest_data["textures"][key].as_str().unwrap_or(""))
+        });
         urls.push(if file.is_empty() {
             None
         } else {
-            Some(resolved_url(file, &manifest_url)?)
+            let base = if replacement.is_some() {
+                string(&get(&document(), "baseURI"))
+            } else {
+                manifest_url.clone()
+            };
+            Some(resolved_url(file, &base)?)
         });
     }
     let mut promises = vec![];
@@ -590,6 +620,24 @@ async fn load_assets(
                     textures[if has_tile { tile_index } else { 0 }].clone(),
                 ),
                 ("surfaceKind", n(surface_kind)),
+                (
+                    "extensionTint",
+                    make(
+                        &three,
+                        "Color",
+                        &[n(
+                            variant["extensionTint"].as_u64().unwrap_or(0xffffff) as f64
+                        )],
+                    ),
+                ),
+                (
+                    "extensionExposure",
+                    n(variant["extensionExposure"]
+                        .as_f64()
+                        .filter(|v| v.is_finite())
+                        .unwrap_or(1.)
+                        .clamp(0., 4.)),
+                ),
                 (
                     "isSide",
                     n(if kind == "side" && !projected_side {

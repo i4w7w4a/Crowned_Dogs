@@ -190,6 +190,23 @@ impl RustBattle {
         .map(|v| flag(&v, "matches"))
         .unwrap_or(false);
         set(&state, "reduceMotion", &reduced.into());
+        let params = construct(
+            &get(&global(), "URLSearchParams"),
+            &[get(&get(&global(), "location"), "search")],
+        );
+        let selected = core(
+            "client.conditions.initial",
+            &[
+                get(&state, "frames"),
+                call(&params, "get", &["time".into()]),
+                call(&params, "get", &["frame".into()]),
+                store_get(&state, "cd-time"),
+                call(&params, "has", &["cal".into()]),
+            ],
+        );
+        if present(&selected) {
+            set(&state, "frame", &selected);
+        }
         set(&state, "duel", &new_duel(&state));
         let log = construct(
             &get(&bindings, "FightLog"),
@@ -335,7 +352,11 @@ async fn settle(arena: &JsValue, method: &str, ms: f64) {
     let timeout = Promise::new(&mut |resolve, _| {
         call(&global(), "setTimeout", &[resolve.into(), ms.into()]);
     });
-    let _ = JsFuture::from(Promise::race(&array(&[Promise::resolve(&p).into(), timeout.into()]))).await;
+    let _ = JsFuture::from(Promise::race(&array(&[
+        Promise::resolve(&p).into(),
+        timeout.into(),
+    ])))
+    .await;
 }
 fn abort_check(signal: &JsValue) -> Result<(), JsValue> {
     if present(signal) {
@@ -552,6 +573,7 @@ fn pressed(el: &JsValue, on: bool) {
     attr(el, "aria-pressed", if on { "true" } else { "false" });
 }
 fn render(s: &JsValue) {
+    arena(s, "setConditions", &[match_(s)]);
     let m = match_(s);
     let d = draft(s);
     let me = at(&get(&m, "fighters"), 0);
@@ -1073,6 +1095,17 @@ fn restart(s: &JsValue, keep_sheet: bool) {
     set(s, "duel", &new_duel(s));
     set(s, "busy", &false.into());
     let m = match_(s);
+    let canonical = core(
+        "client.conditions.frame",
+        &[
+            get(s, "frames"),
+            get(&m, "config"),
+            get(&get(s, "frame"), "id"),
+        ],
+    );
+    if present(&canonical) {
+        set_frame(s, &canonical);
+    }
     let fighters = get(&m, "fighters");
     set(
         s,
@@ -1234,20 +1267,45 @@ fn render_menu(s: &JsValue) {
             }
         ),
     );
-    let frames = values(&get(s, "frames"));
-    let fs = segment("frameSeg", frames.len());
-    hide(&id("frameLabel"), true);
-    hide(&fs, true);
-    for frame in frames {
-        let current = frame == get(s, "frame");
+    let choices = values(&core("client.conditions.choices", &[]));
+    let fs = segment("frameSeg", choices.len());
+    hide(&id("frameLabel"), false);
+    hide(&fs, false);
+    let time = word(&get(&match_(s), "config"), "time");
+    for choice in choices {
+        let wanted = word(&choice, "id");
+        let current = wanted == time;
         let state = s.clone();
-        option(&fs, &word(&frame, "name"), current, move |_| {
-            if !current {
-                set_frame(&state, &frame);
-                restart(&state, false);
-            }
-        });
+        option(
+            &fs,
+            &format!(
+                "{}<span>{}</span>",
+                string(&host(s, "icon", &[get(&choice, "icon")])),
+                word(&choice, "name")
+            ),
+            current,
+            move |_| {
+                if !current {
+                    let config = object(&[
+                        ("mapId", get(&get(&match_(&state), "config"), "mapId")),
+                        ("weather", get(&get(&match_(&state), "config"), "weather")),
+                        ("time", wanted.clone().into()),
+                    ]);
+                    let frame = core(
+                        "client.conditions.frame",
+                        &[get(&state, "frames"), config, JsValue::NULL],
+                    );
+                    store_set(&state, "cd-time", &wanted);
+                    set_frame(&state, &frame);
+                    restart(&state, false);
+                }
+            },
+        );
     }
+    text(
+        &id("conditionNote"),
+        &string(&core("client.conditions.description", &[match_(s)])),
+    );
     host(s, "liquidGlass", &[id("infoVeil")]);
 }
 fn volume_id(kind: &str) -> &'static str {
@@ -1504,15 +1562,7 @@ fn prepare_arena(s: &JsValue) -> Promise {
             (get(&bindings, "myModel"), get(&bindings, "foeModel"))
         };
         let result = async {
-            let loading = try_call(
-                &a,
-                "load",
-                &[
-                    mine,
-                    theirs,
-                    get(&match_(s), "distance"),
-                ],
-            )?;
+            let loading = try_call(&a, "load", &[mine, theirs, get(&match_(s), "distance")])?;
             JsFuture::from(Promise::resolve(&loading)).await?;
             if !flag(&a, "ready") {
                 return Err(js_sys::Error::new("Арена ещё не готова").into());

@@ -153,6 +153,10 @@
         <label class="vrow"><span>Музыка в меню</span><input type="range" id="volMusic" min="0" max="100" step="1" value="100"><output id="volMusicOut" for="volMusic">100</output></label>
         <label class="vrow"><span>Музыка боя</span><input type="range" id="volFight" min="0" max="100" step="1" value="100"><output id="volFightOut" for="volFight">100</output></label>
       </div>
+      <div class="label" id="frameLabel">Время суток</div>
+      <div class="seg" id="frameSeg"></div>
+      <p class="gfx-note" id="conditionNote"></p>
+      <p class="gfx-note">Выбор времени суток начинает новый бой с вашим комплектом.</p>
       <div class="label">Камера</div>
       <div class="seg" id="camSeg"></div>
       <div class="label">Графика</div>
@@ -160,8 +164,6 @@
       <p class="gfx-note" id="gfxNote"></p>
       <div class="label">Рация</div>
       <div class="tracks" id="trackList"></div>
-      <div class="label" id="frameLabel">Фон</div>
-      <div class="seg" id="frameSeg"></div>
       <div class="acts2">
         <button type="button" class="ghost glass" id="restartBtn"><svg class="ico"><use href="#i-restart"/></svg>Новый бой</button>
         <button type="button" class="ghost glass" id="baseInfoBtn"><svg class="ico"><use href="#i-kit"/></svg>На базу</button>

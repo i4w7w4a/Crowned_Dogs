@@ -19,7 +19,7 @@ for (const file of files) {
   let runtimeSource = source;
   if (language === 'rs') runtimeSource = source.split(/#\[cfg\(test\)\]/)[0];
   const count = value => value.split(/\r?\n/).filter(line => line.trim()).length;
-  rows.push({ file, language, all: count(source), working: working && !/(pom-check|surface-check)\.(ts|html)$/.test(file) ? count(runtimeSource) : 0 });
+  rows.push({ file, language, all: count(source), working: working && !/(pom-check|surface-check|battle-times-check)\.(ts|html)$/.test(file) ? count(runtimeSource) : 0 });
 }
 function summary(scope) {
   const languages = {};
