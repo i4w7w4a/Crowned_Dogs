@@ -14,8 +14,8 @@ if (previous) Object.defineProperty(globalThis, "location", previous);
 else Reflect.deleteProperty(globalThis, "location");
 const publicFile = (path: string) => fileURLToPath(new URL(`../public/${path}`, import.meta.url));
 
-test("both maps have four complete time variants with their own shared calibration and geometry", () => {
-  for (const mapId of ["saltHall", "blocks"]) {
+test("every drawn map has four complete time variants with their own shared calibration and geometry", () => {
+  for (const mapId of ["saltHall", "blocks", "dam", "dryBed"]) {
     const times = FRAMES.filter(frame => frame.mapId === mapId && frame.weather === "clear");
     const day = times.find(frame => frame.time === "day")!;
     assert.deepEqual(times.map(frame => frame.time).sort(), ["day", "evening", "morning", "night"], mapId);
@@ -52,6 +52,20 @@ test("real map frames route blocks night to its night plate with the catalogue's
     fighters: [{ id: "a", name: "Тень", weapon: "rifle" }, { id: "b", name: "Искра", weapon: "rifle" }] });
   assert.equal(match.map.maxDistance, 12);
   assert.equal(match.distance, 7);
+});
+
+test("Kaskad maps route every time to their own plate with the catalogue's field size", () => {
+  for (const [mapId, prefix, maxDistance] of [["dam", "dam", 14], ["dryBed", "drybed", 13]] as const) {
+    for (const time of ["morning", "day", "evening", "night"] as const) {
+      const chosen = callRust<Frame>("client.conditions.initial", [FRAMES, time, null, null, false, mapId, null]);
+      assert.deepEqual([chosen.id, chosen.mapId, chosen.time], [`${prefix}-${time}`, mapId, time]);
+      const match = createMatch({ seed: `${prefix}-real-frame`, mapId, weather: chosen.weather, time,
+        fighters: [{ id: "a", name: "Тень", weapon: "rifle" }, { id: "b", name: "Искра", weapon: "rifle" }] });
+      assert.equal(match.map.maxDistance, maxDistance);
+    }
+  }
+  const regions = callRust<{ id: string; name: string }[]>("client.conditions.regions", [FRAMES]);
+  assert.deepEqual(regions.map(region => region.name), ["Белый Яр", "Каскад"]);
 });
 
 test("a synthetic day-only map still falls back without relabelling daytime as night", () => {

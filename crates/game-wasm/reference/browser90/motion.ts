@@ -102,7 +102,7 @@ export class Pose {
 }
 
 /** Each track is filtered as one packed buffer in Rust. */
-function soften(clip: THREE.AnimationClip, keep = .55, sigma = 2.5): void {
+function soften(clip: THREE.AnimationClip, keep = .3, sigma = 6): void {
   for (const track of clip.tracks) {
     const input = new Float64Array(4 + track.values.length);
     input.set([track.getValueSize(), keep, sigma, track instanceof THREE.QuaternionKeyframeTrack ? 1 : 0]);

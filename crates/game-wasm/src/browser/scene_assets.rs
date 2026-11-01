@@ -638,6 +638,22 @@ pub fn dress(host: JsValue, model: JsValue, wear: JsValue) {
             set(&node, "visible", &(!hat.as_deref().is_some_and(has)).into());
             continue;
         }
+        // a suit's morph per hard vest ("vest", "plita4") tucks the jacket in under it while it is worn
+        let dictionary = get(&node, "morphTargetDictionary");
+        if present(&dictionary) {
+            let influences = get(&node, "morphTargetInfluences");
+            for key in Object::keys(&Object::from(dictionary.clone())).iter() {
+                let key = string(&key);
+                let worn = on.iter().any(|m| m.to_ascii_lowercase() == key);
+                let _ = js_sys::Reflect::set(
+                    &influences,
+                    &get(&dictionary, &key),
+                    &(if worn { 1.0 } else { 0.0 }).into(),
+                );
+            }
+        }
+        // the tucked suit hides only faces the vest covers whole: a face with one corner under it reached past its edge
+        let clothes = gear_slot(&name).is_some();
         let mut geometry = get(&node, "geometry");
         let masks = on
             .iter()
@@ -686,11 +702,17 @@ pub fn dress(host: JsValue, model: JsValue, wear: JsValue) {
                     v
                 }
             });
-            if !triangle.iter().any(|v| {
+            let hidden = |v: &u32| {
                 masks
                     .iter()
                     .any(|m| num(&call(m, "getX", &[(*v).into()])) >= 0.5)
-            }) {
+            };
+            let cut = if clothes {
+                triangle.iter().all(hidden)
+            } else {
+                triangle.iter().any(hidden)
+            };
+            if !cut {
                 kept.extend(triangle);
             }
         }

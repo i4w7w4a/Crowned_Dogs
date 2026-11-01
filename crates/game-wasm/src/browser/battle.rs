@@ -1333,7 +1333,7 @@ fn render_menu(s: &JsValue) {
         ),
     );
     let current_map = word(&get(&match_(s), "config"), "mapId");
-    let maps = values(&core("client.conditions.maps", &[get(s, "frames")]));
+    let all_maps = values(&core("client.conditions.maps", &[get(s, "frames")]));
     let clocks = core("client.world.maps", &[js_sys::Date::now().into()]);
     let clock_of = |map: &str| {
         values(&clocks)
@@ -1341,6 +1341,33 @@ fn render_menu(s: &JsValue) {
             .find(|c| word(c, "mapId") == map)
             .unwrap_or(JsValue::NULL)
     };
+    let current_region = all_maps
+        .iter()
+        .find(|m| word(m, "id") == current_map)
+        .map(|m| word(m, "region"))
+        .unwrap_or_default();
+    let regions = values(&core("client.conditions.regions", &[get(s, "frames")]));
+    let rs = segment("regionSeg", regions.len());
+    for region in regions {
+        let wanted = word(&region, "id");
+        let current = wanted == current_region;
+        // A region opens on its first drawn map, at that map's own hour.
+        let first = all_maps
+            .iter()
+            .find(|m| word(m, "region") == wanted)
+            .map(|m| word(m, "id"))
+            .unwrap_or_default();
+        let state = s.clone();
+        option(&rs, &word(&region, "name"), current, move |_| {
+            if !current {
+                choose_map(&state, &first);
+            }
+        });
+    }
+    let maps: Vec<JsValue> = all_maps
+        .into_iter()
+        .filter(|m| word(m, "region") == current_region)
+        .collect();
     let ms = segment("mapSeg", maps.len());
     for choice in maps {
         let wanted = word(&choice, "id");

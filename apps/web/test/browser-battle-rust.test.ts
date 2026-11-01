@@ -126,7 +126,10 @@ function createHarness(options: HarnessOptions = {}) {
     })), ...["day", "morning", "evening", "night"].map(time => ({
       id: `blocks-${time}`, name: "Пятиэтажки", src: `blocks-${time}.png`,
       w: 941, h: 1672, top: 0, mapId: "blocks", weather: "clear", time,
-    }))],
+    })), ...[["dam", "dam", "Плотина"], ["drybed", "dryBed", "Сухое дно"]].flatMap(([prefix, mapId, name]) => ["day", "morning", "evening", "night"].map(time => ({
+      id: `${prefix}-${time}`, name, src: `${prefix}-${time}.png`,
+      w: 941, h: 1672, top: 0, mapId, weather: "clear", time,
+    })))],
     weaponIds: WEAPON_IDS, weapons: WEAPONS, veteranKits: VETERAN_KITS, playlist: [], tracks: {}, timing: data.TIMING,
     myModel: "me.json", foeModel: "enemy.json",
   };
@@ -290,6 +293,21 @@ test("map changes preserve the fitted kit and move to that map's own hour", asyn
   h.element("mapSeg").children[0]!.click();
   assert.equal(h.duel().match.config.mapId, "saltHall");
   assert.equal(h.duel().match.config.time, "night");
+  h.click("moreBtn");
+  assert.equal(h.element("regionSeg").children.length, 2);
+  assert.equal(h.element("regionSeg").children[0]!.getAttribute("aria-pressed"), "true");
+  h.element("regionSeg").children[1]!.click();
+  assert.equal(h.duel().match.config.mapId, "dam");
+  assert.equal(h.duel().match.config.time, "morning", "the dam runs six game hours ahead");
+  assert.equal(h.duel().match.map.maxDistance, 14);
+  assert.deepEqual(h.duel().fighters[0].kit, kit);
+  h.click("moreBtn");
+  assert.equal(h.element("mapSeg").children.length, 2, "only the chosen region's maps are listed");
+  h.element("mapSeg").children[1]!.click();
+  assert.equal(h.duel().match.config.mapId, "dryBed");
+  assert.equal(h.duel().match.config.time, "evening", "the dry bed runs eighteen game hours ahead");
+  assert.equal(h.duel().match.map.maxDistance, 13);
+  assert.equal(h.stored.get("cd-map"), "dryBed");
 }, { now: MIDNIGHT + GAME_HOUR / 60 }));
 
 test("saved blocks map is restored at its own hour", async () => harness(async h => {

@@ -1,8 +1,8 @@
-"""Pack the game hairstyles into apps/web/models/hair-female.glb, children of the head bone.
+"""Pack the game hairstyles into apps/web/models/hair-<sex>.glb, children of the head bone.
 
-usage: blender -b --factory-startup --python pack.py -- GAME_DIR TEXTURE.png
+usage: blender -b --factory-startup --python pack.py -- GAME_DIR TEXTURE.png [female|male]
 GAME_DIR holds game_<style>.blend from game_cards.py (rest-space meshes). Like the beards, every
-mesh is placed in the head bone's frame taken from persona-female.glb's own node graph, so the
+mesh is placed in the head bone's frame taken from persona-<sex>.glb's own node graph, so the
 runtime only has to add the pack under the `head` node. Then run finish.py and meshopt (README).
 """
 import bpy, sys, json, struct
@@ -12,9 +12,10 @@ from mathutils import Matrix, Vector, Quaternion
 args = sys.argv[sys.argv.index('--') + 1:]
 game_dir, tex_p = Path(args[0]), args[1]
 ROOT = Path(__file__).resolve().parents[2]
-STYLES = ('pixie', 'bob', 'braid')
+SEX = args[2] if len(args) > 2 else 'female'
+STYLES = {'female': ('pixie', 'bob', 'braid'), 'male': ('crop', 'slick', 'medium')}[SEX]
 
-raw = (ROOT / 'apps/web/models/persona-female.glb').read_bytes()
+raw = (ROOT / f'apps/web/models/persona-{SEX}.glb').read_bytes()
 jn = struct.unpack_from('<I', raw, 12)[0]
 source = json.loads(raw[20:20 + jn])
 parents = {c: i for i, n in enumerate(source['nodes']) for c in n.get('children', [])}
@@ -57,6 +58,8 @@ def material(name, color, rough, tex=None):
 cards = material('M_Hair_Cards', (1, 1, 1), 0.72, tex_p)
 cap = material('M_Hair_Cap', (0.0532, 0.0282, 0.0155), 0.8)
 tie = material('M_Hair_Tie', (0.012, 0.012, 0.013), 0.6)
+# the crop's faded sides: stubble from fade_texture.py
+fade = material('M_Hair_Fade', (1, 1, 1), 0.72, str(Path(__file__).with_name('hair-fade.png')))
 
 objs = []
 for style in STYLES:
@@ -66,7 +69,7 @@ for style in STYLES:
         sc.collection.objects.link(o)
         o.name = o.data.name = o.name.split('.')[0]  # the HD curves held the plain name in the source file
         o.data.materials.clear()
-        o.data.materials.append(cap if o.name.endswith('_cap') else tie if o.name.endswith('_tie') else cards)
+        o.data.materials.append(cap if o.name.endswith('_cap') else tie if o.name.endswith('_tie') else fade if o.name.endswith('_fade') else cards)
         objs.append(o)
         print('MESH', o.name, len(o.data.polygons), 'faces')
 
@@ -75,7 +78,7 @@ for o in objs:
     o.data.transform(HEAD.inverted())
     o.matrix_world = Matrix.Identity(4)
     o.select_set(True)
-out = ROOT / 'output/hair-hd/raw/hair-female.glb'
+out = ROOT / f'output/hair-hd/raw/hair-{SEX}.glb'
 out.parent.mkdir(parents=True, exist_ok=True)
 bpy.ops.export_scene.gltf(filepath=str(out), export_format='GLB', use_selection=True, export_yup=True,
     export_materials='EXPORT', export_image_format='WEBP', export_animations=False, export_cameras=False,

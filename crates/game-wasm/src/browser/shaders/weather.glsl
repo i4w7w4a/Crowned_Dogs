@@ -26,10 +26,11 @@ if (hasBg > 0.5) {
     float dust = cdWeather.y * gust * low * (0.2 + 0.8 * far) * (0.12 + 1.1 * veil);
     // grains darken the sunlit air a touch and lift the shadows to the dust's tone
     c = mix(c, cdDustColor * (0.82 + 0.18 * veil), clamp(dust, 0.0, 0.88));
-    // single grains flicking past the lens
-    vec2 g = vec2(p.x * 90.0 - t * 40.0, vUv.y * 55.0 + sin(p.x * 9.0 + t) * 0.6);
-    float grain = step(0.975, wxHash(floor(g))) * smoothstep(0.5, 0.0, length(fract(g) - 0.5) - 0.12);
-    c += cdDustColor * grain * cdWeather.y * 0.5;
+    // single grains flicking past the lens: fine sideways specks, never round drops
+    vec2 g = vec2(p.x * 150.0 - t * 70.0, vUv.y * 170.0 + sin(p.x * 9.0 + t) * 0.6);
+    vec2 d = (fract(g) - 0.5) * vec2(0.45, 2.2);
+    float grain = step(0.988, wxHash(floor(g))) * smoothstep(0.32, 0.0, length(d));
+    c = mix(c, cdDustColor, grain * cdWeather.y * 0.3);
   }
   // rain: thin slanted streaks in three depth layers, hidden behind what stands nearer
   if (cdWeather.z > 0.0) {
