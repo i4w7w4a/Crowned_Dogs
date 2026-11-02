@@ -33,11 +33,11 @@ const front = (name) => { const V = rest(nodeOf(name)), T = [];
   for (let q = 0; q < V.ix.length; q += 3) { const v = [0, 1, 2].map((k) => V.pos[V.ix[q + k]]), n = cross(sub(v[1], v[0]), sub(v[2], v[0])), l = Math.hypot(...n) || 1;
     T.push({ v, n: n.map((x) => x / l), lo: [0, 1, 2].map((k) => Math.min(v[0][k], v[1][k], v[2][k])), hi: [0, 1, 2].map((k) => Math.max(v[0][k], v[1][k], v[2][k])) }); }
   return T; };
-// nearest front-facing vest face along o + t d (t in 0..len)
-const cast = (T, o, d, len) => { let best = Infinity;
+// nearest front-facing vest face along o + t d (t in 0..len); facing 2 takes any face
+const cast = (T, o, d, len, facing = -0.2) => { let best = Infinity;
   const end = o.map((c, k) => c + d[k] * len), blo = o.map((c, k) => Math.min(c, end[k])), bhi = o.map((c, k) => Math.max(c, end[k]));
   for (const { v, n, lo, hi } of T) { if (lo[0] > bhi[0] || hi[0] < blo[0] || lo[1] > bhi[1] || hi[1] < blo[1] || lo[2] > bhi[2] || hi[2] < blo[2]) continue;
-    if (dot(n, d) > -0.2) continue;  // the vest's outside faces back along the ray
+    if (dot(n, d) > facing) continue;  // the vest's outside faces back along the ray
     const e1 = sub(v[1], v[0]), e2 = sub(v[2], v[0]), h = cross(d, e2), a = dot(e1, h); if (Math.abs(a) < 1e-12) continue;
     const f = 1 / a, s = sub(o, v[0]), u = f * dot(s, h); if (u < 0 || u > 1) continue;
     const q = cross(s, e1), w = f * dot(d, q); if (w < 0 || u + w > 1) continue; const t = f * dot(e2, q); if (t > 0 && t < best) best = t; }
@@ -57,7 +57,7 @@ const skin = (suitMask, vestMask) => { if (!bodyRest) return [];
   return T; };
 // Skin near the tucked jacket goes too while both are worn: `_<SUIT>_<VEST>` on the body (the game adds it to the
 // masks). Neck and head stay, so the collar never opens a hole.
-const NEAR = 0.03, combos = new Map();
+const NEAR = 0.03, SINK = 0.004, combos = new Map();
 const bodyNeck = BODY && (() => { const skin = BODY.getSkin(), joints = skin.listJoints(), p = BODY.getMesh().listPrimitives()[0];
   const J = p.getAttribute("JOINTS_0"), W = p.getAttribute("WEIGHTS_0"), neck = joints.map((j) => /neck|head/i.test(j.getName()));
   return Array.from({ length: J.getCount() }, (_, i) => { const j = J.getElement(i, []), w = W.getElement(i, []); let s = 0;
@@ -68,7 +68,22 @@ if (bodyRest) for (const [suit, m] of [['Suit', '_SUIT'], ['Ryvok', '_RYVOK']]) 
   const T = front(suit); let poke = 0;
   bodyRest.pos.forEach((p, i) => { if (mask.getScalar(i) >= 0.5 || bodyNeck[i] > 0.9) return;
     if (cast(T, p, bodyRest.nor[i].map((c) => -c), 0.03) < Infinity) { mask.setScalar(i, 1); poke++; } });
-  console.log('body poking through', suit, poke); }
+  // A long skin face can poke out between corners that all sit under the suit (the female's upper back under Ryvok):
+  // points across each face still drawn are tested too, from SINK above the skin, and its corners the suit covers
+  // join the mask. A face whose corners are all neck stays, so the collar never opens a hole.
+  const V = bodyRest; let faces = 0, left = 0;
+  for (let q = 0; q < V.ix.length; q += 3) { const ids = [0, 1, 2].map((k) => V.ix[q + k]);
+    if (ids.some((i) => mask.getScalar(i) >= 0.5)) continue;
+    const v = ids.map((i) => V.pos[i]), c = cross(sub(v[1], v[0]), sub(v[2], v[0])), l = Math.hypot(...c) || 1;
+    const n = c.map((x) => x / l * Math.sign(dot(c, V.nor[ids[0]].map((y, k) => y + V.nor[ids[1]][k] + V.nor[ids[2]][k])) || 1));
+    let out = false;
+    for (let a = 0; a <= 4 && !out; a++) for (let b = 0; a + b <= 4 && !out; b++) { const w = [a, b, 4 - a - b]; if (w.includes(4)) continue;
+      const s = [0, 1, 2].map((k) => (v[0][k] * w[0] + v[1][k] * w[1] + v[2][k] * w[2]) / 4 + n[k] * SINK);
+      out = cast(T, s, n.map((x) => -x), 0.03 + SINK) < Infinity; }
+    if (!out) continue; faces++;
+    const hide = ids.filter((i) => bodyNeck[i] <= 0.9 && cast(T, V.pos[i], V.nor[i], 0.08, 2) < Infinity);
+    if (!hide.length) left++; for (const i of hide) { mask.setScalar(i, 1); poke++; } }
+  console.log('body poking through', suit, poke, 'faces', faces, 'left', left); }
 const done = new Map();
 for (const name of ['Suit', 'Ryvok', 'Solonchak', 'Ten']) {
   const node = nodeOf(name); if (!node) continue;
