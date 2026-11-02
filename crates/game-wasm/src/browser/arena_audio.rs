@@ -195,7 +195,8 @@ impl BrowserArenaAudio {
     }
     pub fn screen(&mut self, view: &str) {
         self.mode = "menu".into();
-        let base = view == "base" || view == "region";
+        // The sync tablet and the region map open over the base, so its music and radio keep playing.
+        let base = matches!(view, "base" | "region" | "sync");
         self.list = get(
             &self.host,
             if base {

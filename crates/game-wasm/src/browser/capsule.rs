@@ -144,7 +144,6 @@ pub fn markup(before: Option<&Value>) -> String {
     };
     let mut out = format!(
         "<div class=\"cd-tab-in{boot}\">\
-         <div class=\"cd-tab-bar\"><span class=\"cd-tab-live\"><i></i>Связь с Персоной</span></div>\
          <section class=\"cd-tab-hero cd-tab-part\" style=\"--i:0\">\
          <div class=\"cd-sync-ring\" style=\"--p:{progress:.3}\" role=\"img\" aria-label=\"Уровень {level}\"><svg viewBox=\"0 0 120 120\" aria-hidden=\"true\">\
          <circle class=\"cd-ring-ticks\" cx=\"60\" cy=\"60\" r=\"57\" pathLength=\"120\"/><circle class=\"cd-sync-track\" cx=\"60\" cy=\"60\" r=\"48\"/>\
@@ -211,7 +210,7 @@ pub fn markup(before: Option<&Value>) -> String {
         if free > 0.0 { " on" } else { "" }
     ));
     // Stat rows: a 20-segment bar shows how far the stat's effect has saturated.
-    out.push_str("<section class=\"cd-tab-part\" style=\"--i:2\"><p class=\"cd-tab-title\">Характеристики</p>");
+    out.push_str("<section class=\"cd-tab-part cd-tab-panel\" style=\"--i:2\"><p class=\"cd-tab-title\">Характеристики</p>");
     for (i, id) in AXES.iter().enumerate() {
         let s = stat(&v, id);
         let points = num(&s["points"]);
@@ -231,7 +230,7 @@ pub fn markup(before: Option<&Value>) -> String {
             next = joined(&s["next"]),
         ));
     }
-    out.push_str("</section><section class=\"cd-tab-part\" style=\"--i:3\"><p class=\"cd-tab-title\">Мастерство оружия</p>");
+    out.push_str("</section><section class=\"cd-tab-part cd-tab-panel\" style=\"--i:3\"><p class=\"cd-tab-title\">Мастерство оружия</p>");
     for (i, m) in v["mastery"].as_array().into_iter().flatten().enumerate() {
         let share = num(&m["share"]);
         out.push_str(&format!(
