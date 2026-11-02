@@ -534,13 +534,11 @@ fn front_of(host: &JsValue, gun: &JsValue) -> JsValue {
 }
 
 /// Worn item id to its mesh in the Persona models; items without a mesh of their own wear a close one.
-const GEAR: [(&str, &str); 13] = [
+const GEAR: [(&str, &str); 11] = [
     ("head-k6", "Helmet"),
     ("head-sych", "Helmet"),
-    ("head-marevo", "Helmet"),
     ("head-cap", "Cap"),
     ("head-sfera", "Sfera"),
-    ("head-filin", "Sfera"),
     ("body-plita2", "Vest"),
     ("body-plita4", "Plita4"),
     ("suit-field", "Suit"),

@@ -1517,33 +1517,6 @@
       }
     },
     {
-      "id": "head-marevo",
-      "kind": "head",
-      "name": "Шлем с тепловизором «Марево»",
-      "tier": 2,
-      "note": "Видит тепло сквозь пыль и дым.",
-      "effects": {
-        "armor": {
-          "head": 8
-        },
-        "thermal": true
-      }
-    },
-    {
-      "id": "head-filin",
-      "kind": "head",
-      "name": "Шлем «Филин»",
-      "tier": 3,
-      "note": "Крепкий шлем с ночным видением. Тяжёлый.",
-      "effects": {
-        "armor": {
-          "head": 20
-        },
-        "nvg": true,
-        "dodge": -0.02
-      }
-    },
-    {
       "id": "body-plita2",
       "kind": "body",
       "name": "Бронежилет «Плита-2»",

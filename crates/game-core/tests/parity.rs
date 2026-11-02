@@ -68,7 +68,7 @@ fn frozen_sniper_rail(method: &str, args: &Value) -> bool {
             && args[2] == "rail-kulak")
 }
 /// Concept gear without a model left the catalogue (01.11.2026); cases built on it are skipped.
-const CONCEPTS: [&str; 13] = [
+const CONCEPTS: [&str; 15] = [
     "body-light",
     "body-bastion",
     "suit-leshy",
@@ -82,6 +82,8 @@ const CONCEPTS: [&str; 13] = [
     "grenade-grad",
     "grenade-emp",
     "grenade-smoke",
+    "head-marevo",
+    "head-filin",
 ];
 fn concept_gear(args: &Value) -> bool {
     let text = args.to_string();

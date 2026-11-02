@@ -87,14 +87,17 @@ for (const name of ['Suit', 'Ryvok', 'Solonchak', 'Ten']) {
       return dot(v, r) < 0 ? v.map((c) => -c) : v; });
     const targets = [];
     for (const [tname, T] of VESTS) {
-      const depth = new Float64Array(n);  // how far in along -normal, per welded vertex
+      const depth = new Float64Array(n), settled = new Uint8Array(n);  // how far in along -normal, per welded vertex
       for (let i = 0; i < n; i++) { if (weld[i] !== i || S.arms[i] >= 0.3) continue;
         const p = S.pos[i], d = sn[i].map((c) => -c), t = cast(T, p.map((c, k) => c - d[k] * UP), d, UP + 0.06);
-        if (t === Infinity) continue; const out = UP - t;  // suit above the vest's outside by this much (negative: below)
+        // The ray starts UP outside the suit, so a vest face hit past UP lies under the suit point: the suit pokes
+        // out by t - UP. A suit already under the vest stays put (it used to be pulled in by the vest's whole
+        // stand-off, 6-8 cm at the female's lower back and sides, which pinched the waist and opened a hole).
+        if (t === Infinity) continue; const out = t - UP; settled[i] = 1;  // suit above the vest's outside by this much (negative: below)
         if (out > -IN && out < 0.08) depth[i] = out + IN; }
       // points the old cut hid but no ray settled (gaps between pouches, folds): take their neighbours' depth
       const cut = prim.getAttribute('_' + tname.toUpperCase());
-      for (let it = 0; it < 6 && cut; it++) for (let i = 0; i < n; i++) if (weld[i] === i && depth[i] === 0 && cut.getScalar(i) >= 0.5) {
+      for (let it = 0; it < 6 && cut; it++) for (let i = 0; i < n; i++) if (weld[i] === i && depth[i] === 0 && !settled[i] && cut.getScalar(i) >= 0.5) {
         let m = 0; for (const j of nb[i]) m = Math.max(m, depth[j]); depth[i] = m; }
       // fade past the vest's edge so the jacket tucks in instead of stepping
       let ring = [...depth].map((x, i) => (x > 0 ? i : -1)).filter((i) => i >= 0);

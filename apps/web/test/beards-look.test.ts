@@ -139,10 +139,10 @@ test("current gear dressing and camera refresh hide Sfera aliases and restore op
   const chosen = look({ face: "m2", beard: "full" });
   sceneApplyLook(player, chosen);
   const shown = () => player.children.filter(n => n.name.startsWith("Beard_") && n.visible).length;
-  for (const id of ["head-sfera", "head-filin", "head-cap", "head-k6", null]) {
+  for (const id of ["head-sfera", "head-cap", "head-k6", null]) {
     sceneDress({ THREE }, player, { head: id });
     sceneSetBeardFirstPerson(player, false, chosen);
-    const closed = id === "head-sfera" || id === "head-filin";
+    const closed = id === "head-sfera";
     assert.equal(shown(), closed ? 0 : 2, `dress then refresh: ${id}`);
     sceneSetBeardFirstPerson(player, true, chosen);
     assert.equal(shown(), 0);

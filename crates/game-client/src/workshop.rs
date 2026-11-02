@@ -3,13 +3,13 @@ use crate::{core, loadout, num, text, truth};
 use serde_json::{json, Value};
 const SLOTS: [&str; 5] = ["optic", "muzzle", "rail", "mag", "stock"];
 /// Item id to preview model. `file#Prefix` shows only that file's meshes named with the prefix.
-/// Only items with a model of their own are offered (Art, 2026-11-01); the night-vision helmets
-/// stay on the K-6 and «Сфера» shells for now.
+/// Only items with a model of their own are offered (Art, 2026-11-01 and 2026-11-02); the night-vision
+/// helmet «Сыч» stays on the K-6 shell for now.
 fn models() -> Value {
     // Temporary, explicitly approved placeholder: Sych keeps its own rules and
     // catalogue icon, but uses the ordinary helmet until its model is ready.
-    json!({"head-k6":"tripo-helmet","head-sych":"tripo-helmet","head-marevo":"tripo-helmet",
-        "head-cap":"gear#Cap","head-sfera":"gear#Sfera","head-filin":"gear#Sfera",
+    json!({"head-k6":"tripo-helmet","head-sych":"tripo-helmet",
+        "head-cap":"gear#Cap","head-sfera":"gear#Sfera",
         "body-plita2":"tripo-vest","body-plita4":"gear#Plita4",
         "suit-field":"gear#Suit","suit-solonchak":"gear#Solonchak","suit-ten":"gear#Ten",
         "suit-ryvok":"gear#Ryvok","boots-bertsy":"gear#Boots",
