@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "source": "Codex image_gen: approved intake plate, its clean edit and lighting-weather edits",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/intake-times/morning/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2913847,
+      "sha256": "04f16bdb9c22adc039c7fd0b27f67cea2516f23d062bb3bf53c95548ecd8df69"
+    },
+    {
+      "path": "apps/web/public/img/intake-times/morning/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 497342,
+      "sha256": "78daab042cbfc2a65ecd0e21ba5699ecb00c0a3c48f1cb85881bde22217a1759"
+    },
+    {
+      "path": "apps/web/public/img/intake-times/morning/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2781467,
+      "sha256": "bab17d39fa43b6866c90b26280a313bc101e83bc6612ba52b9a3bf4846a231dc"
+    },
+    {
+      "path": "apps/web/public/img/intake-times/morning/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 443360,
+      "sha256": "6c296520db712032a4c70ac8fe99ca19519a721c75bfd121d7f623b9d4ef2267"
+    },
+    {
+      "path": "apps/web/public/img/intake-times/evening/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2917775,
+      "sha256": "ceee4f94e04d91ad6aee324519441c5aa6881ab3bc64de8d3df9588eb75c46cb"
+    },
+    {
+      "path": "apps/web/public/img/intake-times/evening/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 491198,
+      "sha256": "243b6a1c15358d758e75c417774826cba47e110156a9557e4b7a2d23c64c8919"
+    },
+    {
+      "path": "apps/web/public/img/intake-times/evening/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2805194,
+      "sha256": "77e3c461f9a462cfc33344689a11e0770c05057b1bd83b76840afce7e97b5680"
+    },
+    {
+      "path": "apps/web/public/img/intake-times/evening/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 445570,
+      "sha256": "6a783a8f219f0403872ba096319f83a83d1d96e5122e663fb62edcd546f56ff7"
+    },
+    {
+      "path": "apps/web/public/img/intake-times/night/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2191614,
+      "sha256": "5492e7d357809ecd12e8fec2141f2fed27610d894e7b30b4ac6ab57e7dd46eab"
+    },
+    {
+      "path": "apps/web/public/img/intake-times/night/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 248208,
+      "sha256": "723f3a9e208cfca77019cb6b3491963c127ee1819fe0e0e93b656a10665c065c"
+    },
+    {
+      "path": "apps/web/public/img/intake-times/night/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2081308,
+      "sha256": "e4f0a964d1d6d273ec053024555180aece0277fbd8610db4a546daa8a0a279e9"
+    },
+    {
+      "path": "apps/web/public/img/intake-times/night/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 212730,
+      "sha256": "2703fa29b8cb2a1b802d3e1f783b4a322b8832330960e8a53b922f660e4b70b1"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "source": "Codex image_gen: approved intake plate, its clean edit and lighting-weather edits",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/intake-day/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3116390,
+      "sha256": "b251c8e81fba47114761a39312531bdd332b31c53fda829c8cd549c2ebca8944"
+    },
+    {
+      "path": "apps/web/public/img/intake-day/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 559490,
+      "sha256": "f022a515fa66ce543643c36b99ac329a8d8e968b3ad4e9738d4ed2533b21cc12"
+    },
+    {
+      "path": "apps/web/public/img/intake-day/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3014801,
+      "sha256": "1388f898b075f53870622f9b9a9b027cc6fad5c951b826ebdef817a80f8b9f70"
+    },
+    {
+      "path": "apps/web/public/img/intake-day/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 505330,
+      "sha256": "d2253d3ad02a6c80ede75dc0b157031a7e077a991c4f503504787f9b0abf3d42"
+    }
+  ]
+}

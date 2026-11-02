@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "source": "Codex image_gen: approved sludgeponds plate, its clean edit and lighting-weather edits",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/sludgeponds-times/morning/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2464324,
+      "sha256": "9f367c71e731be4bf04ce844b65e2a360f0e05df391b9fb91d6954c51c0edc84"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-times/morning/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 432970,
+      "sha256": "4de461e1f046849d98ec9ce7f24b74dd9b140984df2816a466cdacd334b5a2f0"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-times/morning/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2374985,
+      "sha256": "d62a51f91488285f35a2e148887cae566079bb073917f8b32731a8acac386714"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-times/morning/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 390132,
+      "sha256": "0b0877256aaa65216a05b65494c4bfc8999c82b058c4c460221ad7fda811efe9"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-times/evening/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2470291,
+      "sha256": "eb9d192dae9e813ce86807d221def947fb3bb5a5009336834756ed641e5b355f"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-times/evening/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 464722,
+      "sha256": "38aaf6e0f3dbc9ec5e0290873b064032baa1edd5b8963d369ca79ac955bea093"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-times/evening/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2366795,
+      "sha256": "0f4875f3318cb9ed8437b73885e4bab881fbe7711a7e5c8c824ac221c8a10c60"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-times/evening/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 407600,
+      "sha256": "56a265494a5bd20333b61173d45717e3693129297447509595b176b0b63a71f5"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-times/night/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 1757769,
+      "sha256": "8fa3308f852bdb61cfcc34855f5a4fd26cac7ca40f427728eaf84a12f2c016c2"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-times/night/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 177824,
+      "sha256": "ecd1305a7d1b70a49091e3e81a1f49b87deb713d4c13f2af449fc88424e1d295"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-times/night/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 1791237,
+      "sha256": "8988603041cf7471e6c76eb163720ff1377694dde603369bc7385203769a63a5"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-times/night/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 192134,
+      "sha256": "4e4706ae530f861861f667e5831251c1f711d1e78639f265f2e863b66f123717"
+    }
+  ]
+}

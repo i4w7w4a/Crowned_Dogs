@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "source": "Codex image_gen: approved sludgeponds plate, its clean edit and lighting-weather edits",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/sludgeponds-day/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2619283,
+      "sha256": "7fc8fef19bcec768640dc513625093e6d0b5751d6ec13448dd7e5776a1fc48f0"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-day/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 463570,
+      "sha256": "e614607de916ac97e96adafc9e2670ed45d81046a6c29dae6b6efe9f3edeea7f"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-day/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2508752,
+      "sha256": "0c6a62f5b804571b066a321e4910e21ee534a7d97ece0d57998b35451b77c8c9"
+    },
+    {
+      "path": "apps/web/public/img/sludgeponds-day/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 421702,
+      "sha256": "d548cae739afc6ae0f2dba0364edc45941833176d3000f1c7e917565a01d5648"
+    }
+  ]
+}

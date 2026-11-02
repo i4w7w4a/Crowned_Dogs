@@ -84,21 +84,36 @@
       "name": "Сухое дно",
       "region": "Каскад",
       "maxDistance": 13
+    },
+    "intake": {
+      "id": "intake",
+      "name": "Водозабор",
+      "region": "Каскад",
+      "maxDistance": 12
+    },
+    "backwater": {
+      "id": "backwater",
+      "name": "Затон",
+      "region": "Каскад",
+      "maxDistance": 13
+    },
+    "railyard": {
+      "id": "railyard",
+      "name": "Сортировка",
+      "region": "Белый Яр",
+      "maxDistance": 13
+    },
+    "sludgePonds": {
+      "id": "sludgePonds",
+      "name": "Шламовые пруды",
+      "region": "Белый Яр",
+      "maxDistance": 14
     }
   },
   "MAP_ACCESS": {
     "shellingMinutes": 360,
     "shellingWhy": "под обстрелом",
-    "planned": {
-      "belyYar": {
-        "railyard": "Сортировка",
-        "sludgePonds": "Шламовые пруды"
-      },
-      "kaskad": {
-        "intake": "Водозабор",
-        "backwater": "Затон"
-      }
-    },
+    "planned": {},
     "events": {
       "storms": {
         "maps": [
@@ -346,14 +361,18 @@
       "name": "Белый Яр",
       "maps": [
         "saltHall",
-        "blocks"
+        "blocks",
+        "railyard",
+        "sludgePonds"
       ]
     },
     "kaskad": {
       "name": "Каскад",
       "maps": [
         "dam",
-        "dryBed"
+        "dryBed",
+        "intake",
+        "backwater"
       ]
     }
   },

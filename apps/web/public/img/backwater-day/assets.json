@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "source": "Codex image_gen: approved backwater plate, its clean edit and lighting-weather edits",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/backwater-day/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3042316,
+      "sha256": "0146c57b600f29151483cb3a8d2b57289706b214144dbd68793cc13017da4961"
+    },
+    {
+      "path": "apps/web/public/img/backwater-day/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 544722,
+      "sha256": "45934b65ddb71764f350681e8322262fe2522830087507774d8b9e4d13c69264"
+    },
+    {
+      "path": "apps/web/public/img/backwater-day/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2895360,
+      "sha256": "4e30d98e7a246418fbb41bb2520723bf1e979a5c9ef0b21a99f9b733edec1061"
+    },
+    {
+      "path": "apps/web/public/img/backwater-day/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 492654,
+      "sha256": "1a04b38a79eeaef5e87f2820d01cafdff897284b54a20c1949eb0a69606be4d3"
+    }
+  ]
+}

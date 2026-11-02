@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "source": "Codex image_gen: approved railyard plate, its clean edit and lighting-weather edits",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/railyard-day/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2987912,
+      "sha256": "d5c86599a3029784c3f0d09967851b1ed07ffb826856a3529e65c9fc1fd8e1b5"
+    },
+    {
+      "path": "apps/web/public/img/railyard-day/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 496856,
+      "sha256": "e935d7b629a9791be81648e37992be0f9c9bbaf40ad930a5fddf52494120d84e"
+    },
+    {
+      "path": "apps/web/public/img/railyard-day/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2944171,
+      "sha256": "5c24ab2668eb722ab087199192914567ac91f0047a68866d28946a774a179f60"
+    },
+    {
+      "path": "apps/web/public/img/railyard-day/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 468036,
+      "sha256": "5b51314ea1074ce58c213004b9ae1d3ef47a6b358836e79208dd5a0970ce6e29"
+    }
+  ]
+}

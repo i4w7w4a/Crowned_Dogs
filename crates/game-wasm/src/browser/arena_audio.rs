@@ -174,7 +174,7 @@ impl BrowserArenaAudio {
         // Open-air maps share the courtyard's short outdoor tail and ambience.
         let blocks = matches!(
             text(&get(&config, "mapId")).as_str(),
-            "blocks" | "dam" | "dryBed"
+            "blocks" | "dam" | "dryBed" | "backwater" | "sludgePonds"
         );
         let bed = if blocks { "amb.blocks" } else { "amb.hall" };
         self.room = if blocks { "blocks" } else { "hall" }.into();

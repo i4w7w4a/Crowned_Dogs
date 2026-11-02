@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "source": "Codex image_gen: approved backwater plate, its clean edit and lighting-weather edits",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/backwater-times/morning/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2833828,
+      "sha256": "cf86732845c0368fb988144f0d2cf51644ef1f9bda04069de656d93835bacd3d"
+    },
+    {
+      "path": "apps/web/public/img/backwater-times/morning/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 473640,
+      "sha256": "13aaf0fc3b4d5b2f9a1629ae2190f683cb3aab189e7eb828647c1fcc1ab9476f"
+    },
+    {
+      "path": "apps/web/public/img/backwater-times/morning/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2699604,
+      "sha256": "ba140c20efc8348d32ac1d5956e9df8e739661eb24dc87880604bcaa5e2f2581"
+    },
+    {
+      "path": "apps/web/public/img/backwater-times/morning/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 433520,
+      "sha256": "e2de351341cf6a8e0f11d9ca4ee41b005eaed94a433404f32be5de242cde0e1a"
+    },
+    {
+      "path": "apps/web/public/img/backwater-times/evening/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2869308,
+      "sha256": "4da132d63b41f39817a842dd59424c73b58a3e4a047aebf45d7be99cf95424c3"
+    },
+    {
+      "path": "apps/web/public/img/backwater-times/evening/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 480178,
+      "sha256": "e10a0fe63d0ab1c215c060cdd2feedc45612a354f3d89df5ba0b9e6a59b0e1b1"
+    },
+    {
+      "path": "apps/web/public/img/backwater-times/evening/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2706929,
+      "sha256": "2865cca2ee606e6d8b59cf096b078a407458fa87b046121303a9ccc0c45c80a9"
+    },
+    {
+      "path": "apps/web/public/img/backwater-times/evening/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 434462,
+      "sha256": "d606d614edb3ed7980db30c282feaa48c8a0ffbaf83c210274524061cdf92bf4"
+    },
+    {
+      "path": "apps/web/public/img/backwater-times/night/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2212023,
+      "sha256": "3a326197d25e288c1fe11685641a3fda5602ba390e5680142bd91c53d5536c9a"
+    },
+    {
+      "path": "apps/web/public/img/backwater-times/night/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 253492,
+      "sha256": "37f172c94b3a0a399337814d8e1e9702855bab8226b5b33a40911c73b42afca8"
+    },
+    {
+      "path": "apps/web/public/img/backwater-times/night/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2096161,
+      "sha256": "9832add4403ae857ce02babad506d285e2d46b14f89b385c1dcf2c6c5c585c22"
+    },
+    {
+      "path": "apps/web/public/img/backwater-times/night/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 225202,
+      "sha256": "253e3c8b4a0aae68268367368700b16ba66eb7874d749b083a7067c01d13330b"
+    }
+  ]
+}
