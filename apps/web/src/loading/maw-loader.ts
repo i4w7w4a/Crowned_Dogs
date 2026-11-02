@@ -10,5 +10,5 @@ const host = { THREE, GLTFLoader, RoomEnvironment, liquidGlass, base: import.met
 /** Browser libraries are injected; Rust owns the loading presentation. */
 export class MawLoader extends RustMawLoader implements LoadingPresentation {
   constructor() { super(host); }
-  override failed(): Promise<"retry" | "back"> { return super.failed(); }
+  override failed(detail?: string): Promise<"retry" | "back"> { return super.failed(detail); }
 }

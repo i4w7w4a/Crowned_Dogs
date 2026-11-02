@@ -107,15 +107,17 @@ fn load_with_parent(launch: JsValue, view: JsValue, parent: JsValue) -> Promise 
         let outcome = async {
             let mut pending = first?;
             loop {
-                let settled = JsFuture::from(pending.raced.clone()).await;
-                if settled.is_ok() {
-                    return Ok(true.into());
-                }
+                let error = match JsFuture::from(pending.raced.clone()).await {
+                    Ok(_) => return Ok(true.into()),
+                    Err(error) => error,
+                };
                 if boolean(&get(&pending.signal, "aborted")) {
                     return Ok(false.into());
                 }
-                let choice =
-                    JsFuture::from(Promise::resolve(&try_call(&view, "failed", &[])?)).await?;
+                call(&get(&global(), "console"), "error", &["crowned-dogs: the arena failed to load".into(), error.clone()]);
+                let detail = if error.is_object() { get(&error, "message") } else { error.clone() };
+                let detail = detail.as_string().unwrap_or_else(|| string(&error));
+                let choice = JsFuture::from(Promise::resolve(&try_call(&view, "failed", &[detail.into()])?)).await?;
                 if string(&choice) != "retry" {
                     return Ok(false.into());
                 }

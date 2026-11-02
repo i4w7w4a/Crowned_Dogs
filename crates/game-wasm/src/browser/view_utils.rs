@@ -21,7 +21,7 @@ pub fn get(o: &JsValue, name: &str) -> JsValue {
         if !v.is_object() && !v.is_function() {
             JsValue::UNDEFINED
         } else {
-            Reflect::get(&v, &text(key)).unwrap_throw()
+            Reflect::get(&v, &super::bridge::cached_key(key)).unwrap_throw()
         }
     })
 }
@@ -29,7 +29,7 @@ pub fn set(o: &JsValue, name: &str, v: &JsValue) {
     if let Some((path, key)) = name.rsplit_once('.') {
         set(&get(o, path), key, v);
     } else {
-        Reflect::set(o, &text(name), v).unwrap_throw();
+        Reflect::set(o, &super::bridge::cached_key(name), v).unwrap_throw();
     }
 }
 pub fn number(o: &JsValue, name: &str) -> f64 {

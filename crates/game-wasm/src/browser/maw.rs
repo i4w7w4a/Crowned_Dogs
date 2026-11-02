@@ -165,7 +165,8 @@ impl RustMawLoader {
             );
         })
     }
-    pub fn failed(&self) -> Promise {
+    /// `detail` is the error's own words, shown small under the message: a phone has no console.
+    pub fn failed(&self, detail: Option<String>) -> Promise {
         let s = &self.state;
         class(&get(s, "dialog"), "remove", "is-ready");
         class(&get(s, "dialog"), "add", "is-error");
@@ -175,6 +176,12 @@ impl RustMawLoader {
             "textContent",
             &text("Не удалось загрузить арену"),
         );
+        if let Some(detail) = detail.filter(|d| !d.is_empty()) {
+            let small = call(&get(&global(), "document"), "createElement", &[text("small")]);
+            set(&small, "textContent", &text(&detail.chars().take(160).collect::<String>()));
+            set(&small, "style.cssText", &text("display:block;margin-top:6px;opacity:.6;font-size:11px;word-break:break-word"));
+            call(&get(s, "status"), "append", &[small]);
+        }
         set(&get(s, "retry"), "hidden", &flag(false));
         stop_animation(s);
         focus(&get(s, "retry"));

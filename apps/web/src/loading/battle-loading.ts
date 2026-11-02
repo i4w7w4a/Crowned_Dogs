@@ -2,7 +2,7 @@ import { activate_after_ready, run_battle_loading } from "../../../../packages/r
 export interface LoadingPresentation {
   show(onBack: () => void): void;
   ready(): Promise<void>;
-  failed(): Promise<"retry" | "back">;
+  failed(detail?: string): Promise<"retry" | "back">;
   hide(): void;
 }
 export function activateAfterReady(

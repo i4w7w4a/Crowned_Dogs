@@ -142,11 +142,12 @@ struct Mirror {
     pairs: Vec<[JsValue; 4]>,
     mats: Rc<RefCell<Vec<JsValue>>>,
 }
-/// Holds the battle at about 120 frames a second on 240 Hz and faster screens: drawing every
-/// refresh there only heats the machine, and a whole number of refreshes per frame paces evenly.
-/// `?nocap` turns it off for measurements.
+/// Holds drawing to about 120 frames a second on 240 Hz and faster screens, and to about 60 on
+/// a phone or a fitting screen over 100 Hz: drawing every refresh there only heats the device, and
+/// a whole number of refreshes per frame paces evenly. `?nocap` turns it off for measurements.
 #[derive(Default)]
-struct FramePace {
+pub(super) struct FramePace {
+    target: f64,
     last: f64,
     gaps: Vec<f64>,
     refresh: f64,
@@ -154,7 +155,20 @@ struct FramePace {
     drawn: f64,
 }
 impl FramePace {
-    fn due(&mut self, time: f64) -> bool {
+    /// The battle's pace: 120 frames on a computer, 60 on a touch phone.
+    fn battle() -> Self {
+        let phone = get(&global(), "matchMedia").is_function()
+            && boolean(&get(
+                &call(&global(), "matchMedia", &["(pointer: coarse)".into()]),
+                "matches",
+            ));
+        Self::new(if phone { 13. } else { 8. })
+    }
+    /// `target` is the shortest gap between drawn frames, in milliseconds, worth having.
+    pub(super) fn new(target: f64) -> Self {
+        Self { target, ..Self::default() }
+    }
+    pub(super) fn due(&mut self, time: f64) -> bool {
         if self.every == 0. {
             let gap = time - self.last;
             self.last = time;
@@ -165,9 +179,9 @@ impl FramePace {
                 self.gaps.sort_by(f64::total_cmp);
                 self.refresh = self.gaps[self.gaps.len() / 2];
                 let search = string(&get(&get(&global(), "location"), "search"));
-                let off = js_sys::RegExp::new(r"[?&]nocap\b", "").test(&search);
-                self.every = if self.refresh < 4.6 && !off {
-                    (8.0 / self.refresh).ceil()
+                let off = js_sys::RegExp::new(r"[?&]nocap", "").test(&search);
+                self.every = if self.refresh < self.target * 0.575 && !off {
+                    (self.target / self.refresh).ceil()
                 } else {
                     1.
                 };
@@ -595,7 +609,7 @@ impl RustArena {
             on_frame: JsValue::NULL,
             drawn: vec![],
             animation: None,
-            pace: FramePace::default(),
+            pace: FramePace::battle(),
             widen,
             mirror_shader,
             callbacks: vec![],

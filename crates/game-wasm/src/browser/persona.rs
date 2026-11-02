@@ -1,6 +1,7 @@
 //! Authored Persona preview: its pose remains unchanged; Rust controls the scene.
 use super::view_utils::*;
 use js_sys::{Array, Object, Promise};
+use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{future_to_promise, spawn_local};
 
@@ -368,21 +369,6 @@ async fn load_models(s: &JsValue) -> Result<(), JsValue> {
     set(&renderer, "shadowMap.type", &get(&h, "THREE.PCFShadowMap"));
     configure_quality(s);
     resize(s, number(s, "width"), number(s, "height"));
-    let pmrem = make(&h, "THREE.PMREMGenerator", &[renderer]);
-    let room = make(&h, "RoomEnvironment", &[]);
-    let environment = call(&pmrem, "fromScene", &[room.clone(), num(0.06)]);
-    set(s, "environment", &environment);
-    set(
-        &get(s, "scene"),
-        "environment",
-        &if yes(s, "quality.env") {
-            get(&environment, "texture")
-        } else {
-            JsValue::NULL
-        },
-    );
-    call(&room, "dispose", &[]);
-    call(&pmrem, "dispose", &[]);
     set(s, "guns", &Object::new());
     let gun = load_gun(s, weapon(s));
     let a = s.clone();
@@ -656,6 +642,10 @@ fn dress_figure(s: &JsValue) {
     set(&get(s, "equipment"), "visible", &flag(!bare));
 }
 async fn load_environment(s: &JsValue) {
+    // Low quality draws no reflections, so it skips the picture's download and blur passes.
+    if !yes(s, "quality.env") {
+        return;
+    }
     let h = get(s, "host");
     let loader = make(&h, "THREE.TextureLoader", &[]);
     let Ok(p) = try_call(
@@ -734,6 +724,14 @@ fn configure_quality(s: &JsValue) {
         "intensity",
         &num(if yes(&q, "env") { 0.52 } else { 0.78 }),
     );
+    if yes(&q, "env") && !exists(&get(s, "environment")) {
+        // Built only where it is used: on a phone at low its shaders cost seconds of loading.
+        let pmrem = make(&h, "THREE.PMREMGenerator", &[renderer.clone()]);
+        let room = make(&h, "RoomEnvironment", &[]);
+        set(s, "environment", &call(&pmrem, "fromScene", &[room.clone(), num(0.06)]));
+        call(&room, "dispose", &[]);
+        call(&pmrem, "dispose", &[]);
+    }
     let texture = get(s, "environment.texture");
     set(
         &get(s, "scene"),
@@ -1004,14 +1002,15 @@ fn creation_loop(s: &JsValue) {
     }
     set(s, "looping", &flag(true));
     set(s, "loopLast", &num(now()));
-    loop_frame(s);
+    // The bay breathes slowly: 60 frames a second are plenty even on a 120 Hz phone.
+    loop_frame(s, Rc::new(RefCell::new(super::arena::FramePace::new(13.0))));
 }
-fn loop_frame(s: &JsValue) {
+fn loop_frame(s: &JsValue, pace: Rc<RefCell<super::arena::FramePace>>) {
     let a = s.clone();
     let id = call(
         &global(),
         "requestAnimationFrame",
-        &[function(move |_| {
+        &[function(move |stamp| {
             set(&a, "loopFrame", &JsValue::NULL);
             if !yes(&a, "creating")
                 || !yes(&a, "ready")
@@ -1019,6 +1018,10 @@ fn loop_frame(s: &JsValue) {
                 || yes(&a, "disposed")
             {
                 set(&a, "looping", &flag(false));
+                return;
+            }
+            if !pace.borrow_mut().due(stamp.as_f64().unwrap_or_else(now)) {
+                loop_frame(&a, pace.clone());
                 return;
             }
             let time = now();
@@ -1043,7 +1046,7 @@ fn loop_frame(s: &JsValue) {
             );
             aim(&a);
             call(&renderer, "render", &[get(&a, "scene"), get(&a, "camera")]);
-            loop_frame(&a);
+            loop_frame(&a, pace.clone());
         })],
     );
     set(s, "loopFrame", &id);
@@ -1053,8 +1056,10 @@ fn loop_frame(s: &JsValue) {
 fn head(s: &JsValue) -> [f64; 3] {
     let h = get(s, "host");
     let rotating = get(s, "stage.rotating");
-    call(&rotating, "updateMatrixWorld", &[flag(true)]);
+    // Only the turntable's own matrix each frame; the render brings the figure's bones up to date.
+    call(&rotating, "updateWorldMatrix", &[flag(true), flag(false)]);
     if !exists(&get(s, "head")) {
+        call(&rotating, "updateMatrixWorld", &[flag(true)]);
         let figure = get(s, "figure");
         let local = if exists(&figure) {
             measure_head(&h, &rotating, &figure)

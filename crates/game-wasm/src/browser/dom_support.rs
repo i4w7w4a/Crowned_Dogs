@@ -18,10 +18,10 @@ pub fn document() -> JsValue {
     get(&global(), "document")
 }
 pub fn get(object: &JsValue, key: &str) -> JsValue {
-    Reflect::get(object, &js(key)).unwrap_or(JsValue::UNDEFINED)
+    Reflect::get(object, &super::bridge::cached_key(key)).unwrap_or(JsValue::UNDEFINED)
 }
 pub fn set(object: &JsValue, key: &str, value: &JsValue) {
-    if let Err(error) = Reflect::set(object, &js(key), value) {
+    if let Err(error) = Reflect::set(object, &super::bridge::cached_key(key), value) {
         report(key, error);
     }
 }

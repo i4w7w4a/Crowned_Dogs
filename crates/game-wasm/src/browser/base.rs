@@ -68,6 +68,8 @@ struct Base {
     frame: Option<Closure<dyn FnMut(f64)>>,
     frame_id: JsValue,
     drifts: Vec<Drift>,
+    /// The base's moving pictures need no more than 60 frames a second, even on a 120 Hz phone.
+    pace: super::arena::FramePace,
     on_battle: JsValue,
     /// Touch long-press on a slot button: pending timer, and whether it fired.
     hold_timer: JsValue,
@@ -1041,7 +1043,7 @@ impl Base {
                 &[frame.as_ref().clone()],
             );
         }
-        if !self.active {
+        if !self.active || !self.pace.due(now) {
             return None;
         }
         let mut completed = None;
@@ -1298,6 +1300,7 @@ impl BrowserBase {
             frame: None,
             frame_id: JsValue::NULL,
             drifts: vec![],
+            pace: super::arena::FramePace::new(13.0),
             on_battle,
             hold_timer: JsValue::NULL,
             held: false,
