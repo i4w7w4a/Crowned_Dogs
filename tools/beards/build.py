@@ -42,17 +42,17 @@ HEAD=C@world_node(head_index)@C.inverted()
 S=.9630493809698595
 FIT=Matrix(((S,0,0,-.00429309),(0,S,0,-.00425317),(0,0,S,.17305149),(0,0,0,1)))
 # FIT is authored transformation expressed in Blender axes: glTF(x,y,z)->Blender(x,-z,y).
-CONFIG={'m1':(1.608,1.562),'m2':(1.6148,1.572),'m3':(1.614,1.565),'m4':(1.6078,1.559)}
+CONFIG={'m1':(1.608,1.562),'m2':(1.6167,1.5675),'m3':(1.614,1.565),'m4':(1.6092,1.554)}
 STYLES=['boxed','goatee','full','tapered','stubble']
 # Lip outline of each head, measured from the redness of its own skin texture: (x, upper border, lower border)
-# in mm from the centre and from `mouth`, out to the corner of the mouth. m4's lower lip is too pale to measure,
-# so it follows m2's shape one millimetre lower.
+# in mm from the centre and from `mouth`, out to the corner of the mouth. m2 and m4 are the bald Tripo heads of
+# 2026-11-02; m4's measured lower border dips into the chin shadow by the centre, so its middle rows are smoothed.
 LIPS={'m1':[(0,5.6,-13.0),(2,6.0,-13.0),(4,6.6,-13.0),(6,7.6,-12.8),(8,7.9,-12.5),(10,7.1,-11.8),(12,6.3,-11.0),(14,5.3,-10.2),(16,4.1,-9.2),(18,2.5,-8.6),(20,.3,-7.6),(22,-1.7,-6.5),(24,-3.0,-5.1),(25.5,-4.0,-4.0)],
- 'm2':[(0,8.0,-5.6),(2,7.8,-5.3),(4,8.2,-5.1),(6,8.0,-4.8),(8,8.0,-4.2),(10,7.7,-3.0),(12,6.6,-1.9),(14,5.8,-1.2),(16,5.1,-1.2),(18,3.9,-.7),(20,3.3,-.2),(22,2.6,.2),(24,1.9,1.4),(26.2,1.6,1.6)],
+ 'm2':[(0,4.4,-9.2),(2,5.1,-9.3),(4,5.7,-9.4),(6,6.3,-9.3),(8,6.7,-9.0),(10,6.0,-8.2),(12,4.6,-7.5),(14,3.4,-6.0),(16,2.5,-5.6),(18,1.3,-5.0),(20,.1,-4.6),(22,-.6,-3.7),(24,-.9,-2.8),(26,-.8,-2.4),(28.4,-1.6,-1.6)],
  'm3':[(0,7.6,-8.8),(2,7.6,-8.3),(4,8.3,-8.3),(6,9.3,-7.8),(8,9.0,-7.5),(10,8.4,-6.7),(12,7.1,-6.6),(14,6.0,-5.9),(16,4.8,-5.7),(18,3.4,-5.1),(20,1.7,-3.8),(22,.1,-3.2),(24,-.5,-2.7),(25.8,-1.6,-1.6)],
- 'm4':[(0,6.4,-6.6),(2,6.7,-6.3),(4,7.4,-6.1),(6,8.0,-5.8),(8,8.1,-5.2),(10,7.8,-4.0),(12,6.5,-2.9),(14,5.8,-2.6),(16,5.2,-2.6),(18,3.9,-2.2),(20,3.0,-1.5),(22,2.2,-1.2),(24,1.5,-.6),(26.5,1.0,1.0)]}
+ 'm4':[(0,4.2,-9.0),(2,4.5,-9.0),(4,4.9,-8.9),(6,5.7,-8.7),(8,6.0,-8.3),(10,5.2,-7.5),(12,4.8,-7.1),(14,3.6,-6.7),(16,3.1,-6.3),(18,2.1,-5.7),(20,.9,-4.7),(22,-.3,-4.1),(24,-1.1,-3.4),(26,-1.4,-3.0),(29.1,-2.2,-2.2)]}
 # Height of the nose base (subnasale) above `mouth`, from each head's mid-line profile: the moustache reaches it.
-NOSE={'m1':.0195,'m2':.0250,'m3':.0230,'m4':.0230}
+NOSE={'m1':.0195,'m2':.0216,'m3':.0230,'m4':.0208}
 def lip_at(x,face):
  """Upper and lower lip border (mm from `mouth`) at |x| metres, or the corner height past the corner."""
  rows=LIPS[face];xm=x*1000
@@ -103,16 +103,10 @@ beards=[o for o in sc.objects if o.type=='MESH' and o.name.startswith('Beard_')]
 guide_objects=[]
 stats=[item for item in json.loads((OUT/'geometry-report.json').read_text())['styles'] if item['face']!='m4'] if REPAIR_M4 else []
 
-def m4_rear(z):
- # The m4 scan has a separate low-cheek patch extending backwards below its
- # cheek plane. Front-camera rays must not turn that patch into a beard shelf.
- t=max(0,min(1,(z-1.598)/.027));t=t*t*(3-2*t)
- return -.046+.009*t
 def region(p,n,face,style,lips=True):
  mouth,chin=CONFIG[face];x=abs(p.x);z=p.z
  if n.y>.05 or p.y>-.018 or x>.082 or z<chin+.0005:return 0
  rear=-.018-.019*max(0,min(1,(x-.058)/.024))
- if face=='m4':rear=min(rear,m4_rear(z))
  if p.y>rear:return 0
  # Cheek-to-sideburn line rises outwards, with a soft physical root boundary.
  top=mouth+.005+max(0,x-.030)*.68
@@ -185,7 +179,8 @@ for face in (['m1'] if PILOT else ['m4'] if REPAIR_M4 else CONFIG):
   for (ix,iz),a in grid.items():
    if all(k in grid for k in [(ix+1,iz),(ix+1,iz+1),(ix,iz+1)]):
     quad=(a,grid[(ix+1,iz)],grid[(ix+1,iz+1)],grid[(ix,iz+1)])
-    # Reject m4 ray discontinuities instead of spanning separate scan branches.
+    # Reject m4 ray discontinuities instead of spanning separate scan branches (kept for the bald m4 of 2026-11-02,
+    # whose scan has no such patch; its old rear-cheek limit went with the old scan).
     if face=='m4' and all(abs(rv[i].x)>.045 and rv[i].y>-.065 for i in quad) and max((rv[quad[j]]-rv[quad[(j+1)%4]]).length for j in range(4))>.0045:continue
     rf.append(quad)
   rm=bpy.data.meshes.new(f'Beard_{face}_{style}_root');rm.from_pydata(rv,[],rf);rm.update();col=rm.color_attributes.new(name='Color',type='FLOAT_COLOR',domain='POINT')
@@ -224,7 +219,6 @@ for face in (['m1'] if PILOT else ['m4'] if REPAIR_M4 else CONFIG):
     if outer_p is not None and outer_d<.045 and (center-outer_p).dot(outer_n)<.0008:
      center=outer_p+outer_n*.0008
     path.append(clear_collar(center))
-   if face=='m4' and any(center.y>m4_rear(center.z)+.0015 for center in path):continue
    guides.append(path)
    tile=rng.randrange(4);base=len(verts)
    for k,center in enumerate(path):
@@ -264,7 +258,7 @@ bpy.ops.file.pack_all();bpy.ops.wm.save_as_mainfile(filepath=str(OUT/('CrownedDo
 if REPAIR_M4:
  for name,signature in preserved.items():
   if mesh_signature(bpy.data.objects[name])!=signature:raise RuntimeError('Untargeted beard changed: '+name)
- (OUT/'m4-repair-report.json').write_text(json.dumps({'preservedMeshSha256':preserved,'allOtherTwelveFitsUnchanged':True,'rearLimit':'-46mm at low cheek, eased to -37mm at upper sideburn','maxRootGridEdge':.0045},indent=2))
+ (OUT/'m4-repair-report.json').write_text(json.dumps({'preservedMeshSha256':preserved,'allOtherTwelveFitsUnchanged':True,'maxRootGridEdge':.0045},indent=2))
 (OUT/('pilot-geometry-report.json' if PILOT else 'geometry-report.json')).write_text(json.dumps({'headMatrixBlender':[list(r) for r in HEAD],'authoredMatrixBlender':[list(r) for r in FIT],'styles':stats},indent=2))
 if not PILOT:
  bpy.ops.object.select_all(action='DESELECT')
