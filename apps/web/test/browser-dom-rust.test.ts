@@ -194,7 +194,7 @@ test("free without dispose cancels base RAF, global tilt listeners and owned vie
       compileKit: () => ({ armor: { head: 0, body: 0, legs: 0 } }),
       WeaponScreen: Workshop, DepthBackdrop: Depth, liquidGlass() {},
     });
-    const back = root.querySelector(".cd-back");
+    const back = root.querySelector(".cd-fitting .cd-back");
     assert.equal(frames.size, 1);
     // Only the fitting room follows device tilt; the base photograph stays fixed.
     assert.equal(getEventListeners(events, "deviceorientation").length, 1);

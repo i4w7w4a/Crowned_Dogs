@@ -1354,7 +1354,7 @@ fn bind(state: &Rc<RefCell<Base>>) {
         (query(&root, ".cd-create-options"), "click", "look"),
         (query(&root, ".cd-create-next"), "click", "createNext"),
         (query(&root, ".cd-callsign-input"), "keydown", "callsignKeys"),
-        (query(&root, ".cd-back"), "click", "base"),
+        (query(&root, ".cd-fitting .cd-back"), "click", "base"),
         (query(&root, ".cd-enter"), "click", "battle"),
         (query(&root, ".cd-open-catalog"), "click", "catalog"),
         (query(&root, ".cd-dialog-close"), "click", "close"),
