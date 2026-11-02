@@ -14,15 +14,15 @@ const READY: Record<Stance, string> = { pistol: "ready_pistol", rifle: "ready_ri
 /** Each attack's clip, its speed, and the moment in it (seconds at normal speed) that must meet the sound:
  *  the shot, the knife reaching the enemy, the grenade leaving the hand. `hold` is what the hand shows
  *  during it, `release` empties the hand at the mark (the grenade flies), `end` cuts a long clip short
- *  (seconds at normal speed) and goes back to the stance. */
-const ATTACKS: Record<Attack, { clip: string; speed: number; mark: number; hold?: Held; release?: boolean; end?: number }> = {
+ *  (seconds at normal speed) and goes back to the stance, `from` skips the clip's lead-in (2026-11-02). */
+const ATTACKS: Record<Attack, { clip: string; speed: number; mark: number; from?: number; hold?: Held; release?: boolean; end?: number }> = {
   pistol: { clip: "fire_pistol", speed: 1.15, mark: 0.625 },
   rifle: { clip: "fire_rifle", speed: 1, mark: 0.333 },
   shotgun: { clip: "fire_shotgun", speed: 1.25, mark: 0.333 },
   sniper: { clip: "fire_shotgun", speed: 1, mark: 0.333 }, // the bolt works like the pump, slower
-  knife: { clip: "attack_knife", speed: 1.25, mark: 0.958, hold: "knife" },
+  knife: { clip: "attack_knife", speed: 1.25, from: 0.6, mark: 0.958, hold: "knife", end: 1.15 },
   // Art's Tripo throw (24 fps): the hand leaves the grenade at its frame 30, back by frame 46, then a second swing we skip
-  grenade: { clip: "grenade_throw", speed: 1.4, mark: 1.208, hold: "grenade", release: true, end: 1.875 },
+  grenade: { clip: "grenade_throw", speed: 1.4, from: 0.6, mark: 1.208, hold: "grenade", release: true, end: 1.45 },
 };
 
 /** Tracks that move the legs: the pelvis and everything below it (UE Mannequin and Mixamo names). */
@@ -47,6 +47,8 @@ export class Motion {
   private attacking: THREE.AnimationAction | null = null;
   private kind: Attack | null = null;
   private released = false;
+  /** Seconds until the gun comes back to the hands after an attack, or null. */
+  private rearm: number | null = null;
   /** Each clip's pelvis turn, to keep the upper body on its own clip while the legs play another. */
   private pelvisOf = new Map<string, THREE.Interpolant>();
   private pelvis: THREE.Object3D | null;
@@ -95,6 +97,7 @@ export class Motion {
     this.stance = stance;
     if (!this.attacking) this.to("body", this.ready(), 0.3);
     if (!this.walking && !this.attacking) this.to("legs", this.ready(), 0.3);
+    this.rearm = null;
     this.onHold?.(stance);
   }
 
@@ -151,7 +154,7 @@ export class Motion {
   attack(kind: Attack, inSeconds: number): void {
     const a = ATTACKS[kind];
     if (!this.layers.body.has(a.clip)) return; // this figure has no such clip: it stays in its stance
-    const wait = inSeconds - a.mark / a.speed;
+    const wait = inSeconds - (a.mark - (a.from ?? 0)) / a.speed;
     if (wait > 0) this.pending = { in: wait, kind };
     else this.start(kind, -wait * a.speed);
   }
@@ -174,10 +177,15 @@ export class Motion {
       const a = this.to(l, this.ready(), 0);
       if (a) a.time = phase * a.getClip().duration;
     }
+    this.rearm = null;
     this.onHold?.(this.stance);
   }
 
   update(dt: number): void {
+    if (this.rearm !== null) {
+      this.rearm -= dt;
+      if (this.rearm <= 0) { this.rearm = null; this.onHold?.(this.stance); }
+    }
     const p = this.pending;
     if (p) {
       p.in -= dt;
@@ -203,9 +211,10 @@ export class Motion {
     const a = ATTACKS[kind];
     const act = this.to("body", a.clip, 0.12, a.speed, true);
     if (!act) return;
-    act.time = Math.min(at, act.getClip().duration);
+    act.time = Math.min((a.from ?? 0) + at, act.getClip().duration);
     this.attacking = act; this.kind = kind; this.released = false; this.marked = false;
     if (!this.walking) { this.to("legs", a.clip, 0.12, a.speed, true); this.sync("legs", "body"); }
+    this.rearm = null;
     if (a.hold) this.onHold?.(a.hold);
   }
 
@@ -213,7 +222,7 @@ export class Motion {
     this.attacking = null; this.kind = null;
     this.to("body", this.ready(), 0.35);
     if (!this.walking) { this.to("legs", this.ready(), 0.35); this.sync("legs", "body"); }
-    this.onHold?.(this.stance);
+    this.rearm = 0.25;
   }
 
   /** Crossfades a layer to a clip; a looping clip already playing just takes the new speed. */

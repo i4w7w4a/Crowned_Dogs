@@ -25,7 +25,7 @@ The sniper uses the shotgun clips.
 - Male input: `persona-male-art/male.blend`.
 - Female input: `persona-female/fem-v3.blend` (the joined neck, head 2 cm lower).
 
-The grenade throw is Art's female Tripo clip; `scripts/retarget_fm.py -- male-anim.blend fem-v3.blend OUT.blend grenade_throw` gives it to the male. In the arena the grenade leaves the hand at the clip's frame 30 (1.208 s) and the clip ends at 1.875 s.
+The grenade throw is Art's female Tripo clip; `scripts/retarget_fm.py -- male-anim.blend fem-v3.blend OUT.blend grenade_throw` gives it to the male. In the arena the grenade leaves the hand at the clip's frame 30 (1.208 s). Since 2026-11-02 the arena plays only 0.6–1.45 s of it (`from`/`end` in `crates/game-motion/src/timeline.rs`): the T-pose-like stand before and the arms-out stand after looked silly. The knife plays 0.6–1.15 s of `attack_knife` for the same reason (half a second of crouched shuffling before the stab). The gun comes back 0.25 s into the blend to the ready stance.
 
 The current game sources are `male-anim-v2.blend` and `fem-anim-v3.blend` here (with the grenade throw; images packed). Since arena v31 the game models are these files dressed in the armour: see ../armor-game/README.md.
 
