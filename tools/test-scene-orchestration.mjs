@@ -60,8 +60,9 @@ const factory = new THREE.Mesh(new THREE.BoxGeometry(.2,.1,.1),metal); factory.n
 const mod = new THREE.Mesh(new THREE.BoxGeometry(.6,.05,.05),metal);mod.name="muzzle_tishina";mod.userData={factory:false,slot:"muzzle",replaces:"factory_muzzle"};gun.add(mod);
 const guns=await sceneLoadGuns({...host,loadModel:async()=>({scene:gun})});assert.equal(mod.parent,socket);
 const realA=new RustSceneHand(host,persona(),new THREE.Matrix4(),metal,{guns}),realB=new oldWeapons.Hand(persona(),new THREE.Matrix4(),metal,{guns});
-// The real pistol sits a size up and forward in the palm, which the original never did (HOLDS in scene_assets.rs).
-{const pistol=realB.items.get("pistol");pistol.scale.setScalar(1.2);pistol.position.set(.03,.02,0);}
+// The real pistol sits a size up and forward in the palm and the grenade on the palm side, which the original
+// never did (HOLDS in scene_assets.rs).
+{const pistol=realB.items.get("pistol");pistol.scale.setScalar(1.2);pistol.position.set(.03,.02,0);realB.items.get("grenade").position.set(0,-.01,-.045);}
 for(const mods of [{},{muzzle:"muzzle-tishina"},{}]){realA.fit(mods);realB.fit(mods);realA.hold("rifle");realB.hold("rifle");assert.deepEqual(snapshot(realA.mount),snapshot(realB.mount));const a=new THREE.Vector3(),b=new THREE.Vector3();assert.equal(realA.muzzle(a),realB.muzzle(b));close(a.toArray(),b.toArray());}realA.free();
 function dressed(){const root=new THREE.Group(),g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute([0,0,0,1,0,0,0,1,0,1,1,0,2,1,0,2,2,0],3));g.setAttribute("_suit",new THREE.Float32BufferAttribute([0,0,1,0,0,0],1));g.setIndex([0,1,2,3,4,5]);root.add(new THREE.Mesh(g,metal));for(const name of ["Suit","Vest","Helmet","Hair","Hair_Helmet"]){const mesh=new THREE.Mesh(new THREE.BoxGeometry(),metal);mesh.name=name;root.add(mesh);}return root;}
 for(const wear of [{suit:true,body:true,head:true},{suit:true,body:false,head:false},{suit:false,body:false,head:true}]){const a=dressed(),b=dressed();sceneDress(host,a,wear);oldDress.dress(b,wear);assert.deepEqual(snapshot(a),snapshot(b));}
