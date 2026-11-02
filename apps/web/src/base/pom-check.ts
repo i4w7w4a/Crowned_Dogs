@@ -34,7 +34,7 @@ const draw = (): void => {
   renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
   camera.aspect = canvas.clientWidth / canvas.clientHeight; camera.updateProjectionMatrix();
   renderer.render(scene, camera);
-  if (!errors.length) status.textContent = `${engineVersion}\nКачество: ${quality}; Silhouette POM: ${quality !== "low"}; ошибок шейдера: 0`;
+  if (!errors.length) status.textContent = `${engineVersion}\nКачество: ${quality}; Silhouette POM: ${quality !== "low" && quality !== "minimal"}; ошибок шейдера: 0`;
 };
 const setQuality = (): void => {
   deck.setQuality(quality);

@@ -24,6 +24,10 @@ impl Settings {
             style(&input, "--v", &format!("{v}%"));
             content(&get(&input, "nextElementSibling"), &v);
         }
+        let meter = super::fps_meter::on();
+        let fps = query(&self.dialog, ".cd-fps-toggle");
+        content(&query(&fps, "b"), if meter { "Вкл" } else { "Выкл" });
+        attr(&fps, "aria-pressed", &meter.to_string());
         let store = get(&self.host, "store");
         let camera = call(&store, "get", &[js("cd-camera")]);
         let camera = if text(&camera) == "back" {
@@ -100,11 +104,11 @@ pub fn mount_sound_settings(host: JsValue) {
         let button=create("button","glass cd-settings");set(&button,"type",&js("button"));attr(&button,"aria-label","Настройки звука");html(&button,"<svg class=\"cd-set-ico\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7h16M4 17h16\"/><circle fill=\"currentColor\" stroke=\"none\" cx=\"15.5\" cy=\"7\" r=\"2.6\"/><circle fill=\"currentColor\" stroke=\"none\" cx=\"8.5\" cy=\"17\" r=\"2.6\"/></svg>");
         let dialog=create("dialog","cd-dialog sheet glass cd-sound");html(&dialog,include_str!("sound-settings.html"));call(&get(&document(),"body"),"append",&[button.clone(),dialog.clone()]);
         let state=Rc::new(RefCell::new(Settings{host,dialog:dialog.clone(),listeners:vec![]}));
-        for (target,event,action) in [(button,"click","open"),(query(&dialog,".cd-sound-toggle:not(.cd-restart)"),"click","toggle"),(query(&dialog,".cd-restart"),"click","restart"),(query(&dialog,".cd-dialog-close"),"click","close"),(dialog.clone(),"click","click"),(dialog,"input","volume")] {
+        for (target,event,action) in [(button,"click","open"),(query(&dialog,".cd-sound-toggle:not(.cd-restart)"),"click","toggle"),(query(&dialog,".cd-restart"),"click","restart"),(query(&dialog,".cd-fps-toggle"),"click","fps"),(query(&dialog,".cd-dialog-close"),"click","close"),(dialog.clone(),"click","click"),(dialog,"input","volume")] {
             let weak=Rc::downgrade(&state);let listener=Listener::new(&target,event,move |event|{let Some(state)=weak.upgrade()else{return;};let state=state.borrow();let audio=get(&state.host,"gameAudio");
                 match action{
                     "open"=>{call(&audio,"unlock",&[]);state.draw();call(&state.dialog,"showModal",&[]);call(&state.host,"liquidGlass",&[state.dialog.clone()]);},
-                    "toggle"=>{call(&audio,"toggle",&[]);state.draw();},"restart"=>state.restart(),
+                    "toggle"=>{call(&audio,"toggle",&[]);state.draw();},"restart"=>state.restart(),"fps"=>{super::fps_meter::set_on(!super::fps_meter::on());state.draw();},
                     "close"=>{call(&state.dialog,"close",&[]);},
                     "volume"=>{let input=closest(&event,"input[data-k]");if exists(&input){call(&audio,"unlock",&[]);call(&audio,"setVolume",&[js(&data(&input,"k")),number(text(&get(&input,"value")).parse::<f64>().unwrap_or(0.0)/100.0)]);state.draw();}},
                     "click"=>{if get(&event,"target")==state.dialog{call(&state.dialog,"close",&[]);return;}let choice=closest(&event,"[data-choice]");if !exists(&choice){return;}let group=call(&choice,"closest",&[js("[data-g]")]);let id=js(&data(&choice,"choice"));if data(&group,"g")=="cam"{call(&get(&state.host,"store"),"set",&[js("cd-camera"),id]);}else{call(&state.host,"keepQuality",&[id]);}state.draw();},_=>{}

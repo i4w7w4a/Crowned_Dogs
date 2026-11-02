@@ -205,31 +205,39 @@ pub fn keep_quality(id: &str) {
     store_set("cd-quality", id);
 }
 thread_local! {
-    static SHARP: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+    static PICKED: std::cell::RefCell<Option<JsValue>> = const { std::cell::RefCell::new(None) };
 }
-/// Whether this device gets the double-size painted backgrounds: the quality picked for it
-/// draws the arena's backdrop sharp. Asked once per page, on a throwaway WebGL context.
-pub fn sharp_pictures() -> bool {
-    if let Some(sharp) = SHARP.with(|c| c.get()) {
-        return sharp;
+/// The quality picked for this device, which decides the assets a page loads. Asked once per
+/// page, on a throwaway WebGL context; without a page (tests, workers) there is no canvas to
+/// ask, so an empty entry: the plain assets.
+fn picked() -> JsValue {
+    if let Some(quality) = PICKED.with(|c| c.borrow().clone()) {
+        return quality;
     }
-    // Without a page (tests, workers) there is no canvas to ask: the plain pictures.
-    let Ok(canvas) = try_call(&get(&global(), "document"), "createElement", &["canvas".into()]) else {
-        SHARP.with(|c| c.set(Some(false)));
-        return false;
-    };
-    let gl = try_call(&canvas, "getContext", &["webgl2".into()]).unwrap_or(JsValue::NULL);
-    let id = string(&get(&start_quality(gl.clone()), "id"));
-    let quality = get(&get(&rust("client.data", &[]), "QUALITY"), &id);
-    let sharp = boolean(&get(&quality, "sharpBackdrop"));
-    if present(&gl) {
-        let lose = call(&gl, "getExtension", &["WEBGL_lose_context".into()]);
-        if present(&lose) {
-            call(&lose, "loseContext", &[]);
+    let quality = match try_call(&get(&global(), "document"), "createElement", &["canvas".into()]) {
+        Err(_) => js_sys::Object::new().into(),
+        Ok(canvas) => {
+            let gl = try_call(&canvas, "getContext", &["webgl2".into()]).unwrap_or(JsValue::NULL);
+            let id = string(&get(&start_quality(gl.clone()), "id"));
+            if present(&gl) {
+                let lose = call(&gl, "getExtension", &["WEBGL_lose_context".into()]);
+                if present(&lose) {
+                    call(&lose, "loseContext", &[]);
+                }
+            }
+            get(&get(&rust("client.data", &[]), "QUALITY"), &id)
         }
-    }
-    SHARP.with(|c| c.set(Some(sharp)));
-    sharp
+    };
+    PICKED.with(|c| *c.borrow_mut() = Some(quality.clone()));
+    quality
+}
+/// Whether this device gets the double-size painted backgrounds: its quality draws the arena's backdrop sharp.
+pub fn sharp_pictures() -> bool {
+    boolean(&get(&picked(), "sharpBackdrop"))
+}
+/// Whether this device loads the figure models' copies with GPU-compressed maps.
+pub fn compressed_textures() -> bool {
+    boolean(&get(&picked(), "compressedTextures"))
 }
 
 /// A fresh UUID for a duel's seed. `crypto.randomUUID` exists only on https and localhost, so

@@ -14,7 +14,7 @@ How it works: MediaPipe Pose (heavy model, python 3.12 venv, mediapipe 0.10.14) 
 | Pistol | ready_pistol | fire_pistol | shot 0.625 s |
 | Rifle | ready_rifle | fire_rifle | shot 0.333 s |
 | Shotgun | ready_shotgun | fire_shotgun | shot 0.333 s, then the pump |
-| Knife | ready_knife | attack_knife | contact 0.958 s |
+| Knife | ready_knife | attack_knife (replaced 2026-11-02, see below) | contact 0.3 s |
 
 The sniper uses the shotgun clips.
 
@@ -25,7 +25,7 @@ The sniper uses the shotgun clips.
 - Male input: `persona-male-art/male.blend`.
 - Female input: `persona-female/fem-v3.blend` (the joined neck, head 2 cm lower).
 
-The grenade throw is Art's female Tripo clip; `scripts/retarget_fm.py -- male-anim.blend fem-v3.blend OUT.blend grenade_throw` gives it to the male. In the arena the grenade leaves the hand at the clip's frame 30 (1.208 s) and the clip ends at 1.875 s.
+The grenade throw is Art's female Tripo clip; `scripts/retarget_fm.py -- male-anim.blend fem-v3.blend OUT.blend grenade_throw` gives it to the male. In the arena the grenade leaves the hand at the clip's frame 30 (1.208 s). Since 2026-11-02 the arena plays only 0.6–1.45 s of it (`from`/`end` in `crates/game-motion/src/timeline.rs`): the T-pose-like stand before and the arms-out stand after looked silly. The knife plays 0.6–1.15 s of `attack_knife` for the same reason (half a second of crouched shuffling before the stab). The gun comes back 0.25 s into the blend to the ready stance.
 
 The current game sources are `male-anim-v2.blend` and `fem-anim-v3.blend` here (with the grenade throw; images packed). Since arena v31 the game models are these files dressed in the armour: see ../armor-game/README.md.
 
@@ -36,6 +36,22 @@ Then export the game file:
 - Then gltf-transform: resample, dedup, prune, resize 1024, webp q88, meshopt medium.
 
 Check sheets live in `check/`. `male-anim.blend` is the male with every take and clip.
+
+## Knife and grenade from Quaternius (2026-11-02)
+
+Art found the mocap knife stab (a low crouched lunge) and the Tripo grenade throw (a sidearm swing) silly. Both clips in both Persona GLBs now come from Quaternius' **Universal Animation Library 2, Standard** (CC0, quaternius.itch.io, the free 17 MB zip; file `Unreal-Godot/UAL2_Standard.glb`, UE Mannequin bone names):
+
+- `attack_knife` = `Melee_Hook` + `Melee_Hook_Rec`, hips, trunk and legs damped to 0.35: a guard, a short wind-up, a hooking slash at face height (forward at 0.3 s), back to guard. Game cut: 0–0.55 s, then the ready stance blends in.
+- `grenade_throw` = `OverhandThrow`, damped to 0.45: the off arm points, the hand goes over the head and lets go at 0.35 s, a follow-through lean. Game cut: 0.03–0.6 s. The library throws with an open hand, so the right fingers are bent 0.7 of the way to `Melee_Hook`'s fist (wrist to middle fingertip 0.13–0.14 m instead of 0.18–0.19), and `HOLDS` in `crates/game-wasm/src/browser/scene_assets.rs` moves the grenade 4.5 cm to the palm side, where those fingers close round it (before, it sat in the plane of the hand and showed through its back).
+
+Recipe, from the repo root with the original GLBs from git:
+
+```
+git show HEAD:apps/web/models/persona-male.glb > male-orig.glb
+node tools/anim/retarget_ual.mjs male-orig.glb UAL2_Standard.glb apps/web/models/persona-male.glb "attack_knife=Melee_Hook+Melee_Hook_Rec~0.35" "grenade_throw=OverhandThrow~0.45^Melee_Hook:0.7"
+```
+
+The same for the female. `name=ClipA+ClipB@from-to~k^Grip:g` joins clips, cuts seconds, keeps `k` of the hips', trunk's and legs' travel (undamped, the library's strikes lunge to the floor and the throw bows to the knees) and bends the right fingers `g` of the way to their pose in `Grip`'s first frame. The tool is described in its header. After a change: `spec` in `crates/game-motion/src/timeline.rs` and the frozen `crates/game-motion/reference/motion.ts` take the new `from`/`mark`/`end`, then `npm run models:ktx2 -w @crowned-dogs/web -- persona-male persona-female`. Rejected from the same pack: `Sword_Regular_A`/`B` (too elaborate, leans far back), undamped `Melee_Hook` (falls to the floor).
 
 ## In the game
 

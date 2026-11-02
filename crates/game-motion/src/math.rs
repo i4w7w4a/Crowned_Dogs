@@ -25,6 +25,7 @@ pub fn compute(kind: &str, v: &[f64]) -> Result<Vec<f64>, String> {
         "cameraDistance" => 3,
         "footprint" => 16,
         "feet" => 25,
+        "look" => 20,
         "dust" => 2,
         _ => return Err(format!("Unknown motion computation: {kind}")),
     };
@@ -459,6 +460,29 @@ pub fn compute(kind: &str, v: &[f64]) -> Result<Vec<f64>, String> {
             let mut out = target.to_array().to_vec();
             appendv(&mut out, pole);
             appendq(&mut out, flat);
+            out
+        }
+        "look" => {
+            // Neck and head quaternions (world), the head's ear-to-ear axis in its own frame, the head and
+            // target positions, weight, neck share and the largest turn. The face's heading is taken across
+            // the ears, so a canted cheek-on-stock head reads the same as an upright one. The answer turns
+            // both bones about the world up and comes back as each bone's local post-rotation.
+            let (neck, head) = (quat(v, 0), quat(v, 4));
+            let mut face = (head * vec(v, 8)).cross(DVec3::Y);
+            face.y = 0.0;
+            let mut to = vec(v, 14) - vec(v, 11);
+            to.y = 0.0;
+            if face.length_squared() < 1e-9 || to.length_squared() < 1e-9 {
+                return Ok(vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]);
+            }
+            let off = face.cross(to).y.atan2(face.dot(to));
+            let turn = off.clamp(-v[19], v[19]) * v[17].clamp(0.0, 1.0);
+            let local =
+                |q: DQuat, angle: f64| DQuat::from_axis_angle(q.conjugate() * DVec3::Y, angle);
+            let mut out = Vec::with_capacity(9);
+            appendq(&mut out, local(neck, turn * v[18]));
+            appendq(&mut out, local(head, turn * (1.0 - v[18])));
+            out.push(off);
             out
         }
         "dust" => {

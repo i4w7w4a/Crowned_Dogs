@@ -191,6 +191,7 @@ pub fn silhouette_deck(host: JsValue, source: JsValue, radius: f64, height: f64)
         ("cdPomOrthographic", false.into()),
         ("cdPomSteps", 28.into()),
         ("cdPomRefine", 5.into()),
+        ("cdPomShadowSteps", 10.into()),
         ("cdPomTexel", (1. / 1024.).into()),
         ("cdPomModelView", make(&host, "Matrix4", &[])),
         ("cdPomModelWorld", make(&host, "Matrix4", &[])),
@@ -332,6 +333,7 @@ pub fn silhouette_deck(host: JsValue, source: JsValue, radius: f64, height: f64)
         set(&fallback, "visible", &(!enabled).into());
         put(&uniforms, "cdPomSteps", get(&selected, "steps"));
         put(&uniforms, "cdPomRefine", get(&selected, "refine"));
+        put(&uniforms, "cdPomShadowSteps", get(&selected, "shadowSteps"));
         set(&get(&g, "userData"), "reliefQuality", &quality);
         set(&get(&g, "userData"), "reliefEnabled", &enabled.into());
     }) as Box<dyn FnMut(JsValue)>)

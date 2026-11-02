@@ -16,15 +16,21 @@ fn ready_name(stance: &str) -> &str {
         _ => "ready_pistol",
     }
 }
+/// The knife and grenade clips come from Quaternius' Universal Animation Library 2 (CC0), retargeted with
+/// `tools/anim/retarget_ual.mjs`: the hook slash reaches forward at 0.3 s, the overhand throw lets go at 0.35 s.
+/// `end` cuts the tail where the arm is on its way back; the ready stance blends in from there. `from` skips a
+/// clip's lead-in (the grenade's first frames barely move).
 fn spec(kind: &str) -> Value {
     match kind {
         "pistol" => json!({"clip":"fire_pistol","speed":1.15,"mark":0.625}),
         "rifle" => json!({"clip":"fire_rifle","speed":1,"mark":0.333}),
         "shotgun" => json!({"clip":"fire_shotgun","speed":1.25,"mark":0.333}),
         "sniper" => json!({"clip":"fire_shotgun","speed":1,"mark":0.333}),
-        "knife" => json!({"clip":"attack_knife","speed":1.25,"mark":0.958,"hold":"knife"}),
+        "knife" => {
+            json!({"clip":"attack_knife","speed":1,"mark":0.3,"hold":"knife","end":0.55})
+        }
         "grenade" => {
-            json!({"clip":"grenade_throw","speed":1.4,"mark":1.208,"hold":"grenade","release":true,"end":1.875})
+            json!({"clip":"grenade_throw","speed":1,"from":0.03,"mark":0.35,"hold":"grenade","release":true,"end":0.6})
         }
         _ => Value::Null,
     }
@@ -65,6 +71,7 @@ fn start(state: &mut Value, commands: &mut Vec<Value>, kind: &str, at: f64) {
     if !to(state, commands, "body", clip, 0.12, n(&a["speed"]), true) {
         return;
     }
+    let at = n(&a["from"]) + at;
     commands.push(json!({"op":"time","layer":"body","value":at.min(n(&state["durations"][clip]))}));
     state["kind"] = json!(kind);
     state["released"] = json!(false);
@@ -73,6 +80,7 @@ fn start(state: &mut Value, commands: &mut Vec<Value>, kind: &str, at: f64) {
         to(state, commands, "legs", clip, 0.12, n(&a["speed"]), true);
         sync(state, commands);
     }
+    state["rearm"] = Value::Null;
     if !a["hold"].is_null() {
         commands.push(json!({"op":"hold","value":a["hold"]}));
     }
@@ -85,14 +93,15 @@ fn done(state: &mut Value, commands: &mut Vec<Value>) {
         to(state, commands, "legs", &r, 0.35, 1.0, false);
         sync(state, commands);
     }
-    commands.push(json!({"op":"hold","value":state["stance"]}));
+    // The gun comes back once the hands are near its grip; at once it swung one-handed through the blend.
+    state["rearm"] = json!(0.25);
 }
 pub fn event(args: &Value) -> Value {
     let mut state = args["state"].clone();
     let event = s(&args["event"]);
     let mut commands = vec![];
     if event == "create" {
-        state = json!({"stance":"pistol","walking":false,"pending":null,"fallen":false,"marked":false,"kind":null,"released":false,"body":null,"legs":null,"durations":args["durations"]});
+        state = json!({"stance":"pistol","walking":false,"pending":null,"fallen":false,"marked":false,"kind":null,"released":false,"rearm":null,"body":null,"legs":null,"durations":args["durations"]});
     } else {
         match event {
             "arm" => {
@@ -106,6 +115,7 @@ pub fn event(args: &Value) -> Value {
                             to(&mut state, &mut commands, "legs", &r, 0.3, 1.0, false);
                         }
                     }
+                    state["rearm"] = Value::Null;
                     commands.push(json!({"op":"hold","value":stance}));
                 }
             }
@@ -145,7 +155,8 @@ pub fn event(args: &Value) -> Value {
                 let kind = s(&args["kind"]);
                 let a = spec(kind);
                 if state["durations"].get(s(&a["clip"])).is_some() {
-                    let wait = n(&args["inSeconds"]) - n(&a["mark"]) / n(&a["speed"]);
+                    let wait =
+                        n(&args["inSeconds"]) - (n(&a["mark"]) - n(&a["from"])) / n(&a["speed"]);
                     if wait > 0.0 {
                         state["pending"] = json!({"in":wait,"kind":kind});
                     } else {
@@ -173,9 +184,17 @@ pub fn event(args: &Value) -> Value {
                         commands.push(json!({"op":"time","layer":layer,"value":n(&args["phase"])*n(&state["durations"][&r])}));
                     }
                 }
+                state["rearm"] = Value::Null;
                 commands.push(json!({"op":"hold","value":state["stance"]}));
             }
             "update" => {
+                if !state["rearm"].is_null() {
+                    state["rearm"] = json!(n(&state["rearm"]) - n(&args["dt"]));
+                    if n(&state["rearm"]) <= 0.0 {
+                        state["rearm"] = Value::Null;
+                        commands.push(json!({"op":"hold","value":state["stance"]}));
+                    }
+                }
                 if !state["pending"].is_null() {
                     state["pending"]["in"] = json!(n(&state["pending"]["in"]) - n(&args["dt"]));
                     if n(&state["pending"]["in"]) <= 0.0 {

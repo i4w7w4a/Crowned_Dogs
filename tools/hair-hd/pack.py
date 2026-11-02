@@ -73,16 +73,23 @@ for style in STYLES:
         objs.append(o)
         print('MESH', o.name, len(o.data.polygons), 'faces')
 
-if SEX == 'male':
-    # a hidden 1 mm quad: finish.py hangs the scalp mask (scalp_mask.py) on its material, so the mask
-    # skips the WEBP export and travels with the pack
-    me = bpy.data.meshes.new('Hair_scalp')
+
+def mask_quad(name, mat):
+    """A hidden 1 mm quad: finish.py hangs a head mask on its material, so the mask skips the WEBP export and
+    travels with the pack."""
+    me = bpy.data.meshes.new(name)
     me.from_pydata([(0, 0, 0), (.001, 0, 0), (.001, 0, .001), (0, 0, .001)], [], [(0, 1, 2, 3)])
     me.uv_layers.new().data.foreach_set('uv', (0, 0, 1, 0, 1, 1, 0, 1))
-    me.materials.append(material('M_Hair_Scalp', (1, 1, 1), 1.0))
-    o = bpy.data.objects.new('Hair_scalp', me); sc.collection.objects.link(o)
+    me.materials.append(material(mat, (1, 1, 1), 1.0))
+    o = bpy.data.objects.new(name, me); sc.collection.objects.link(o)
     me.transform(HEAD)  # at the bone once the loop below takes the head's frame out
     objs.append(o)
+
+
+if SEX == 'male':
+    mask_quad('Hair_scalp', 'M_Hair_Scalp')   # the scans' buzz cuts (scalp_mask.py)
+    for style in ('slick', 'ponytail'):       # the painted hairlines under these two (scalp_mask.py)
+        mask_quad(f'Hair_line_{style}', f'M_Hair_Line_{style}')
 
 for o in objs:
     # baked into the vertices so the exported node sits at the bone with no offset of its own
@@ -91,7 +98,8 @@ for o in objs:
     o.select_set(True)
 out = ROOT / f'output/hair-hd/raw/hair-{SEX}.glb'
 out.parent.mkdir(parents=True, exist_ok=True)
+# the slick's and the ponytail's hairline strips carry their roots' fade-in as vertex alpha (game_cards.py)
 bpy.ops.export_scene.gltf(filepath=str(out), export_format='GLB', use_selection=True, export_yup=True,
     export_materials='EXPORT', export_image_format='WEBP', export_animations=False, export_cameras=False,
-    export_lights=False, export_extras=False)
+    export_lights=False, export_extras=False, export_vertex_color='NAME', export_vertex_color_name='Color')
 print('EXPORTED', out)

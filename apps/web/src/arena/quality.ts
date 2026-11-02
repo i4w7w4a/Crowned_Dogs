@@ -1,11 +1,11 @@
-// Graphics settings: four levels from a weak phone in Telegram to a strong PC.
+// Graphics settings: five levels from a weak phone in Telegram to a strong PC.
 // Every level draws the same picture, the higher ones just draw it cleaner and add
 // light: the haze, the light shafts from the roof, dust in the air.
 
 import { callRust, guess_quality, start_quality, keep_quality } from "../../../../packages/runtime/src/index.ts";
 
 
-export type QualityId = "low" | "medium" | "high" | "ultra";
+export type QualityId = "minimal" | "low" | "medium" | "high" | "ultra";
 
 export interface Quality {
   id: QualityId;
@@ -46,6 +46,8 @@ export interface Quality {
   mirror: boolean;
   /** The double-size painting, drawn with a sharp filter. */
   sharpBackdrop: boolean;
+  /** The figures' maps GPU-compressed (KTX2): a quarter of the video memory, no decoding on load. */
+  compressedTextures: boolean;
 }
 
 export const QUALITY = callRust<{ QUALITY: Record<QualityId, Quality> }>("client.data", []).QUALITY;

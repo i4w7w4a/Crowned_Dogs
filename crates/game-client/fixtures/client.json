@@ -642,6 +642,31 @@
     "fallAfterLastAttack": 0.45
   },
   "QUALITY": {
+    "minimal": {
+      "id": "minimal",
+      "name": "Минимум",
+      "maxDpr": 0.75,
+      "maxPixels": 200000,
+      "ssaa": 1,
+      "msaa": 0,
+      "shadow": 0,
+      "shadowRadius": 0,
+      "shadowSamples": 0,
+      "taps": 3,
+      "mips": false,
+      "rays": 0,
+      "raysScale": 0.5,
+      "haze": 0,
+      "hazeScale": 0.5,
+      "dofTaps": 1,
+      "dust": 0,
+      "textures": 512,
+      "anisotropy": 1,
+      "env": false,
+      "mirror": false,
+      "sharpBackdrop": false,
+      "compressedTextures": true
+    },
     "low": {
       "id": "low",
       "name": "Низкая",
@@ -664,7 +689,8 @@
       "anisotropy": 1,
       "env": false,
       "mirror": false,
-      "sharpBackdrop": false
+      "sharpBackdrop": false,
+      "compressedTextures": true
     },
     "medium": {
       "id": "medium",
@@ -688,7 +714,8 @@
       "anisotropy": 4,
       "env": true,
       "mirror": false,
-      "sharpBackdrop": false
+      "sharpBackdrop": false,
+      "compressedTextures": true
     },
     "high": {
       "id": "high",
@@ -712,7 +739,8 @@
       "anisotropy": 8,
       "env": true,
       "mirror": true,
-      "sharpBackdrop": true
+      "sharpBackdrop": true,
+      "compressedTextures": false
     },
     "ultra": {
       "id": "ultra",
@@ -736,7 +764,8 @@
       "anisotropy": 16,
       "env": true,
       "mirror": true,
-      "sharpBackdrop": true
+      "sharpBackdrop": true,
+      "compressedTextures": false
     }
   },
   "ZONE_TO": {

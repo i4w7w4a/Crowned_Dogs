@@ -54,28 +54,15 @@ pub(super) async fn await_value(value: JsValue) -> Result<JsValue, JsValue> {
 #[wasm_bindgen(js_name = sceneLoadModel)]
 pub fn load_model(host: JsValue, url: String) -> Promise {
     future_to_promise(async move {
-        let response = await_value(try_call(&global(), "fetch", &[url.clone().into()])?).await?;
-        if !boolean(&get(&response, "ok")) {
-            return Err(
-                js_sys::Error::new(&format!("model: {}", num(&get(&response, "status")))).into(),
-            );
-        }
-        let bytes = if url.ends_with(".json") {
-            let payload = await_value(try_call(&response, "json", &[])?).await?;
-            let encoded = try_call(&global(), "atob", &[get(&payload, "data")])?;
-            let text = encoded.as_string().unwrap_or_default();
-            let bytes = text.chars().map(|c| c as u8).collect::<Vec<_>>();
-            Uint8Array::from(bytes.as_slice()).buffer().into()
-        } else {
-            await_value(try_call(&response, "arrayBuffer", &[])?).await?
+        // The phone qualities take the model's copy with GPU-compressed maps when the build
+        // ships one; a copy that fails to load or transcode falls back to the plain model.
+        let gltf = match compressed_copy(&host, &url) {
+            Some((copy, ktx2)) => match parse_model(&host, &copy, Some(&ktx2)).await {
+                Ok(gltf) => gltf,
+                Err(_) => parse_model(&host, &url, None).await?,
+            },
+            None => parse_model(&host, &url, None).await?,
         };
-        let loader = construct(&get(&host, "GLTFLoader"), &[]);
-        call(
-            &loader,
-            "setMeshoptDecoder",
-            &[get(&host, "MeshoptDecoder")],
-        );
-        let gltf = await_value(try_call(&loader, "parseAsync", &[bytes, "".into()])?).await?;
         // A Persona carries every face; until a look picks one, only the first shows.
         for node in nodes(&get(&gltf, "scene")) {
             let name = string(&get(&get(&node, "material"), "name"));
@@ -87,6 +74,42 @@ pub fn load_model(host: JsValue, url: String) -> Promise {
         let _ = install_relief_async(host, get(&gltf, "scene"), url).await;
         Ok(gltf)
     })
+}
+
+/// The `.k.json` copy of a model and the host's KTX2 transcoder, when this device's quality asks
+/// for compressed maps and the build has the copy.
+fn compressed_copy(host: &JsValue, url: &str) -> Option<(String, JsValue)> {
+    let copy = format!("{}.k.json", url.strip_suffix(".json")?);
+    let (has, ktx2) = (get(host, "hasFile"), get(host, "ktx2"));
+    if !super::platform::compressed_textures() || !has.is_function() || !ktx2.is_function() {
+        return None;
+    }
+    if !boolean(&invoke(&has, &[copy.clone().into()])) {
+        return None;
+    }
+    let ktx2 = invoke(&ktx2, &[]);
+    present(&ktx2).then_some((copy, ktx2))
+}
+async fn parse_model(host: &JsValue, url: &str, ktx2: Option<&JsValue>) -> Result<JsValue, JsValue> {
+    let response = await_value(try_call(&global(), "fetch", &[url.into()])?).await?;
+    if !boolean(&get(&response, "ok")) {
+        return Err(js_sys::Error::new(&format!("model: {}", num(&get(&response, "status")))).into());
+    }
+    let bytes = if url.ends_with(".json") {
+        let payload = await_value(try_call(&response, "json", &[])?).await?;
+        let encoded = try_call(&global(), "atob", &[get(&payload, "data")])?;
+        let text = encoded.as_string().unwrap_or_default();
+        let bytes = text.chars().map(|c| c as u8).collect::<Vec<_>>();
+        Uint8Array::from(bytes.as_slice()).buffer().into()
+    } else {
+        await_value(try_call(&response, "arrayBuffer", &[])?).await?
+    };
+    let loader = construct(&get(host, "GLTFLoader"), &[]);
+    call(&loader, "setMeshoptDecoder", &[get(host, "MeshoptDecoder")]);
+    if let Some(ktx2) = ktx2 {
+        call(&loader, "setKTX2Loader", &[ktx2.clone()]);
+    }
+    await_value(try_call(&loader, "parseAsync", &[bytes, "".into()])?).await
 }
 
 /// Real gun models by held class (pistol, shotgun, rifle, sniper); a class without one keeps its placeholder boxes.
@@ -102,7 +125,10 @@ const HELD_MODELS: &[(&str, &str)] = &[("knife", "knife"), ("grenade", "grenade"
 /// A real gun whose own origin is not where the hand closes: its scale in the hand, then its shift
 /// in the mount (x along the bore, y up). The pistol's centre sat in the fist with the grip back in
 /// the wrist; it goes up and forward into the palm, a size up to fill the gloved hand (Art, 2026-11-01).
-const HOLDS: &[(&str, f64, [f64; 3])] = &[("pistol", 1.2, [0.03, 0.02, 0.])];
+/// The grenade sat in the plane of the hand, showing through its back; it moves out to the palm side (-z)
+/// where the throw's half-closed fingers wrap it (2026-11-02).
+const HOLDS: &[(&str, f64, [f64; 3])] =
+    &[("pistol", 1.2, [0.03, 0.02, 0.]), ("grenade", 1., [0., -0.01, -0.045])];
 #[wasm_bindgen(js_name = sceneLoadGuns)]
 pub fn load_guns(host: JsValue) -> Promise {
     future_to_promise(async move {
@@ -967,6 +993,7 @@ pub fn relief_hook(host: JsValue, material: JsValue, quality: JsValue) -> JsValu
         || !present(&get(&material, "bumpMap"))
         || !present(&get(&material, "normalMap"))
         || id == "low"
+        || id == "minimal"
         || !compatible_uv(&host, &material)
     {
         return JsValue::UNDEFINED;
