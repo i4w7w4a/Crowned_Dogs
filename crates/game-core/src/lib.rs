@@ -5,6 +5,7 @@ use std::sync::OnceLock;
 mod ai;
 mod combat;
 mod draft;
+mod hazard;
 mod loadout;
 pub mod rng;
 mod sync;
@@ -293,6 +294,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
         "canSwap" => json!(!combat::swap(x(0), side(1)).is_null()),
         "validateOrder" => combat::validate(x(0), side(1), x(2)),
         "conditionAccuracy" => num(combat::condition(x(0), side(1), n(x(2)))),
+        "conditionToxic" => num(n(&combat::weather(x(0))["toxic"])),
         "hitChance" => num(combat::hit_chance(
             x(0),
             side(1),

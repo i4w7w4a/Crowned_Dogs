@@ -386,12 +386,18 @@ fn new_duel(s: &JsValue) -> JsValue {
     } else {
         JsValue::UNDEFINED
     };
+    // The guns working on this map, or ranging on it for the next shift, bring far more shells.
+    let clock = get(&frame, "clock");
+    let map = word(&frame, "mapId");
+    let shelled = word(&clock, "shelled") == map || word(&clock, "nextShelled") == map;
     construct(
         &get(&get(s, "host"), "LocalDuel"),
         &[object(&[
             ("mapId", get(&frame, "mapId")),
             ("weather", get(&frame, "weather")),
             ("time", get(&frame, "time")),
+            ("events", true.into()),
+            ("shelled", shelled.into()),
             (
                 "player",
                 object(&[
@@ -589,6 +595,9 @@ fn pressed(el: &JsValue, on: bool) {
 }
 fn render(s: &JsValue) {
     arena(s, "setConditions", &[match_(s)]);
+    if !flag(s, "busy") && get(&get(s, "arena"), "hazardMark").is_function() {
+        arena(s, "hazardMark", &[match_(s)]);
+    }
     let m = match_(s);
     let d = draft(s);
     let me = at(&get(&m, "fighters"), 0);
@@ -649,6 +658,30 @@ fn render(s: &JsValue) {
             &(lock || number(&m, "distance") - mv < 1.).into(),
         );
     }
+    // A hazard warned for this turn: the chip under the health bars and an amber mark on
+    // every move that ends inside it.
+    let warning = core("words.hazardWarning", &[m.clone()]);
+    let risky = if present(&warning) {
+        values(&get(&warning, "risky"))
+    } else {
+        vec![]
+    };
+    for b in all(".mv") {
+        let mv = word(&get(&b, "dataset"), "m").parse::<f64>().unwrap_or(0.);
+        toggle(&b, "risk", !lock && risky.iter().any(|r| r.as_f64() == Some(mv)));
+    }
+    hide(&id("hazardNote"), !present(&warning) || over(s));
+    if present(&warning) {
+        let icon = match word(&warning, "kind").as_str() {
+            "drone" => "i-drone",
+            "shell" | "collapse" => "i-blast",
+            "toxic" => "i-dust",
+            _ => "i-storm",
+        };
+        html(&id("hazardIcon"), &string(&host(s, "icon", &[icon.into()])));
+        text(&id("hazardText"), &word(&warning, "text"));
+    }
+    let stunned = flag(&warning, "stunned") && !lock;
     let dist = number(&controls, "dist");
     text(&id("distLabel"), &format!("{dist} {}", steps(dist)));
     hide(&id("distNote"), !flag(&controls, "noShot"));
@@ -708,10 +741,12 @@ fn render(s: &JsValue) {
         );
     }
     let message = get(&controls, "message");
-    set(&id("goBtn"), "disabled", &present(&message).into());
+    set(&id("goBtn"), "disabled", &(present(&message) && !stunned).into());
     text(
         &id("goText"),
-        &if present(&message) {
+        &if stunned {
+            "Оглушён · ход без тебя".into()
+        } else if present(&message) {
             string(&message)
         } else if kind == "flee" {
             "Уйти из боя".into()
@@ -751,12 +786,21 @@ fn draw_hp(s: &JsValue, side: usize) {
 fn draw_header(s: &JsValue) {
     let c = get(&match_(s), "config");
     let words = get(s, "words");
+    // Each map names its own weather: smoke in the hall, mist off the water, fumes over the ponds.
+    let weather = string(&core(
+        "client.world.weatherName",
+        &[get(&c, "mapId"), get(&c, "weather")],
+    ));
+    let mut chars = weather.chars();
+    let weather = chars
+        .next()
+        .map(|f| f.to_uppercase().collect::<String>() + chars.as_str())
+        .unwrap_or_else(|| word(&get(&words, "WEATHER_WORD"), &word(&c, "weather")));
     text(
         &id("condText"),
         &format!(
-            "{} · {}",
+            "{} · {weather}",
             word(&get(&words, "TIME_WORD"), &word(&c, "time")),
-            word(&get(&words, "WEATHER_WORD"), &word(&c, "weather"))
         ),
     );
     text(&id("mapTitle"), &word(&get(s, "frame"), "name"));
@@ -820,6 +864,11 @@ fn end_turn(s: &JsValue) {
     if !can_tap(s) {
         return;
     }
+    // Stunned by lightning: the turn plays without an order, which is not going missing.
+    if num(&get(&at(&get(&match_(s), "fighters"), 0), "stunned")) > 0. {
+        play_turn(s, call(&duel(s), "timeout", &[]));
+        return;
+    }
     let r = call(&duel(s), "submit", &[]);
     if r.is_string() {
         call(&get(s, "log"), "note", &[r]);
@@ -874,43 +923,164 @@ fn play_turn(s: &JsValue, r: JsValue) {
             ],
         );
     }
+    if get(&get(s, "arena"), "hazardMark").is_function() {
+        arena(s, "hazardMark", &[JsValue::NULL]);
+    }
     render(s);
     let report = r.clone();
     after(s, number(&timing, "ourAttack"), move |s| {
         strike(s, &report, 0)
     });
+    let hazard = get(&r, "hazard");
+    let kind = word(&hazard, "kind");
+    // The living world strikes after both shots: the line goes into the log once it has landed.
+    let lands = present(&hazard) && (kind != "blackout" || present(&get(&hazard, "toxic")));
+    let report = r.clone();
     after(s, number(&timing, "enemyAttack"), move |s| {
-        strike(s, &r, 1);
-        let fighters = get(&match_(s), "fighters");
-        call(
-            &get(s, "log"),
-            "add",
-            &[
-                r,
-                array(&[
-                    get(&at(&fighters, 0), "name"),
-                    get(&at(&fighters, 1), "name"),
-                ])
-                .into(),
-                array(&[
-                    get(&at(&fighters, 0), "weapon"),
-                    get(&at(&fighters, 1), "weapon"),
-                ])
-                .into(),
-            ],
-        );
-    });
-    after(s, 2.5, |s| {
-        set(s, "busy", &false.into());
-        set(s, "turn", &get(&match_(s), "turn"));
-        if over(s) {
-            finish(s);
-        } else {
-            audio(s, "play", &["ui.turn".into()]);
-            render(s);
-            start_timer(s);
+        strike(s, &report, 1);
+        if !lands {
+            log_turn(s, report);
         }
     });
+    if !lands {
+        after(s, 2.5, next_turn);
+        return;
+    }
+    if kind == "shell" {
+        // the far guns, then the shell's own whine comes down
+        sound(s, "artillery.far", 0.4, -2.);
+    }
+    after(s, HAZARD_AT, move |s| {
+        let impact = if get(&get(s, "arena"), "hazardStrike").is_function() {
+            num(&arena(s, "hazardStrike", &[r.clone()])).max(0.)
+        } else {
+            0.
+        };
+        match word(&get(&r, "hazard"), "kind").as_str() {
+            "lightning" => sound(s, "thunder", impact, 3.),
+            "shell" => {
+                sound(s, "miss.near", (impact - 0.3).max(0.), -6.);
+                sound(s, "grenade.blast", impact, 2.);
+            }
+            "drone" => {
+                sound(s, "dash.whoosh", (impact - 0.3).max(0.), 0.);
+                sound(s, "grenade.blast", impact, 0.);
+            }
+            "collapse" => {
+                sound(s, "body.fall", impact, 2.);
+                sound(s, "grenade.blast", impact, -8.);
+            }
+            _ => {}
+        }
+        after(s, impact, move |s| {
+            hazard_lands(s, &r);
+            log_turn(s, r);
+            after(s, 0.9_f64.max(2.5 - HAZARD_AT - impact), next_turn);
+        });
+    });
+}
+/// When the warned hazard comes down, after both shots.
+const HAZARD_AT: f64 = 1.75;
+fn sound(s: &JsValue, id: &str, delay: f64, gain_db: f64) {
+    audio(
+        s,
+        "play",
+        &[
+            id.into(),
+            object(&[("delay", delay.into()), ("gainDb", gain_db.into())]),
+        ],
+    );
+}
+/// The hazard's damage, the stun and the poison show where they land, after the shots' numbers.
+fn hazard_lands(s: &JsValue, r: &JsValue) {
+    let h = get(r, "hazard");
+    let stage = id("stage");
+    let mine = (
+        number(&stage, "clientWidth") * 0.3,
+        number(&stage, "clientHeight") * 0.6,
+    );
+    let toxic = number(&h, "toxic");
+    for side in 0..2usize {
+        let hp = at(&get(r, "hp"), side);
+        Reflect::set(&get(s, "hp"), &(side as u32).into(), &hp).unwrap_throw();
+        let (x, y) = if side == 1 { point(s, "body") } else { mine };
+        let hit = values(&get(&h, "hits"))
+            .into_iter()
+            .find(|hh| number(hh, "side") as usize == side);
+        if let Some(hh) = &hit {
+            let stun = if flag(hh, "stun") { " · оглушён" } else { "" };
+            floating(
+                x + if side == 1 { 36. } else { 0. },
+                y - 40.,
+                "dmg",
+                &format!("−{}", number(hh, "damage")),
+                &format!("{}{stun}", word(&h, "name")),
+            );
+            let blast = word(&h, "kind") != "lightning";
+            arena(
+                s,
+                "hit",
+                &[
+                    if side == 1 { "enemy" } else { "me" }.into(),
+                    "body".into(),
+                    if blast { "grenade" } else { "hit" }.into(),
+                ],
+            );
+            if side == 0 {
+                fire(&id("flashHurt"), "on");
+            }
+        }
+        if toxic > 0. {
+            floating(
+                x + if side == 1 { 36. } else { 0. },
+                y + if hit.is_some() { 10. } else { -40. },
+                "dmg",
+                &format!("−{toxic}"),
+                "отрава",
+            );
+        }
+        if num(&hp) <= 0. {
+            arena(s, "fall", &[if side == 1 { "enemy" } else { "me" }.into()]);
+            if side == 0 && word(s, "camera") == "fp" && !flag(s, "reduceMotion") {
+                toggle(&id("stage"), "down", true);
+            }
+        }
+    }
+    if !values(&get(&h, "hits")).is_empty() || word(&h, "kind") == "shell" {
+        shake(s);
+    }
+    render(s);
+}
+fn next_turn(s: &JsValue) {
+    set(s, "busy", &false.into());
+    set(s, "turn", &get(&match_(s), "turn"));
+    if over(s) {
+        finish(s);
+    } else {
+        audio(s, "play", &["ui.turn".into()]);
+        render(s);
+        start_timer(s);
+    }
+}
+fn log_turn(s: &JsValue, r: JsValue) {
+    let fighters = get(&match_(s), "fighters");
+    call(
+        &get(s, "log"),
+        "add",
+        &[
+            r,
+            array(&[
+                get(&at(&fighters, 0), "name"),
+                get(&at(&fighters, 1), "name"),
+            ])
+            .into(),
+            array(&[
+                get(&at(&fighters, 0), "weapon"),
+                get(&at(&fighters, 1), "weapon"),
+            ])
+            .into(),
+        ],
+    );
 }
 fn arm_both(s: &JsValue) {
     for side in 0..2 {
@@ -961,7 +1131,12 @@ fn floating(x: f64, y: f64, class: &str, big: &str, small: &str) {
 fn strike(s: &JsValue, r: &JsValue, side: usize) {
     let a = at(&get(r, "attacks"), side);
     let target = 1 - side;
-    let hp = at(&get(r, "hp"), target);
+    // A hazard after the shots takes its own share later: the shots show the health before it.
+    let before = get(&get(r, "hazard"), "hpBefore");
+    let hp = at(
+        &if present(&before) { before } else { get(r, "hp") },
+        target,
+    );
     Reflect::set(&get(s, "hp"), &(target as u32).into(), &hp).unwrap_throw();
     if present(&a) {
         let ours = side == 0;
