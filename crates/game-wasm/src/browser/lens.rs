@@ -120,7 +120,8 @@ impl RustLens {
         let matrix = || make(&three, "Matrix4", &[]);
         let color = || make(&three, "Color", &[]);
         let sun = vector(0.8, 0.8);
-        let shader = |fragment: &str, entries: &[(&str, JsValue)]| {
+        // the name picks each pass's node twin on WebGPU (apps/web/src/arena/gpu.ts)
+        let shader = |name: &str, fragment: &str, entries: &[(&str, JsValue)]| {
             let uniforms = object(&[]);
             for (key, value) in entries {
                 set(&uniforms, key, &object(&[("value", value.clone())]));
@@ -129,6 +130,7 @@ impl RustLens {
                 &three,
                 "ShaderMaterial",
                 &[object(&[
+                    ("name", name.into()),
                     (
                         "vertexShader",
                         include_str!("shaders/vertexShader.glsl").into(),
@@ -142,6 +144,7 @@ impl RustLens {
             )
         };
         let compose = shader(
+            "compose",
             include_str!("shaders/composeShader.glsl"),
             &[
                 ("tFig", texture(&fig)),
@@ -165,6 +168,7 @@ impl RustLens {
         let sun_dir = make(&three, "Vector3", &[n(0.), n(0.5), n(-1.)]);
         call(&sun_dir, "normalize", &[]);
         let haze_mat = shader(
+            "haze",
             include_str!("shaders/hazeShader.glsl"),
             &[
                 ("invProj", matrix()),
@@ -185,6 +189,7 @@ impl RustLens {
             ],
         );
         let mask = shader(
+            "raysMask",
             include_str!("shaders/raysMaskShader.glsl"),
             &[
                 ("tComp", texture(&comp)),
@@ -195,6 +200,7 @@ impl RustLens {
             ],
         );
         let blur = shader(
+            "raysBlur",
             include_str!("shaders/raysBlurShader.glsl"),
             &[
                 ("tSrc", JsValue::NULL),
@@ -204,6 +210,7 @@ impl RustLens {
             ],
         );
         let lens = shader(
+            "lens",
             include_str!("shaders/lensShader.glsl"),
             &[
                 ("tComp", texture(&comp)),
@@ -905,6 +912,7 @@ fn hand_mark(three: &JsValue) -> (JsValue, JsValue) {
         three,
         "ShaderMaterial",
         &[object(&[
+            ("name", "handMark".into()),
             (
                 "vertexShader",
                 "void main() { gl_Position = vec4(position.xy, 0.9999, 1.0); }".into(),
@@ -1017,6 +1025,11 @@ impl LensState {
             return;
         }
         self.shader_features = features;
+        // on WebGPU the compose pass is built from nodes, from the same bits
+        if get(&self.compose, "setFeatures").is_function() {
+            call(&self.compose, "setFeatures", &[n(f64::from(features))]);
+            return;
+        }
         let original = include_str!("shaders/composeShader.glsl");
         let mut fragment = original.to_string();
         let uniforms = get(&self.compose, "uniforms");

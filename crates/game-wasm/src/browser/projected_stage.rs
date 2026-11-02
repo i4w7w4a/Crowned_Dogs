@@ -34,11 +34,13 @@ fn uniforms(values: &[(&str, JsValue)]) -> JsValue {
     }
     out
 }
-fn shader(three: &JsValue, fragment: &str, values: &[(&str, JsValue)]) -> JsValue {
+/// `name` picks the material's node twin on WebGPU (apps/web/src/arena/gpu.ts).
+fn shader(three: &JsValue, name: &str, fragment: &str, values: &[(&str, JsValue)]) -> JsValue {
     make(
         three,
         "ShaderMaterial",
         &[object(&[
+            ("name", name.into()),
             ("vertexShader", VERTEX.into()),
             ("fragmentShader", fragment.into()),
             ("uniforms", uniforms(values)),
@@ -126,6 +128,7 @@ impl RustProjectedStage {
         }
         let depth_material = shader(
             &three,
+            "stageDepth",
             DEPTH,
             &[("sourceViewProjection", make(&three, "Matrix4", &[]))],
         );
@@ -737,6 +740,7 @@ async fn load_assets(
             .unwrap_or_else(|| vec![0.10, 0.11, 0.12]);
         let material = shader(
             &three,
+            "stage",
             FRAGMENT,
             &[
                 ("sourceViewProjection", source.clone()),

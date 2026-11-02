@@ -42,5 +42,6 @@ export interface HazeScene {
 
 /** Three.js is the renderer; Rust owns the render graph and texture lifetimes. */
 export class Lens extends RustLens {
-  constructor(renderer: THREE.WebGLRenderer) { super({ THREE, FullScreenQuad }, renderer); }
+  // a WebGPU renderer (gpu.ts) brings its own THREE
+  constructor(renderer: THREE.WebGLRenderer & { three?: object }) { super({ THREE: renderer.three ?? THREE, FullScreenQuad }, renderer); }
 }

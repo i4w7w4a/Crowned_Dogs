@@ -395,6 +395,8 @@ impl RustArena {
             "PerspectiveCamera",
             &[n(45.), n(1024. / 1536.), n(0.1), n(80.)],
         );
+        // WebGPU keeps depth in 0..1, WebGL in -1..1: the hand-made projection below follows the renderer
+        set(&camera, "coordinateSystem", &get(&renderer, "coordinateSystem"));
         let hemi = make(
             &host,
             "HemisphereLight",
@@ -2021,10 +2023,12 @@ impl ArenaState {
                 p(&self.camera, "far"),
             ],
         );
+        let mut projection = projection.iter().copied().map(n).collect::<Vec<_>>();
+        projection.push(get(&self.camera, "coordinateSystem"));
         call(
             &get(&self.camera, "projectionMatrix"),
             "makePerspective",
-            &projection.iter().copied().map(n).collect::<Vec<_>>(),
+            &projection,
         );
         let inverse = get(&self.camera, "projectionMatrixInverse");
         copy(&inverse, &get(&self.camera, "projectionMatrix"));

@@ -19,6 +19,9 @@ import { TextureTiers } from "./textures.ts";
 import { loadModel } from "./load-model.ts";
 import { Hand, gripOf, loadGuns } from "./weapons.ts";
 
+// ?gpu=1 draws the arena with WebGPU where the browser has it (see gpu.ts)
+const GPU = new URLSearchParams(location.search).has("gpu") && "gpu" in navigator ? await import("./gpu.ts") : null;
+
 export type Who = "me" | "enemy";
 export type HitKind = "hit" | "blocked" | "grenade";
 
@@ -27,7 +30,7 @@ export class Arena extends RustArena {
   constructor(canvas: HTMLCanvasElement) {
     const query = new URLSearchParams(location.search);
     super({
-      THREE, clone, dress, KIT_A, Dust, Lens, ProjectedStage, tune, Motion, Pose,
+      THREE: GPU?.THREE ?? THREE, clone, dress, KIT_A, Dust: GPU?.Dust ?? Dust, Lens, ProjectedStage, tune: GPU?.tune ?? tune, Motion, Pose,
       armsOnly, findBones, pitch, Collapse, FALL_TIME, Flash, HoldOut,
       Feet, gaitOf, Viewmodel, TextureTiers, loadModel, Hand, gripOf, loadGuns,
       quality: QUALITY.medium,
