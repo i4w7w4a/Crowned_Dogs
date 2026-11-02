@@ -34,6 +34,38 @@ float coc(vec2 uv) {
       vec3 w = mix(vec3(1.0), spectrum(t), 0.45);
       t = (float(i) + jitter) / float(TAPS);
 `],
+  // 2 Nov 2026 (later): no taps means no depth of field, and no lens smear or glow (minimal quality)
+  ["composeShader", `vec3 focused(vec2 uv) {
+  if (hasDepth < 0.5) return painting(uv);`, `vec3 focused(vec2 uv) {
+#if DOF_TAPS < 1
+  return painting(uv); // no depth of field: the hall stays sharp
+#else
+  if (hasDepth < 0.5) return painting(uv);`],
+  ["composeShader", `  return sum / wsum;
+#endif
+}`, `  return sum / wsum;
+#endif
+#endif
+}`],
+  ["lensShader", `  vec4 c;
+  if (amount < 0.0004 && r < 0.0004) {`, `  vec4 c;
+#if TAPS < 1
+  c = clean(src); // no smear: clean glass to the edges, and no glow, which reads the frame's mips
+#else
+  if (amount < 0.0004 && r < 0.0004) {`],
+  ["lensShader", `    c = vec4(sum / wsum, a / float(TAPS));
+  }
+`, `    c = vec4(sum / wsum, a / float(TAPS));
+  }
+#endif
+`],
+  ["lensShader", `  vec3 halo = max(textureLod(tComp, src, 4.5 + glowLod).rgb - 0.55, 0.0) + max(textureLod(tComp, src, 6.0 + glowLod).rgb - 0.5, 0.0);
+  c.rgb += halo * glow * hasBg;
+`, `#if TAPS > 0
+  vec3 halo = max(textureLod(tComp, src, 4.5 + glowLod).rgb - 0.55, 0.0) + max(textureLod(tComp, src, 6.0 + glowLod).rgb - 0.5, 0.0);
+  c.rgb += halo * glow * hasBg;
+#endif
+`],
 ];
 for (const [name, from, to] of revisions) {
   assert.equal(shaders[name].split(from).length, 2, `${name} revision must match the oracle once`);

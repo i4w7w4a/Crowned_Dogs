@@ -488,6 +488,13 @@ impl RustLens {
                     set(&get(t, "texture"), "type", &kind);
                 }
                 set(&get(&s.fig, "texture"), "colorSpace", &get(&s.three, space));
+                // a lens without smear or glow (no taps) reads the frame only at full size, so
+                // its mips are not rebuilt every frame
+                let mips = prop(&q, "taps") > 0.;
+                let comp = get(&s.comp, "texture");
+                set(&comp, "generateMipmaps", &mips.into());
+                let filter = if mips { "LinearMipmapLinearFilter" } else { "LinearFilter" };
+                set(&comp, "minFilter", &get(&s.three, filter));
                 set(&s.fig, "samples", &get(&q, "msaa"));
                 set(&s.near, "samples", &n(prop(&q, "msaa").min(4.)));
                 for t in [&s.fig, &s.near, &s.comp] {
