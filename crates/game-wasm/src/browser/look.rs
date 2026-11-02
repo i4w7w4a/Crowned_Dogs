@@ -54,10 +54,41 @@ fn tint(material: &JsValue, factor: [f64; 3]) {
     );
 }
 
+/// 0 to 3 for the faces m1/f1 to m4/f4.
+fn face_index(face: &str) -> Option<usize> {
+    face.get(1..).and_then(|d| d.parse::<usize>().ok()).filter(|i| (1..=4).contains(i)).map(|i| i - 1)
+}
+
+/// The hair pack's mask of the male scans' baked buzz cut (`tools/hair-hd/scalp_mask.py`, one channel per face, R m1 to
+/// A m4) and the mean brightness of each face's buzz. Under a pack hairstyle the head shader paints the buzz in the
+/// hair's colour; a pack without the mask paints nothing.
+struct Scalp {
+    map: JsValue,
+    luma: Vec<f64>,
+    on: bool,
+}
+
+fn scalp(model: &JsValue, packed: bool) -> Scalp {
+    let node = call(model, "getObjectByName", &["Hair_scalp".into()]);
+    let map = if present(&node) { get(&get(&node, "material"), "map") } else { JsValue::NULL };
+    let luma: Vec<f64> = if present(&node) {
+        values(&get(&get(&node, "userData"), "cdScalpLuma")).iter().map(num).collect()
+    } else {
+        Vec::new()
+    };
+    if present(&map) && !string(&get(&map, "colorSpace")).is_empty() {
+        // a mask, not a colour: sampled as stored
+        set(&map, "colorSpace", &"".into());
+        set(&map, "needsUpdate", &true.into());
+    }
+    let on = packed && present(&map) && luma.len() == 4;
+    Scalp { map: if present(&map) { map } else { JsValue::NULL }, luma, on }
+}
+
 /// Sets up the eye shader on a head material; returns its uniforms. The head's model carries its two irises in the
 /// mesh's own space (`cdEyes`: x, y, z, radius twice): the scans' UV atlases scatter an eye over several islands, so
-/// the eyes are found by position, not by texture area.
-fn head_hook(material: &JsValue, node: &JsValue, paint: &JsValue) -> JsValue {
+/// the eyes are found by position, not by texture area. The same shader paints the scalp under pack hair (`Scalp`).
+fn head_hook(material: &JsValue, node: &JsValue, paint: &JsValue, scalp: &Scalp) -> JsValue {
     let eyes = get(&get(node, "userData"), "cdEyes");
     let mut spots = if present(&eyes) { values(&eyes) } else { Vec::new() };
     spots.resize(8, 0.0.into());
@@ -69,12 +100,16 @@ fn head_hook(material: &JsValue, node: &JsValue, paint: &JsValue) -> JsValue {
             ("cdEyeB", object(&[("value", area(1))])),
             ("cdIris", object(&[("value", get(paint, "iris"))])),
             ("cdTime", object(&[("value", 0.0.into())])),
+            ("cdScalp", object(&[("value", JsValue::NULL)])),
+            ("cdScalpPick", object(&[("value", array(&[0.0.into(), 0.0.into(), 0.0.into(), 0.0.into()]).into())])),
+            ("cdScalpTone", object(&[("value", array(&[0.0.into(), 0.0.into(), 0.0.into()]).into())])),
+            ("cdScalpLuma", object(&[("value", 1.0.into())])),
         ]);
         set(&get(material, "userData"), "cdLook", &uniforms);
         let shared = uniforms.clone();
         let compile = Closure::<dyn FnMut(JsValue)>::new(move |shader: JsValue| {
             let own = get(&shader, "uniforms");
-            for key in ["cdEyeA", "cdEyeB", "cdIris", "cdTime"] {
+            for key in ["cdEyeA", "cdEyeB", "cdIris", "cdTime", "cdScalp", "cdScalpPick", "cdScalpTone", "cdScalpLuma"] {
                 set(&own, key, &get(&shared, key));
             }
             let vertex = string(&get(&shader, "vertexShader"))
@@ -84,12 +119,16 @@ fn head_hook(material: &JsValue, node: &JsValue, paint: &JsValue) -> JsValue {
             let fragment = string(&get(&shader, "fragmentShader"))
                 .replacen(
                     "#include <common>",
-                    "#include <common>\nvarying vec3 cdLocal;\nuniform vec4 cdEyeA;\nuniform vec4 cdEyeB;\nuniform vec3 cdIris;\nuniform float cdTime;\nvec3 cdGlow = vec3( 0.0 );",
+                    "#include <common>\nvarying vec3 cdLocal;\nuniform vec4 cdEyeA;\nuniform vec4 cdEyeB;\nuniform vec3 cdIris;\nuniform float cdTime;\nuniform sampler2D cdScalp;\nuniform vec4 cdScalpPick;\nuniform vec3 cdScalpTone;\nuniform float cdScalpLuma;\nvec3 cdGlow = vec3( 0.0 );",
                     1,
                 )
                 .replacen(
                     "#include <map_fragment>",
-                    concat!("#include <map_fragment>\n", include_str!("shaders/look-eyes.glsl")),
+                    concat!(
+                        "#include <map_fragment>\n",
+                        include_str!("shaders/look-eyes.glsl"),
+                        include_str!("shaders/look-scalp.glsl")
+                    ),
                     1,
                 )
                 .replacen(
@@ -100,7 +139,7 @@ fn head_hook(material: &JsValue, node: &JsValue, paint: &JsValue) -> JsValue {
             set(&shader, "fragmentShader", &fragment.into());
         })
         .into_js_value();
-        let hook = object(&[("key", "look4".into()), ("compile", compile.clone())]);
+        let hook = object(&[("key", "look5".into()), ("compile", compile.clone())]);
         HOOKS.with(|h| h.set(material.unchecked_ref(), &hook));
         // Until the next tune, the hook runs on its own; tune then chains it with the rest.
         set(material, "onBeforeCompile", &compile);
@@ -109,6 +148,21 @@ fn head_hook(material: &JsValue, node: &JsValue, paint: &JsValue) -> JsValue {
     set(&get(&uniforms, "cdEyeA"), "value", &area(0));
     set(&get(&uniforms, "cdEyeB"), "value", &area(1));
     set(&get(&uniforms, "cdIris"), "value", &get(paint, "iris"));
+    // the face's own channel, from its material's name (M_Head_m3: blue)
+    let channel = string(&get(material, "name"))
+        .strip_prefix(HEAD)
+        .filter(|face| face.starts_with('m'))
+        .and_then(face_index);
+    let mut pick = [0.0; 4];
+    let mut luma = 1.0;
+    if let (true, Some(i)) = (scalp.on, channel) {
+        pick[i] = 1.0;
+        luma = scalp.luma[i].max(0.001);
+    }
+    set(&get(&uniforms, "cdScalp"), "value", &scalp.map);
+    set(&get(&uniforms, "cdScalpPick"), "value", &array(&pick.map(JsValue::from)).into());
+    set(&get(&uniforms, "cdScalpTone"), "value", &get(paint, "hairCap"));
+    set(&get(&uniforms, "cdScalpLuma"), "value", &luma.into());
     uniforms
 }
 
@@ -255,6 +309,7 @@ pub fn apply(model: JsValue, look: JsValue) {
     let (hair, hair_on, packed) = hair_selection(&model, &paint);
     // a pack style the model lacks shows the long hair rather than none
     let stand_in = super::beards::HAIR_STYLES.contains(&string(&get(&paint, "hair")).as_str()) && !packed;
+    let scalp = scalp(&model, packed);
     let mut cap_material = get(&get(&model, "userData"), "cdCap");
     for node in nodes(&model) {
         if !boolean(&get(&node, "isMesh")) {
@@ -273,8 +328,20 @@ pub fn apply(model: JsValue, look: JsValue) {
             }
             continue;
         }
+        if mesh == "Hair_scalp" {
+            // carries the scalp mask only (`scalp`) and stays hidden
+            continue;
+        }
         if mesh.starts_with("Hair_") {
             set(&node, "visible", &(hair_on && mesh.starts_with(&hair)).into());
+            // the pack's shape keys fit it to each face's own skull (game_cards.py), in face order
+            let fits = get(&node, "morphTargetInfluences");
+            if present(&fits) {
+                let chosen = face_index(&string(&get(&paint, "face")));
+                for i in 0..values(&fits).len() {
+                    set(&fits, &i.to_string(), &(if chosen == Some(i) { 1.0 } else { 0.0 }).into());
+                }
+            }
             if mesh.ends_with("_cap") {
                 let m = own_material(&model, &node, "M_Hair_Cap");
                 let c = rgb(&get(&paint, "hairCap"));
@@ -313,7 +380,7 @@ pub fn apply(model: JsValue, look: JsValue) {
         if name.starts_with(HEAD) {
             set(&node, "visible", &(name == face).into());
             tint(&material, skin);
-            let uniforms = head_hook(&material, &node, &paint);
+            let uniforms = head_hook(&material, &node, &paint, &scalp);
             tick(&node, &uniforms);
         } else if BODIES.contains(&name.as_str()) {
             tint(&material, skin);

@@ -73,9 +73,20 @@ for style in STYLES:
         objs.append(o)
         print('MESH', o.name, len(o.data.polygons), 'faces')
 
+if SEX == 'male':
+    # a hidden 1 mm quad: finish.py hangs the scalp mask (scalp_mask.py) on its material, so the mask
+    # skips the WEBP export and travels with the pack
+    me = bpy.data.meshes.new('Hair_scalp')
+    me.from_pydata([(0, 0, 0), (.001, 0, 0), (.001, 0, .001), (0, 0, .001)], [], [(0, 1, 2, 3)])
+    me.uv_layers.new().data.foreach_set('uv', (0, 0, 1, 0, 1, 1, 0, 1))
+    me.materials.append(material('M_Hair_Scalp', (1, 1, 1), 1.0))
+    o = bpy.data.objects.new('Hair_scalp', me); sc.collection.objects.link(o)
+    me.transform(HEAD)  # at the bone once the loop below takes the head's frame out
+    objs.append(o)
+
 for o in objs:
     # baked into the vertices so the exported node sits at the bone with no offset of its own
-    o.data.transform(HEAD.inverted())
+    o.data.transform(HEAD.inverted(), shape_keys=True)  # and the per-face fits (game_cards.py)
     o.matrix_world = Matrix.Identity(4)
     o.select_set(True)
 out = ROOT / f'output/hair-hd/raw/hair-{SEX}.glb'

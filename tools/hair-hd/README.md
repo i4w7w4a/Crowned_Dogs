@@ -63,6 +63,17 @@
 лица и под закрытым шлемом: `crates/game-wasm/src/browser/look.rs`, список причёсок: `crates/game-client/src/look.rs`.
 Одна причёска на все 4 лица: где череп f2–f4 выходит из подложки, подложка и пряди отодвигаются (до 11 мм).
 
+Мужские (2 ноября 2026): основная форма отодвинута под самый крупный череп, а для каждого лица есть своя посадка,
+morph target `Head_m1…m4` (выходит там, где череп этого лица торчит, и прижимается до 1 мм над ним, не глубже 3 мм).
+`look.rs` включает морф выбранного лица. Без этого на m1 хвост и зачёс висели до 6,6 мм над головой. Головы берутся
+из `output/beards/heads-rest.blend` (`tools/beards/prepare.py`), четвёртым аргументом `game_cards.py`.
+
+Под причёсками у сканов m1–m4 своя запечённая короткая стрижка (светлая у m1, седая у m2/m3). Маска `scalp-male.png`
+(`scalp_mask.py`, канал на лицо: R m1 … A m4, в UV головы) показывает шейдеру головы, где она: там стрижка
+перекрашивается в цвет причёски с сохранением рисунка щетины (`shaders/look-scalp.glsl`). Маска и средняя яркость
+каждой стрижки (`scalp-male.json`) едут в пакете на скрытом квадрате `Hair_scalp` (его делает `pack.py`, PNG
+вешает `finish.py`).
+
 ```bash
 B="/c/Program Files/Blender Foundation/Blender 5.2/blender.exe"
 for s in pixie bob braid; do "$B" -b 3d/hair-hd/$s.blend --python tools/hair-hd/game_cards.py -- $s <tmp>/game_$s.blend x; done
@@ -72,8 +83,17 @@ npx @gltf-transform/cli@4.5.1 meshopt output/hair-hd/raw/hair-female.glb apps/we
 ```
 
 Мужские: то же с `male_short.blend → crop`, `male_slick.blend → slick`, `male_medium.blend → medium`,
-`male_ponytail.blend → ponytail`, затем
-`pack.py -- <tmp> <текстура> male`, `finish.py output/hair-hd/raw/hair-male.glb` и meshopt в `apps/web/models/hair-male.glb`.
+`male_ponytail.blend → ponytail` и головами для посадок, затем маска, `pack.py … male`, `finish.py` и meshopt:
+
+```bash
+"$B" -b 3d/hair-hd/male_short.blend --python tools/hair-hd/game_cards.py -- crop <tmp>/game_crop.blend x "$PWD/output/beards/heads-rest.blend"
+"$B" -b --factory-startup --python tools/hair-hd/scalp_mask.py -- "$PWD/apps/web/models/persona-male.glb" "$PWD/tools/hair-hd/scalp-male.png"
+"$B" -b --factory-startup --python tools/hair-hd/pack.py -- <tmp> <полный путь>/tools/hair-hd/hair-strands.png male
+python -I tools/hair-hd/finish.py output/hair-hd/raw/hair-male.glb
+npx @gltf-transform/cli@4.5.1 meshopt output/hair-hd/raw/hair-male.glb apps/web/models/hair-male.glb --quantize-position 16 --quantize-normal 12 --quantize-texcoord 14
+```
+
+Маску пересобирать после замены голов.
 
 `hair-strands.png`: текстура прядей старых женских волос (та же, что в persona-female.glb).
 

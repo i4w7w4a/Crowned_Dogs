@@ -1,6 +1,8 @@
 """Game version of one HD hairstyle: hair cards and a scalp cap from the strands.
 
-usage: blender -b 3d/hair-hd/<groom>.blend --python game_cards.py -- STYLE OUT.blend TEXTURE.png
+usage: blender -b 3d/hair-hd/<groom>.blend --python game_cards.py -- STYLE OUT.blend TEXTURE.png [HEADS.blend]
+HEADS.blend holds the game's current heads at rest (tools/beards/prepare.py writes output/beards/heads-rest.blend
+for the male ones); without it the groom file's own heads are used.
 The HD groom has 60-75 thousand strands; a phone draws a few hundred textured strips instead.
 The strands are grouped by shape (root, middle, tip) into clumps; each clump becomes one strip
 that follows the clump's median strand, as wide as the clump, lying flat on the hair volume, plus
@@ -14,6 +16,7 @@ from mathutils.bvhtree import BVHTree
 
 args = sys.argv[sys.argv.index('--') + 1:]
 style, out_p, tex_p = args[:3]
+heads_p = args[3] if len(args) > 3 else None
 # clumps and segments per groom object: (object, mesh suffix, clumps, segments, width clip)
 PLAN = {
     'pixie': [('Hair_pixie', 'cards', 460, 6, (0.004, 0.016))],
@@ -281,12 +284,24 @@ if 'Braid_tie' in bpy.data.objects:
 
 # faces 1-4 against the cap: one hairstyle serves all four heads, so wherever a skull stands
 # out of the cap (rays from outside in, towards the skull centre), the cap and the strips over it
-# move out by that much plus a millimetre, fading out over 3 cm away from the cap.
+# move out by that much plus a millimetre, fading out over 3 cm away from the cap. That clears the
+# largest skull and left the hair standing off the others (m1 under the ponytail, Art 2026-11-02),
+# so each face also gets a shape key of its own fit, out or in to a millimetre over its own skull
+# (look.rs picks the chosen face's); the base shape stays the fit that clears all four.
 from mathutils.kdtree import KDTree
+if heads_p:
+    with bpy.data.libraries.load(heads_p) as (src, dst):
+        assert all(f in src.objects for f in FACES), heads_p
+        dst.objects = list(FACES)
+    face_objs = dict(zip(FACES, dst.objects))   # loaded as Head_m1.001 and so on beside the groom's own
+else:
+    face_objs = {f: bpy.data.objects[f] for f in FACES}
 heads = []
 for face in FACES:
-    V, F = world_mesh(bpy.data.objects[face])
-    heads.append((face, BVHTree.FromPolygons([tuple(v) for v in V], F)))
+    o = face_objs[face]
+    M = np.array(o.matrix_world)
+    V = np.array([v.co for v in o.data.vertices]) @ M[:3, :3].T + M[:3, 3]
+    heads.append((face, BVHTree.FromPolygons([tuple(v) for v in V], [tuple(p.vertices) for p in o.data.polygons])))
 
 
 def outer(bvh, d):
@@ -296,11 +311,14 @@ def outer(bvh, d):
 
 dirs = unit(cv - C); rc = np.linalg.norm(cv - C, axis=1)
 delta = np.zeros(len(cv))
+fits = {}
 for face, bvh in heads:
     r = np.array([outer(bvh, d) or 0.0 for d in dirs])
-    need = np.maximum(0, r + 0.001 - rc)
+    need = np.where(r > 0, r + 0.001 - rc, 0.0)
     need[need > 0.014] = 0  # an ear standing out, not the skull
-    print('CLEARANCE', face, 'cap points under skin', int((r > rc + 0.0002).sum()), 'max mm', round(1000 * need.max(), 1))
+    fits[face] = np.maximum(need, -0.003)
+    print('CLEARANCE', face, 'cap points under skin', int((r > rc + 0.0002).sum()), 'max mm', round(1000 * need.max(), 1),
+          'own fit in, max mm', round(-1000 * fits[face].min(), 1))
     delta = np.maximum(delta, need)
 kd = KDTree(len(cv))
 for i, v in enumerate(cv):
@@ -308,24 +326,32 @@ for i, v in enumerate(cv):
 kd.balance()
 
 
-def push(P):
-    out = P.copy()
+def near_cap(P):
+    """The 8 nearest cap points of each vertex, their weights, and the fade with distance from the cap."""
+    idx = np.zeros((len(P), 8), int); w = np.zeros((len(P), 8)); fade = np.zeros(len(P))
     for i, p in enumerate(P):
         near = kd.find_n(tuple(p), 8)
-        w = np.array([1 / (n[2] + 0.002) for n in near]); dd = np.array([delta[n[1]] for n in near])
-        fade = np.clip(1 - (near[0][2] - 0.01) / 0.03, 0, 1)
-        out[i] = p + unit(p - C) * float((w * dd).sum() / w.sum()) * fade
-    return out
+        idx[i] = [n[1] for n in near]; w[i] = [1 / (n[2] + 0.002) for n in near]
+        fade[i] = np.clip(1 - (near[0][2] - 0.01) / 0.03, 0, 1)
+    return idx, w / w.sum(1, keepdims=True), fade
 
 
-if delta.max() > 0:
-    for o in out_objs:
-        P = np.array([v.co for v in o.data.vertices])
-        Q = push(P) if not o.name.endswith('_cap') else P + dirs * delta[:, None]
-        for v, q in zip(o.data.vertices, Q):
-            v.co = tuple(q)
-        o.data.update()
-    print('PUSHED out, max mm', round(1000 * delta.max(), 1))
+def push(P, nb, dl):
+    idx, w, fade = nb
+    return P + unit(P - C) * ((w * dl[idx]).sum(1) * fade)[:, None]
+
+
+for o in out_objs:
+    P = np.array([v.co for v in o.data.vertices])
+    cap_like = o.name.endswith('_cap')
+    nb = None if cap_like else near_cap(P)
+    fit = (lambda dl: P + dirs * dl[:, None]) if cap_like else (lambda dl: push(P, nb, dl))
+    o.data.vertices.foreach_set('co', fit(delta).astype(np.float32).ravel())
+    o.data.update()
+    o.shape_key_add(name='Basis')
+    for face in FACES:
+        o.shape_key_add(name=face, from_mix=False).data.foreach_set('co', fit(fits[face]).astype(np.float32).ravel())
+print('PUSHED out, max mm', round(1000 * delta.max(), 1), '; a shape key per face')
 
 # a clean file with only the game pieces
 keep = {o.name for o in out_objs}

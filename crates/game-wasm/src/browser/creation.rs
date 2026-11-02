@@ -217,6 +217,10 @@ pub fn spoken(line: &str) -> String {
 pub fn pick(look: &JsValue, key: &str, value: &str) -> JsValue {
     let next = js_sys::Object::assign(&js_sys::Object::new(), look.unchecked_ref());
     set(&next, key, &js(value));
+    // The beard takes the hair's colour (the two lists share their ids); its own swatches still change it after.
+    if key == "hairColor" {
+        set(&next, "beardColor", &js(value));
+    }
     if key == "sex" {
         // Face and hair lists differ per sex; let normalize choose that sex's defaults.
         for field in ["face", "hair"] {

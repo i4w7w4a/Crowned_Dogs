@@ -103,10 +103,22 @@ beards=[o for o in sc.objects if o.type=='MESH' and o.name.startswith('Beard_')]
 guide_objects=[]
 stats=[item for item in json.loads((OUT/'geometry-report.json').read_text())['styles'] if item['face']!='m4'] if REPAIR_M4 else []
 
+# Lowest point of each head's ear lobe (rest z): above it the beard stops at the ear's front, below it reaches back
+# to the jaw angle. The sideburns run up to SIDEBURN, under the scalp's own hairline.
+LOBE={'m1':1.622,'m2':1.630,'m3':1.622,'m4':1.618}
+SIDEBURN=1.69
+def smooth(a,b,v):
+ t=max(0,min(1,(v-a)/(b-a)));return t*t*(3-2*t)
+def neckline(p,face):
+ """Lower edge of the beard: where the underside of the jaw meets the throat, rising back to the jaw angle."""
+ return CONFIG[face][1]-.013+.83*max(0,min(.062,p.y+.070))
+def rear_line(z,face):
+ """Back edge: just before the ear beside it, the jaw angle below the lobe."""
+ return -.006-.013*smooth(LOBE[face]-.012,LOBE[face]+.003,z)-.005*smooth(1.675,1.695,z)
 def region(p,n,face,style,lips=True):
  mouth,chin=CONFIG[face];x=abs(p.x);z=p.z
- if n.y>.05 or p.y>-.018 or x>.082 or z<chin+.0005:return 0
- rear=-.018-.019*max(0,min(1,(x-.058)/.024))
+ if x>.095 or n.y>.6:return 0
+ rear=rear_line(z,face)
  if p.y>rear:return 0
  # Cheek-to-sideburn line rises outwards, with a soft physical root boundary.
  top=mouth+.005+max(0,x-.030)*.68
@@ -114,9 +126,13 @@ def region(p,n,face,style,lips=True):
  # Under the nose the moustache climbs to the nose base and ends with a short fade, not a straight shaded band.
  philtrum=max(0,min(1,(.022-x)/.012));philtrum=philtrum*philtrum*(3-2*philtrum)
  top+=(mouth+NOSE[face]-.0012-top)*philtrum if mouth+NOSE[face]-.0012>top else 0
+ # In front of the ear the cheek line turns up into a sideburn about two centimetres wide.
+ sideburn=0 if style=='goatee' else smooth(-.048,-.034,p.y)
+ top+=(SIDEBURN-top)*sideburn
  if z>top:return 0
- jaw=chin+.044*(x/.080)**1.8
- if z<jaw:return 0
+ # Under the jaw the beard goes on down to the throat (the old front-only layer stopped at the jawline).
+ neck=neckline(p,face)
+ if z<neck:return 0
  # Hair grows up to the lips' own outline: roots start half a millimetre off the vermilion border.
  gap=lip_gap(x,z,face)
  if lips and gap<.0005:return 0
@@ -129,7 +145,9 @@ def region(p,n,face,style,lips=True):
  # Stubble fades out over a wider band, so its border never reads as a drawn line.
  soft=2.4 if style=='stubble' else 1
  topfade=.006*soft+(.0025-.006*soft)*philtrum
- edge=min((top-z)/topfade,(z-jaw)/(.004*soft),(.082-x)/(.008*soft),(gap-.0005)/(.0012 if style=='goatee' else .0016) if lips else 1,(rear-p.y)/(.010*soft))
+ # the sideburn thins out into the scalp's hairline over a centimetre or more
+ topfade=max(topfade,.013*sideburn)
+ edge=min((top-z)/topfade,(z-neck)/(.005*soft),(gap-.0005)/(.0012 if style=='goatee' else .0016) if lips else 1,(rear-p.y)/max(.006,.004*soft),(.6-n.y)/.3)
  if style=='goatee':edge=min(edge,(limit-x)/.004)
  return max(0,min(1,edge))*(1-patch)
 def strand_length(p,face,style):
@@ -155,36 +173,47 @@ for face in (['m1'] if PILOT else ['m4'] if REPAIR_M4 else CONFIG):
 
  for style in (['boxed'] if PILOT else STYLES):
   rng=random.Random(730+list(CONFIG).index(face)*32+STYLES.index(style))
-  # Thin surface-fitted dense root layer; outer cards provide fiber detail and silhouette.
-  rv=[];ra=[];rf=[];grid={};step=.00085
+  # Thin dense root layer on the head's own surface, every triangle near the beard cut in nine (about 1.6 mm),
+  # so it follows the jaw round to its underside and up the sideburns; outer cards provide fiber detail and silhouette.
+  rv=[];ra=[];rf=[];index={}
   mouth,chin=CONFIG[face]
-  for ix in range(199):
-   x=-.084+ix*step
-   for iz in range(142):
-    z=chin-.005+iz*step
-    p,n,_,_=bvh.ray_cast(Vector((x,-.5,z)),Vector((0,1,0)))
-    weight=region(p,n,face,style) if p is not None else 0
-    if weight<=0:
-     # A ring of clear points on the lip border lets the shade fade into the lips instead of ending in grid steps.
-     if p is None or lip_gap(abs(p.x),p.z,face)<-.0012 or region(p,n,face,style,lips=False)<=0:continue
-     weight=0
-    grid[(ix,iz)]=len(rv)
-    jaw=chin+.044*(abs(x)/.080)**1.8
-    bulk=strand_length(p,face,style)*max(0,min(1,(mouth+.012-z)/max(.01,mouth+.012-jaw)))*1.08
-    if style=='boxed':bulk*=.2
-    if style=='stubble':bulk=0
-    # By the lips the shade stays on the skin; pushed down with the beard's bulk it would bare a band under the lower lip.
-    bulk*=max(0,min(1,(lip_gap(abs(p.x),p.z,face)-.0005)/.014))
-    rv.append(clear_collar(p+n*(.00055+bulk*.40)+Vector((0,0,-bulk*.60))));ra.append(weight*(.5 if style=='stubble' else .88))
-  for (ix,iz),a in grid.items():
-   if all(k in grid for k in [(ix+1,iz),(ix+1,iz+1),(ix,iz+1)]):
-    quad=(a,grid[(ix+1,iz)],grid[(ix+1,iz+1)],grid[(ix,iz+1)])
-    # Reject m4 ray discontinuities instead of spanning separate scan branches (kept for the bald m4 of 2026-11-02,
-    # whose scan has no such patch; its old rear-cheek limit went with the old scan).
-    if face=='m4' and all(abs(rv[i].x)>.045 and rv[i].y>-.065 for i in quad) and max((rv[quad[j]]-rv[quad[(j+1)%4]]).length for j in range(4))>.0045:continue
-    rf.append(quad)
+  def root_vertex(key,p,n):
+   if key in index:return index[key]
+   x=abs(p.x);jaw=chin+.044*(x/.080)**1.8
+   bulk=strand_length(p,face,style)*max(0,min(1,(mouth+.012-p.z)/max(.01,mouth+.012-jaw)))*1.08
+   if style=='boxed':bulk*=.2
+   if style=='stubble':bulk=0
+   # By the lips the shade stays on the skin; pushed down with the beard's bulk it would bare a band under the lower lip.
+   bulk*=max(0,min(1,(lip_gap(x,p.z,face)-.0005)/.014))
+   # Toward the neckline the volume closes back onto the throat.
+   bulk*=max(0,min(1,(p.z-neckline(p,face))/.025))
+   index[key]=len(rv);rv.append(clear_collar(p+n*(.00055+bulk*.40)+Vector((0,0,-bulk*.60))));ra.append(region(p,n,face,style)*(.6 if style=='stubble' else .88))
+   return index[key]
+  near={v.index for v in mesh.vertices if region(v.co,v.normal,face,style,lips=False)>0}
+  near|={i for t in mesh.loop_triangles if near.intersection(t.vertices) for i in t.vertices}
+  for tri in mesh.loop_triangles:
+   ids=tri.vertices
+   if not near.intersection(ids):continue
+   P=[mesh.vertices[i].co for i in ids];Nv=[mesh.vertices[i].normal for i in ids];at={}
+   for i in range(4):
+    for j in range(4-i):
+     b=(i,j,3-i-j);nz=[c for c in range(3) if b[c]]
+     # corners and edge points are shared with the neighbouring triangles
+     if len(nz)==1:key=('v',ids[nz[0]])
+     elif len(nz)==2:a,c=sorted(nz,key=lambda q:ids[q]);key=('e',ids[a],ids[c],b[a])
+     else:key=('f',tri.index,i,j)
+     at[i,j]=root_vertex(key,(P[0]*b[0]+P[1]*b[1]+P[2]*b[2])/3,(Nv[0]*b[0]+Nv[1]*b[1]+Nv[2]*b[2]).normalized())
+   for i in range(3):
+    for j in range(3-i):
+     rf.append((at[i,j],at[i+1,j],at[i,j+1]))
+     if i+j<2:rf.append((at[i+1,j],at[i+1,j+1],at[i,j+1]))
+  # Triangles with any root in them stay, so the shade fades out over the last one (into the lips too).
+  rf=[f for f in rf if max(ra[i] for i in f)>0]
+  used=sorted({i for f in rf for i in f});remap={o:k for k,o in enumerate(used)}
+  rv=[rv[i] for i in used];ra=[ra[i] for i in used];rf=[tuple(remap[i] for i in f) for f in rf]
   rm=bpy.data.meshes.new(f'Beard_{face}_{style}_root');rm.from_pydata(rv,[],rf);rm.update();col=rm.color_attributes.new(name='Color',type='FLOAT_COLOR',domain='POINT')
-  for i,a in enumerate(ra):col.data[i].color=(.07,.039,.022,a)
+  # The hair packs' cap tone (3/4 of the strands' own colour), so a beard and hair of one colour read alike.
+  for i,a in enumerate(ra):col.data[i].color=(.1017,.0556,.0317,a)
   for poly in rm.polygons:poly.use_smooth=True
   ro=bpy.data.objects.new(rm.name,rm);sc.collection.objects.link(ro);rm.materials.append(rootmat);beards.append(ro)
   outer=BVHTree.FromPolygons(rv,rf)
@@ -204,6 +233,8 @@ for face in (['m1'] if PILOT else ['m4'] if REPAIR_M4 else CONFIG):
    length=strand_length(p,face,style)*rng.uniform(.78,1.12)*(.45+.55*math.sqrt(region(p,n,face,style)))
    down=Vector((rng.uniform(-.27,.27),0,-1))
    if above_lip(p,face) and abs(p.x)<.034:down=Vector((math.copysign(.65,p.x),0,-.35))
+   # under the jaw "down" is the skin's own normal: there the hair runs forward to join the chin's and hangs from it
+   if n.z<-.45:down.y=-.35
    tangent=(down-n*down.dot(n)).normalized()
    if tangent.length<.3:tangent=Vector((0,-1,-.3)).normalized()
    side=tangent.cross(n).normalized();width=rng.uniform(.0009,.0016) if style=='stubble' else rng.uniform(.0025,.0045)
