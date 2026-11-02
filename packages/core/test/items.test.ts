@@ -104,14 +104,14 @@ test("effects add up over the kit", () => {
     head: "head-sfera",
     body: "body-plita4",
     boots: "boots-bertsy",
-    suit: "suit-ten",
+    suit: "suit-ryvok",
   });
   assert.deepEqual(kit.armor, { head: 25, body: 20, groin: 10, legs: 10 });
   assert.equal(kit.grenades, 3, "vest pouch and underbarrel launcher");
   assert.equal(kit.dodge, -0.04);
-  assert.equal(kit.dashEvade, -0.04);
-  assert.deepEqual(kit.camo, { near: 0, mid: 0.03, far: 0.04 });
-  assert.equal(kit.heatProof, true);
+  assert.ok(Math.abs(kit.dashEvade + 0.01) < 1e-9, "the Ryvok's dash bonus offsets part of the heavy kit");
+  assert.deepEqual(kit.camo, { near: 0, mid: 0, far: -0.02 });
+  assert.equal(kit.heatProof, false);
   assert.equal(kit.weapon.doubleShot, 0.08);
   // Scope: worse up close, better far away; untouched where the rifle cannot reach.
   assert.equal(kit.weapon.accuracy[0], WEAPONS.rifle.accuracy[0]! - 0.05);
@@ -127,17 +127,18 @@ function duel(a: Loadout, b: Loadout, over: Partial<Parameters<typeof createMatc
 const rifle = starterLoadout("rifle");
 const hold = (zone: "head" | "body" = "body"): Order => ({ action: { type: "shoot", move: 0, zone }, defend: ["head", "body"] });
 
-test("night vision lifts the night penalty and camouflage hides you far away", () => {
+test("night vision lifts the night penalty and camouflage counts only far away", () => {
   const night = duel(rifle, rifle, { time: "night" });
   const nvg = duel({ ...rifle, head: "head-sych" }, rifle, { time: "night" });
   const morning = duel(rifle, rifle);
   assert.ok(hitChance(night, 0, "rifle", 10, 1, false) < hitChance(morning, 0, "rifle", 10, 1, false));
   assert.equal(hitChance(nvg, 0, "rifle", 10, 1, false), hitChance(morning, 0, "rifle", 10, 1, false));
 
-  const hidden = duel(rifle, { ...rifle, suit: "suit-ten" });
-  const far = hitChance(morning, 0, "rifle", 10, 1, false) - hitChance(hidden, 0, "rifle", 10, 1, false);
-  assert.ok(Math.abs(far - 0.04) < 1e-9, String(far));
-  assert.equal(hitChance(hidden, 0, "rifle", 4, 1, false), hitChance(morning, 0, "rifle", 4, 1, false), "camouflage does nothing up close");
+  // The Ryvok's camouflage is negative: it shows you far away.
+  const seen = duel(rifle, { ...rifle, suit: "suit-ryvok" });
+  const far = hitChance(seen, 0, "rifle", 10, 1, false) - hitChance(morning, 0, "rifle", 10, 1, false);
+  assert.ok(Math.abs(far - 0.02) < 1e-9, String(far));
+  assert.equal(hitChance(seen, 0, "rifle", 4, 1, false), hitChance(morning, 0, "rifle", 4, 1, false), "camouflage does nothing up close");
 });
 
 test("a suppressor belongs to its gun", () => {

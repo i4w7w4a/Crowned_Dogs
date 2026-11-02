@@ -1552,16 +1552,6 @@
       "effects": {}
     },
     {
-      "id": "suit-solonchak",
-      "kind": "suit",
-      "name": "Костюм «Солончак»",
-      "tier": 1,
-      "note": "Светлая ткань с охлаждением: щит не перегревается днём.",
-      "effects": {
-        "heatProof": true
-      }
-    },
-    {
       "id": "suit-ryvok",
       "kind": "suit",
       "name": "Комбинезон «Рывок»",
@@ -1571,20 +1561,6 @@
         "dashEvade": 0.03,
         "camo": {
           "far": -0.02
-        }
-      }
-    },
-    {
-      "id": "suit-ten",
-      "kind": "suit",
-      "name": "Термокостюм «Тень»",
-      "tier": 3,
-      "note": "Прячет тепло и охлаждает щит.",
-      "effects": {
-        "heatProof": true,
-        "camo": {
-          "mid": 0.03,
-          "far": 0.04
         }
       }
     },
@@ -1713,7 +1689,7 @@
       "weapon2": null,
       "head": "head-sfera",
       "body": "body-plita4",
-      "suit": "suit-solonchak",
+      "suit": "suit-field",
       "boots": "boots-bertsy",
       "knife": "knife-std",
       "grenade": "grenade-rg1"
@@ -1736,7 +1712,7 @@
       },
       "head": "head-sych",
       "body": "body-plita2",
-      "suit": "suit-ten",
+      "suit": "suit-field",
       "boots": "boots-bertsy",
       "knife": "knife-std",
       "grenade": "grenade-rg1"

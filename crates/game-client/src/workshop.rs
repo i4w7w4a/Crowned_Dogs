@@ -11,8 +11,7 @@ fn models() -> Value {
     json!({"head-k6":"tripo-helmet","head-sych":"tripo-helmet",
         "head-cap":"gear#Cap","head-sfera":"gear#Sfera",
         "body-plita2":"tripo-vest","body-plita4":"gear#Plita4",
-        "suit-field":"gear#Suit","suit-solonchak":"gear#Solonchak","suit-ten":"gear#Ten",
-        "suit-ryvok":"gear#Ryvok","boots-bertsy":"gear#Boots",
+        "suit-field":"gear#Suit","suit-ryvok":"gear#Ryvok","boots-bertsy":"gear#Boots",
         "knife":"knife","knife-std":"knife","grenade-rg1":"grenade",
         "pistol-pustelga":"pustelga","shotgun-taran":"taran","rifle-varyag":"varyag","sniper-berkut":"berkut"})
 }

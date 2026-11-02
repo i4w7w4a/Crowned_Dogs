@@ -534,7 +534,7 @@ fn front_of(host: &JsValue, gun: &JsValue) -> JsValue {
 }
 
 /// Worn item id to its mesh in the Persona models; items without a mesh of their own wear a close one.
-const GEAR: [(&str, &str); 11] = [
+const GEAR: [(&str, &str); 9] = [
     ("head-k6", "Helmet"),
     ("head-sych", "Helmet"),
     ("head-cap", "Cap"),
@@ -542,12 +542,12 @@ const GEAR: [(&str, &str); 11] = [
     ("body-plita2", "Vest"),
     ("body-plita4", "Plita4"),
     ("suit-field", "Suit"),
-    ("suit-solonchak", "Solonchak"),
-    ("suit-ten", "Ten"),
     ("suit-ryvok", "Ryvok"),
     ("boots-bertsy", "Boots"),
 ];
 /// Each slot's meshes; the first is worn for `true` and when the model lacks the item's own.
+/// The recoloured Solonchak and Ten left the catalogue (2026-11-02) but are still in the models, so they stay
+/// listed here to be hidden.
 const SLOTS: [(&str, &[&str]); 4] = [
     ("head", &["Helmet", "Cap", "Sfera"]),
     ("body", &["Vest", "Plita4"]),

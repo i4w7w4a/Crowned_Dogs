@@ -67,8 +67,9 @@ fn frozen_sniper_rail(method: &str, args: &Value) -> bool {
             && method == "client.equipWeaponMod"
             && args[2] == "rail-kulak")
 }
-/// Concept gear without a model left the catalogue (01.11.2026); cases built on it are skipped.
-const CONCEPTS: [&str; 15] = [
+/// Concept gear without a model of its own left the catalogue (01.11.2026, recoloured suits 02.11.2026);
+/// cases built on it are skipped.
+const CONCEPTS: [&str; 17] = [
     "body-light",
     "body-bastion",
     "suit-leshy",
@@ -84,6 +85,8 @@ const CONCEPTS: [&str; 15] = [
     "grenade-smoke",
     "head-marevo",
     "head-filin",
+    "suit-solonchak",
+    "suit-ten",
 ];
 fn concept_gear(args: &Value) -> bool {
     let text = args.to_string();
