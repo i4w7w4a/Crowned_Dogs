@@ -15,6 +15,10 @@
   --cyan: #73d3e2;
   --amber: #e9ac3f;
   --red: #e0583f;
+  /* a picked choice: a light cold fill with dark words and icons */
+  --pick-bg: #e6eaec;
+  --pick-fg: #0e1113;
+  --pick-dim: rgba(14, 17, 19, 0.62);
   --display: "Inter Tight", "Helvetica Neue", Arial, sans-serif;
   --body: "Inter", "Segoe UI", Roboto, sans-serif;
   --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
@@ -79,8 +83,9 @@ button:disabled { cursor: default; }
 
 /* Liquid glass (Apple style), on every button of the fight and the menu: the same 60% black tint whatever the state,
    a light blur, and a rim lit from the top left and the bottom right. In Chromium the picture also bends at the
-   rounded edge (hud/liquid.ts puts the lens filter into --lens). No outline (Art 20:07): a picked button shows only
-   a brighter edge and a glow from inside. */
+   rounded edge (hud/liquid.ts puts the lens filter into --lens). No outline (Art 20:07). A picked choice is filled
+   light with dark words, as on iOS (Art 2026-11-02: the old brighter edge was too easy to miss); an open menu and
+   the confirm button keep the brighter edge. */
 .glass {
   --rim: linear-gradient(140deg, rgba(255,255,255,.66), rgba(255,255,255,.16) 26%, rgba(255,255,255,.06) 54%, rgba(255,255,255,.36));
   --rim-w: 1px;
@@ -88,7 +93,7 @@ button:disabled { cursor: default; }
   -webkit-backdrop-filter: blur(2px) saturate(1.6) brightness(1.05);
   backdrop-filter: var(--lens,) blur(2px) saturate(1.6) brightness(1.05);
   box-shadow: inset 0 1px 1px rgba(255,255,255,.14), inset 0 0 10px rgba(255,255,255,.06), 0 6px 18px rgba(0,0,0,.2);
-  transition: box-shadow .2s, color .18s;
+  transition: box-shadow .2s, color .18s, background-color .2s;
 }
 .glass::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit; padding: var(--rim-w); background: var(--rim); pointer-events: none;
@@ -98,10 +103,17 @@ button:disabled { cursor: default; }
 @media (hover: hover) {
   .glass:hover:not(:disabled) { --rim: linear-gradient(140deg, rgba(255,255,255,.82), rgba(255,255,255,.24) 26%, rgba(255,255,255,.1) 54%, rgba(255,255,255,.48)); }
 }
-.glass.on, .glass[aria-pressed="true"]:not(.srow), .glass[aria-expanded="true"], .go.glass:not(:disabled) {
+.glass[aria-expanded="true"], .go.glass:not(:disabled) {
   --rim: linear-gradient(140deg, rgba(255,255,255,.98), rgba(255,255,255,.42) 26%, rgba(255,255,255,.22) 54%, rgba(255,255,255,.78));
   box-shadow: inset 0 1px 1px rgba(255,255,255,.3), inset 0 0 16px rgba(255,255,255,.2), 0 6px 18px rgba(0,0,0,.2);
 }
+/* :is() lifts every picked state above the screens' own colour rules (.cd-shell .glass and the like). */
+.glass:is(.on, [aria-pressed="true"]:not(.srow, .cd-sound-toggle), [aria-selected="true"]) {
+  --rim: linear-gradient(160deg, #fff, rgba(255,255,255,.4) 40%, rgba(255,255,255,.75));
+  background-color: var(--pick-bg); color: var(--pick-fg); text-shadow: none;
+  box-shadow: inset 0 1px 0 #fff, inset 0 -12px 18px rgba(40,52,60,.14), 0 6px 18px rgba(0,0,0,.35);
+}
+.glass:is(.on, [aria-pressed="true"]:not(.srow, .cd-sound-toggle), [aria-selected="true"]) .ico { filter: none; }
 .glass:disabled::before { opacity: .5; }
 .glass.round { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; }
 .glass.round .ico { width: 18px; height: 18px; }
@@ -234,14 +246,16 @@ button:disabled { cursor: default; }
 .mv .ico { width: 24px; height: 24px; stroke-width: 1.7; filter: drop-shadow(0 0 1.5px rgba(0,0,0,.9)) drop-shadow(0 1px 4px rgba(0,0,0,.7)); }
 .mv .ico.down { transform: scaleY(-1); }
 .mv:hover:not(:disabled) { color: #fff; }
-.mv.on { color: #fff; }
-.mv.on .ico { stroke-width: 2.2; filter: drop-shadow(0 0 4px rgba(255,255,255,.55)) drop-shadow(0 0 1.5px rgba(0,0,0,.85)); }
+/* the picked step: the same light fill as a picked button */
+.mv.on { align-self: center; min-width: 46px; padding: 0 10px; border-radius: 12px; background: var(--pick-bg); color: var(--pick-fg); text-shadow: none; box-shadow: inset 0 1px 0 #fff, 0 4px 14px rgba(0,0,0,.4); }
+.mv.on .ico { stroke-width: 2; filter: none; }
 .mv:disabled { opacity: .22; }
 .mv.stay { height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font: 500 14px/1 var(--body); color: var(--fg); white-space: nowrap; }
-.mv.stay.on { color: #fff; font-weight: 600; }
+.mv.stay.on { color: var(--pick-fg); font-weight: 600; }
+.mv.stay.on small { color: #8a5608; }
 .mv.stay small { font: 500 11px/1 var(--body); color: var(--amber); }
 
-/* defence: four glass buttons, each with a small figure that lights its zone; a guarded zone gets the brighter edge.
+/* defence: four glass buttons, each with a small figure that lights its zone; a guarded zone is filled light.
    The enemy's hit on us floats over our fighter, the controls are away then */
 .guard { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .glabel { margin-bottom: 1px; font: 500 14px/1.2 var(--body); color: var(--dim); white-space: nowrap; }
@@ -255,7 +269,8 @@ button:disabled { cursor: default; }
 .dz[data-z="groin"] .fig { --f-groin: currentColor; }
 .dz[data-z="legs"] .fig { --f-legs: currentColor; }
 .dz .zl { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dz.on { color: #fff; font-weight: 600; }
+.dz.on { font-weight: 600; }
+.dz.on .fig { --off: rgba(14,17,19,.22); filter: none; }
 .dz:disabled > * { opacity: .45; }
 
 /* attack other than a shot: knife and grenade side by side, edge to edge with the confirm button; the other gun above them when the kit has one */
@@ -273,9 +288,9 @@ button:disabled { cursor: default; }
 .swap .ico { width: 18px; height: 18px; color: rgba(236,232,223,.85); }
 .swap .an { font: 500 14px/1 var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .swap .as { margin-left: auto; font: 400 12px/1 var(--body); color: rgba(236,232,223,.62); white-space: nowrap; }
-.act.on, .swap.on { color: #fff; }
 .act.on .an, .swap.on .an { font-weight: 600; }
-.act.on .ico, .swap.on .ico { color: #fff; }
+.act.on .ico, .swap.on .ico { color: inherit; }
+.act.on .as, .swap.on .as { color: var(--pick-dim); }
 .act:disabled > *, .swap:disabled > * { opacity: .38; }
 
 /* confirm the turn: the same glass, its rim turns solid white once the order is complete */
@@ -303,7 +318,7 @@ button:disabled { cursor: default; }
 .sh-in > * { flex-shrink: 0; }
 .sheet .sh-head { display: flex; justify-content: space-between; align-items: center; gap: 10px;
   /* the title and the cross stay put while the menu scrolls */
-  position: sticky; top: -18px; z-index: 2; margin: -18px -16px 0; padding: 18px 16px 10px; background: rgba(12,13,13,.94); }
+  position: sticky; top: -18px; z-index: 2; margin: -18px -16px 0; padding: 18px 16px 10px; background: rgba(12,13,13,.99); }
 .sheet h2 { margin: 0 0 0 2px; font: 600 22px/1.1 var(--display); }
 .sheet p { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.5; }
 .sheet .label { margin: 6px 0 -2px 2px; font: 500 14px/1.2 var(--body); color: rgba(236,232,223,.62); }
@@ -333,17 +348,17 @@ button:disabled { cursor: default; }
 .vrow input::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
 .seg { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 6px; }
 .seg button { height: 44px; padding: 0 2px; font: 500 14px/1.1 var(--body); color: rgba(236,232,223,.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.seg button[aria-pressed="true"] { color: #fff; font-weight: 600; }
+/* five in a row (time, weather): a size smaller, so «По часам» keeps some air on the light fill */
+@container style(--n: 5) { .seg button { font-size: 13px; letter-spacing: -.01em; } }
 /* each map shows its own hour and weather under its name */
 #mapSeg button { height: 52px; }
 #mapSeg button small { display: block; margin-top: 3px; font: 400 11px/1.2 var(--body); color: rgba(236,232,223,.55); overflow: hidden; text-overflow: ellipsis; }
-#mapSeg button[aria-pressed="true"] small { color: var(--cyan); }
+#mapSeg button[aria-pressed="true"] small { color: var(--pick-dim); }
 .sheet .gfx-note { margin-top: -6px; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .tracks button { text-align: left; padding: 10px 12px; font: 500 14px/1.2 var(--body); color: rgba(236,232,223,.85); }
 .tracks button small { display: block; margin-top: 3px; font: 400 12px/1.2 var(--body); color: rgba(236,232,223,.55); }
-.tracks button[aria-pressed="true"] { color: #fff; }
-.tracks button[aria-pressed="true"] small { color: var(--cyan); }
+.tracks button[aria-pressed="true"] small { color: var(--pick-dim); }
 .sheet .acts2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
 .sheet .home { width: 100%; margin-top: 8px; }
 .ghost { height: 52px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 500 16px/1 var(--body); color: var(--fg); }
