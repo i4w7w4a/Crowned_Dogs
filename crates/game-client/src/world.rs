@@ -27,9 +27,37 @@ fn map_offset(map: &str) -> f64 {
     }
 }
 
-/// Covered maps never get rain or snow inside; lightning still shows through the roof.
+/// Covered maps (a roof, or the intake's gallery) never get rain inside; lightning still
+/// shows through the roof and the openings. The cover is in `MAP_WEATHER`.
 fn indoor(map: &str) -> bool {
-    map == "saltHall"
+    constants()["MAP_WEATHER"][map]["cover"]
+        .as_str()
+        .is_some_and(|c| c != "open")
+}
+
+/// The weather's name on this map: the salt hall's dust is a salt haze, the ponds' fog is fumes.
+fn weather_name(map: &str, weather: &str) -> Value {
+    let c = constants();
+    let own = &c["MAP_WEATHER"][map]["weather"][weather]["name"];
+    if own.is_string() {
+        own.clone()
+    } else {
+        c["WEATHER"][weather]["name"].clone()
+    }
+}
+
+/// The colour of a map's own fog or dust, by day: smoke under a roof, mist off the water,
+/// salt in the air of the hall, yellow fumes over the sludge ponds.
+fn tint(map: &str, weather: &str) -> Option<u32> {
+    match (map, weather) {
+        ("saltHall" | "railyard", "fog") => Some(0x8f8a84),
+        ("saltHall", "dust") => Some(0xd3d6d4),
+        ("dryBed", "dust") => Some(0xd0d0c8),
+        ("dam" | "intake" | "backwater", "fog") => Some(0xa7b2bb),
+        ("sludgePonds", "fog") => Some(0x9fa184),
+        ("sludgePonds", "dust") => Some(0xbdb98f),
+        _ => None,
+    }
 }
 
 /// Where each time of day starts, in game minutes. Four equal quarters.
@@ -279,13 +307,14 @@ pub fn at(ms: f64, map: &str) -> Value {
         "nextTimeName": c["TIME_NAMES"][next_time],
         "nextTimeInMs": to_minutes(to_next),
         "weather": weather,
-        "weatherName": c["WEATHER"][&weather]["name"],
+        "weatherName": weather_name(map, &weather),
         "nextWeather": next_weather,
-        "nextWeatherName": c["WEATHER"][&next_weather]["name"],
+        "nextWeatherName": weather_name(map, &next_weather),
         "nextWeatherInMs": to_minutes(window_end - local),
         "event": event,
         "eventName": c["REGION_EVENTS"][event]["name"],
         "indoor": indoor(map),
+        "toxic": constants()["MAP_WEATHER"][map]["weather"][&weather]["toxic"].as_f64().unwrap_or(0.0) > 0.0,
         "home": region_maps(&region).first().is_some_and(|h| h == map),
         "open": closed.is_none(),
         "closedName": closed.as_deref().map(|why| closed_name(why, map)),
@@ -320,6 +349,26 @@ pub fn fx(weather: &str, time: &str, map: &str) -> Value {
         _ => (0xa3a9ad, 0xbfc1bd, 0xc3c9ce),
     };
     let outdoor = !indoor(map);
+    // The map's own fog or dust colour, darker at dusk and at night like the plain ones.
+    let (fog_color, dust_color) = match tint(map, weather) {
+        Some(day) => {
+            let k = match time {
+                "night" => 0.3,
+                "evening" | "morning" => 0.85,
+                _ => 1.0,
+            };
+            let shade = |hex: u32| {
+                let ch = |sh: u32| ((((hex >> sh) & 255) as f64 * k).round() as u32).min(255) << sh;
+                ch(16) | ch(8) | ch(0)
+            };
+            if weather == "fog" {
+                (shade(day), dust_color)
+            } else {
+                (fog_color, shade(day))
+            }
+        }
+        None => (fog_color, dust_color),
+    };
     let (fog, dust, rain, flash, dim, haze) = match weather {
         "fog" => (if night { 0.75 } else { 0.78 }, 0.0, 0.0, 0.0, 0.94, 3.0),
         "dust" => (0.1, if night { 0.6 } else { 0.8 }, 0.0, 0.0, 0.94, 2.4),
@@ -377,6 +426,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
                 .collect::<Vec<_>>())
         }
         "client.world.fx" => fx(text(&args[0]), text(&args[1]), text(&args[2])),
+        "client.world.weatherName" => weather_name(text(&args[0]), text(&args[1])),
         _ => return Err(format!("Unknown world operation: {method}")),
     })
 }

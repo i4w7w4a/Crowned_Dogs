@@ -15,6 +15,7 @@ pub mod first_person;
 pub mod fps_meter;
 pub mod held_effects;
 pub mod home_stage;
+pub mod hazard_fx;
 pub mod hud;
 pub mod icons;
 pub mod item;

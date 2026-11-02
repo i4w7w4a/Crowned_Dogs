@@ -2,10 +2,107 @@
 //! the lamps dip now and then, the rings turn, panels slide in and the base's name settles like a
 //! radio readout. The motion lives in CSS (apps/web/src/base/live.css) under `:root.cd-live`;
 //! this module marks the page and scatters the dust, so the lower qualities pay nothing.
+//! The base photographs themselves come alive too (game-graphics live-scene.glsl): each picture's lamps,
+//! screens, lights, water and air are listed here as a `Life`.
 use super::dom_support::*;
 use js_sys::Math::random;
 use std::{cell::Cell, rc::Rc};
 use wasm_bindgen::{JsValue, closure::Closure};
+
+/// The shader that brings a photograph to life; a picture's fragment shader comes after it.
+pub use game_graphics::LIVE_SCENE as SCENE;
+
+/// What moves in one picture, in its own coordinates (u from the left, v from the top). Rects are
+/// u0, v0, u1, v1; an empty rect is all zeros. See game-graphics live-scene.glsl for each field.
+pub struct Life {
+    pub lamps: &'static [[f64; 4]],
+    pub screens: &'static [[f64; 4]],
+    pub leds: &'static [[f64; 4]],
+    pub steam: &'static [[f64; 4]],
+    pub drips: &'static [[f64; 4]],
+    pub tube: [f64; 4],
+    pub wet: [f64; 4],
+    pub net: [f64; 4],
+    pub flow: [f64; 4],
+    pub window: [f64; 4],
+    pub sun: [f64; 4],
+    pub mist: [f64; 4],
+}
+const NONE: [f64; 4] = [0.0; 4];
+/// A picture with nothing listed: only the camera breathes.
+pub const STILL: Life = Life {
+    lamps: &[],
+    screens: &[],
+    leds: &[],
+    steam: &[],
+    drips: &[],
+    tube: NONE,
+    wet: NONE,
+    net: NONE,
+    flow: NONE,
+    window: NONE,
+    sun: NONE,
+    mist: NONE,
+};
+
+/// The live scene's uniforms for `life`, at rest. `vec4` makes a THREE.Vector4.
+pub fn uniforms(
+    life: &Life,
+    aspect: f64,
+    vec4: &dyn Fn([f64; 4]) -> JsValue,
+) -> Vec<(&'static str, JsValue)> {
+    let value = |v: JsValue| {
+        let u: JsValue = js_sys::Object::new().into();
+        set(&u, "value", &v);
+        u
+    };
+    let list = |spots: &[[f64; 4]], slots: usize| {
+        let all = js_sys::Array::new();
+        for i in 0..slots {
+            all.push(&vec4(spots.get(i).copied().unwrap_or(NONE)));
+        }
+        value(all.into())
+    };
+    vec![
+        ("uTime", value(number(0.0))),
+        ("uLive", value(number(0.0))),
+        ("uAspect", value(number(aspect))),
+        ("uLamps", list(life.lamps, 8)),
+        ("uScreens", list(life.screens, 3)),
+        ("uLeds", list(life.leds, 6)),
+        ("uSteam", list(life.steam, 2)),
+        ("uDrips", list(life.drips, 4)),
+        ("uTube", value(vec4(life.tube))),
+        ("uWet", value(vec4(life.wet))),
+        ("uNet", value(vec4(life.net))),
+        ("uFlow", value(vec4(life.flow))),
+        ("uWindow", value(vec4(life.window))),
+        ("uSun", value(vec4(life.sun))),
+        ("uMist", value(vec4(life.mist))),
+    ]
+}
+
+/// A scene's clock: how alive it is (fading in over about two seconds when the quality allows
+/// it, out when it no longer does) and the seconds it shows.
+#[derive(Default)]
+pub struct Clock {
+    live: f64,
+    stamp: f64,
+}
+impl Clock {
+    /// Advances to now: (liveness 0–1, scene seconds).
+    pub fn tick(&mut self) -> (f64, f64) {
+        let now = js_sys::Date::now() / 1000.0;
+        let dt = if self.stamp > 0.0 { (now - self.stamp).clamp(0.0, 0.1) } else { 0.0 };
+        self.stamp = now;
+        let goal = if on() { 1.0 } else { 0.0 };
+        self.live += (goal - self.live) * (dt * 1.6).min(1.0);
+        if (goal - self.live).abs() < 0.002 {
+            self.live = goal;
+        }
+        (self.live, now % 1800.0)
+    }
+}
 
 /// Screens that get dust in the air, and how many motes each.
 const DUST: [(&str, usize); 3] = [(".cd-home", 34), (".cd-fitting", 26), (".cd-sync", 20)];
@@ -17,27 +114,28 @@ const GLYPHS: &[char] = &[
 /// Ticks of a readout, 40 ms each.
 const ROLL: u32 = 16;
 
+thread_local! {
+    static LIVE: Cell<bool> = const { Cell::new(false) };
+}
+
 /// Marks the page for its quality: `cd-live` on high and ultra.
 pub fn mark(id: &str) {
-    toggle(
-        &get(&document(), "documentElement"),
-        "cd-live",
-        matches!(id, "high" | "ultra"),
+    let live = matches!(id, "high" | "ultra");
+    toggle(&get(&document(), "documentElement"), "cd-live", live);
+    let still = boolean(
+        &call(
+            &global(),
+            "matchMedia",
+            &[js("(prefers-reduced-motion: reduce)")],
+        ),
+        "matches",
     );
+    LIVE.with(|cell| cell.set(live && !still));
 }
 
 /// Whether the screens move: a live quality and no request for reduced motion.
-fn on() -> bool {
-    let root = get(&document(), "documentElement");
-    call(&get(&root, "classList"), "contains", &[js("cd-live")]).as_bool() == Some(true)
-        && !boolean(
-            &call(
-                &global(),
-                "matchMedia",
-                &[js("(prefers-reduced-motion: reduce)")],
-            ),
-            "matches",
-        )
+pub fn on() -> bool {
+    LIVE.with(Cell::get)
 }
 
 /// Scatters the dust over each screen once; CSS shows it only on a live page. Every mote gets its

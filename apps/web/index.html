@@ -48,6 +48,8 @@
   <symbol id="i-evening" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M3.1 16.2 20.9 16.2 21.5 16.8 21.5 17.6 20.9 18.2 3.1 18.2 2.5 17.6 2.5 16.8zM6.8 15.6a5.2 5.2 0 0 1 10.4 0zM12.95 9 12.95 6.2 11.05 6.2 11.05 9zM7.55 10.63 5.56 8.96 4.34 10.41 6.33 12.09zM17.67 12.09 19.66 10.41 18.44 8.96 16.45 10.63zM9.4 19.4 14.6 19.4 12 22z"/></symbol>
   <symbol id="i-night" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M19.6 14.6A8 8 0 1 1 9.4 4.4a6.3 6.3 0 0 0 10.2 10.2zM17.6 2.4 18.4 4.6 20.6 5.4 18.4 6.2 17.6 8.4 16.8 6.2 14.6 5.4 16.8 4.6z"/></symbol>
   <symbol id="i-dust" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M3 9c2-1.6 4-1.6 6 0s4 1.6 6 0 4-1.4 6-.4M3 13.8c2-1.6 4-1.6 6 0s4 1.6 6 0"/><path fill="currentColor" stroke="none" d="M17.9 14.2a1.1 1.1 0 1 1 2.2 0a1.1 1.1 0 1 1 -2.2 0zM4.3 18.8a1.1 1.1 0 1 1 2.2 0a1.1 1.1 0 1 1 -2.2 0zM9.6 19.4a1 1 0 1 1 2 0a1 1 0 1 1 -2 0zM14.5 18.6a1.1 1.1 0 1 1 2.2 0a1.1 1.1 0 1 1 -2.2 0zM19.5 18.4a0.9 0.9 0 1 1 1.8 0a0.9 0.9 0 1 1 -1.8 0z"/></symbol>
+  <symbol id="i-drone" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M1.9 6.4a3.6 1.15 0 1 0 7.2 0a3.6 1.15 0 1 0 -7.2 0zM14.9 6.4a3.6 1.15 0 1 0 7.2 0a3.6 1.15 0 1 0 -7.2 0zM9.6 9.3h4.8l.9.9v3.4l-.9.9h-4.8l-.9-.9v-3.4zM10.8 14.5h2.4v3.1l-1.2 2.4-1.2-2.4z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5.5 7.7 9.2 10.3M18.5 7.7 14.8 10.3M5.5 6.4v1.4M18.5 6.4v1.4"/></symbol>
+  <symbol id="i-blast" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12.0 2.4 L13.7 8.5 L17.8 6.8 L16.1 10.9 L22.2 12.6 L16.1 14.3 L17.8 18.4 L13.7 16.7 L12.0 22.8 L10.3 16.7 L6.2 18.4 L7.9 14.3 L1.8 12.6 L7.9 10.9 L6.2 6.8 L10.3 8.5z"/></symbol>
   <symbol id="i-storm" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M7 15.2h10.2a3.8 3.8 0 0 0 .5-7.6A5.4 5.4 0 0 0 7.1 8.4 3.4 3.4 0 0 0 7 15.2z"/><path fill="currentColor" stroke="none" d="M13.6 16.4 10 20 12.4 20 10.8 23.2 15.6 18.6 13.1 18.6 15 16.4z"/></symbol>
   <symbol id="i-fog" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M3.7 7 20.3 7 21 7.7 21 8.5 20.3 9.2 3.7 9.2 3 8.5 3 7.7zM6.2 10.9 18.3 10.9 19 11.6 19 12.4 18.3 13.1 6.2 13.1 5.5 12.4 5.5 11.6zM3.7 14.8 20.3 14.8 21 15.5 21 16.3 20.3 17 3.7 17 3 16.3 3 15.5zM7.7 18.7 16.3 18.7 17 19.4 17 20.2 16.3 20.9 7.7 20.9 7 20.2 7 19.4z"/></symbol>
   <!-- menu: thin line -->
@@ -95,6 +97,8 @@
         <div class="hpl"><b id="hpEn">100</b><span class="bar"><i class="lag" id="ghostEn"></i><i id="barEn"></i></span></div>
       </div>
     </div>
+    <!-- a hazard warned a turn ahead: lightning, a kamikaze drone, a shell, a collapse, a blackout -->
+    <div class="hazard glass" id="hazardNote" role="status" hidden><span class="hz-ico" id="hazardIcon" aria-hidden="true"></span><span id="hazardText"></span></div>
   </header>
 
   <section class="panel" aria-label="Ход">

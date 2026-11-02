@@ -77,6 +77,15 @@ struct LensState {
     weather: serde_json::Value,
     /// Lightning strikes drawn so far, and whether one is lit right now.
     strikes: std::cell::Cell<(u32, bool)>,
+    /// The living world is on: a strike close by flashes the whole picture and a blackout
+    /// darkens it, the painting included.
+    events: bool,
+    /// The last close flash: when it went off, its colour times strength, and whether it
+    /// flickers like lightning or dies away like a blast.
+    pulse: std::cell::Cell<(f64, [f64; 3], bool)>,
+    /// How much light is left (1 lit, lower in a blackout), where it is heading, and when it
+    /// was last eased.
+    dim: std::cell::Cell<(f64, f64, f64)>,
     shader_features: u8,
     /// Minimal quality: 8-bit frame, the gun and the hands drawn into the fighters' picture.
     minimal: bool,
@@ -271,6 +280,9 @@ impl RustLens {
                 heat_depth: [0.2, 0.1, 1.0],
                 weather: serde_json::Value::Null,
                 strikes: Default::default(),
+                events: false,
+                pulse: std::cell::Cell::new((-100., [0.; 3], false)),
+                dim: std::cell::Cell::new((1., 1., 0.)),
                 shader_features: 0,
                 minimal: false,
                 mark: None,
@@ -459,6 +471,30 @@ impl RustLens {
         s.refresh_battle_shader();
     }
 
+    /// The living world's strikes light and darken the whole picture; without events the
+    /// compose shader stays as it was.
+    #[wasm_bindgen(js_name = setEvents)]
+    pub fn set_events(&self, on: bool) {
+        let mut s = self.state.borrow_mut();
+        if s.disposed || s.events == on {
+            return;
+        }
+        s.events = on;
+        s.refresh_battle_shader();
+    }
+    /// A strike close by: `lightning` flickers twice, a blast flares and dies away.
+    pub fn flash(&self, r: f64, g: f64, b: f64, lightning: bool) {
+        let s = self.state.borrow();
+        let t = num(&call(&s.clock, "getElapsed", &[]));
+        s.pulse.set((t, [r, g, b], lightning));
+    }
+    /// The light left in the picture: 1 is normal, a blackout takes most of it.
+    #[wasm_bindgen(js_name = setDim)]
+    pub fn set_dim(&self, target: f64) {
+        let s = self.state.borrow();
+        let (now, _, at) = s.dim.get();
+        s.dim.set((now, target, at));
+    }
     /// How many lightning strikes have flashed; the battle rolls thunder after each.
     #[wasm_bindgen(getter)]
     pub fn strikes(&self) -> u32 {
@@ -686,7 +722,10 @@ impl RustLens {
             let t = num(&call(&s.clock, "getElapsed", &[]));
             put(&s.compose, "cdWeatherTime", n(t));
             let flash = s.weather["flash"].as_f64().unwrap_or(0.) * lightning(t);
-            set(&uniform(&s.compose, "cdWeather"), "w", &n(flash));
+            // a bolt close by lights the sky as the far ones do, without rolling more thunder
+            let (at, _, bolt) = s.pulse.get();
+            let near = if bolt { flicker(t - at) } else { 0. };
+            set(&uniform(&s.compose, "cdWeather"), "w", &n(flash.max(near)));
             let w2 = uniform(&s.compose, "cdWeather2");
             let surge = s.weather["surge"].as_f64().unwrap_or(0.) * dust_surge(t);
             set(&w2, "x", &n(surge));
@@ -694,6 +733,34 @@ impl RustLens {
             let (count, lit) = s.strikes.get();
             s.strikes
                 .set((count + u32::from(flash > 0.05 && !lit), flash > 0.05));
+        }
+        if s.shader_features & 64 != 0 {
+            let t = num(&call(&s.clock, "getElapsed", &[]));
+            let (at, color, bolt) = s.pulse.get();
+            let k = if bolt {
+                flicker(t - at)
+            } else if t >= at {
+                (-(t - at) * 7.).exp()
+            } else {
+                0.
+            };
+            // The lights sputter out and come back with a flicker.
+            let (now, target, last) = s.dim.get();
+            let step = (t - last).clamp(0., 0.1);
+            let next = now + (target - now) * (1. - (-step * 4.).exp());
+            let shown = if (target - next).abs() > 0.03
+                && ((t * 37.).sin() * 43758.5).fract().abs() < 0.3
+            {
+                target.min(next)
+            } else {
+                next
+            };
+            s.dim.set((next, target, t));
+            call(
+                &uniform(&s.compose, "cdPulse"),
+                "set",
+                &[n(color[0] * k), n(color[1] * k), n(color[2] * k), n(shown)],
+            );
         }
         call(&layers, "set", &[n(0.)]);
         if present(&stage) {
@@ -968,6 +1035,20 @@ pub(crate) fn dust_surge(t: f64) -> f64 {
     // two seconds to thicken, three held, four to clear
     smooth(dt / 2.0) * (1.0 - smooth((dt - 5.0) / 4.0)) * (0.8 + 0.2 * h(k + 1.7))
 }
+/// A bolt close by: a white-hot stroke, a dark gap, the second stroke, then the glow dies.
+pub(crate) fn flicker(dt: f64) -> f64 {
+    if dt < 0. {
+        0.
+    } else if dt < 0.07 {
+        1.
+    } else if dt < 0.11 {
+        0.15
+    } else if dt < 0.2 {
+        0.9
+    } else {
+        0.9 * (-(dt - 0.2) * 9.).exp()
+    }
+}
 pub(crate) fn lightning(t: f64) -> f64 {
     let period = 14.0;
     let k = (t / period).floor();
@@ -1005,7 +1086,8 @@ impl LensState {
             | (u8::from(self.sun_glare) << 2)
             | (u8::from(weather) << 3)
             | (u8::from(lite) << 4)
-            | (u8::from(minimal) << 5);
+            | (u8::from(minimal) << 5)
+            | (u8::from(self.events) << 6);
         if weather {
             self.weather_uniforms();
         }
@@ -1044,6 +1126,7 @@ impl LensState {
             "cdDustColor",
             "cdRainColor",
             "cdWeather2",
+            "cdPulse",
         ] {
             let _ = js_sys::Reflect::delete_property(
                 &js_sys::Object::from(uniforms.clone()),
@@ -1143,6 +1226,20 @@ impl LensState {
   vec4 n = vec4(0.0, 0.0, 0.0, max(hand, fringe));"#,
             );
             fragment = fragment.replace("c = tone(n) + c * (1.0 - n.a);", "");
+        }
+        if self.events {
+            declarations.push_str("uniform vec4 cdPulse;
+");
+            set(
+                &uniforms,
+                "cdPulse",
+                &object(&[("value", make(&self.three, "Vector4", &[n(0.), n(0.), n(0.), n(1.)]))]),
+            );
+            fragment = fragment.replace(
+                "gl_FragColor = vec4(c, max(a, n.a));",
+                "c = c * cdPulse.w + cdPulse.rgb * (0.3 + 0.7 * c);
+  gl_FragColor = vec4(c, max(a, n.a));",
+            );
         }
         if self.night_vision {
             // Daylight ACES subtracts a black offset and clamps faint HDR

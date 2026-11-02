@@ -1,5 +1,5 @@
 //! Arena ownership and frame orchestration. Three.js objects are opaque renderer handles.
-use super::{bridge::*, shield_fx::ShieldFx};
+use super::{bridge::*, hazard_fx::HazardFx, shield_fx::ShieldFx};
 use js_sys::{Float64Array, Promise};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
@@ -271,6 +271,10 @@ struct ArenaState {
     /// The «Зонт» domes that show a blocked hit: the enemy's in the far pass, mine in the near one.
     enemy_shield: ShieldFx,
     my_shield: ShieldFx,
+    /// Lightning, shells, the drone and a falling roof, and the lines of the warned stretch.
+    hazard: HazardFx,
+    /// The warned stretch's edges in steps ahead of me, while it is marked on the floor.
+    warned: Option<[f64; 2]>,
     muzzle_light: JsValue,
     catcher: JsValue,
     dust: JsValue,
@@ -541,6 +545,7 @@ impl RustArena {
             &object(&[("value", n(0.))]),
         );
         let my_shield = ShieldFx::new(&three, &scene, NEAR, &wide_k, &wide_y);
+        let hazard = HazardFx::new(&three, &scene);
         let widen = Closure::<dyn FnMut(JsValue)>::new(move |shader| {
             set(&get(&shader, "uniforms"), "wideK", &wk);
             set(&get(&shader, "uniforms"), "wideY", &wy);
@@ -568,6 +573,8 @@ impl RustArena {
             spark,
             enemy_shield,
             my_shield,
+            hazard,
+            warned: None,
             muzzle_light,
             catcher,
             dust,
@@ -845,6 +852,10 @@ impl RustArena {
         if get(&s.lens, "setNightVision").is_function() {
             call(&s.lens, "setNightVision", &[night_vision.into()]);
         }
+        if get(&s.lens, "setEvents").is_function() {
+            let events = m["config"]["events"].as_bool() == Some(true);
+            call(&s.lens, "setEvents", &[events.into()]);
+        }
         let fx = policy(
             "client.world.fx",
             serde_json::json!([
@@ -1058,6 +1069,42 @@ impl RustArena {
         f.fall_t = 0.;
         call(&f.motion, "fall", &[]);
     }
+    /// Marks the stretch the coming hazard will strike with two amber lines on the floor, and
+    /// dims the lights for a blackout; `null` takes the lines away while the turn plays.
+    #[wasm_bindgen(js_name=hazardMark)]
+    pub fn hazard_mark(&self, match_state: JsValue) {
+        let mut s = self.state.borrow_mut();
+        if !s.ready {
+            return;
+        }
+        let m = data(&match_state);
+        let h = &m["hazard"];
+        let now = m["config"]["events"].as_bool() == Some(true)
+            && !h["kind"].is_null()
+            && h["turn"] == m["turn"];
+        s.warned = match (now, h["at"].as_f64(), m["lane"][0].as_f64()) {
+            (true, Some(at), Some(me)) => {
+                let reach = h["radius"].as_f64().unwrap_or(0.) + 0.5;
+                Some([at - me - reach, at - me + reach])
+            }
+            _ => None,
+        };
+        let marked = s.warned.is_some();
+        s.hazard.show_mark(marked);
+        if !m.is_null() && get(&s.lens, "setDim").is_function() {
+            let dark = now && h["kind"].as_str() == Some("blackout");
+            call(&s.lens, "setDim", &[n(if dark { 0.3 } else { 1. })]);
+        }
+    }
+    /// Plays this turn's hazard from the report and returns the seconds until it hits.
+    #[wasm_bindgen(js_name=hazardStrike)]
+    pub fn hazard_strike(&self, report: JsValue) -> f64 {
+        let mut s = self.state.borrow_mut();
+        if !s.ready {
+            return 0.;
+        }
+        s.strike(&data(&report))
+    }
     #[wasm_bindgen(js_name=setFirstPerson)]
     pub fn set_first_person(&self, on: bool) {
         self.state.borrow_mut().first_person(on);
@@ -1152,6 +1199,7 @@ impl ArenaState {
         }
         self.enemy_shield.dispose();
         self.my_shield.dispose();
+        self.hazard.dispose();
         let _ = try_call(&self.renderer, "dispose", &[]);
     }
     fn make_figure(
@@ -1831,6 +1879,28 @@ impl ArenaState {
         }
         self.enemy_shield.update(dt, aspect);
         self.my_shield.update(dt, aspect);
+        if let Some([near, far]) = self.warned {
+            if self.hazard.marking() {
+                let camera = xyz(&get(&self.camera, "position"));
+                let me = self.lane_point(0.);
+                let enemy = self.lane_point(self.dist);
+                let (dx, dz) = (enemy[0] - me[0], enemy[2] - me[2]);
+                let l = dx.hypot(dz).max(1e-6);
+                let edges = [self.lane_point(near), self.lane_point(far)];
+                self.hazard
+                    .place_mark(edges, [-dz / l, 0., dx / l], camera);
+            }
+        }
+        self.hazard.update(dt);
+        for (c, bolt) in self.hazard.take_flashes() {
+            if get(&self.lens, "flash").is_function() {
+                call(
+                    &self.lens,
+                    "flash",
+                    &[n(c[0]), n(c[1]), n(c[2]), bolt.into()],
+                );
+            }
+        }
         if p(&self.quality, "dust") != 0. {
             call(
                 &self.lens,
@@ -2265,6 +2335,11 @@ impl ArenaState {
         set(&self.spark, "visible", &false.into());
         self.enemy_shield.stop();
         self.my_shield.stop();
+        self.hazard.stop();
+        self.warned = None;
+        if get(&self.lens, "setDim").is_function() {
+            call(&self.lens, "setDim", &[n(1.)]);
+        }
         for f in [self.enemy.as_ref().unwrap(), self.me.as_ref().unwrap()] {
             call(&f.flash, "stop", &[]);
         }
@@ -2378,6 +2453,85 @@ impl ArenaState {
         xyz(&self.tmp_a)
     }
     /// Where a fighter's feet are (under the hips, on the floor) and how tall they stand.
+    /// A spot on the floor `o` steps ahead of me along the lane; the enemy stands at `self.dist`.
+    /// In first person a spot by my feet is kept a little ahead of the lens, so it stays in sight.
+    fn lane_point(&self, o: f64) -> [f64; 3] {
+        let k = self.k.as_ref().unwrap();
+        // Where the walk ends: the hazard strikes after the moves.
+        let goal = self.walk.as_ref().map_or(self.depth, |w| w.to);
+        let scale = goal / self.depth_of(self.dist).max(1e-6);
+        let ahead = |o: f64| {
+            let d = self.depth_of(o) * scale;
+            [k.kx * d, 0., -d]
+        };
+        if o >= 1. {
+            return ahead(o);
+        }
+        let one = ahead(1.);
+        if self.fp && o > -0.5 {
+            let c = xyz(&get(&self.camera, "position"));
+            let t = (1.8 / (c[2] - one[2]).max(1.8)).max(o);
+            return [c[0] + (one[0] - c[0]) * t, 0., c[2] + (one[2] - c[2]) * t];
+        }
+        let me = xyz(&get(&self.me.as_ref().unwrap().group, "position"));
+        [0, 1, 2].map(|i| me[i] + (one[i] - me[i]) * o)
+    }
+    /// Starts the strike in the scene; returns the seconds until it lands.
+    fn strike(&mut self, r: &serde_json::Value) -> f64 {
+        let h = &r["hazard"];
+        let Some(kind) = h["kind"].as_str() else {
+            return 0.;
+        };
+        let me_at = r["lane"][0].as_f64().unwrap_or(0.);
+        let hits: Vec<u64> = h["hits"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|x| x["side"].as_u64()).collect())
+            .unwrap_or_default();
+        let side_spot = |side: u64| {
+            if side == 0 {
+                self.lane_point(0.)
+            } else {
+                self.lane_point(self.dist)
+            }
+        };
+        // Lightning and a falling roof land on the one they hit; a shell on its mark.
+        let spot = match (hits.as_slice(), h["at"].as_f64()) {
+            ([one], _) if kind != "shell" => side_spot(*one),
+            (_, Some(at)) => self.lane_point(at - me_at),
+            ([one, ..], None) => side_spot(*one),
+            _ => {
+                // The drone found nobody standing still: it goes off beside the lane.
+                let mid = self.lane_point(self.dist / 2.);
+                let aside = if js_sys::Math::random() < 0.5 { -2.5 } else { 2.5 };
+                [mid[0] + aside, 0., mid[2]]
+            }
+        };
+        let camera = xyz(&get(&self.camera, "position"));
+        let close = (spot[0] - camera[0]).hypot(spot[2] - camera[2]) < 3.;
+        match kind {
+            "lightning" => {
+                self.hazard.bolt(spot, camera);
+                0.03
+            }
+            "shell" => {
+                self.hazard
+                    .blast_in(0.5, spot, if close { 0.75 } else { 1. });
+                0.5
+            }
+            "collapse" => {
+                self.hazard.collapse(spot, 0.85);
+                0.85
+            }
+            "drone" => {
+                let from = [spot[0] + js_sys::Math::random() * 10. - 5., 9., spot[2] - 12.];
+                let to = [spot[0], spot[1] + 0.4, spot[2]];
+                self.hazard
+                    .drone(from, to, 1.05, if close { 0.55 } else { 0.7 });
+                1.05
+            }
+            _ => 0.,
+        }
+    }
     fn standing(&self, target: &Figure) -> ([f64; 3], f64) {
         let top = self.placed(&get(&target.bones, "top"));
         let hips = self.placed(&get(&target.bones, "hips"));

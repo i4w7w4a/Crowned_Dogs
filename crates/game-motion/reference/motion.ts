@@ -16,12 +16,12 @@ const READY: Record<Stance, string> = { pistol: "ready_pistol", rifle: "ready_ri
  *  during it, `release` empties the hand at the mark (the grenade flies), `end` cuts a long clip short
  *  (seconds at normal speed) and goes back to the stance, `from` skips the clip's lead-in (2026-11-02). */
 const ATTACKS: Record<Attack, { clip: string; speed: number; mark: number; from?: number; hold?: Held; release?: boolean; end?: number }> = {
-  pistol: { clip: "fire_pistol", speed: 1.15, mark: 0.625 },
+  pistol: { clip: "fire_pistol", speed: 1.15, mark: 0.625, end: 1 },
   rifle: { clip: "fire_rifle", speed: 1, mark: 0.333 },
   shotgun: { clip: "fire_shotgun", speed: 1.25, mark: 0.333 },
   sniper: { clip: "fire_shotgun", speed: 1, mark: 0.333 }, // the bolt works like the pump, slower
   // Quaternius UAL2 (CC0) hook slash and overhand throw, retargeted by tools/anim/retarget_ual.mjs (2026-11-02)
-  knife: { clip: "attack_knife", speed: 1, mark: 0.3, hold: "knife", end: 0.55 },
+  knife: { clip: "attack_knife", speed: 0.85, mark: 0.3, hold: "knife", end: 0.55 },
   grenade: { clip: "grenade_throw", speed: 1, from: 0.03, mark: 0.35, hold: "grenade", release: true, end: 0.6 },
 };
 

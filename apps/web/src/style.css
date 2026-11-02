@@ -162,6 +162,12 @@ button:disabled { cursor: default; }
 .hud { position: absolute; inset: 0 0 auto; z-index: 8; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 0; pointer-events: none;
   color: var(--fg); text-shadow: 0 1px 2px rgba(0,0,0,.55), 0 0 12px rgba(0,0,0,.5); } /* no gradient behind: the shadows keep it readable on a bright picture */
 .duel { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 12px; }
+/* the warned hazard: one glass line under the health bars, the danger in amber */
+.hazard { display: flex; align-items: center; gap: 8px; width: fit-content; max-width: min(360px, 100%); margin: 10px auto 0; padding: 7px 12px 7px 10px; border-radius: 14px;
+  font: 500 12.5px/1.3 var(--body); color: var(--fg); text-shadow: none; }
+.hazard[hidden] { display: none; }
+.hazard .hz-ico { display: grid; flex: none; color: var(--amber); }
+.hazard .hz-ico .ico { width: 18px; height: 18px; }
 .side { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .side.en { align-items: flex-end; }
 .who { max-width: 100%; font: 500 11.5px/1.25 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -251,6 +257,12 @@ button:disabled { cursor: default; }
 .mv.on { align-self: center; min-width: 46px; padding: 0 10px; border-radius: 12px; background: var(--pick-bg); color: var(--pick-fg); text-shadow: none; box-shadow: inset 0 1px 0 var(--pick-hi), 0 4px 14px rgba(0,0,0,.4); }
 .mv.on .ico { stroke-width: 2; filter: none; }
 .mv:disabled { opacity: .22; }
+/* a move that ends inside the warned stretch */
+.mv.risk { color: var(--amber); }
+.mv.risk.on { box-shadow: inset 0 1px 0 var(--pick-hi), inset 0 -3px 0 var(--amber), 0 4px 14px rgba(0,0,0,.4); }
+.ln.hz .a { grid-column: 2 / -1; color: var(--dim); }
+.ln.hz .ico { color: var(--muted); } .ln.hz.hurt .ico, .ln.hz.hurt .a { color: var(--amber); }
+.ticker .tx .hz { color: var(--amber); font-weight: 500; }
 .mv.stay { height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font: 500 14px/1 var(--body); color: var(--fg); white-space: nowrap; }
 .mv.stay.on { color: var(--pick-fg); font-weight: 600; }
 .mv.stay.on small { color: #8a5608; }

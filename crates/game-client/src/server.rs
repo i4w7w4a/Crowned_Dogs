@@ -118,6 +118,10 @@ impl Request {
         };
         let mut config = setting;
         config["seed"] = json!(seed);
+        // Server fights live in the same world as the browser: hazards on unless a setting says no.
+        if config.get("events").is_none() {
+            config["events"] = json!(true);
+        }
         config["fighters"] = json!([fighter(&a)?, fighter(&b)?]);
         let m = core("createMatch", json!([config]))?;
         let id = self.unique(&state["duels"], true)?;

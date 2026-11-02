@@ -20,18 +20,32 @@ void main() {
   vec2 original = (vUv - 0.5) * uCover + 0.5;
   // At rest this is exactly the source photograph with ordinary object-fit cover.
   // There is no permanent overscan, camera drift, colour grade or layer cutout.
-  if (uZoom <= 1.0 && uParallax <= 0.0) {
+  if (uZoom <= 1.0 && uParallax <= 0.0 && uLive <= 0.0) {
     gl_FragColor = vec4(texture2D(uColor, original).rgb, 1.0);
     return;
   }
-  vec2 at = uPivot + (original - uPivot) / uZoom;
-  float depth = softDepth(at) - 0.5;
+  // A live scene is held by hand: a 2.4% margin lets the camera breathe without showing an edge.
+  float t = uTime;
+  vec2 sway = vec2(sin(t * 0.31) + 0.45 * sin(t * 0.83 + 1.3),
+                   0.7 * sin(t * 0.23 + 0.6) + 0.35 * sin(t * 1.4)) * uLive;
+  vec2 at = uPivot + (original - uPivot) / (uZoom * (1.0 + 0.024 * uLive)) + sway * 0.0018;
+  float depth = softDepth(at);
   vec2 edge = smoothstep(vec2(0.0), vec2(0.035), min(at, vec2(1.0) - at));
-  vec2 warp = (uPivot - at) * depth * uParallax * edge.x * edge.y;
+  vec2 warp = (uPivot - at) * (depth - 0.5) * uParallax * edge.x * edge.y;
   warp = clamp(warp, vec2(-0.002), vec2(0.002));
+  // Near things swing more than far ones as the camera breathes.
+  warp += sway * 0.006 * (depth - 0.5) * edge.x * edge.y;
+  vec2 picture = vec2(at.x, 1.0 - at.y);
+  vec2 life = cdLiveWarp(picture, t) * uLive;
+  warp += vec2(life.x, -life.y);
   // The zoom is a convex UV interpolation. Limit even the tiny residual warp
   // to existing source pixels, so no screen corner can expose a hole.
   vec2 available = max(vec2(0.0), min(at, vec2(1.0) - at));
   at += clamp(warp, -available, available);
-  gl_FragColor = vec4(texture2D(uColor, clamp(at, vec2(0.0), vec2(1.0))).rgb, 1.0);
+  at = clamp(at, vec2(0.0), vec2(1.0));
+  vec3 col = texture2D(uColor, at).rgb;
+  if (uLive > 0.0) {
+    col = mix(col, cdLiveLight(col, vec2(at.x, 1.0 - at.y), depth, t), uLive);
+  }
+  gl_FragColor = vec4(col, 1.0);
 }

@@ -23,10 +23,13 @@ pub fn create(config: &Value) -> Result<Value, String> {
             "grenades":if kit.is_null(){json!(1)}else{kit["grenades"].clone()},"lastDefend":[],"afkStreak":0,
             "flash":false,"winded":false,"facesSun":sun==i as i32,"shieldOff":0,"smoke":0,"sidearm":false})
     }).collect();
-    Ok(
-        json!({"version":1,"config":config,"map":map,"turn":1,"distance":config["startDistance"].as_f64().unwrap_or(7.0).min(n(&map["maxDistance"])),
-        "fighters":fighters,"rng":rng,"result":null,"history":[]}),
-    )
+    let mut m = json!({"version":1,"config":config,"map":map,"turn":1,"distance":config["startDistance"].as_f64().unwrap_or(7.0).min(n(&map["maxDistance"])),
+        "fighters":fighters,"rng":rng,"result":null,"history":[]});
+    if b(&config["events"]) {
+        m["lane"] = json!([0.0, m["distance"]]);
+        m["hazard"] = Value::Null;
+    }
+    Ok(m)
 }
 pub fn weapon(m: &Value, side: usize, w: &str) -> Value {
     let kit = &m["config"]["fighters"][side]["kit"];
@@ -84,8 +87,8 @@ pub fn guard(m: &Value, side: usize, w: &str) -> f64 {
     }
     (if w == "knife" { 0.5 } else { 0.26 }) + n(&weapon(m, side, w)["guardBonus"])
 }
-pub fn weather(m: &Value) -> &Value {
-    &constants()["WEATHER"][s(&m["config"]["weather"])]
+pub fn weather(m: &Value) -> Value {
+    hazard::weather(m)
 }
 pub fn limit(m: &Value, turn: f64) -> f64 {
     let max = n(&m["map"]["maxDistance"]);
@@ -174,13 +177,22 @@ pub fn validate(m: &Value, side: usize, order: &Value) -> Value {
 pub fn condition(m: &Value, side: usize, d: f64) -> f64 {
     let me = &m["fighters"][side];
     let band = band(d);
-    let mut mult = n(&weather(m)["accuracy"][band]);
-    if s(&m["config"]["weather"]) == "dust" && b(&me["gear"]["thermal"]) {
+    let w = weather(m);
+    let mut mult = n(&w["accuracy"][band]);
+    // A thermal sight sees through dust, not through wind or spray.
+    if s(&m["config"]["weather"]) == "dust" && b(&me["gear"]["thermal"]) && w["thermal"] != json!(false) {
         mult = 1.0 - (1.0 - mult) / 2.0;
     }
-    match s(&m["config"]["time"]) {
+    // A blackout under a roof plays as night.
+    let time = if hazard::dark(m) {
+        "night"
+    } else {
+        s(&m["config"]["time"])
+    };
+    match time {
         "day" => {
-            if band == "far" {
+            // Heat shimmer rises over open ground only.
+            if band == "far" && !hazard::covered(m) {
                 mult *= 0.9;
             }
         }
@@ -210,7 +222,7 @@ pub fn hit_chance(m: &Value, side: usize, id: &str, d: f64, still: f64, dashing:
     if acc <= 0.0 {
         return 0.0;
     }
-    if s(&m["config"]["time"]) == "night" {
+    if s(&m["config"]["time"]) == "night" || hazard::dark(m) {
         acc += n(&w["nightAcc"]);
     }
     if id != "knife" {
@@ -416,10 +428,14 @@ pub fn resolve(input: &Value, orders: &Value) -> Result<Value, String> {
         return Err("The match is already over".into());
     }
     let mut m = input.clone();
-    let afk = [orders[0].is_null(), orders[1].is_null()];
+    // Lightning stuns for one turn: the Persona stands with last turn's guard, which is not the
+    // operator going missing.
+    let stunned = [0, 1].map(|i| n(&m["fighters"][i]["stunned"]) > 0.0);
+    let afk = [0, 1].map(|i| orders[i].is_null() && !stunned[i]);
+    let dark = hazard::dark(&m);
     let mut final_orders = vec![];
     for side in 0..2 {
-        if afk[side] {
+        if afk[side] || stunned[side] {
             final_orders
                 .push(json!({"action":{"type":"wait"},"defend":m["fighters"][side]["lastDefend"]}));
         } else {
@@ -507,19 +523,40 @@ pub fn resolve(input: &Value, orders: &Value) -> Result<Value, String> {
         m["fighters"][side] = f.clone();
         let silenced =
             b(&f["gear"]["suppressor"]) || b(&weapon(&m, side, s(&f["weapon"]))["suppressor"]);
-        f["flash"] = json!(s(&m["config"]["time"]) == "night" && kind == "shoot" && !silenced);
+        let night = s(&m["config"]["time"]) == "night" || dark || hazard::covered(&m);
+        f["flash"] = json!(night && kind == "shoot" && !silenced);
+        if stunned[side] {
+            f["stunned"] = json!(0);
+        }
         f["winded"] = json!(kind == "dash");
         m["fighters"][side] = f;
     }
-    let report = json!({"turn":m["turn"],"distanceBefore":before,"distanceAfter":after,"limit":lim,
+    let mut struck = Value::Null;
+    if hazard::on(&m) {
+        let went = hazard::travel(before, moves, after);
+        let [x0, x1] = hazard::lane(&m);
+        // Whole thousandths keep the lane's two ends exactly the range apart.
+        let at = |x: f64| (x * 1000.0).round() / 1000.0;
+        m["lane"] = json!([at(x0 + went[0]), at(x1 - went[1])]);
+        struck = hazard::strike(&mut m, moves);
+    }
+    let mut report = json!({"turn":m["turn"],"distanceBefore":before,"distanceAfter":after,"limit":lim,
         "actions":[final_orders[0]["action"],final_orders[1]["action"]],"defend":[final_orders[0]["defend"],final_orders[1]["defend"]],
         "moves":moves,"attacks":attacks,"hp":[m["fighters"][0]["hp"],m["fighters"][1]["hp"]],"afk":afk});
+    if hazard::on(&m) {
+        report["lane"] = m["lane"].clone();
+        report["hazard"] = struck;
+        report["stunned"] = json!(stunned);
+    }
     m["history"]
         .as_array_mut()
         .ok_or("Invalid match history")?
         .push(report.clone());
     m["result"] = judge(&m, &final_orders);
     if m["result"].is_null() {
+        if hazard::on(&m) {
+            m["hazard"] = hazard::warn(&m);
+        }
         m["turn"] = num(n(&m["turn"]) + 1.0);
     }
     Ok(json!({"match":m,"report":report}))
