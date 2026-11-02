@@ -207,6 +207,7 @@ impl ShieldFx {
     /// Sparks and the echo wave follow the graphics setting; the dome itself is cheap everywhere.
     pub fn set_quality(&mut self, id: &str) {
         let (count, detail) = match id {
+            "minimal" => (4, 0.),
             "low" => (8, 0.),
             "medium" => (14, 0.6),
             "high" => (20, 1.),

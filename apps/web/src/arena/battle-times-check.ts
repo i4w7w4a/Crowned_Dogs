@@ -105,7 +105,7 @@ async function reset() {
     seed: reviewSeed, mapId: chosen.mapId, weather: reviewWeather, time: chosen.time,
     fighters: [kitFighter("qa-me", "Оператор", own), kitFighter("qa-enemy", "Искра", starterLoadout(foeGun))], startDistance: 7,
   });
-  plate.src = quality.value === "low" ? chosen.src : chosen.src2x ?? chosen.src;
+  plate.src = quality.value === "low" || quality.value === "minimal" ? chosen.src : chosen.src2x ?? chosen.src;
   plate.alt = chosen.name;
   arena.setFrame(chosen); arena.setQuality(QUALITY[quality.value as QualityId]); arena.setFirstPerson(fp.checked);
   resize(); arena.resume();

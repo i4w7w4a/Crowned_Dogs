@@ -1,5 +1,7 @@
-//! The frame counter switched on in the settings: frames the game actually drew each second
-//! and the longest gap between them, so a phone's smoothness can be read without a console.
+//! The frame counter switched on in the settings: frames the game actually drew each second,
+//! the longest gap between them and the processor's time per frame, so a phone's smoothness can
+//! be read without a console. A processor time well under the frame time means the graphics chip
+//! is what holds the phone back.
 use super::{bridge::*, platform::{store_get, store_set}};
 use std::cell::RefCell;
 use wasm_bindgen::JsValue;
@@ -14,6 +16,10 @@ struct Meter {
     last: f64,
     frames: u32,
     worst: f64,
+    /// When this frame's drawing began, how long it has taken so far, and the window's sum.
+    began: f64,
+    work: f64,
+    busy: f64,
 }
 thread_local! { static METER: RefCell<Meter> = RefCell::new(Meter::default()); }
 
@@ -44,8 +50,10 @@ pub fn frame(now: f64) {
         if now - m.last < 1. {
             return;
         }
+        m.busy += m.work;
+        (m.began, m.work) = (clock(), 0.);
         if m.start == 0. || now - m.last > 1000. {
-            (m.start, m.last, m.frames, m.worst) = (now, now, 0, 0.);
+            (m.start, m.last, m.frames, m.worst, m.busy) = (now, now, 0, 0., 0.);
             return;
         }
         m.worst = m.worst.max(now - m.last);
@@ -63,8 +71,30 @@ pub fn frame(now: f64) {
             call(&get(&document, "body"), "append", &[label.clone()]);
             m.label = label;
         }
-        let text = format!("{:.0} к/с · {:.0} мс", f64::from(m.frames) * 1000. / span, m.worst);
+        let frames = f64::from(m.frames);
+        let text = format!(
+            "{:.0} к/с · {:.0} мс · ЦП {:.0} мс",
+            frames * 1000. / span,
+            m.worst,
+            m.busy / frames
+        );
         set(&m.label, "textContent", &text.into());
-        (m.start, m.frames, m.worst) = (now, 0, 0.);
+        (m.start, m.frames, m.worst, m.busy) = (now, 0, 0., 0.);
     });
+}
+
+/// Every drawing loop calls this when its frame is drawn; with loops sharing a frame the last one
+/// counts, from the first one's start.
+pub fn done() {
+    if !on() {
+        return;
+    }
+    METER.with(|m| {
+        let mut m = m.borrow_mut();
+        m.work = clock() - m.began;
+    });
+}
+
+fn clock() -> f64 {
+    num(&call(&get(&global(), "performance"), "now", &[]))
 }

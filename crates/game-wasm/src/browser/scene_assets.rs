@@ -990,6 +990,7 @@ pub fn relief_hook(host: JsValue, material: JsValue, quality: JsValue) -> JsValu
         || !present(&get(&material, "bumpMap"))
         || !present(&get(&material, "normalMap"))
         || id == "low"
+        || id == "minimal"
         || !compatible_uv(&host, &material)
     {
         return JsValue::UNDEFINED;

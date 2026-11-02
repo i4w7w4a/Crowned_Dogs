@@ -890,15 +890,12 @@ impl LensState {
         self.weather["active"].as_bool() == Some(true)
     }
     fn refresh_battle_shader(&mut self) {
-        let heat = self.heat
-            && !self.night_vision
-            && present(&self.quality)
-            && string(&get(&self.quality, "id")) != "low";
+        let light = present(&self.quality)
+            && matches!(string(&get(&self.quality, "id")).as_str(), "minimal" | "low");
+        let heat = self.heat && !self.night_vision && present(&self.quality) && !light;
         let weather = self.weather_on();
-        // Low draws the weather with fewer layers of noise, rain and drops.
-        let lite = weather
-            && present(&self.quality)
-            && string(&get(&self.quality, "id")) == "low";
+        // Low and minimal draw the weather with fewer layers of noise, rain and drops.
+        let lite = weather && light;
         let features = u8::from(self.night_vision)
             | (u8::from(heat) << 1)
             | (u8::from(self.sun_glare) << 2)

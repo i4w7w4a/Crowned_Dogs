@@ -172,6 +172,17 @@ impl FramePace {
     pub(super) fn new(target: f64) -> Self {
         Self { target, ..Self::default() }
     }
+    /// Minimal quality holds the battle to about 30 frames: a weak phone then stays cool and even.
+    fn follow(&mut self, quality: &JsValue) {
+        let target = if string(&get(quality, "id")) == "minimal" {
+            30.
+        } else {
+            Self::battle().target
+        };
+        if target != self.target {
+            *self = Self::new(target);
+        }
+    }
     pub(super) fn due(&mut self, time: f64) -> bool {
         if self.every == 0. {
             let gap = time - self.last;
@@ -642,6 +653,7 @@ impl RustArena {
             if present(&callback) {
                 invoke(&callback, &[]);
             }
+            super::fps_meter::done();
         }));
         Self { state }
     }
@@ -1891,6 +1903,7 @@ impl ArenaState {
     }
     fn set_quality(&mut self, q: JsValue) {
         self.quality = q.clone();
+        self.pace.follow(&q);
         call(&self.lens, "setQuality", &[q.clone()]);
         let shadows = p(&q, "shadow") > 0.;
         set(
