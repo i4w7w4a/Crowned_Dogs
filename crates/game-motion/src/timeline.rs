@@ -16,8 +16,10 @@ fn ready_name(stance: &str) -> &str {
         _ => "ready_pistol",
     }
 }
-/// `from` skips a clip's lead-in: the knife take opens with half a second of crouched shuffling and the grenade
-/// clip with a T-pose-like stand, both of which looked silly in the arena (Art, 2026-11-02). `end` cuts the tail.
+/// The knife and grenade clips come from Quaternius' Universal Animation Library 2 (CC0), retargeted with
+/// `tools/anim/retarget_ual.mjs`: the hook slash reaches forward at 0.3 s, the overhand throw lets go at 0.35 s.
+/// `end` cuts the tail where the arm is on its way back; the ready stance blends in from there. `from` skips a
+/// clip's lead-in (the grenade's first frames barely move).
 fn spec(kind: &str) -> Value {
     match kind {
         "pistol" => json!({"clip":"fire_pistol","speed":1.15,"mark":0.625}),
@@ -25,10 +27,10 @@ fn spec(kind: &str) -> Value {
         "shotgun" => json!({"clip":"fire_shotgun","speed":1.25,"mark":0.333}),
         "sniper" => json!({"clip":"fire_shotgun","speed":1,"mark":0.333}),
         "knife" => {
-            json!({"clip":"attack_knife","speed":1.25,"from":0.6,"mark":0.958,"hold":"knife","end":1.15})
+            json!({"clip":"attack_knife","speed":1,"mark":0.3,"hold":"knife","end":0.55})
         }
         "grenade" => {
-            json!({"clip":"grenade_throw","speed":1.4,"from":0.6,"mark":1.208,"hold":"grenade","release":true,"end":1.45})
+            json!({"clip":"grenade_throw","speed":1,"from":0.03,"mark":0.35,"hold":"grenade","release":true,"end":0.6})
         }
         _ => Value::Null,
     }
@@ -153,7 +155,8 @@ pub fn event(args: &Value) -> Value {
                 let kind = s(&args["kind"]);
                 let a = spec(kind);
                 if state["durations"].get(s(&a["clip"])).is_some() {
-                    let wait = n(&args["inSeconds"]) - (n(&a["mark"]) - n(&a["from"])) / n(&a["speed"]);
+                    let wait =
+                        n(&args["inSeconds"]) - (n(&a["mark"]) - n(&a["from"])) / n(&a["speed"]);
                     if wait > 0.0 {
                         state["pending"] = json!({"in":wait,"kind":kind});
                     } else {

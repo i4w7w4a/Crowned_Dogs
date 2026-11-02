@@ -20,9 +20,9 @@ const ATTACKS: Record<Attack, { clip: string; speed: number; mark: number; from?
   rifle: { clip: "fire_rifle", speed: 1, mark: 0.333 },
   shotgun: { clip: "fire_shotgun", speed: 1.25, mark: 0.333 },
   sniper: { clip: "fire_shotgun", speed: 1, mark: 0.333 }, // the bolt works like the pump, slower
-  knife: { clip: "attack_knife", speed: 1.25, from: 0.6, mark: 0.958, hold: "knife", end: 1.15 },
-  // Art's Tripo throw (24 fps): the hand leaves the grenade at its frame 30, back by frame 46, then a second swing we skip
-  grenade: { clip: "grenade_throw", speed: 1.4, from: 0.6, mark: 1.208, hold: "grenade", release: true, end: 1.45 },
+  // Quaternius UAL2 (CC0) hook slash and overhand throw, retargeted by tools/anim/retarget_ual.mjs (2026-11-02)
+  knife: { clip: "attack_knife", speed: 1, mark: 0.3, hold: "knife", end: 0.55 },
+  grenade: { clip: "grenade_throw", speed: 1, from: 0.03, mark: 0.35, hold: "grenade", release: true, end: 0.6 },
 };
 
 /** Tracks that move the legs: the pelvis and everything below it (UE Mannequin and Mixamo names). */

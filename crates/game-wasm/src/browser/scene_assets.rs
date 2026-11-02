@@ -125,7 +125,10 @@ const HELD_MODELS: &[(&str, &str)] = &[("knife", "knife"), ("grenade", "grenade"
 /// A real gun whose own origin is not where the hand closes: its scale in the hand, then its shift
 /// in the mount (x along the bore, y up). The pistol's centre sat in the fist with the grip back in
 /// the wrist; it goes up and forward into the palm, a size up to fill the gloved hand (Art, 2026-11-01).
-const HOLDS: &[(&str, f64, [f64; 3])] = &[("pistol", 1.2, [0.03, 0.02, 0.])];
+/// The grenade sat in the plane of the hand, showing through its back; it moves out to the palm side (-z)
+/// where the throw's half-closed fingers wrap it (2026-11-02).
+const HOLDS: &[(&str, f64, [f64; 3])] =
+    &[("pistol", 1.2, [0.03, 0.02, 0.]), ("grenade", 1., [0., -0.01, -0.045])];
 #[wasm_bindgen(js_name = sceneLoadGuns)]
 pub fn load_guns(host: JsValue) -> Promise {
     future_to_promise(async move {
