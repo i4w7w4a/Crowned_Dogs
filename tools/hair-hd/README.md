@@ -50,11 +50,26 @@
 
 В игре они называются `crop` «Короткая», `slick` «Зачёс назад», `medium` «Средняя», `ponytail` «Низкий хвост»
 (пакет `hair-male.glb`), «Ёжик» остаётся. У короткой бока «под машинку» — не полоски, а слой `Hair_crop_fade` с текстурой щетины
-`hair-fade.png` (`fade_texture.py`): к уху и шее реже, наверху сплошная. У зачёса тот же слой `Hair_slick_fade`
-под всей шапкой, плотность по корням: у линии роста редкие волоски, иначе концы полосок торчали зубцами на коже.
-Хвост: полоски по голове `Hair_ponytail_cards`, сам хвост `Hair_ponytail_tail`, чёрная резинка `Hair_ponytail_tie`,
-слой `Hair_ponytail_fade` как у зачёса. В HD есть пряди сквозь череп и свободные у висков: в игровой версии их нет
-(полосками они висели на лбу). У лба в центре HD-волосы расходятся «звездой», под ней слой fade густой.
+`hair-fade.png` (`fade_texture.py`): к уху и шее реже, наверху сплошная.
+Хвост: полоски по голове `Hair_ponytail_cards`, сам хвост `Hair_ponytail_tail`, чёрная резинка `Hair_ponytail_tie`.
+В HD есть пряди сквозь череп и свободные у висков: в игровой версии их нет (полосками они висели на лбу).
+У лба в центре HD-волосы расходятся «звездой».
+
+Линия роста у лба зачёса и хвоста (2 ноября 2026, раньше там был слой `_fade` из штрихов, и концы полосок
+стояли ступеньками):
+- полоски, чей корень лежит открыто спереди (никакая другая полоска не проходит над ним ближе 6 мм), а у хвоста
+  все полоски передней половины головы, проявляются от корня: альфа в цвете вершин (атрибут `Color`), 0.1 у корня
+  и полная через 14 мм, на этом участке ряды вершин через 2 мм. Текстура прядей почти без полутонов, поэтому шейдер
+  полосок в `look.rs` (`hair_hook`) начинает каждую прядь текстуры (столбец u) в своей точке этого участка, и край
+  рассыпается на волоски, а не обрезается одной линией;
+- подложка `_cap` не заходит под первые 12 мм таких полосок (ближе 7 мм), иначе её плоский край просвечивал;
+- у хвоста полоски передней половины, идущие поперёк соседей больше чем на 14°, выброшены: у висков и у пробора
+  они лежали рублеными кусками поперёк остальных;
+- на голове под ними нарисована сама линия роста, маска `hairline-<style>.png` (`scalp_mask.py`, по корням из
+  `game_<style>_roots.npz`, которые пишет `game_cards.py`): 0.5 — ничего, выше — цвет волос, сплошной под
+  полосками и редеющий штрихами по направлению зачёса чуть дальше последних корней; ниже — запечённая щетина скана
+  на лбу перед линией, она возвращается к коже лица. Нарисованные волосы матовые (блик кожи на них гасится),
+  иначе тёмно-коричневое светилось серым пятном.
 
 ## Игровые версии (`apps/web/models/hair-female.glb`, `hair-male.glb`)
 
@@ -70,9 +85,10 @@ morph target `Head_m1…m4` (выходит там, где череп этого
 
 Под причёсками у сканов m1–m4 своя запечённая короткая стрижка (светлая у m1, седая у m2/m3). Маска `scalp-male.png`
 (`scalp_mask.py`, канал на лицо: R m1 … A m4, в UV головы) показывает шейдеру головы, где она: там стрижка
-перекрашивается в цвет причёски с сохранением рисунка щетины (`shaders/look-scalp.glsl`). Маска и средняя яркость
-каждой стрижки (`scalp-male.json`) едут в пакете на скрытом квадрате `Hair_scalp` (его делает `pack.py`, PNG
-вешает `finish.py`).
+перекрашивается в цвет причёски с сохранением рисунка щетины (`shaders/look-scalp.glsl`). Маска, средняя яркость
+каждой стрижки, цвет кожи лба и щетины каждого лица (`scalp-male.json`: `luma`, `skin`, `buzz`) едут в пакете на
+скрытом квадрате `Hair_scalp`, маски линии роста — на `Hair_line_slick` и `Hair_line_ponytail` (квадраты делает
+`pack.py`, PNG вешает `finish.py`).
 
 ```bash
 B="/c/Program Files/Blender Foundation/Blender 5.2/blender.exe"
@@ -87,13 +103,13 @@ npx @gltf-transform/cli@4.5.1 meshopt output/hair-hd/raw/hair-female.glb apps/we
 
 ```bash
 "$B" -b 3d/hair-hd/male_short.blend --python tools/hair-hd/game_cards.py -- crop <tmp>/game_crop.blend x "$PWD/output/beards/heads-rest.blend"
-"$B" -b --factory-startup --python tools/hair-hd/scalp_mask.py -- "$PWD/apps/web/models/persona-male.glb" "$PWD/tools/hair-hd/scalp-male.png"
+"$B" -b --factory-startup --python tools/hair-hd/scalp_mask.py -- "$PWD/apps/web/models/persona-male.glb" "$PWD/tools/hair-hd/scalp-male.png" slick=<tmp>/game_slick_roots.npz ponytail=<tmp>/game_ponytail_roots.npz
 "$B" -b --factory-startup --python tools/hair-hd/pack.py -- <tmp> <полный путь>/tools/hair-hd/hair-strands.png male
 python -I tools/hair-hd/finish.py output/hair-hd/raw/hair-male.glb
 npx @gltf-transform/cli@4.5.1 meshopt output/hair-hd/raw/hair-male.glb apps/web/models/hair-male.glb --quantize-position 16 --quantize-normal 12 --quantize-texcoord 14
 ```
 
-Маску пересобирать после замены голов.
+Маски пересобирать после замены голов и после новых полосок зачёса или хвоста (корни меняются).
 
 `hair-strands.png`: текстура прядей старых женских волос (та же, что в persona-female.glb).
 

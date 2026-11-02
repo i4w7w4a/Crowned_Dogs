@@ -61,28 +61,54 @@ fn face_index(face: &str) -> Option<usize> {
 
 /// The hair pack's mask of the male scans' baked buzz cut (`tools/hair-hd/scalp_mask.py`, one channel per face, R m1 to
 /// A m4) and the mean brightness of each face's buzz. Under a pack hairstyle the head shader paints the buzz in the
-/// hair's colour; a pack without the mask paints nothing.
+/// hair's colour; a pack without the mask paints nothing. The slick and the ponytail also bring a mask of their own
+/// hairline (`line`, same channels): painted in the hair's colour so their strips' ends do not stand on bare skin,
+/// and the buzz on the forehead in front of it taken back to the face's own skin (`skin`, `buzz`: linear colours).
 struct Scalp {
     map: JsValue,
+    line: JsValue,
     luma: Vec<f64>,
+    skin: Vec<[f64; 3]>,
+    buzz: Vec<[f64; 3]>,
     on: bool,
 }
 
-fn scalp(model: &JsValue, packed: bool) -> Scalp {
-    let node = call(model, "getObjectByName", &["Hair_scalp".into()]);
+/// A head mask carried on one of the pack's hidden quads, sampled as stored.
+fn mask(model: &JsValue, quad: &str) -> JsValue {
+    let node = call(model, "getObjectByName", &[quad.into()]);
     let map = if present(&node) { get(&get(&node, "material"), "map") } else { JsValue::NULL };
+    if !present(&map) {
+        return JsValue::NULL;
+    }
+    if !string(&get(&map, "colorSpace")).is_empty() {
+        set(&map, "colorSpace", &"".into());
+        set(&map, "needsUpdate", &true.into());
+    }
+    map
+}
+
+fn scalp(model: &JsValue, packed: bool, style: &str) -> Scalp {
+    let node = call(model, "getObjectByName", &["Hair_scalp".into()]);
     let luma: Vec<f64> = if present(&node) {
         values(&get(&get(&node, "userData"), "cdScalpLuma")).iter().map(num).collect()
     } else {
         Vec::new()
     };
-    if present(&map) && !string(&get(&map, "colorSpace")).is_empty() {
-        // a mask, not a colour: sampled as stored
-        set(&map, "colorSpace", &"".into());
-        set(&map, "needsUpdate", &true.into());
-    }
+    // sRGB as the script measured them, linear for the shader
+    let tones = |key: &str| -> Vec<[f64; 3]> {
+        let linear = |c: f64| if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) };
+        let list = if present(&node) { values(&get(&get(&node, "userData"), key)) } else { Vec::new() };
+        list.iter()
+            .map(|c| {
+                let c: Vec<f64> = values(c).iter().map(num).collect();
+                [0, 1, 2].map(|i| linear(c.get(i).copied().unwrap_or(0.0)))
+            })
+            .collect()
+    };
+    let (skin, buzz) = (tones("cdScalpSkin"), tones("cdScalpBuzz"));
+    let map = mask(model, "Hair_scalp");
     let on = packed && present(&map) && luma.len() == 4;
-    Scalp { map: if present(&map) { map } else { JsValue::NULL }, luma, on }
+    Scalp { map, line: mask(model, &format!("Hair_line_{style}")), luma, skin, buzz, on }
 }
 
 /// Sets up the eye shader on a head material; returns its uniforms. The head's model carries its two irises in the
@@ -104,12 +130,19 @@ fn head_hook(material: &JsValue, node: &JsValue, paint: &JsValue, scalp: &Scalp)
             ("cdScalpPick", object(&[("value", array(&[0.0.into(), 0.0.into(), 0.0.into(), 0.0.into()]).into())])),
             ("cdScalpTone", object(&[("value", array(&[0.0.into(), 0.0.into(), 0.0.into()]).into())])),
             ("cdScalpLuma", object(&[("value", 1.0.into())])),
+            ("cdHairline", object(&[("value", JsValue::NULL)])),
+            ("cdHairlineOn", object(&[("value", 0.0.into())])),
+            ("cdScalpSkin", object(&[("value", array(&[0.0.into(), 0.0.into(), 0.0.into()]).into())])),
+            ("cdScalpBuzz", object(&[("value", array(&[0.0.into(), 0.0.into(), 0.0.into()]).into())])),
         ]);
         set(&get(material, "userData"), "cdLook", &uniforms);
         let shared = uniforms.clone();
         let compile = Closure::<dyn FnMut(JsValue)>::new(move |shader: JsValue| {
             let own = get(&shader, "uniforms");
-            for key in ["cdEyeA", "cdEyeB", "cdIris", "cdTime", "cdScalp", "cdScalpPick", "cdScalpTone", "cdScalpLuma"] {
+            for key in [
+                "cdEyeA", "cdEyeB", "cdIris", "cdTime", "cdScalp", "cdScalpPick", "cdScalpTone", "cdScalpLuma", "cdHairline",
+                "cdHairlineOn", "cdScalpSkin", "cdScalpBuzz",
+            ] {
                 set(&own, key, &get(&shared, key));
             }
             let vertex = string(&get(&shader, "vertexShader"))
@@ -119,7 +152,7 @@ fn head_hook(material: &JsValue, node: &JsValue, paint: &JsValue, scalp: &Scalp)
             let fragment = string(&get(&shader, "fragmentShader"))
                 .replacen(
                     "#include <common>",
-                    "#include <common>\nvarying vec3 cdLocal;\nuniform vec4 cdEyeA;\nuniform vec4 cdEyeB;\nuniform vec3 cdIris;\nuniform float cdTime;\nuniform sampler2D cdScalp;\nuniform vec4 cdScalpPick;\nuniform vec3 cdScalpTone;\nuniform float cdScalpLuma;\nvec3 cdGlow = vec3( 0.0 );",
+                    "#include <common>\nvarying vec3 cdLocal;\nuniform vec4 cdEyeA;\nuniform vec4 cdEyeB;\nuniform vec3 cdIris;\nuniform float cdTime;\nuniform sampler2D cdScalp;\nuniform vec4 cdScalpPick;\nuniform vec3 cdScalpTone;\nuniform float cdScalpLuma;\nuniform sampler2D cdHairline;\nuniform float cdHairlineOn;\nuniform vec3 cdScalpSkin;\nuniform vec3 cdScalpBuzz;\nvec3 cdGlow = vec3( 0.0 );\nfloat cdHairPaint = 0.0;",
                     1,
                 )
                 .replacen(
@@ -135,11 +168,18 @@ fn head_hook(material: &JsValue, node: &JsValue, paint: &JsValue, scalp: &Scalp)
                     "#include <emissivemap_fragment>",
                     "#include <emissivemap_fragment>\ntotalEmissiveRadiance += cdGlow;",
                     1,
+                )
+                // hair painted on the scalp is matt: with the skin's sheen the dark brown under the hairline's
+                // thinning strips lit up as a grey patch
+                .replacen(
+                    "#include <aomap_fragment>",
+                    "#include <aomap_fragment>\nreflectedLight.directSpecular *= 1.0 - 0.85 * cdHairPaint;\nreflectedLight.indirectSpecular *= 1.0 - 0.85 * cdHairPaint;",
+                    1,
                 );
             set(&shader, "fragmentShader", &fragment.into());
         })
         .into_js_value();
-        let hook = object(&[("key", "look5".into()), ("compile", compile.clone())]);
+        let hook = object(&[("key", "look8".into()), ("compile", compile.clone())]);
         HOOKS.with(|h| h.set(material.unchecked_ref(), &hook));
         // Until the next tune, the hook runs on its own; tune then chains it with the rest.
         set(material, "onBeforeCompile", &compile);
@@ -163,6 +203,18 @@ fn head_hook(material: &JsValue, node: &JsValue, paint: &JsValue, scalp: &Scalp)
     set(&get(&uniforms, "cdScalpPick"), "value", &array(&pick.map(JsValue::from)).into());
     set(&get(&uniforms, "cdScalpTone"), "value", &get(paint, "hairCap"));
     set(&get(&uniforms, "cdScalpLuma"), "value", &luma.into());
+    let (mut skin, mut buzz) = ([0.0; 3], [0.0; 3]);
+    let line = match channel {
+        Some(i) if scalp.on && present(&scalp.line) && i < scalp.skin.len() && i < scalp.buzz.len() => {
+            (skin, buzz) = (scalp.skin[i], scalp.buzz[i]);
+            true
+        }
+        _ => false,
+    };
+    set(&get(&uniforms, "cdHairline"), "value", &scalp.line);
+    set(&get(&uniforms, "cdHairlineOn"), "value", &(if line { 1.0 } else { 0.0 }).into());
+    set(&get(&uniforms, "cdScalpSkin"), "value", &array(&skin.map(JsValue::from)).into());
+    set(&get(&uniforms, "cdScalpBuzz"), "value", &array(&buzz.map(JsValue::from)).into());
     uniforms
 }
 
@@ -182,18 +234,33 @@ fn hair_hook(material: &JsValue) {
         set(&map, "needsUpdate", &true.into());
     }
     let compile = Closure::<dyn FnMut(JsValue)>::new(move |shader: JsValue| {
-        let fragment = string(&get(&shader, "fragmentShader")).replacen(
-            "#include <normal_fragment_begin>",
-            "#include <normal_fragment_begin>
+        let fragment = string(&get(&shader, "fragmentShader"))
+            .replacen(
+                "#include <normal_fragment_begin>",
+                "#include <normal_fragment_begin>
 #ifdef DOUBLE_SIDED
 normal *= faceDirection;
 #endif",
-            1,
-        );
+                1,
+            )
+            // The slick's and the ponytail's hairline strips fade in from the root (vertex alpha, game_cards.py).
+            // The texture's strands are near solid, so a plain fade cut them all at one line: each strand, a
+            // column of the texture, starts at its own point along the fade instead, and the end breaks into hairs.
+            .replacen(
+                "#include <color_fragment>",
+                "#if defined( USE_COLOR_ALPHA ) && defined( USE_MAP )
+float cdStrand = fract( sin( floor( vMapUv.x * 160.0 ) * 12.9898 ) * 43758.5453 );
+diffuseColor.rgb *= vColor.rgb;
+diffuseColor.a *= smoothstep( cdStrand, cdStrand + 0.04, ( vColor.a - 0.1 ) / 0.9 * 1.05 );
+#else
+#include <color_fragment>
+#endif",
+                1,
+            );
         set(&shader, "fragmentShader", &fragment.into());
     })
     .into_js_value();
-    let hook = object(&[("key", "hair1".into()), ("compile", compile.clone())]);
+    let hook = object(&[("key", "hair2".into()), ("compile", compile.clone())]);
     HOOKS.with(|h| h.set(material.unchecked_ref(), &hook));
     set(material, "onBeforeCompile", &compile);
     set(material, "needsUpdate", &true.into());
@@ -309,7 +376,7 @@ pub fn apply(model: JsValue, look: JsValue) {
     let (hair, hair_on, packed) = hair_selection(&model, &paint);
     // a pack style the model lacks shows the long hair rather than none
     let stand_in = super::beards::HAIR_STYLES.contains(&string(&get(&paint, "hair")).as_str()) && !packed;
-    let scalp = scalp(&model, packed);
+    let scalp = scalp(&model, packed, string(&get(&paint, "hair")).as_str());
     let mut cap_material = get(&get(&model, "userData"), "cdCap");
     for node in nodes(&model) {
         if !boolean(&get(&node, "isMesh")) {
@@ -328,8 +395,9 @@ pub fn apply(model: JsValue, look: JsValue) {
             }
             continue;
         }
-        if mesh == "Hair_scalp" {
-            // carries the scalp mask only (`scalp`) and stays hidden
+        if mesh == "Hair_scalp" || mesh.starts_with("Hair_line_") {
+            // carry the head masks only (`scalp`) and stay hidden
+            set(&node, "visible", &false.into());
             continue;
         }
         if mesh.starts_with("Hair_") {
@@ -347,7 +415,7 @@ pub fn apply(model: JsValue, look: JsValue) {
                 let c = rgb(&get(&paint, "hairCap"));
                 call(&get(&m, "color"), "setRGB", &[c[0].into(), c[1].into(), c[2].into()]);
             } else if mesh.ends_with("_fade") {
-                // the crop's clipper fade and the slick's hairline lie on the skull and tile round it: no strip hook, whose
+                // the crop's clipper fade lies on the skull and tiles round it: no strip hook, whose
                 // clamped texture would smear the first column into stripes
                 tint(&material, rgb(&get(&paint, "hairCards")));
             } else if mesh.ends_with("_tie") {
