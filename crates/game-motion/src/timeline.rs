@@ -19,15 +19,17 @@ fn ready_name(stance: &str) -> &str {
 /// The knife and grenade clips come from Quaternius' Universal Animation Library 2 (CC0), retargeted with
 /// `tools/anim/retarget_ual.mjs`: the hook slash reaches forward at 0.3 s, the overhand throw lets go at 0.35 s.
 /// `end` cuts the tail where the arm is on its way back; the ready stance blends in from there. `from` skips a
-/// clip's lead-in (the grenade's first frames barely move).
+/// clip's lead-in (the grenade's first frames barely move). The pistol shot ends at 1 s: after it the clip
+/// pulls both hands back to the chest, where they sank into the vest (Art, 2026-11-02); the ready stance
+/// holds the pistol out instead. The knife plays at 0.85: at full speed Art found the slash a bit rushed.
 fn spec(kind: &str) -> Value {
     match kind {
-        "pistol" => json!({"clip":"fire_pistol","speed":1.15,"mark":0.625}),
+        "pistol" => json!({"clip":"fire_pistol","speed":1.15,"mark":0.625,"end":1.0}),
         "rifle" => json!({"clip":"fire_rifle","speed":1,"mark":0.333}),
         "shotgun" => json!({"clip":"fire_shotgun","speed":1.25,"mark":0.333}),
         "sniper" => json!({"clip":"fire_shotgun","speed":1,"mark":0.333}),
         "knife" => {
-            json!({"clip":"attack_knife","speed":1,"mark":0.3,"hold":"knife","end":0.55})
+            json!({"clip":"attack_knife","speed":0.85,"mark":0.3,"hold":"knife","end":0.55})
         }
         "grenade" => {
             json!({"clip":"grenade_throw","speed":1,"from":0.03,"mark":0.35,"hold":"grenade","release":true,"end":0.6})

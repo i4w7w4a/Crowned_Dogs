@@ -24,7 +24,9 @@ fn travel(t: f64, dur: f64) -> (f64, f64) {
 pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
     Ok(match method {
         "client.arena.data" => {
-            let mut views = json!({"rifle":{"at":[0,1.57,0.04],"tilt":0},"shotgun":{"at":[0,1.57,0.04],"tilt":0},"sniper":{"at":[0,1.57,0.04],"tilt":0},"pistol":{"at":[0,1.57,0.04],"tilt":0},"knife":{"at":[-0.2,1.36,0.12],"tilt":0.3},"grenade":{"at":[0.17,1.47,0.12],"tilt":0.53}});
+            // The knife and the grenade keep the gun's eye point: their own spots slid the body sideways
+            // mid-strike and sat the camera in the right shoulder, so the sleeve filled the screen (2026-11-02).
+            let mut views = json!({"rifle":{"at":[0,1.57,0.04],"tilt":0},"shotgun":{"at":[0,1.57,0.04],"tilt":0},"sniper":{"at":[0,1.57,0.04],"tilt":0},"pistol":{"at":[0,1.57,0.04],"tilt":0}});
             if let Some(t) = args[0].as_array().filter(|a| a.len() == 4) {
                 for v in views.as_object_mut().unwrap().values_mut() {
                     v["at"] = json!([t[0], t[1], t[2]]);
