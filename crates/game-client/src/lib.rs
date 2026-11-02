@@ -78,22 +78,26 @@ fn guess_quality(device: &Value) -> &'static str {
         return "low";
     }
     let gpu = text(&device["gpu"]).to_lowercase();
+    // Drawn by the processor: every pixel counts.
     if ["swiftshader", "llvmpipe", "software", "basic render"]
         .iter()
         .any(|x| gpu.contains(x))
     {
-        return "low";
+        return "minimal";
     }
     let memory = device["memory"].as_f64().unwrap_or(4.0);
     let cores = device["cores"].as_f64().unwrap_or(4.0);
     if truth(&device["phone"]) {
-        let mali = gpu.contains("mali-t")
+        let oldest = gpu.contains("mali-t")
             || gpu.contains("mali-4")
-            || (50..=59)
-                .chain(70..=72)
-                .any(|n| gpu.contains(&format!("mali-g{n}")));
-        let adreno = (300..=599).any(|n| gpu.contains(&format!("adreno (tm) {n}")));
-        return if memory <= 3.0 || cores <= 4.0 || mali || adreno {
+            || (300..=499).any(|n| gpu.contains(&format!("adreno (tm) {n}")));
+        let mali = (50..=59)
+            .chain(70..=72)
+            .any(|n| gpu.contains(&format!("mali-g{n}")));
+        let adreno = (500..=599).any(|n| gpu.contains(&format!("adreno (tm) {n}")));
+        return if oldest || memory <= 2.0 {
+            "minimal"
+        } else if memory <= 3.0 || cores <= 4.0 || mali || adreno {
             "low"
         } else {
             "medium"
@@ -127,7 +131,13 @@ mod tests {
     fn software_and_old_mobile_renderers_are_restricted() {
         assert_eq!(
             guess_quality(&json!({"webgl":true,"gpu":"Google SwiftShader"})),
-            "low"
+            "minimal"
+        );
+        assert_eq!(
+            guess_quality(
+                &json!({"webgl":true,"gpu":"Adreno (TM) 405","phone":true,"memory":3,"cores":8})
+            ),
+            "minimal"
         );
         assert_eq!(
             guess_quality(

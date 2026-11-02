@@ -31,7 +31,7 @@ PLAN = {
                  ('Hair_ponytail_tail', 'tail', 80, 14, (0.003, 0.012))],
 }[style]
 FACES = [f'Head_{"m" if style in ("crop", "slick", "medium", "ponytail") else "f"}{i}' for i in range(1, 5)]
-# combed flat back over the skull: one layer, roots narrowed only at the thin hairline, a fade under it
+# combed flat back over the skull: one layer, roots narrowed and faded in at the thin hairline, painted on the head under it
 SLEEK = style in ('slick', 'ponytail')
 rng = np.random.default_rng(7)
 dg = bpy.context.evaluated_depsgraph_get()
@@ -106,6 +106,7 @@ C = np.array([top[:, 0].mean(), top[:, 1].mean(), zt - 0.095])
 
 out_objs = []
 roots = []
+fade_paths = []
 for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
     S = strands(bpy.data.objects[obj_name])
     R, L = resample(S, SEG)
@@ -140,14 +141,68 @@ for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
     rdens = np.array([len(kd.find_range(tuple(r), 0.008)) for r in R[:, 0]]); rmed = np.median(rdens)
     t = np.linspace(0, 1, SEG + 1)
     sleek = SLEEK and suffix == 'cards'
-    axis = smooth(np.median(R, axis=0), 2)   # a tail's strips lie round its own axis, not the skull's centre
-    verts, faces, uvs, normals = [], [], [], []
+    centres = {}
     for j in range(K):
         grp = R[lab == j]
-        if len(grp) < 4:
+        if len(grp) >= 4:
+            centres[j] = smooth(np.median(grp, axis=0))
+            centres[j][0] = np.median(grp[:, 0], axis=0)
+    arcs = {j: np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(c, axis=0), axis=1))]) for j, c in centres.items()}
+    open_end = set()
+    if sleek:
+        # the strips' paths every 2 mm past their first 8 mm, with their directions
+        pts, tng, own = [], [], []
+        for j, c in centres.items():
+            a = np.arange(0.008, arcs[j][-1], 0.002)
+            g = np.gradient(c, axis=0)
+            pts.append(np.stack([np.interp(a, arcs[j], c[:, k]) for k in range(3)], 1)); own += [j] * len(a)
+            tng.append(unit(np.stack([np.interp(a, arcs[j], g[:, k]) for k in range(3)], 1)))
+        pts, tng, own = np.concatenate(pts), np.concatenate(tng), np.array(own)
+
+        def tree(sel):
+            kt = KDTree(len(sel))
+            for i in sel:
+                kt.insert(tuple(pts[i]), int(i))
+            kt.balance()
+            return kt
+        kc = tree(np.arange(len(pts)))
+        # the ponytail's clumps mix strands that sweep across each other at the temples and round the parting:
+        # their strips lay across the flow of the strips under them and showed as chopped pieces there (Art,
+        # 2026-11-02). On the front half of the head a strip that runs over 14 degrees off its neighbours' flow
+        # is dropped; those under it cover the place.
+        if style == 'ponytail':
+            across = {}
+            for j, c in centres.items():
+                if c[0, 1] >= C[1]:
+                    continue
+                angs = []
+                for i in np.flatnonzero(own == j):
+                    nb = [m for _, m, _ in kc.find_range(tuple(pts[i]), 0.006) if own[m] != j]
+                    if len(nb) >= 3:
+                        f = tng[nb] * np.sign(tng[nb] @ tng[i])[:, None]
+                        angs.append(np.degrees(np.arccos(min(1.0, abs(unit(f.mean(0)) @ tng[i])))))
+                if angs and np.median(angs) > 14:
+                    across[j] = np.median(angs)
+            print('DROPPED across the flow', len(across), 'strips')
+            for j, v in across.items():
+                print('  %3d deg, root %s' % (v, np.round(centres.pop(j)[0], 3)))
+            kc = tree(np.flatnonzero(~np.isin(own, list(across))))
+        # strips whose root end lies open on the front of the head, with no other strip passing over it within
+        # 6 mm (the hairline, the ponytail's parting): those fade in from the root
+        open_end = {j for j, c in centres.items() if c[0, 1] < C[1] - 0.03
+                    and all(own[i] == j for _, i, _ in kc.find_range(tuple(c[0]), 0.006))}
+        # the ponytail's long strips pass close by each other's roots at the hairline without covering their
+        # ends, which still stood as steps at the temples: all its strips on the front half of the head fade in
+        if style == 'ponytail':
+            open_end |= {j for j, c in centres.items() if c[0, 1] < C[1]}
+    axis = smooth(np.median(R, axis=0), 2)   # a tail's strips lie round its own axis, not the skull's centre
+    verts, faces, uvs, normals, alphas = [], [], [], [], []
+    strips = edges = 0
+    for j in range(K):
+        grp = R[lab == j]
+        if j not in centres:
             continue
-        centre = smooth(np.median(grp, axis=0))
-        centre[0] = np.median(grp[:, 0], axis=0)
+        centre = centres[j]
         # braid: as strips the loose face strand turned into a dark block over the eye (Art,
         # 2026-11-01), so no strip hangs in front of the face below the forehead
         if style == 'braid' and suffix == 'cards':
@@ -179,21 +234,41 @@ for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
         thick = np.clip(smooth(wn, 2), 0, 0.01)
         n = unit(0.7 * nrm + 0.3 * out) if suffix not in ('plait', 'tail') else nrm
         vtip = 0.8 if sleek else 1.0   # the slick's strips end bluntly, short of the texture's tips
+        # the slick's and the ponytail's hairline strips fade in from the root (vertex alpha: the strip shader in
+        # look.rs starts each strand of the texture at its own point along it), so their blunt ends stop drawing
+        # steps on the forehead (Art, 2026-11-02); the head shader paints the hairline under them (scalp_mask.py)
+        arc = np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(centre, axis=0), axis=1))])
+        edge = j in open_end
+        if edge:
+            fade_paths.append(np.stack([np.interp(np.arange(0, 0.0121, 0.002), arc, centre[:, k]) for k in range(3)], 1))
+        # rows along the strip: its SEG + 1, and on a hairline strip more over its first 14 mm, where the fade
+        # runs (a segment is some 2 cm: across one, the fade was a blunt cut a millimetre in)
+        rows = np.arange(SEG + 1.0)
+        if edge:
+            rows = np.union1d(rows, np.interp(np.arange(0.002, 0.0141, 0.002), arc, rows))
+        at = lambda X: np.stack([np.interp(rows, np.arange(SEG + 1), x) for x in np.reshape(X, (SEG + 1, -1)).T], 1)
+        r_centre, r_nrm, r_across, r_n = at(centre), unit(at(nrm)), unit(at(across)), unit(at(n))
+        r_half, r_thick, r_t = at(half)[:, 0], at(thick)[:, 0], rows / SEG
+        # 0.1 at the root, where even the strongest strands stay under the 0.15 cut, to full 14 mm along
+        r_alpha = np.clip(0.1 + 0.9 * (at(arc)[:, 0] / 0.014) ** 1.3, 0, 1) if edge else np.ones(len(rows))
         for layer in ((0,) if sleek else (0, 1)):
             k = 1.0 if layer == 0 else 0.65
             shift = 0.0 if layer == 0 else rng.uniform(-0.35, 0.35)
-            lift = (0.0 if layer == 0 else 0.6) * thick + 0.0006 * layer
+            lift = (0.0 if layer == 0 else 0.6) * r_thick + 0.0006 * layer
             u0 = rng.uniform(0, 0.5)
             base = len(verts)
-            for i in range(SEG + 1):
-                c = centre[i] + nrm[i] * lift[i] + across[i] * shift * half[i]
+            for i in range(len(rows)):
+                c = r_centre[i] + r_nrm[i] * lift[i] + r_across[i] * shift * r_half[i]
                 for side in (-1, 1):
-                    verts.append(tuple(c + across[i] * side * half[i] * k))
-                    uvs.append((u0 + (0.5 + 0.5 * side) * 0.5, t[i] * vtip))
-                    normals.append(tuple(n[i]))
-            for i in range(SEG):
+                    verts.append(tuple(c + r_across[i] * side * r_half[i] * k))
+                    uvs.append((u0 + (0.5 + 0.5 * side) * 0.5, r_t[i] * vtip))
+                    normals.append(tuple(r_n[i]))
+                    alphas.append(r_alpha[i])
+            for i in range(len(rows) - 1):
                 a = base + 2 * i
                 faces.append((a, a + 1, a + 3, a + 2))
+            strips += 1
+        edges += edge
     name = f'Hair_{style}_{suffix}'
     me = bpy.data.meshes.new(name)
     me.from_pydata(verts, [], faces)
@@ -203,10 +278,16 @@ for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
         for li in poly.loop_indices:
             uv.data[li].uv = uvs[me.loops[li].vertex_index]
     me.normals_split_custom_set_from_vertices(normals)
+    if sleek:
+        col = me.color_attributes.new(name='Color', type='FLOAT_COLOR', domain='POINT')
+        col.data.foreach_set('color', np.array([(1, 1, 1, a) for a in alphas], np.float32).ravel())
     me.update()
     ob = bpy.data.objects.new(name, me)
     out_objs.append(ob)
-    print('CARDS', name, 'strands', len(R), 'strips', len(faces) // SEG, 'tris', 2 * len(faces))
+    if suffix == 'cards':
+        # the roots and their first steps for the hairline mask (scalp_mask.py), as directions from the skull's centre
+        np.savez(out_p[:-len('.blend')] + '_roots.npz', roots=R[:, 0], dirs=R[:, 1] - R[:, 0], centre=C)
+    print('CARDS', name, 'strands', len(R), 'strips', strips, 'fading in', edges, 'tris', 2 * len(faces))
 
 # the groom's dark cap, and the braid's tie
 cv, cf = world_mesh(bpy.data.objects['Scalp_cap'])
@@ -242,35 +323,16 @@ for i, r in enumerate(rk):
     kr.insert(tuple(r), i)
 kr.balance()
 dens = np.array([len(kr.find_range(tuple(v), 0.008)) for v in cv])
-if SLEEK:
-    # the slick's hairline: strips there stood as teeth on bare skin (Art's game, 2026-11-02). The
-    # whole HD cap gets the fade's dashes, v by root density: sparse at the hairline, a solid pile
-    # under the strips, so the hairline thins out the way fine hairs do
-    Ch = np.array([0.003, -0.008, 1.700])
-    d = cv - Ch
-    az = np.degrees(np.arctan2(d[:, 0], -d[:, 1]))
-    fu = (az + 180) / 360 * 14
-    fv = 0.04 + 0.86 * np.clip(dens / np.median(dens), 0, 1) ** 0.8
-    if style == 'ponytail':
-        # the ponytail's groom has a whorl at the hairline's centre: its strips radiate from there and left a
-        # bare notch under it (fine hairs in HD), so the fade there is a dense pile thinning to the hairline
-        W = np.array([-0.004, -0.0866, 1.758])
-        rw = np.hypot(cv[:, 0] - W[0], cv[:, 2] - W[2])
-        fv = np.where(cv[:, 1] < W[1] + 0.03, np.maximum(fv, 0.85 * np.clip((0.015 - rw) / 0.009, 0, 1)), fv)
-    fp = cv + unit(d) * 0.0004
-    me = bpy.data.meshes.new(f'Hair_{style}_fade'); me.from_pydata([tuple(v) for v in fp], [], cf); me.shade_smooth()
-    uv = me.uv_layers.new(name='UVMap')
-    for poly in me.polygons:
-        us = [fu[me.loops[li].vertex_index] for li in poly.loop_indices]
-        wrap = max(us) - min(us) > 7
-        for li in poly.loop_indices:
-            vi = me.loops[li].vertex_index
-            uv.data[li].uv = (fu[vi] + (14 if wrap and fu[vi] < 7 else 0), fv[vi])
-    me.normals_split_custom_set_from_vertices([tuple(n) for n in unit(d)])
-    me.update()
-    out_objs.append(bpy.data.objects.new(f'Hair_{style}_fade', me))
-    print('FADE', len(fp), 'verts')
+# the slick's and the ponytail's hairline was a layer of the fade's dashes over the whole cap: its sparse end
+# scattered dots on the forehead and its edge read as a brown band, so the head shader paints it now (scalp_mask.py)
 dense = dens >= 0.5 * np.median(dens)
+# and it stays out from under the first 12 mm of the front strips that fade in, where its flat edge showed through
+if fade_paths:
+    ke = np.concatenate(fade_paths); kt = KDTree(len(ke))
+    for i, r in enumerate(ke):
+        kt.insert(tuple(r), i)
+    kt.balance()
+    dense &= np.array([kt.find(tuple(v))[2] > 0.007 for v in cv])
 cf = [f for f in cf if dense[list(f)].all()]
 used = sorted({i for f in cf for i in f}); remap = {o: n for n, o in enumerate(used)}
 cv = cv[used]; cf = [tuple(remap[i] for i in f) for f in cf]

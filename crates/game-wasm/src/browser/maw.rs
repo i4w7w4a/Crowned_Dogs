@@ -19,12 +19,13 @@ impl RustMawLoader {
             &dialog,
             "innerHTML",
             &text(&format!(
-                r#"<div class="cd-maw-inner">
+                r#"<button class="glass cd-maw-back" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg>На базу</button>
+          <div class="cd-maw-inner">
           <div class="cd-maw-stage" aria-hidden="true"><canvas></canvas></div>
-          <div class="cd-maw-hud"><h1 class="cd-maw-word"><img src="{}brand/wordmark.svg" alt="CROWNED DOGS"></h1><p class="cd-maw-tag">PMC · 2051</p>
+          <div class="cd-maw-hud"><h1 class="cd-maw-word"><img src="{}brand/wordmark.svg" alt="CROWNED DOGS"></h1>
             <div class="cd-maw-progress" role="progressbar" aria-label="Загрузка арены"></div>
             <p class="cd-maw-status" role="status">Загрузка арены…</p>
-            <div class="cd-maw-actions"><button class="glass cd-maw-retry" type="button" hidden>Повторить</button><button class="glass cd-maw-back" type="button">На базу</button></div>
+            <div class="cd-maw-actions"><button class="glass cd-maw-retry" type="button" hidden>Повторить</button></div>
           </div></div>"#,
                 string(&host, "base")
             )),

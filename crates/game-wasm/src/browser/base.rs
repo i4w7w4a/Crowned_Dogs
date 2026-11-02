@@ -1046,7 +1046,11 @@ impl Base {
         if !self.active || !self.pace.due(now) {
             return None;
         }
-        super::fps_meter::frame(now);
+        // On the stand the Persona's own loop does the drawing, and the meter follows that one.
+        let metered = !self.staged();
+        if metered {
+            super::fps_meter::frame(now);
+        }
         let mut completed = None;
         if self.view == "base" && self.home_ready {
             let (target, progress) = if let Some((target, start)) = &self.home_motion {
@@ -1143,6 +1147,9 @@ impl Base {
                 call(&self.depth, "draw", &[number(tx * 2.0), number(ty * 2.0)]);
                 call_optional(&self.viewer, "shift", &[number(tx * 0.6), number(ty * 0.6)]);
             }
+        }
+        if metered {
+            super::fps_meter::done();
         }
         completed
     }

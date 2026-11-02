@@ -70,6 +70,9 @@ async function compress(glb: string, out: string): Promise<void> {
     const image = texture.getImage();
     const used = slots(texture);
     if (!image || !used.length || !/^image\/(png|jpeg|webp)$/.test(texture.getMimeType())) continue;
+    // The head masks on the male hair pack's hidden quads (tools/hair-hd/scalp_mask.py) stay PNG: each channel
+    // is another face's mask, which ETC1S would bleed into the others, and the shader reads them without mipmaps.
+    if (texture.listParents().some((p) => p.propertyType === "Material" && /^M_Hair_(Scalp|Line_)/.test(p.getName()))) continue;
     const normal = used.includes("normalTexture");
     const colour = used.some((slot) => /^(baseColor|emissive|sheenColor|specularColor)Texture$/.test(slot));
     const ktx2 = await encodeToKTX2(image, normal

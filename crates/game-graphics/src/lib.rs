@@ -50,7 +50,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             let quality = args["quality"].as_str().unwrap_or("medium");
             // Medium is the phones' default: a coarser march, and the relief casts no shadow on itself.
             let (steps, refine, shadow_steps, texture_size) = match quality {
-                "low" => (0, 0, 0, 512),
+                "minimal" | "low" => (0, 0, 0, 512),
                 "medium" => (16, 4, 0, 1024),
                 "high" => (48, 6, 10, 1024),
                 "ultra" => (72, 7, 10, 1024),

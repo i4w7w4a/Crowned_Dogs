@@ -642,6 +642,31 @@
     "fallAfterLastAttack": 0.45
   },
   "QUALITY": {
+    "minimal": {
+      "id": "minimal",
+      "name": "Минимум",
+      "maxDpr": 0.75,
+      "maxPixels": 200000,
+      "ssaa": 1,
+      "msaa": 0,
+      "shadow": 0,
+      "shadowRadius": 0,
+      "shadowSamples": 0,
+      "taps": 3,
+      "mips": false,
+      "rays": 0,
+      "raysScale": 0.5,
+      "haze": 0,
+      "hazeScale": 0.5,
+      "dofTaps": 1,
+      "dust": 0,
+      "textures": 512,
+      "anisotropy": 1,
+      "env": false,
+      "mirror": false,
+      "sharpBackdrop": false,
+      "compressedTextures": true
+    },
     "low": {
       "id": "low",
       "name": "Низкая",

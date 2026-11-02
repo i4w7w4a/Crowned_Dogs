@@ -6,7 +6,7 @@ use wasm_bindgen::{prelude::*, JsCast, UnwrapThrowExt};
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
 
 const ZONES: [&str; 4] = ["head", "body", "groin", "legs"];
-const QUALITY_IDS: [&str; 4] = ["low", "medium", "high", "ultra"];
+const QUALITY_IDS: [&str; 5] = ["minimal", "low", "medium", "high", "ultra"];
 
 fn id(name: &str) -> JsValue {
     call(&document(), "getElementById", &[name.into()])
@@ -1389,6 +1389,7 @@ fn render_menu(s: &JsValue) {
         }
         "high" => "Для компьютера: дымка с тенями бойцов, текстуры 2К, чёткий фон.",
         "medium" => "Для телефона: мягкие тени, лучи света из окон, пыль в воздухе.",
+        "minimal" => "Для самых слабых телефонов: кадр мельче, до 30 кадров в секунду, без теней, дымки и пыли.",
         _ => "Для слабых телефонов: без теней, дымки и пыли, картинка попроще.",
     };
     text(

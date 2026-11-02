@@ -348,8 +348,8 @@ button:disabled { cursor: default; }
 .vrow input::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
 .seg { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 6px; }
 .seg button { height: 44px; padding: 0 2px; font: 500 14px/1.1 var(--body); color: rgba(236,232,223,.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* five in a row (time, weather): a size smaller, so «По часам» keeps some air on the light fill */
-@container style(--n: 5) { .seg button { font-size: 13px; letter-spacing: -.01em; } }
+/* five in a row (time, weather, graphics): smaller, so «По часам» and «Минимум» fit a phone's width */
+@container style(--n: 5) { .seg button { font-size: 12px; letter-spacing: -.02em; } }
 /* each map shows its own hour and weather under its name */
 #mapSeg button { height: 52px; }
 #mapSeg button small { display: block; margin-top: 3px; font: 400 11px/1.2 var(--body); color: rgba(236,232,223,.55); overflow: hidden; text-overflow: ellipsis; }

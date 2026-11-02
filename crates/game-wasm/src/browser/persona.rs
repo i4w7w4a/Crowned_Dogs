@@ -754,7 +754,7 @@ fn configure_quality(s: &JsValue) {
 /// fill on the stand, or the bay's top light and two rims in creation. The sky light, nearly
 /// free, grows to cover the fills that go out.
 fn fit_lights(s: &JsValue) {
-    let low = string(&get(s, "quality"), "id") == "low";
+    let low = matches!(string(&get(s, "quality"), "id").as_str(), "minimal" | "low");
     let creating = yes(s, "creating");
     let fills = Array::from(&get(s, "fills"));
     for (i, light) in fills.iter().enumerate() {
@@ -1027,8 +1027,9 @@ fn creation_loop(s: &JsValue) {
     }
     set(s, "looping", &flag(true));
     set(s, "loopLast", &num(now()));
-    // The bay breathes slowly: 60 frames a second are plenty even on a 120 Hz phone.
-    loop_frame(s, Rc::new(RefCell::new(super::arena::FramePace::new(13.0))));
+    // The bay breathes slowly: 60 frames a second are plenty even on a 120 Hz phone, 30 on minimal.
+    let target = if string(s, "quality.id") == "minimal" { 30.0 } else { 13.0 };
+    loop_frame(s, Rc::new(RefCell::new(super::arena::FramePace::new(target))));
 }
 fn loop_frame(s: &JsValue, pace: Rc<RefCell<super::arena::FramePace>>) {
     let a = s.clone();
@@ -1072,6 +1073,7 @@ fn loop_frame(s: &JsValue, pace: Rc<RefCell<super::arena::FramePace>>) {
             );
             aim(&a);
             call(&renderer, "render", &[get(&a, "scene"), get(&a, "camera")]);
+            super::fps_meter::done();
             loop_frame(&a, pace.clone());
         })],
     );
