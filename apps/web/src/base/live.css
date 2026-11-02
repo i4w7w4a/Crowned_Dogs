@@ -1,0 +1,124 @@
+/* Live base screens on the high and ultra qualities (Art 2026-11-02): crates/game-wasm/src/browser/live.rs
+   marks the page with .cd-live and scatters the dust. Nearly everything moves by transform and opacity,
+   so the compositor carries it; nothing here runs on the lower qualities or with reduced motion.
+   Entrances use fill-mode backwards: the travel fade (.cd-travelling) keeps its own opacity after them. */
+.cd-motes { display: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Dust in the lamp light: specks drift up and sideways, now and then a big soft fleck out of focus. */
+  :root.cd-live .cd-motes { display: block; position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+  :root.cd-live .cd-creating > .cd-motes { display: none; }
+  .cd-motes i { position: absolute; width: var(--s); height: var(--s); border-radius: 50%; opacity: 0;
+    background: radial-gradient(circle, rgba(238,242,240,.95), rgba(238,242,240,0) 70%); animation: cd-mote var(--d) linear var(--t) infinite; }
+  .cd-motes i.b { background: radial-gradient(circle, rgba(222,232,235,.32), rgba(222,232,235,.1) 48%, rgba(222,232,235,0) 70%); }
+  @keyframes cd-mote {
+    0% { opacity: 0; transform: translate(0, 0); }
+    18% { opacity: var(--o); }
+    50% { transform: translate(calc(var(--dx) * .5 + 8px), calc(var(--dy) * .5)); }
+    82% { opacity: var(--o); }
+    100% { opacity: 0; transform: translate(var(--dx), var(--dy)); }
+  }
+  /* The hall's lamps dip for a blink every few seconds, each screen on its own beat. */
+  :root.cd-live .cd-motes::before { content: ""; position: absolute; inset: 0; background: #020405; opacity: 0; animation: cd-lamp 9.5s linear infinite; }
+  :root.cd-live .cd-fitting > .cd-motes::before { animation-duration: 13s; animation-delay: -4s; }
+  :root.cd-live .cd-sync > .cd-motes::before { animation-duration: 11s; animation-delay: -7s; }
+  @keyframes cd-lamp { 0%, 58%, 59.4%, 60.6%, 100% { opacity: 0; } 58.6% { opacity: .2; } 60% { opacity: .12; } }
+
+  /* Home rings: an arc circles each one and a bright core breathes inside; «В бой» runs hotter. */
+  :root.cd-live .cd-shell .cd-tunnel-ring { position: relative; transition: scale .25s cubic-bezier(.2,.8,.2,1); }
+  :root.cd-live .cd-shell .cd-tunnel-ring::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 1.5px solid transparent;
+    border-top-color: rgba(255,255,255,.8); border-right-color: rgba(255,255,255,.2); animation: cd-orbit 4.2s linear infinite; }
+  :root.cd-live .cd-shell .cd-tunnel-ring::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 8px 2px rgba(255,255,255,.55); animation: cd-core 2.6s ease-in-out infinite; }
+  :root.cd-live .cd-to-sync .cd-tunnel-ring::before { animation-direction: reverse; animation-duration: 5.2s; }
+  :root.cd-live .cd-to-persona .cd-tunnel-ring::before { animation-duration: 4.8s; }
+  :root.cd-live .cd-to-region .cd-tunnel-ring::before { animation-direction: reverse; animation-duration: 3.8s; }
+  :root.cd-live .cd-to-persona .cd-tunnel-ring::after { animation-delay: -.9s; }
+  :root.cd-live .cd-to-region .cd-tunnel-ring::after { animation-delay: -1.7s; }
+  :root.cd-live .cd-enter .cd-tunnel-ring::before { inset: -9px; border-bottom-color: rgba(255,255,255,.55); animation-duration: 2.4s; }
+  :root.cd-live .cd-enter .cd-tunnel-ring::after { width: 8px; height: 8px; margin: -4px; animation-duration: 1.6s; }
+  :root.cd-live .cd-enter .cd-tunnel-ring { animation-duration: 1.6s; }
+  @keyframes cd-orbit { to { rotate: 360deg; } }
+  @keyframes cd-core { 50% { scale: .55; opacity: .55; } }
+  @media (hover: hover) { :root.cd-live .cd-shell .cd-tunnel:hover .cd-tunnel-ring { scale: 1.14; } }
+
+  /* A glint runs across the ring labels and the big buttons now and then. */
+  :root.cd-live .cd-shell :is(.cd-tunnel-label, .cd-primary:not(:disabled))::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: linear-gradient(105deg, transparent 38%, rgba(255,255,255,.17) 50%, transparent 62%) no-repeat; background-size: 260% 100%; background-position: 140% 0;
+    animation: cd-glint 7s ease-in-out infinite; }
+  :root.cd-live .cd-to-fitting .cd-tunnel-label::after { animation-delay: .8s; }
+  :root.cd-live .cd-to-sync .cd-tunnel-label::after { animation-delay: 1.6s; }
+  :root.cd-live .cd-to-persona .cd-tunnel-label::after { animation-delay: 2.4s; }
+  :root.cd-live .cd-to-region .cd-tunnel-label::after { animation-delay: 3.2s; }
+  :root.cd-live .cd-shell .cd-primary::after { animation-duration: 6s; animation-delay: 1.2s; }
+  @keyframes cd-glint { 0%, 72% { background-position: 140% 0; } 100% { background-position: -40% 0; } }
+
+  /* The home assembles: logo, the base's name, the rings one after another, the operator line. */
+  :root.cd-live .cd-home .cd-home-header { animation: cd-in-down .6s cubic-bezier(.2,.7,.2,1) .05s backwards; }
+  :root.cd-live .cd-home .cd-home-title .cd-overline { animation: cd-in-fade .5s ease-out .15s backwards; }
+  :root.cd-live .cd-home .cd-home-title h1 { animation: cd-in-title .9s cubic-bezier(.2,.7,.2,1) .12s backwards; }
+  :root.cd-live .cd-home .cd-tunnel { animation: cd-in-ring .55s cubic-bezier(.2,.8,.25,1.2) .3s backwards; }
+  :root.cd-live .cd-home .cd-to-fitting { animation-delay: .38s; }
+  :root.cd-live .cd-home .cd-to-sync { animation-delay: .46s; }
+  :root.cd-live .cd-home .cd-to-persona { animation-delay: .54s; }
+  :root.cd-live .cd-home .cd-to-region { animation-delay: .62s; }
+  :root.cd-live .cd-home .cd-home-bottom { animation: cd-in-up .6s cubic-bezier(.2,.7,.2,1) .4s backwards; }
+  /* Operator on the line: a light by the overline breathes. */
+  :root.cd-live .cd-operator > .cd-overline::before { content: ""; display: inline-block; width: 5px; height: 5px; margin-right: 7px; vertical-align: 1px; border-radius: 50%;
+    background: #9fe3ec; box-shadow: 0 0 6px #73d3e2; animation: cd-online 2.4s ease-in-out infinite; }
+  @keyframes cd-online { 50% { opacity: .3; box-shadow: 0 0 2px #73d3e2; } }
+
+  /* The fitting room: header drops in, the slots slide in from their sides, the footer rises. */
+  :root.cd-live .cd-fitting:not(.cd-creating) .cd-fit-header { animation: cd-in-down .5s cubic-bezier(.2,.7,.2,1) backwards; }
+  :root.cd-live .cd-fitting:not(.cd-creating) .cd-slot-column-0 .cd-slot { animation: cd-in-left .5s cubic-bezier(.2,.7,.2,1) backwards; }
+  :root.cd-live .cd-fitting:not(.cd-creating) .cd-slot-column-1 .cd-slot { animation: cd-in-right .5s cubic-bezier(.2,.7,.2,1) backwards; }
+  :root.cd-live .cd-fitting .cd-slot:nth-child(1) { animation-delay: .1s; }
+  :root.cd-live .cd-fitting .cd-slot:nth-child(2) { animation-delay: .17s; }
+  :root.cd-live .cd-fitting .cd-slot:nth-child(3) { animation-delay: .24s; }
+  :root.cd-live .cd-fitting .cd-slot:nth-child(4) { animation-delay: .31s; }
+  :root.cd-live .cd-fitting:not(.cd-creating) .cd-fit-footer { animation: cd-in-up .55s cubic-bezier(.2,.7,.2,1) .3s backwards; }
+
+  /* The catalogue opens from the button and its cards deal in one by one. */
+  :root.cd-live .cd-dialog.sheet.glass[open] { animation: cd-pop .34s cubic-bezier(.2,.8,.25,1.1); }
+  :root.cd-live .cd-dialog[open] .cd-item-card { animation: cd-in-up .42s cubic-bezier(.2,.7,.2,1) backwards; }
+  :root.cd-live .cd-dialog[open] .cd-item-card:nth-child(2) { animation-delay: .04s; }
+  :root.cd-live .cd-dialog[open] .cd-item-card:nth-child(3) { animation-delay: .08s; }
+  :root.cd-live .cd-dialog[open] .cd-item-card:nth-child(4) { animation-delay: .12s; }
+  :root.cd-live .cd-dialog[open] .cd-item-card:nth-child(5) { animation-delay: .16s; }
+  :root.cd-live .cd-dialog[open] .cd-item-card:nth-child(6) { animation-delay: .2s; }
+  :root.cd-live .cd-dialog[open] .cd-item-card:nth-child(n+7) { animation-delay: .24s; }
+
+  /* The instructor's video link: an interference band rolls down, and the picture jumps once in a while. */
+  :root.cd-live .cd-briefing-portrait { overflow: hidden; }
+  :root.cd-live .cd-briefing-portrait::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 14%; z-index: 1; pointer-events: none;
+    background: linear-gradient(180deg, transparent, rgba(220,235,238,.07) 45%, rgba(220,235,238,.12) 50%, transparent); animation: cd-band 5.5s linear infinite; }
+  :root.cd-live .cd-briefing-portrait img { animation: cd-jump 7s steps(1, end) infinite; }
+  @keyframes cd-band { from { transform: translateY(-100%); } to { transform: translateY(720%); } }
+  @keyframes cd-jump { 0%, 91%, 93.5%, 100% { translate: 0 0; opacity: 1; } 91.5% { translate: 4px 0; opacity: .82; } 92.5% { translate: -3px 1px; opacity: .9; } }
+
+  /* Region map: the header comes down. */
+  :root.cd-live .cd-region:not([hidden]) .cd-region-head { animation: cd-in-down .5s cubic-bezier(.2,.7,.2,1) .1s backwards; }
+
+  /* The loading screen: the maw breathes and the wordmark flickers on like a sign. */
+  :root.cd-live .cd-maw-stage { animation: cd-breath-in 6s ease-in-out infinite; }
+  :root.cd-live .cd-maw-word { animation: cd-sign 1.2s linear .2s backwards; }
+  @keyframes cd-breath-in { 50% { scale: 1.018; } }
+  @keyframes cd-sign { 0% { opacity: 0; } 12% { opacity: .8; } 18% { opacity: .1; } 30% { opacity: .9; } 36% { opacity: .35; } 52%, 100% { opacity: 1; } }
+
+  /* Small touches under the pointer. */
+  @media (hover: hover) {
+    :root.cd-live .cd-settings svg { transition: rotate .4s cubic-bezier(.2,.8,.2,1); }
+    :root.cd-live .cd-settings:hover svg { rotate: 90deg; }
+    :root.cd-live .cd-shell .cd-back-arrow, :root.cd-live .cd-shell .cd-region-back svg { transition: translate .25s cubic-bezier(.2,.8,.2,1); }
+    :root.cd-live .cd-shell :is(.cd-back, .cd-region-back):hover :is(.cd-back-arrow, svg) { translate: -3px 0; }
+  }
+
+  @keyframes cd-in-up { from { opacity: 0; translate: 0 16px; } }
+  @keyframes cd-in-down { from { opacity: 0; translate: 0 -12px; } }
+  @keyframes cd-in-left { from { opacity: 0; translate: -22px 0; } }
+  @keyframes cd-in-right { from { opacity: 0; translate: 22px 0; } }
+  @keyframes cd-in-fade { from { opacity: 0; } }
+  @keyframes cd-in-title { from { opacity: 0; letter-spacing: .34em; filter: blur(6px); } }
+  @keyframes cd-in-ring { from { opacity: 0; scale: .3; } 70% { opacity: 1; } }
+  @keyframes cd-pop { from { opacity: 0; scale: .94; translate: 0 10px; } }
+}

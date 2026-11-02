@@ -3,7 +3,7 @@ use super::{
     base_region::{self, Region},
     capsule, creation,
     dom_support::*,
-    platform,
+    live, platform,
     scroll::BrowserScroll,
 };
 use js_sys::{Array, Promise};
@@ -118,6 +118,10 @@ impl Base {
         }
         let was = std::mem::replace(&mut self.view, view.into());
         hidden(&self.home, view != "base");
+        if view == "base" {
+            live::scramble(&query(&self.home, ".cd-home-title h1"));
+            live::scramble(&query(&self.home, ".cd-callsign"));
+        }
         hidden(&query(&self.root, ".cd-sync"), view != "sync");
         if view == "sync" {
             self.render_sync(None);
@@ -1250,6 +1254,8 @@ impl BrowserBase {
     pub fn new(root: JsValue, on_battle: JsValue, host: JsValue) -> Result<Self, JsValue> {
         set(&root, "className", &js("cd-shell"));
         html(&root, &initial(&host));
+        live::mark(&platform::quality_id());
+        live::dress(&root);
         let home = query(&root, ".cd-home");
         let fitting = query(&root, ".cd-fitting");
         let canvas = query(&root, ".cd-persona-canvas");

@@ -203,6 +203,7 @@ pub fn start_quality(gl: JsValue) -> JsValue {
 #[wasm_bindgen]
 pub fn keep_quality(id: &str) {
     store_set("cd-quality", id);
+    super::live::mark(id);
 }
 thread_local! {
     static GPU_NAME: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
@@ -254,6 +255,10 @@ fn picked() -> JsValue {
     };
     PICKED.with(|c| *c.borrow_mut() = Some(quality.clone()));
     quality
+}
+/// The id of the quality picked for this device (empty without a page).
+pub fn quality_id() -> String {
+    string(&get(&picked(), "id"))
 }
 /// Whether this device gets the double-size painted backgrounds: its quality draws the arena's backdrop sharp.
 pub fn sharp_pictures() -> bool {
