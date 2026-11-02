@@ -129,6 +129,7 @@ body { margin: 0; }
 .cd-sound-toggle[aria-pressed="true"] b::after { left: 21px; background: #111212; }
 
 .cd-set-label { margin: 6px 0 0; font-size: 13px; opacity: .7; }
+.cd-set-note { margin: -4px 4px 0; font-size: 12px; line-height: 1.35; opacity: .6; overflow-wrap: anywhere; }
 .cd-set-seg { display: flex; flex-wrap: wrap; gap: 6px; }
 .cd-set-seg button { flex: 1 1 auto; min-height: 38px; padding: 0 10px; color: #fff; border-radius: 12px; }
 
