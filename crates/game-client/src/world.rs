@@ -96,11 +96,6 @@ fn region_of(map: &str) -> String {
         .unwrap_or_else(|| "belyYar".into())
 }
 
-/// The region's home map: always open, where a shut map sends the player back.
-pub fn home(map: &str) -> String {
-    region_maps(&region_of(map)).swap_remove(0)
-}
-
 fn listed(list: &Value, id: &str) -> bool {
     list.as_array()
         .is_some_and(|l| l.iter().any(|v| text(v) == id))
@@ -190,11 +185,6 @@ fn next_change(
         let then = closure(map, region, start);
         (then.is_some() != now.is_some()).then_some((start, then))
     })
-}
-
-/// Whether the player may fight on `map` at real time `ms`.
-pub fn open(ms: f64, map: &str) -> bool {
-    closure(map, &region_of(map), ms / DAY_MS * DAY_MINUTES).is_none()
 }
 
 /// A map's name, drawn or still planned.
@@ -469,8 +459,8 @@ mod tests {
                 assert!(w["changeInMs"].is_null());
             }
         }
-        assert_eq!(home("dryBed"), "dam");
-        assert_eq!(home("railyard"), "saltHall");
+        assert_eq!(at(0.0, "dam")["home"], true);
+        assert_eq!(at(0.0, "railyard")["home"], false);
         assert_eq!(at(0.0, "railyard")["mapName"], "Сортировка");
     }
 

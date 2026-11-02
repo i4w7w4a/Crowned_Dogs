@@ -1212,20 +1212,14 @@ fn segment(name: &str, count: usize) -> JsValue {
     );
     el
 }
-fn option(
-    parent: &JsValue,
-    content: &str,
-    selected: bool,
-    action: impl FnMut(JsValue) + 'static,
-) -> JsValue {
+fn option(parent: &JsValue, content: &str, selected: bool, action: impl FnMut(JsValue) + 'static) {
     let b = call(&document(), "createElement", &["button".into()]);
     set(&b, "type", &"button".into());
     set(&b, "className", &"glass".into());
     html(&b, content);
     attr(&b, "aria-pressed", if selected { "true" } else { "false" });
     listen(&b, "click", action);
-    call(parent, "appendChild", &[b.clone()]);
-    b
+    call(parent, "appendChild", &[b]);
 }
 /// The game clock picks the map's hour and weather. Address keys (`time`,
 /// `weather`, `frame`, `map`, `cal`) pin them for checks and screenshots; the
@@ -1452,8 +1446,9 @@ fn render_menu(s: &JsValue) {
         let c = clock_of(&wanted);
         let left = number(&c, "changeInMs");
         let shut = get(&c, "open") == JsValue::FALSE;
-        // A shut map says why and for how long; an open one warns five minutes
-        // before the clock shuts it.
+        // The map buttons are a debug tool like the weapon picker (Art), so a
+        // shut map still opens; it says why and for how long, and an open one
+        // warns five minutes before the clock shuts it.
         let note = if shut {
             format!(
                 "<small class=\"shut\">{} · ещё {}</small>",
@@ -1475,7 +1470,7 @@ fn render_menu(s: &JsValue) {
             )
         };
         let state = s.clone();
-        let button = option(
+        option(
             &ms,
             &format!("{}{note}", word(&choice, "name")),
             current,
@@ -1485,7 +1480,6 @@ fn render_menu(s: &JsValue) {
                 }
             },
         );
-        set(&button, "disabled", &(shut && !current).into());
     }
     let c = clock_of(&current_map);
     hide(&id("frameLabel"), false);
