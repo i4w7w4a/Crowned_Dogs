@@ -4,7 +4,7 @@ import { tune } from "../arena/materials.ts";
 import type { Quality, QualityId } from "../arena/quality.ts";
 
 interface ReliefProgram { common: string; trace: string; normal: string; version: string }
-interface ReliefQuality { steps: number; refine: number; textureSize: number; enabled: boolean }
+interface ReliefQuality { steps: number; refine: number; shadowSteps: number; textureSize: number; enabled: boolean }
 type Compile = (shader: THREE.WebGLProgramParametersWithUniforms) => void;
 const reliefHooks = new WeakMap<THREE.Material, { compile: Compile; key: string; quality: (id: QualityId) => void }>();
 
@@ -53,7 +53,7 @@ export function silhouetteDeck(source: THREE.MeshStandardMaterial, radius: numbe
   const uniforms = {
     cdPomRelief: { value: source.bumpMap }, cdPomSize: { value: new THREE.Vector2(radius, height / 2) },
     cdPomCameraLocal: { value: new THREE.Vector3() }, cdPomRayLocal: { value: new THREE.Vector3() },
-    cdPomOrthographic: { value: false }, cdPomSteps: { value: 28 }, cdPomRefine: { value: 5 }, cdPomTexel: { value: 1 / 1024 },
+    cdPomOrthographic: { value: false }, cdPomSteps: { value: 28 }, cdPomRefine: { value: 5 }, cdPomShadowSteps: { value: 10 }, cdPomTexel: { value: 1 / 1024 },
     cdPomModelView: { value: new THREE.Matrix4() }, cdPomModelWorld: { value: new THREE.Matrix4() },
     cdPomProjection: { value: new THREE.Matrix4() }, cdPomNormalMatrix: { value: new THREE.Matrix3() },
     cdPomViewToLocal: { value: new THREE.Matrix3() },
@@ -126,7 +126,7 @@ uniform mat4 spotLightMatrix[NUM_SPOT_LIGHT_COORDS];
   const setQuality = (quality: QualityId): void => {
     const selected = callRust<ReliefQuality>("graphics.pomQuality", { quality });
     mesh.visible = selected.enabled; fallback.visible = !selected.enabled;
-    uniforms.cdPomSteps.value = selected.steps; uniforms.cdPomRefine.value = selected.refine;
+    uniforms.cdPomSteps.value = selected.steps; uniforms.cdPomRefine.value = selected.refine; uniforms.cdPomShadowSteps.value = selected.shadowSteps;
     group.userData.reliefQuality = quality;
     group.userData.reliefEnabled = selected.enabled;
   };

@@ -11,7 +11,7 @@ c = tone(n) + c * (1.0 - n.a);
     c = mix(c, cdDustColor * (0.88 + 0.12 * roll), clamp(surge * (0.3 + 0.25 * roll) * n.a, 0.0, 0.6));
     // out-of-focus specks: a few stuck on the glass, more blown past in a gust
     float specks = 0.0;
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < CD_WX_LAYERS - 1; i++) {
       float fi = float(i);
       vec2 g = q * (7.0 + fi * 6.0);
       g.x -= wt * fi * 2.6;
@@ -37,18 +37,23 @@ c = tone(n) + c * (1.0 - n.a);
     float wet = cdWeather2.z;
     vec3 drop = wxDrops(q, 4.5, wt, 1.0, 0.4 * wet);
     vec3 d2 = wxDrops(q, 10.0, wt, 7.0, 0.5 * wet);
-    vec3 d3 = wxDrops(q, 23.0, wt, 13.0, 0.55 * wet);
     vec3 sl = wxSlide(q, 7.0, wt, 21.0);
     if (d2.z > drop.z) drop = d2;
+#ifndef CD_WX_LITE
+    vec3 d3 = wxDrops(q, 23.0, wt, 13.0, 0.55 * wet);
     if (d3.z > drop.z) drop = d3;
+#endif
     if (sl.z > drop.z) drop = sl;
     // wet metal and gloves: a little darker, with beads that catch the light
-    vec2 bq = q * 70.0;
-    vec2 bd = (fract(bq) - 0.25 - 0.5 * vec2(wxHash(floor(bq) + 2.0), wxHash(floor(bq) + 3.0))) / (0.12 + 0.16 * wxHash(floor(bq) + 4.0));
-    float bead = step(0.88, wxHash(floor(bq) + 5.0)) * smoothstep(1.0, 0.3, length(bd));
     float lit = dot(c, vec3(0.3, 0.5, 0.2));
     c *= 1.0 - 0.14 * wet * n.a;
-    c += vec3(0.9, 0.94, 1.0) * bead * n.a * wet * (0.5 * lit + 0.05 + 0.8 * cdWeather.w);
+    vec2 bq = q * 70.0;
+    // beads sit only on the gun and the hands, and in one cell of eight
+    if (n.a > 0.0 && wxHash(floor(bq) + 5.0) >= 0.88) {
+      vec2 bd = (fract(bq) - 0.25 - 0.5 * vec2(wxHash(floor(bq) + 2.0), wxHash(floor(bq) + 3.0))) / (0.12 + 0.16 * wxHash(floor(bq) + 4.0));
+      float bead = smoothstep(1.0, 0.3, length(bd));
+      c += vec3(0.9, 0.94, 1.0) * bead * n.a * wet * (0.5 * lit + 0.05 + 0.8 * cdWeather.w);
+    }
     if (drop.z > 0.001) {
       vec2 s = drop.xy / drop.z;
       float l2 = min(dot(s, s), 1.0);

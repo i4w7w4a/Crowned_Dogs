@@ -108,6 +108,8 @@ impl RustPersonaViewer {
         set(&key, "shadow.bias", &num(-0.00015));
         set(&key, "shadow.normalBias", &num(0.014));
         call(&scene, "add", &[key.clone(), get(&key, "target")]);
+        // The front fill, the back fill and the two warm points; `fit_lights` thins them on low.
+        let fills = Array::new();
         for (color, power, pos) in [
             (0xc7ccd0, 0.85, [2.4, 1.9, 2.1]),
             (0xe8eef2, 2.0, [1.4, 2.7, -1.8]),
@@ -118,7 +120,8 @@ impl RustPersonaViewer {
                 &[num(color as f64), num(power)],
             );
             call(&get(&light, "position"), "fromArray", &[floats(&pos)]);
-            call(&scene, "add", &[light]);
+            call(&scene, "add", &[light.clone()]);
+            fills.push(&light);
         }
         for x in [-1.3, 1.3] {
             let light = make(
@@ -131,8 +134,10 @@ impl RustPersonaViewer {
                 "set",
                 &[num(x), num(0.65), num(0.25)],
             );
-            call(&scene, "add", &[light]);
+            call(&scene, "add", &[light.clone()]);
+            fills.push(&light);
         }
+        set(&s, "fills", &fills);
         Self { state: s }
     }
     #[wasm_bindgen(getter,js_name=previewDescription)]
@@ -742,7 +747,27 @@ fn configure_quality(s: &JsValue) {
             JsValue::NULL
         },
     );
+    fit_lights(s);
     tune(s, &get(s, "scene"));
+}
+/// Every light costs each lit pixel a full shading pass, so low keeps four: the key, the back
+/// fill on the stand, or the bay's top light and two rims in creation. The sky light, nearly
+/// free, grows to cover the fills that go out.
+fn fit_lights(s: &JsValue) {
+    let low = string(&get(s, "quality"), "id") == "low";
+    let creating = yes(s, "creating");
+    let fills = Array::from(&get(s, "fills"));
+    for (i, light) in fills.iter().enumerate() {
+        // 0 front fill, 1 back fill (the bay's rims stand in for it), 2 and 3 warm points.
+        set(&light, "visible", &flag(!low || (i == 1 && !creating)));
+    }
+    let lift = get(s, "bayParts.lift");
+    if exists(&lift) {
+        set(&lift, "visible", &flag(!low));
+    }
+    if low {
+        set(&get(s, "hemisphere"), "intensity", &num(if creating { 2.3 } else { 1.6 }));
+    }
 }
 fn anisotropy(s: &JsValue) -> f64 {
     let caps = get(s, "renderer.capabilities");
@@ -1024,6 +1049,7 @@ fn loop_frame(s: &JsValue, pace: Rc<RefCell<super::arena::FramePace>>) {
                 loop_frame(&a, pace.clone());
                 return;
             }
+            super::fps_meter::frame(stamp.as_f64().unwrap_or_else(now));
             let time = now();
             let dt = ((time - number(&a, "loopLast")) / 1000.0).clamp(0.0, 0.1);
             set(&a, "loopLast", &num(time));
@@ -1137,6 +1163,7 @@ fn crown(h: &JsValue, figure: &JsValue) -> f64 {
 fn show_stand(s: &JsValue) {
     let on = !yes(s, "creating");
     super::bay::show(s, !on);
+    fit_lights(s);
     set(&get(s, "stage.fixed"), "visible", &flag(on));
     let keep = [
         get(s, "figure"),

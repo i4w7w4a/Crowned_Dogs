@@ -48,15 +48,16 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
         "graphics.surfaceProfile" => Ok(surface::profile(&args)),
         "graphics.pomQuality" => {
             let quality = args["quality"].as_str().unwrap_or("medium");
-            let (steps, refine, texture_size) = match quality {
-                "low" => (0, 0, 512),
-                "medium" => (28, 5, 1024),
-                "high" => (48, 6, 1024),
-                "ultra" => (72, 7, 1024),
+            // Medium is the phones' default: a coarser march, and the relief casts no shadow on itself.
+            let (steps, refine, shadow_steps, texture_size) = match quality {
+                "low" => (0, 0, 0, 512),
+                "medium" => (16, 4, 0, 1024),
+                "high" => (48, 6, 10, 1024),
+                "ultra" => (72, 7, 10, 1024),
                 _ => return Err(format!("Unknown graphics quality: {quality}")),
             };
             Ok(
-                json!({"steps":steps, "refine":refine, "textureSize":texture_size, "enabled":steps > 0}),
+                json!({"steps":steps, "refine":refine, "shadowSteps":shadow_steps, "textureSize":texture_size, "enabled":steps > 0}),
             )
         }
         "graphics.weaponVisibility" => {

@@ -8,6 +8,7 @@ uniform vec3 cdPomRayLocal;
 uniform bool cdPomOrthographic;
 uniform int cdPomSteps;
 uniform int cdPomRefine;
+uniform int cdPomShadowSteps;
 uniform float cdPomTexel;
 uniform mat4 cdPomModelView;
 uniform mat4 cdPomModelWorld;
@@ -87,10 +88,12 @@ bool cdPomIntersect(vec3 surface, vec3 ray, out vec3 hit) {
 // Relief-scale occlusion supplements the ordinary shadow map; large shadows still
 // come from Three's actual scene lights and are received at the corrected point.
 float cdPomLightVisibility(vec3 viewDirection) {
+    if (cdPomShadowSteps == 0) return 1.0;
     vec3 direction = normalize(cdPomViewToLocal * viewDirection);
     vec3 origin = cdPomHit + cdPomNormal(cdPomHit) * 0.00035;
     float distance = 0.00065;
     for (int i = 0; i < 10; ++i) {
+        if (i >= cdPomShadowSteps) break;
         vec3 p = origin + direction * distance;
         if (p.y > cdPomSize.y || length(p.xz) > cdPomSize.x) break;
         if (cdPomField(p) < -0.00008) return 0.12;

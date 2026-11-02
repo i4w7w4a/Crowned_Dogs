@@ -895,10 +895,15 @@ impl LensState {
             && present(&self.quality)
             && string(&get(&self.quality, "id")) != "low";
         let weather = self.weather_on();
+        // Low draws the weather with fewer layers of noise, rain and drops.
+        let lite = weather
+            && present(&self.quality)
+            && string(&get(&self.quality, "id")) == "low";
         let features = u8::from(self.night_vision)
             | (u8::from(heat) << 1)
             | (u8::from(self.sun_glare) << 2)
-            | (u8::from(weather) << 3);
+            | (u8::from(weather) << 3)
+            | (u8::from(lite) << 4);
         if weather {
             self.weather_uniforms();
         }
@@ -974,6 +979,14 @@ impl LensState {
             fragment = fragment.replace("gl_FragColor = vec4(c, max(a, n.a));", "vec2 glareDelta = (vUv - cdGlareSun) * vec2(bgSize.x / max(bgSize.y, 1.0), 1.0);\n  float glare = exp(-length(glareDelta) * 5.5);\n  c += vec3(1.0, 0.83, 0.62) * glare * 0.14;\n  gl_FragColor = vec4(c, max(a, n.a));");
         }
         if weather {
+            declarations.push_str(if lite {
+                "#define CD_WX_LITE
+#define CD_WX_LAYERS 2
+"
+            } else {
+                "#define CD_WX_LAYERS 3
+"
+            });
             declarations.push_str(include_str!("shaders/weatherCommon.glsl"));
             fragment = fragment.replace(
                 "vec4 n = smoothRead(tNear, vUv, nearSize);",

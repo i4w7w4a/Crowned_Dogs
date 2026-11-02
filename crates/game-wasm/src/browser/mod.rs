@@ -12,6 +12,7 @@ pub mod capsule;
 pub mod collapse;
 pub mod dom_support;
 pub mod first_person;
+pub mod fps_meter;
 pub mod held_effects;
 pub mod home_stage;
 pub mod hud;
