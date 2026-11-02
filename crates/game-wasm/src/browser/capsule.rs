@@ -144,7 +144,7 @@ pub fn markup(before: Option<&Value>) -> String {
     };
     let mut out = format!(
         "<div class=\"cd-tab-in{boot}\">\
-         <div class=\"cd-tab-bar\"><span>Капсула · ложемент 2</span><span class=\"cd-tab-live\"><i></i>Связь с Персоной</span></div>\
+         <div class=\"cd-tab-bar\"><span class=\"cd-tab-live\"><i></i>Связь с Персоной</span></div>\
          <section class=\"cd-tab-hero cd-tab-part\" style=\"--i:0\">\
          <div class=\"cd-sync-ring\" style=\"--p:{progress:.3}\" role=\"img\" aria-label=\"Уровень {level}\"><svg viewBox=\"0 0 120 120\" aria-hidden=\"true\">\
          <circle class=\"cd-ring-ticks\" cx=\"60\" cy=\"60\" r=\"57\" pathLength=\"120\"/><circle class=\"cd-sync-track\" cx=\"60\" cy=\"60\" r=\"48\"/>\
@@ -169,7 +169,7 @@ pub fn markup(before: Option<&Value>) -> String {
     let was = shape(old.as_ref());
     let delay = if boot { 0.7 } else { 0.0 };
     let total = delay + 0.8;
-    out.push_str("<section class=\"cd-tab-radar cd-tab-part\" style=\"--i:1\"><i class=\"cd-radar-sweep\"></i><svg viewBox=\"0 0 200 200\" aria-hidden=\"true\"><g class=\"cd-radar-grid\">");
+    out.push_str("<section class=\"cd-tab-radar cd-tab-part\" style=\"--i:1\"><svg viewBox=\"0 0 200 200\" aria-hidden=\"true\"><g class=\"cd-radar-grid\">");
     for k in 1..=4 {
         let r = 78.0 * k as f64 / 4.0;
         out.push_str(&format!(
