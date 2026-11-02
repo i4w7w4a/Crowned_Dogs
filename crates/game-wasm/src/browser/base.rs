@@ -1046,6 +1046,7 @@ impl Base {
         if !self.active || !self.pace.due(now) {
             return None;
         }
+        super::fps_meter::frame(now);
         let mut completed = None;
         if self.view == "base" && self.home_ready {
             let (target, progress) = if let Some((target, start)) = &self.home_motion {

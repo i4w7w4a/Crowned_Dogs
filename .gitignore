@@ -6,6 +6,7 @@ data/
 apps/web/public/media/
 apps/web/public/models/
 apps/web/dist/
+apps/web/.ktx2/
 __pycache__/
 target/
 release-local/

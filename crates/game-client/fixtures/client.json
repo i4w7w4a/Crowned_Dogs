@@ -664,7 +664,8 @@
       "anisotropy": 1,
       "env": false,
       "mirror": false,
-      "sharpBackdrop": false
+      "sharpBackdrop": false,
+      "compressedTextures": true
     },
     "medium": {
       "id": "medium",
@@ -688,7 +689,8 @@
       "anisotropy": 4,
       "env": true,
       "mirror": false,
-      "sharpBackdrop": false
+      "sharpBackdrop": false,
+      "compressedTextures": true
     },
     "high": {
       "id": "high",
@@ -712,7 +714,8 @@
       "anisotropy": 8,
       "env": true,
       "mirror": true,
-      "sharpBackdrop": true
+      "sharpBackdrop": true,
+      "compressedTextures": false
     },
     "ultra": {
       "id": "ultra",
@@ -736,7 +739,8 @@
       "anisotropy": 16,
       "env": true,
       "mirror": true,
-      "sharpBackdrop": true
+      "sharpBackdrop": true,
+      "compressedTextures": false
     }
   },
   "ZONE_TO": {
