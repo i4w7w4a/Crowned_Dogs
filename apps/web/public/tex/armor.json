@@ -1,0 +1,14 @@
+{
+ "sizes": [
+  2048,
+  4096
+ ],
+ "materials": {
+  "M_Vest": "tex/armor/M_Vest",
+  "M_Helmet": "tex/armor/M_Helmet",
+  "M_Cap": "tex/armor/M_Cap",
+  "M_Boots": "tex/armor/M_Boots",
+  "M_Sfera": "tex/armor/M_Sfera",
+  "M_Plita4": "tex/armor/M_Plita4"
+ }
+}

@@ -1,0 +1,605 @@
+// Behavioral parity for the Rust render graph. No WebGL/audio device is opened.
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
+import ts from "typescript";
+import * as Three from "three";
+import { RustArena, RustLens, RustTextureTiers, RustProjectedStage, callRust, motionCompute } from "../packages/runtime/src/index.ts";
+
+const root = resolve(import.meta.dirname, "..");
+const shaders = { ...await import(pathToFileURL(resolve(root, "crates/game-wasm/reference/browser/lens-shaders.ts")).href) };
+// Shader changes made on purpose after the oracle was frozen, as [shader, oracle text, current text].
+// 2 Nov 2026: depth is read soft through its mips (a projected stage's proxy boxes cut halos into
+// fog and blur), and the edge smear is half white with a per-pixel start (a camouflage net split
+// into rainbow copies).
+const revisions = [
+  ["composeShader", `float coc(vec2 uv) {
+  float d = focusInv - texture(tDepth, uv).r * 1.25;`, `// A blurred read of the depth: a projected stage's proxy boxes would otherwise cut
+// hard lines into the blur and the weather (painted depth maps have no mips and stay sharp).
+float softInv(vec2 uv, float spread) {
+  return textureLod(tDepth, uv, log2(max(1.0, float(textureSize(tDepth, 0).y) * spread))).r * 1.25;
+}
+float coc(vec2 uv) {
+  float d = focusInv - softInv(uv, 0.012);`],
+  ["hazeShader", "texture(tDepth, vUv).r * 1.25", "textureLod(tDepth, vUv, log2(max(1.0, float(textureSize(tDepth, 0).y) * 0.04))).r * 1.25"],
+  ["lensShader", `    float lod = log2(max(1.0, max(span, r * outSize.y * 1.5)) * ssaa);
+`, `    float lod = log2(max(1.0, max(span * 2.0, r * outSize.y * 1.5)) * ssaa);
+    // each pixel starts its taps at its own offset, so a busy pattern near the edge (a camouflage
+    // net, sandbags) does not break into rows of copies
+    float jitter = ign(gl_FragCoord.xy + 17.0);
+`],
+  ["lensShader", `      vec3 w = spectrum(t);
+`, `      // half white: fine detail smears without splitting into red, green and blue copies
+      vec3 w = mix(vec3(1.0), spectrum(t), 0.45);
+      t = (float(i) + jitter) / float(TAPS);
+`],
+  // 2 Nov 2026 (later): no taps means no depth of field, and no lens smear or glow (minimal quality)
+  ["composeShader", `vec3 focused(vec2 uv) {
+  if (hasDepth < 0.5) return painting(uv);`, `vec3 focused(vec2 uv) {
+#if DOF_TAPS < 1
+  return painting(uv); // no depth of field: the hall stays sharp
+#else
+  if (hasDepth < 0.5) return painting(uv);`],
+  ["composeShader", `  return sum / wsum;
+#endif
+}`, `  return sum / wsum;
+#endif
+#endif
+}`],
+  ["lensShader", `  vec4 c;
+  if (amount < 0.0004 && r < 0.0004) {`, `  vec4 c;
+#if TAPS < 1
+  c = clean(src); // no smear: clean glass to the edges, and no glow, which reads the frame's mips
+#else
+  if (amount < 0.0004 && r < 0.0004) {`],
+  ["lensShader", `    c = vec4(sum / wsum, a / float(TAPS));
+  }
+`, `    c = vec4(sum / wsum, a / float(TAPS));
+  }
+#endif
+`],
+  ["lensShader", `  vec3 halo = max(textureLod(tComp, src, 4.5 + glowLod).rgb - 0.55, 0.0) + max(textureLod(tComp, src, 6.0 + glowLod).rgb - 0.5, 0.0);
+  c.rgb += halo * glow * hasBg;
+`, `#if TAPS > 0
+  vec3 halo = max(textureLod(tComp, src, 4.5 + glowLod).rgb - 0.55, 0.0) + max(textureLod(tComp, src, 6.0 + glowLod).rgb - 0.5, 0.0);
+  c.rgb += halo * glow * hasBg;
+#endif
+`],
+];
+for (const [name, from, to] of revisions) {
+  assert.equal(shaders[name].split(from).length, 2, `${name} revision must match the oracle once`);
+  shaders[name] = shaders[name].replace(from, to);
+}
+const quality = callRust("client.data", []).QUALITY;
+let fixtureNumber = 0;
+async function original(file, bindings) {
+  const key = `__renderFixture${++fixtureNumber}`;
+  globalThis[key] = bindings;
+  const source = readFileSync(resolve(root, "crates/game-wasm/reference/browser", file), "utf8");
+  const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+    .replace(/^import .*?;\s*$/gm, "");
+  const module = await import(`data:text/javascript;base64,${Buffer.from(`const { ${Object.keys(bindings).join(",")} } = globalThis.${key};\n${output}`).toString("base64")}`);
+  delete globalThis[key];
+  return module;
+}
+const flush = () => new Promise(resolve => setImmediate(resolve));
+function parity(actual, expected, path = "render") {
+  if (typeof actual === "number" && typeof expected === "number") {
+    assert.ok(Math.abs(actual - expected) <= 1e-12 * Math.max(1, Math.abs(expected)), `${path}: ${actual} != ${expected}`);
+  } else if (actual && expected && typeof actual === "object" && typeof expected === "object") {
+    assert.deepEqual(Object.keys(actual), Object.keys(expected), path);
+    for (const key of Object.keys(actual)) parity(actual[key], expected[key], `${path}.${key}`);
+  } else assert.equal(actual, expected, path);
+}
+function deferred() { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; }
+function fakeCanvas() {
+  return { width: 1, height: 1, getContext() { return {
+    createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}, drawImage() {},
+    getImageData: (_x, _y, w, h) => ({ data: Uint8ClampedArray.from({ length: w * h * 4 }, (_, i) => i % 4 === 3 ? 255 : 210 + i % 40) }),
+  }; } };
+}
+const saved = { document: globalThis.document, location: globalThis.location, devicePixelRatio: globalThis.devicePixelRatio, fetch: globalThis.fetch, window: globalThis.window };
+globalThis.document = { createElement: () => fakeCanvas(), addEventListener() {}, removeEventListener() {}, hidden: false };
+globalThis.location = { search: "" }; globalThis.devicePixelRatio = 1.5; globalThis.window = globalThis;
+
+function normalized(value) {
+  if (value == null || typeof value !== "object") return value;
+  if (value.isTexture) return { texture: value.userData.label ?? "texture", width: value.image?.width, height: value.image?.height };
+  if (value.isColor) return value.toArray();
+  if (value.isVector2 || value.isVector3 || value.isVector4 || value.isMatrix4) return value.toArray();
+  if (Array.isArray(value)) return value.map(normalized);
+  return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalized(v)]));
+}
+function makeHost() {
+  const loads = [], images = [], trace = [], passes = [], targets = [], renderers = [], viewmodels = [];
+  class Timer { update(time = 125) { this.time = time; } connect() {} dispose() {} reset() { this.time = 0; } getDelta() { return 1 / 60; } getElapsed() { return (this.time ?? 125) / 1000; } }
+  class TextureLoader {
+    loadAsync(url) { const request = { url, ...deferred() }; loads.push(request); return request.promise; }
+    load(url, done) { this.loadAsync(url).then(done); }
+  }
+  class ImageLoader { loadAsync(url) { const request = { url, ...deferred() }; images.push(request); return request.promise; } }
+  class RenderTarget extends Three.WebGLRenderTarget {
+    constructor(...args) { super(...args); this.index = targets.length; this.texture.userData.label = `target${this.index}`; targets.push(this); }
+    setSize(w, h) { super.setSize(w, h); trace.push(["size", this.index, w, h]); }
+    dispose() { trace.push(["dispose", this.index]); super.dispose(); }
+  }
+  class Renderer {
+    constructor() { this.extensions = { has: () => true }; this.capabilities = { maxTextureSize: 8192, getMaxAnisotropy: () => 8 }; this.shadowMap = { autoUpdate: true, enabled: true }; this.ratio = 1; this.width = this.height = 1; renderers.push(this); }
+    setClearColor(...args) { trace.push(["clearColor", ...args]); }
+    setRenderTarget(t) { this.target = t; trace.push(["target", t?.index ?? null]); }
+    clear() { trace.push(["clear"]); }
+    render(scene, camera) { this.scene = scene; this.camera = camera; trace.push(["render", camera.layers.mask, this.shadowMap.autoUpdate]); }
+    setPixelRatio(v) { this.ratio = v; }
+    setSize(w, h) { this.width = w; this.height = h; }
+    getDrawingBufferSize(out) { return out.set(Math.floor(this.width * this.ratio), Math.floor(this.height * this.ratio)); }
+    getContext() { return this; }
+    setAnimationLoop(fn) { this.loop = fn; }
+    dispose() { this.disposals = (this.disposals ?? 0) + 1; }
+  }
+  class FullScreenQuad { dispose() {} render(renderer) { passes.push({ target: renderer.target?.index ?? null, shader: this.material.fragmentShader.replaceAll("\r\n", "\n"), defines: { ...this.material.defines }, uniforms: normalized(Object.fromEntries(Object.entries(this.material.uniforms).map(([k, v]) => [k, v.value]))) }); } }
+  class PMREMGenerator { fromEquirectangular(t) { return { texture: t.clone() }; } dispose() {} }
+  const THREE = { ...Three, Timer, TextureLoader, ImageLoader, WebGLRenderTarget: RenderTarget, WebGLRenderer: Renderer, PMREMGenerator };
+  return { THREE, FullScreenQuad, loads, images, trace, passes, targets, renderers, viewmodels };
+}
+function texture(label, width = 512, height = 1024) { const t = new Three.Texture({ width, height }); t.userData.label = label; return t; }
+const look = { smear: .045, soft: .0025, barrel: .07, vignette: .97, glow: .45, contrast: .3, near: 2.5, saturation: .55, tint: 0xf1f4f6, dof: .035, dofNear: .3, rays: .9, haze: .03, hazeColor: 0xdfe6ea };
+
+async function exerciseLens(useRust) {
+  const h = makeHost(), renderer = new h.THREE.WebGLRenderer();
+  const Old = useRust ? null : (await original("lens.ts", { THREE: h.THREE, FullScreenQuad: h.FullScreenQuad, motionCompute, ...shaders })).Lens;
+  const lens = useRust ? new RustLens(h, renderer) : new Old(renderer);
+  lens.setSize(1080, 1920, 720, 1280, { x: .03, y: .1, w: .9, h: .8 });
+  lens.setQuality(quality.medium); lens.setLook(look, 1.05); lens.setHorizon(.4);
+  lens.setBackdrop("hall.jpg", "hall@2x.jpg", "depth.png");
+  // Upgrade while the original image is in flight; the lower-resolution completion is stale.
+  lens.setQuality(quality.ultra);
+  for (const request of h.loads) request.resolve(texture(request.url));
+  await flush();
+  const scene = new Three.Scene(), camera = new Three.PerspectiveCamera(55, 9 / 16, .1, 80);
+  camera.position.set(0, 1.65, 0); camera.updateMatrixWorld(); camera.layers.mask = 5;
+  const light = new Three.DirectionalLight(); light.castShadow = true; light.shadow.map = { depthTexture: texture("shadow") };
+  lens.render(scene, camera, 1, { enemyDepth: 7, light });
+  assert.equal(camera.layers.mask, 5); assert.equal(renderer.shadowMap.autoUpdate, true);
+  assert.equal(lens.dof, look.dof);
+  const screen = Array.from(lens.toScreen(.3, .7));
+  const direction = lens.sunDirection(camera, new Three.Vector3()).toArray();
+  lens.setQuality(quality.low); lens.setBackdrop("next.jpg", undefined, undefined);
+  for (const request of h.loads.filter(r => r.url === "next.jpg")) request.resolve(texture(request.url));
+  await flush();
+  lens.render(scene, camera, 1, { enemyDepth: 1, light });
+  assert.equal(lens.dof, 0); assert.equal(lens.raysTexture, null);
+  return { passes: h.passes, targets: h.targets.map(t => ({ w: t.width, h: t.height, samples: t.samples })), screen, direction };
+}
+
+async function testTextureTiers() {
+  const h = makeHost();
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ sizes: [2048, 4096], materials: { suit: "tex/suit" } }) });
+  const albedo = texture("color", 1024, 1024), orm = texture("orm", 1024, 1024);
+  const material = new Three.MeshStandardMaterial({ map: albedo, roughnessMap: orm, metalnessMap: orm }); material.name = "suit";
+  const root = new Three.Group(); root.add(new Three.Mesh(new Three.BoxGeometry(), material));
+  const tiers = new RustTextureTiers(h, [root, root], "models/persona.glb");
+  const low = tiers.set(512, 2); await low;
+  assert.equal(material.map.image.width, 512); assert.equal(material.roughnessMap, material.metalnessMap); assert.equal(tiers.current, 512);
+  const older = tiers.set(2048, 4); await flush(); const current = tiers.set(4096, 8); await flush();
+  assert.equal(h.images.filter(v => v.url.endsWith("2048.webp")).length, 2);
+  assert.equal(h.images.filter(v => v.url.endsWith("4096.webp")).length, 2);
+  for (const request of h.images.filter(v => v.url.endsWith("4096.webp"))) request.resolve({ width: 4096, height: 4096 });
+  await current;
+  for (const request of h.images.filter(v => v.url.endsWith("2048.webp"))) request.resolve({ width: 2048, height: 2048 });
+  await older;
+  assert.equal(tiers.current, 4096); assert.equal(material.map.image.width, 4096); assert.equal(material.map.anisotropy, 8);
+  assert.equal(material.roughnessMap, material.metalnessMap);
+  const failed = tiers.set(2048, 2); await flush();
+  for (const request of h.images.slice(-2)) request.reject(new Error("missing optional tier"));
+  await failed; assert.equal(tiers.current, 1024); assert.equal(material.map, albedo); assert.equal(material.map.anisotropy, 2);
+}
+
+async function testBattleOptics() {
+  const h = makeHost(), renderer = new h.THREE.WebGLRenderer();
+  const lens = new RustLens(h, renderer);
+  const camera = new Three.PerspectiveCamera(55, 9/16, .1, 80), scene = new Three.Scene();
+  const draw = () => {
+    lens.render(scene, camera, 1, { enemyDepth: 7 });
+    return h.passes.filter(p => p.shader.includes("vec3 RRTAndODTFit")).at(-1);
+  };
+  try {
+    lens.setSize(720, 1280, 720, 1280, { x:0,y:0,w:1,h:1 });
+    lens.setQuality(quality.medium); lens.setLook(look, 1.05);
+    const base = draw().shader;
+    lens.setBattleAtmosphere(true, false, .2, .1);
+    const heat = draw();
+    assert.ok(heat.shader.includes("float distant ="));
+    assert.deepEqual(heat.uniforms.cdHeatDepth.slice(0, 3), [.2,.1,1]);
+    assert.equal(typeof heat.uniforms.cdBattleTime, "number");
+    assert.ok(heat.shader.includes("texture(tFig, vUv)"), "heat never moves fighter samples");
+    lens.setQuality(quality.low); assert.equal(draw().shader, base, "low quality omits heat");
+    lens.setQuality(quality.medium); assert.ok(draw().shader.includes("float distant ="));
+    lens.setBattleAtmosphere(false, true, .2, .1);
+    lens.setWorldSun(new Three.Vector3(.3,.1,-1).normalize());
+    const glare = draw();
+    assert.ok(glare.shader.includes("float glare ="));
+    assert.ok(glare.uniforms.cdGlareSun[0] > .5);
+    assert.ok(!glare.shader.includes("float distant ="));
+    lens.setBattleAtmosphere(false, false, .2, .1);
+    lens.setNightVision(true);
+    const intensified = draw().shader;
+    assert.ok(intensified.includes("vec3 phosphor ="));
+    assert.ok(intensified.includes("toSRGB(max(lin, vec3(0.0)))"),"NVG must receive weak HDR figure and weapon signals before daylight black clipping");
+    assert.ok(!intensified.includes("aces(lin)"),"daylight ACES must not erase faint radiance before intensification");
+    lens.setNightVision(false); assert.equal(draw().shader, base);
+    const restored = draw().uniforms;
+    assert.ok(!("cdGlareSun" in restored)); assert.ok(!("cdHeatDepth" in restored));
+  } finally { lens.dispose(); lens.free(); }
+}
+
+function arenaHost() {
+  const h = makeHost();
+  const events = [];
+  class Motion {
+    constructor() { this.stances = {}; this.gait = null; this.attackKind = null; this.pistolReady = 1; this.planted = true; }
+    arm(gun) { this.gun = gun; this.onHold?.(gun); }
+    walk(kind, phase) { this.gait = kind; events.push(["walk", kind, phase]); }
+    pace(rate) { events.push(["pace", rate]); }
+    attack(kind, when) { this.attackKind = kind; this.pending = kind; events.push(["attack", kind, when]); }
+    update() { if (this.pending) { this.onMark?.(this.pending); this.pending = null; } }
+    settle() {} stand() { this.gait = null; } fall() { this.attackKind = null; }
+    reset() { this.gait = null; this.attackKind = null; }
+  }
+  class Pose { save() {} restore() {} }
+  class Feet { update() {} }
+  class Collapse { begin() {} apply(value) { events.push(["fall", value]); } }
+  class HoldOut { apply() {} support() {} }
+  class Hand {
+    constructor(model, _grip, _steel, opts) { this.mount = new Three.Group(); model.add(this.mount); this.opts = opts; }
+    hold(kind) { events.push(["hold", kind]); }
+    fit(mods) { events.push(["fit", mods]); }
+  }
+  class Flash {
+    constructor() { this.sprite = new Three.Sprite(); this.life = 0; }
+    get parts() { return [this.sprite]; }
+    fire(_hand, size) { this.life = size; this.pending = true; }
+    stop() { this.life = 0; }
+    update(dt) { this.fired = !!this.pending; this.pending = false; this.life = Math.max(0, this.life - dt); return this.life; }
+  }
+  class Viewmodel {
+    constructor() { h.viewmodels.push(this); this.shots = 0; }
+    shot() { this.shots++; }
+    off() { this.active = false; }
+    update(_dt, gun, active, stance) { this.active = gun; this.attack = active; this.stance = stance; }
+  }
+  class Dust { constructor() { this.points = new Three.Points(); } setCount(value) { this.count = value; } update() {} }
+  class Lens {
+    constructor(renderer) { this.renderer = renderer; this.raysTexture = null; this.dof = 0; }
+    setQuality(q) { this.quality = q; } setBackdrop() {} setHorizon() {} setLook() {} setSize() {}
+    toScreen(x, y) { return [x, y]; } sunDirection(_camera, out) { return out.set(0, .5, -1).normalize(); }
+    render(scene, camera) { this.renderer.scene = scene; this.renderer.camera = camera; }
+    dispose() {}
+  }
+  class TextureTiers { async set() {} }
+  const scene = new Three.Group();
+  scene.add(new Three.Mesh(new Three.BoxGeometry(.4, 1.7, .2), new Three.MeshStandardMaterial()));
+  for (const [i, name] of ["head", "top", "neck", "spine", "spine1", "spine2", "hips", "rLeg", "rUpLeg"].entries()) {
+    const bone = new Three.Bone(); bone.name = name; bone.position.set(i * .01, [1.6, 1.75, 1.5, 1, 1.1, 1.3, .85, .3, .7][i], 0); scene.add(bone);
+  }
+  const model = { scene, animations: [new Three.AnimationClip("walk", 1, []), new Three.AnimationClip("run", .5, [])] };
+  Object.assign(h, {
+    Motion, Pose, Feet, Collapse, HoldOut, Flash, Hand, Viewmodel, Dust, Lens, TextureTiers,
+    clone: value => value.clone(true), dress() {}, KIT_A: {}, tune() {}, FALL_TIME: 1.4,
+    armsOnly: () => () => {}, findBones: value => Object.fromEntries(value.children.filter(o => o.isBone).map(o => [o.name, o])),
+    pitch: (bone, angle) => { if (bone) bone.rotation.x += angle; }, gaitOf: () => ({ speed: 1, phase: 0 }),
+    gripOf: () => ({}), loadModel: async () => ({ ...model, scene: model.scene.clone(true) }), loadGuns: async () => ({}),
+    quality: quality.medium, events,
+  });
+  return h;
+}
+const frame = {
+  id: "hall", name: "Hall", src: "hall.jpg", w: 941, h: 1672, top: 0, mapId: "saltHall", time: "day", weather: "clear",
+  cal: { fov: 55, camH: 2, feet: [.572, .608], height: .212, me: { x: -.15, y: .17, z: -.66 }, back: .45, fp: { camH: 1.65, near: .88 } },
+  look: { exposure: 1.05, rim: 0xe8eef2, fill: 0xc7ccd0, fog: 0x8e9497, sky: 0xc3cacd, ground: 0x2b2d2e, puddle: 0, lens: look },
+};
+async function exerciseArena(useRust) {
+  const h = arenaHost();
+  // Muzzle data grew burst sizes per gun after the migration; the frozen arena reads only the flash sizes.
+  const oldRust = (method, args) => {
+    const value = callRust(method, args);
+    return method === "client.arena.data" ? { ...value, muzzle: value.muzzle.size } : value;
+  };
+  const bindings = { ...h, callRust: oldRust, motionCompute, SkeletonUtils: { clone: h.clone }, QUALITY: quality };
+  const Old = useRust ? null : (await original("arena.ts", bindings)).Arena;
+  const arena = useRust ? new RustArena(h, fakeCanvas(), { wide: .62, fpkey: 2.5 }) : new Old(fakeCanvas());
+  arena.setFrame(frame); arena.resize(720, 1280, { x: 0, y: .02, w: 1, h: .95 });
+  arena.resume(); assert.equal(h.renderers[0].loop, undefined);
+  await arena.load("same.glb", "same.glb", 7);
+  for (const request of h.loads) request.resolve(texture(request.url)); await flush();
+  assert.equal(arena.ready, true); assert.equal(typeof h.renderers[0].loop, "function");
+  let callbackFrames = 0;
+  arena.onFrame = () => { arena.zoneOnScreen("head"); callbackFrames++; };
+  arena.arm("me", "rifle", { sight: "a" }); arena.arm("enemy", "pistol", {});
+  arena.setFirstPerson(true); arena.move(5, 1, 1); arena.attack("me", "rifle", .1); arena.attack("enemy", "pistol", .1);
+  for (let i = 0; i < 8; i++) h.renderers[0].loop(1000 + i * 16.7);
+  // A blocked hit shows the «Зонт» dome, not the frozen arena's body spark, so the enemy takes a plain one.
+  arena.hit("enemy", "head", "hit"); arena.hit("me", "body", "blocked");
+  for (let i = 0; i < 3; i++) h.renderers[0].loop(1200 + i * 16.7);
+  arena.fall("enemy"); h.renderers[0].loop(1300);
+  const screen = ["head", "body", "groin", "legs"].map(zone => Array.from(arena.zoneOnScreen(zone)));
+  const renderer = h.renderers[0];
+  // The «Зонт» dome and its sparks, and the living world's strikes, came after the frozen arena.
+  // A hidden mirror figure is no longer posed each frame; it catches up the frame the reflection turns on.
+  const still = o => o.type === "Group" && !o.visible;
+  const snapshot = renderer.scene.children.filter(o => o.name !== "shield" && o.name !== "hazard").map(o => ({
+    type: o.type, position: still(o) ? null : o.position.toArray(), rotation: still(o) ? null : o.rotation.toArray(), scale: o.scale.toArray(), visible: o.visible,
+    // The muzzle light burns at 9x the flash now, not the frozen arena's 6x.
+    intensity: !useRust && o.color?.getHex?.() === 0xffb36b ? o.intensity * 1.5 : o.intensity, color: o.color?.toArray(),
+  }));
+  const projection = renderer.camera.projectionMatrix.toArray();
+  arena.pause(); assert.equal(renderer.loop, null); assert.equal(callbackFrames, 12);
+  arena.setQuality(quality.low); await arena.texturesDone; arena.setFirstPerson(false); arena.reset(7); arena.resume(); renderer.loop(1500); arena.pause();
+  return { screen, snapshot, projection, events: h.events, vm: h.viewmodels.map(v => ({ shots: v.shots, active: v.active, stance: v.stance })) };
+}
+
+// New projected-hall behavior is tested separately from the frozen painted-hall
+// oracle. Keep the original fixture and parity assertions unchanged above.
+function projectedArenaHost(gate = Promise.resolve()) {
+  const h = arenaHost(), stages = [], lenses = [];
+  const flashes = [], PaintedFlash = h.Flash;
+  class TimeFlash extends PaintedFlash {
+    constructor(...args) { super(...args); flashes.push(this); }
+    fire(...args) { this.suppressed = args[4] ?? false; super.fire(...args); }
+  }
+  class ProjectedStage {
+    constructor() { this.ready = false; this.travel = 0; this.directionX = 0; this.moves = []; this.loads = []; this.variants = []; this.disposals = 0; stages.push(this); }
+    load(url, variant) {
+      this.loads.push(url);
+      this.variants.push(variant);
+      return gate.then(() => { if (!this.disposals) this.ready = true; });
+    }
+    setTravel(metres, directionX = 0) { this.travel = metres; this.directionX = directionX; this.moves.push([metres, directionX]); }
+    dispose() { this.disposals++; this.ready = false; }
+  }
+  const PaintedLens = h.Lens;
+  class StageLens extends PaintedLens {
+    constructor(renderer) { super(renderer); this.stage = null; lenses.push(this); }
+    setStage(stage) { this.stage = stage; }
+    setNightVision(enabled) { this.nightVision = enabled; }
+    setBattleAtmosphere(heat, glare) { this.heat = heat; this.glare = glare; }
+  }
+  Object.assign(h, { ProjectedStage, Lens: StageLens, Flash:TimeFlash, stages, lenses, flashes });
+  return h;
+}
+
+async function testProjectedArenaMovement() {
+  const h = projectedArenaHost(), arena = new RustArena(h, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  try {
+    arena.setFrame({ ...frame, id: "hall1" }); arena.resize(720, 1280, { x: 0, y: 0, w: 1, h: 1 });
+    arena.setFirstPerson(true); arena.resume(); await arena.load("same.glb", "same.glb", 7);
+    const stage = h.stages[0], renderer = h.renderers[0];
+    assert.equal(stage.ready, true); assert.equal(h.lenses[0].stage, stage);
+    assert.deepEqual(stage.loads, ["img/battle-stage/manifest.json"]);
+    let ticks = 0;
+    const stepFrames = (count = 180) => { for (let i = 0; i < count; i++) renderer.loop(++ticks * 1000 / 60); };
+    const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
+
+    const walks = () => h.events.filter(event => event[0] === "walk").length;
+    const beforeOwn = walks();
+    arena.move(6, 1, 0); stepFrames();
+    const ownStep = stage.travel;
+    assert.ok(ownStep > .4 && ownStep < .6, `own step must move the world by about half a metre: ${ownStep}`);
+    assert.equal(walks(), beforeOwn, "a stationary opponent must not walk when only our camera advances");
+    assert.ok(stage.moves.some(([m]) => m > 0 && m < ownStep), "world movement must animate through intermediate positions");
+    arena.move(7, -1, 0); stepFrames(); close(stage.travel, 0);
+
+    const beforeEnemy = walks();
+    arena.move(6, 0, 1); stepFrames(); close(stage.travel, 0);
+    assert.ok(walks() > beforeEnemy, "enemy-only motion must animate the opponent without moving the world");
+
+    arena.reset(7); arena.move(4, 3, 0); stepFrames();
+    const rush = stage.travel;
+    assert.ok(rush > 1.2 && rush < 1.5, `first-person rush must travel metres, not centimetres: ${rush}`);
+    arena.setFirstPerson(false); close(stage.travel, rush);
+    arena.setFirstPerson(true); close(stage.travel, rush);
+    arena.reset(7); close(stage.travel, 0);
+
+    // A view change settles an in-flight move once, and only once.
+    arena.move(6, 1, 0); stepFrames(8);
+    assert.ok(stage.travel > 0 && stage.travel < ownStep);
+    arena.setFirstPerson(false); close(stage.travel, ownStep);
+    stepFrames(); arena.setFirstPerson(true); close(stage.travel, ownStep);
+
+    // Equal relative range can still mean both fighters have moved in world space.
+    arena.reset(7); arena.move(7, 1, -1); stepFrames(); close(stage.travel, ownStep);
+    arena.reset(1); arena.move(1, 3, 0); stepFrames(); close(stage.travel, 0);
+
+    arena.dispose(); arena.dispose();
+    assert.equal(stage.disposals, 1); assert.equal(renderer.loop, null); assert.equal(arena.ready, false);
+  } finally { arena.free(); }
+}
+
+async function testProjectedArenaLifecycle() {
+  // Switching to another hall must not wait for a pending optional projection,
+  // and that stale completion must never reattach it to the new hall.
+  const old = deferred(), h = projectedArenaHost(old.promise);
+  const arena = new RustArena(h, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  try {
+    arena.setFrame({ ...frame, id: "hall1" });
+    arena.setFrame({ ...frame, id: "hall2" }); arena.resume();
+    assert.equal(h.lenses[0].stage, null);
+    let finished = false;
+    const loading = arena.load("same.glb", "same.glb", 7).then(() => { finished = true; });
+    await flush(); await flush();
+    assert.equal(finished, true, "the next hall must load independently of stale projection assets");
+    old.resolve(); await loading; await flush();
+    assert.equal(h.lenses[0].stage, null); assert.equal(arena.ready, true);
+  } finally { old.resolve(); arena.free(); }
+
+  const pending = deferred(), dying = projectedArenaHost(pending.promise);
+  const disposed = new RustArena(dying, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  disposed.setFrame({ ...frame, id: "hall1" }); disposed.resume();
+  const late = disposed.load("same.glb", "same.glb", 7);
+  disposed.dispose(); pending.resolve(); await late; await flush();
+  assert.equal(disposed.ready, false); assert.equal(dying.renderers[0].loop, null);
+  assert.equal(dying.stages[0].disposals, 1); assert.equal(dying.stages[0].ready, false);
+  disposed.free(); assert.equal(dying.stages[0].disposals, 1);
+
+  // Optional stage failure keeps the pre-existing painted hall usable.
+  const unavailable = deferred(), fallback = projectedArenaHost(unavailable.promise);
+  const painted = new RustArena(fallback, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  try {
+    painted.setFrame({ ...frame, id: "hall1" }); painted.resume();
+    const loading = painted.load("same.glb", "same.glb", 7);
+    unavailable.reject(new Error("optional projection asset unavailable")); await loading;
+    assert.equal(painted.ready, true); assert.equal(fallback.lenses[0].stage, null);
+    painted.move(6, 1, 0);
+    for (let i = 0; i < 180; i++) fallback.renderers[0].loop(i * 1000 / 60);
+    assert.equal(fallback.stages[0].travel, 0);
+    assert.ok(fallback.events.some(event => event[0] === "walk"), "painted fallback retains its original camera-relative gait");
+  } finally { painted.free(); }
+}
+
+async function testTimePresentation() {
+  const h = projectedArenaHost(), arena = new RustArena(h, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  const variant = { manifest: "img/battle-stage/manifest.json", textures: { clean:"night-clean.webp", equipment:"night.webp" } };
+  const night = { ...frame, id:"hall-night", time:"night", projectedStage:variant,
+    look:{ ...frame.look, lighting:{sky:.21,rim:1.45,fill:.75,key:1.6}, sun:[.1,.3,-1] } };
+  const match = callRust("createMatch", [{ seed:"time-render",mapId:"saltHall",weather:"clear",time:"night",fighters:[{id:"a",name:"A",weapon:"rifle",gear:{nvg:true}},{id:"b",name:"B",weapon:"rifle"}] }]);
+  try {
+    arena.setFrame(night); arena.setFirstPerson(true); arena.resume(); await arena.load("same.glb", "same.glb", 7);
+    arena.setConditions(match); h.renderers[0].loop(100);
+    assert.deepEqual(h.stages[0].variants[0], variant);
+    assert.equal(h.lenses[0].nightVision, true);
+    assert.equal(h.lenses[0].heat, false);
+    match.fighters[0].gear.nvg=false; arena.setConditions(match); assert.equal(h.lenses[0].nightVision,false);
+    match.fighters[0].gear.nvg=true; arena.setConditions(match); assert.equal(h.lenses[0].nightVision,true);
+    const quiet = callRust("starterLoadout", ["rifle"]);
+    quiet.weapon1={item:"rifle-varyag",mods:{muzzle:"muzzle-tishina"}};
+    quiet.weapon2={item:"pistol-pustelga"};
+    match.config.fighters[0].kit=callRust("compileKit",[quiet]);
+    arena.arm("me","rifle",{}); arena.setConditions(match); arena.attack("me","rifle",.01); h.renderers[0].loop(116);
+    assert.equal(h.flashes[1].suppressed,true,"the equipped suppressor controls the muzzle effect");
+    match.fighters[0].weapon="pistol"; match.fighters[0].sidearm=true;
+    arena.arm("me","pistol",{}); arena.setConditions(match); arena.attack("me","pistol",.01); h.renderers[0].loop(132);
+    assert.equal(h.flashes[1].suppressed,false,"the sidearm must not inherit the primary gun's suppressor");
+    const lights = h.renderers[0].scene.children.filter(o=>o.isLight);
+    const key = lights.find(o=>o.isSpotLight && o.angle < .27), rim = lights.find(o=>o.isDirectionalLight && o.castShadow);
+    assert.ok(Math.abs(key.intensity - .8) < 1e-10); assert.equal(rim.intensity,1.45);
+    arena.setQuality(quality.low); assert.ok(Math.abs(key.intensity - .8) < 1e-10);
+    arena.setFirstPerson(false); assert.equal(key.intensity, 1.6);
+    arena.setFrame({ ...frame, id:"hall1" });
+    match.config.time="day"; arena.setConditions(match); h.renderers[0].loop(200);
+    assert.equal(key.color.getHex(),0xb4b4b0,"returning to day restores the original key color");
+    assert.equal(h.lenses[0].nightVision, false); assert.equal(h.lenses[0].heat, true);
+    match.config.time="evening"; match.fighters[0].facesSun=true; arena.setConditions(match);
+    assert.equal(h.lenses[0].glare, true);
+    match.fighters[0].facesSun=false; arena.setConditions(match); assert.equal(h.lenses[0].glare, false);
+    arena.setQuality(quality.high);
+    arena.setFrame({ ...frame, id:"blocks-day", look:{...frame.look,reflection:false} });
+    h.renderers[0].loop(300);
+    let reflection;
+    h.renderers[0].scene.traverse(object => { if (object.scale.y === -1) reflection=object.parent.parent; });
+    assert.ok(reflection,"the fixture must contain the actual inverted fighter hierarchy");
+    assert.equal(reflection.visible,false,"dry courtyard suppresses the wet-ground reflection");
+    arena.setQuality(quality.ultra); assert.equal(reflection.visible,false,"a quality change must not make dry ground reflective");
+    arena.setFrame({ ...frame, id:"hall1" }); assert.equal(reflection.visible,true,"returning to the hall restores its reflection");
+    arena.setQuality(quality.low); assert.equal(reflection.visible,false,"low quality still omits reflections");
+  } finally { arena.dispose(); arena.free(); }
+}
+
+async function testProjectedSideLighting() {
+  const previousDocument=globalThis.document, previousFetch=globalThis.fetch;
+  // This material test is headless. Do not let the 2D canvas stub masquerade
+  // as the throwaway WebGL2 context used by the device-quality probe.
+  globalThis.document={baseURI:"http://stage.test/"};
+  globalThis.fetch=async()=>new Response(JSON.stringify({
+    version:1, calibration:{fov:55,aspect:941/1672,camHeight:2,horizon:.37244444444444447},
+    textures:{clean:"clean.png",equipment:"hall.png"},
+    meshes:[{name:"closed-wall-side",material:"side",color:[.25,.235,.21],positions:[0,0,-2,1,0,-2,0,1,-2],indices:[0,1,2]}],
+  }));
+  const h=makeHost();
+  h.THREE.TextureLoader=class { async loadAsync(url){return texture(url);} };
+  const renderer=new h.THREE.WebGLRenderer();
+  renderer.getRenderTarget=()=>renderer.target??null;
+  const stage=new RustProjectedStage({THREE:h.THREE},renderer),camera=new Three.PerspectiveCamera();
+  const surface=()=>{
+    stage.drawToScreen(camera);
+    return renderer.scene.getObjectByName("closed-wall-side").material.uniforms;
+  };
+  try {
+    await stage.load("manifest.json",{sideTint:0x7f8790,sideExposure:.06});
+    const night=surface();
+    assert.equal(night.sideTint.value.getHex(),0x7f8790);
+    assert.equal(night.sideExposure.value,.06);
+    const tint=night.sideTint.value;
+    assert.ok((tint.r*.2126+tint.g*.7152+tint.b*.0722)*night.sideExposure.value<.02,"unseen sides must not retain daylight luminance at night");
+    await stage.load("manifest.json");
+    const day=surface();
+    assert.equal(day.sideTint.value.getHex(),0xffffff,"an old manifest with no variant must restore its authored side colours");
+    assert.equal(day.sideExposure.value,1);
+    assert.deepEqual(day.sideColor.value.toArray(),[.25,.235,.21]);
+  } finally {
+    stage.dispose();stage.free();globalThis.document=previousDocument;globalThis.fetch=previousFetch;
+  }
+}
+
+async function testTeardown() {
+  const h = makeHost(), renderer = new h.THREE.WebGLRenderer();
+  const lens = new RustLens(h, renderer);
+  lens.setBackdrop("late.jpg", undefined, "late-depth.png");
+  lens.dispose(); const released = h.trace.filter(v => v[0] === "dispose").length;
+  lens.dispose(); assert.equal(h.trace.filter(v => v[0] === "dispose").length, released);
+  let lateDisposals = 0;
+  for (const pending of h.loads) { const t = texture(pending.url); t.addEventListener("dispose", () => lateDisposals++); pending.resolve(t); }
+  await flush(); assert.equal(lateDisposals, 2); lens.free();
+
+  const a = arenaHost(), model = deferred(); a.loadModel = () => model.promise;
+  const arena = new RustArena(a, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  arena.setFrame(frame); arena.resume(); const loading = arena.load("late.glb", "late.glb", 7);
+  arena.dispose(); arena.dispose(); arena.resume();
+  assert.equal(a.renderers[0].loop, null); assert.equal(a.renderers[0].disposals, 1); assert.equal(arena.ready, false);
+  model.resolve({ scene: new Three.Group(), animations: [] }); await loading;
+  assert.equal(arena.ready, false); assert.equal(a.renderers[0].loop, null); arena.free();
+  assert.equal(a.renderers[0].disposals, 1);
+
+  const b = arenaHost(), active = new RustArena(b, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  active.setFrame(frame); active.resume(); await active.load("same.glb", "same.glb", 7);
+  assert.equal(typeof b.renderers[0].loop, "function"); active.free();
+  assert.equal(b.renderers[0].loop, null); assert.equal(b.renderers[0].disposals, 1);
+}
+
+async function benchmarkArena(useRust) {
+  const h = arenaHost();
+  const Old = useRust ? null : (await original("arena.ts", { ...h, callRust, motionCompute, SkeletonUtils: { clone: h.clone }, QUALITY: quality })).Arena;
+  const arena = useRust ? new RustArena(h, fakeCanvas(), { wide: .62, fpkey: 2.5 }) : new Old(fakeCanvas());
+  arena.setFrame(frame); await arena.load("same.glb", "same.glb", 7); arena.setFirstPerson(true); arena.resume();
+  const tick = h.renderers[0].loop;
+  for (let i = 0; i < 200; i++) tick(i * 16);
+  const start = performance.now();
+  for (let i = 0; i < 3000; i++) tick(i * 16);
+  const perFrame = (performance.now() - start) / 3000;
+  arena.pause(); if (useRust) arena.free();
+  return perFrame;
+}
+
+try {
+  assert.deepEqual(await exerciseLens(true), await exerciseLens(false));
+  await testTextureTiers();
+  parity(await exerciseArena(true), await exerciseArena(false));
+  await testTeardown();
+  await testProjectedArenaMovement();
+  await testProjectedArenaLifecycle();
+  await testBattleOptics();
+  await testTimePresentation();
+  await testProjectedSideLighting();
+  console.log("PASS Rust lens: identical shaders, quality targets, passes, uniforms, projection, async backdrop cancellation");
+  console.log("PASS Rust texture tiers: shared maps, shrink, stale completion, failed tier fallback, atomic restoration");
+  console.log("PASS Rust arena: lifecycle, quality, first-person framing, walking, firing, hit/fall, reflection, callback reentry");
+  console.log("PASS Rust teardown: idempotent disposal, cancelled late loads, no renderer callback after Rust owner drops");
+  console.log("PASS Rust projected combat: animated own step/retreat/rush, enemy-only movement, interrupted camera change, reset and blocked advance");
+  console.log("PASS Rust projected lifecycle: independent hall switching, cancelled teardown and usable painted fallback");
+  console.log("PASS Rust time presentation: canonical NVG/glare, depth-limited heat, quality transitions, variant projection and daylight color restoration");
+  console.log("PASS Rust projected side lighting: dark night sides and exact legacy daylight restoration");
+  if (process.env.CD_RENDER_BENCH === "1") {
+    console.log("CPU-only orchestration benchmark (ms/frame, stub renderer, no GPU):", { rust: await benchmarkArena(true), typescript: await benchmarkArena(false) });
+  }
+} finally {
+  for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
+}

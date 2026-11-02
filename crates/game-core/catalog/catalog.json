@@ -1,0 +1,2118 @@
+{
+  "AFK_LIMIT": 3,
+  "BASE_STATS": {
+    "hp": 100,
+    "personal": 27,
+    "mastery": 0.74,
+    "critChance": 0.07,
+    "critMult": 1.47,
+    "dodge": 0.07,
+    "blockBreakChance": 0.07,
+    "blockBreakPower": 0.27,
+    "armorPen": 0.04,
+    "antiPen": 0.04
+  },
+  "DASH_EVADE": 0.1,
+  "DASH_STEPS": 3,
+  "DASH_WINDED": 0.1,
+  "DAY_FAR_ACCURACY": 0.9,
+  "DAY_GUARD_BONUS": 0.04,
+  "DEFAULT_ARMOR": {
+    "head": 0,
+    "body": 20,
+    "groin": 0,
+    "legs": 10
+  },
+  "GRENADE": {
+    "base": 35,
+    "armorPen": 0.24,
+    "minDistance": 2,
+    "maxDistance": 8,
+    "perFight": 1
+  },
+  "GUARD": 0.26,
+  "HAZARDS": {
+    "lightning": {
+      "name": "молния",
+      "radius": 1,
+      "damage": 6,
+      "stun": 1,
+      "shieldOff": 1
+    },
+    "shell": {
+      "name": "снаряд",
+      "radius": 1,
+      "damage": 22,
+      "edge": 0.5
+    },
+    "collapse": {
+      "name": "обвал",
+      "radius": 0,
+      "damage": 18
+    },
+    "drone": {
+      "name": "дрон-камикадзе",
+      "damage": 16
+    },
+    "blackout": {
+      "name": "свет погас"
+    }
+  },
+  "KNIFE_GUARD": 0.5,
+  "KNIFE_REACH": 2,
+  "MAPS": {
+    "saltHall": {
+      "id": "saltHall",
+      "name": "Соляной цех",
+      "region": "Белый Яр",
+      "maxDistance": 11
+    },
+    "blocks": {
+      "id": "blocks",
+      "name": "Пятиэтажки",
+      "region": "Белый Яр",
+      "maxDistance": 12
+    },
+    "dam": {
+      "id": "dam",
+      "name": "Плотина",
+      "region": "Каскад",
+      "maxDistance": 14
+    },
+    "dryBed": {
+      "id": "dryBed",
+      "name": "Сухое дно",
+      "region": "Каскад",
+      "maxDistance": 13
+    }
+  },
+  "MAP_ACCESS": {
+    "shellingMinutes": 360,
+    "shellingWhy": "под обстрелом",
+    "planned": {
+      "belyYar": {
+        "railyard": "Сортировка",
+        "sludgePonds": "Шламовые пруды"
+      },
+      "kaskad": {
+        "intake": "Водозабор",
+        "backwater": "Затон"
+      }
+    },
+    "events": {
+      "storms": {
+        "maps": [
+          "backwater",
+          "dryBed"
+        ],
+        "why": "вода поднялась"
+      },
+      "dryWind": {
+        "maps": [
+          "sludgePonds"
+        ],
+        "why": "ядовитая пыль"
+      },
+      "chemical": {
+        "maps": [
+          "intake"
+        ],
+        "why": "заражена вода"
+      }
+    },
+    "hours": {
+      "railyard": {
+        "shut": [
+          "morning",
+          "day",
+          "evening"
+        ],
+        "why": "открыта только ночью"
+      },
+      "sludgePonds": {
+        "shut": [
+          "day"
+        ],
+        "why": "дневные испарения"
+      },
+      "backwater": {
+        "shut": [
+          "morning"
+        ],
+        "why": "утренний туман"
+      }
+    },
+    "release": {
+      "map": "dryBed",
+      "clock": "dam",
+      "starts": [
+        480,
+        1200
+      ],
+      "minutes": 360,
+      "why": "сброс воды"
+    }
+  },
+  "MAP_WEATHER": {
+    "saltHall": {
+      "cover": "roof",
+      "weather": {
+        "clear": {
+          "hazards": {
+            "drone": 0.06
+          }
+        },
+        "dust": {
+          "name": "соляная взвесь",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.95,
+            "far": 0.8
+          }
+        },
+        "storm": {
+          "name": "гроза над крышей",
+          "accuracy": {
+            "near": 1,
+            "mid": 1,
+            "far": 1
+          },
+          "turnLimit": 15,
+          "hazards": {
+            "collapse": 0.15,
+            "blackout": 0.2,
+            "drone": 0.04
+          }
+        },
+        "fog": {
+          "name": "дым",
+          "hazards": {
+            "drone": 0.06
+          }
+        }
+      }
+    },
+    "blocks": {
+      "cover": "open",
+      "weather": {
+        "fog": {
+          "name": "смог"
+        }
+      }
+    },
+    "dam": {
+      "cover": "open",
+      "weather": {
+        "dust": {
+          "name": "ветер с водохранилища",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.95,
+            "far": 0.75
+          },
+          "thermal": false
+        },
+        "fog": {
+          "name": "туман с воды"
+        }
+      }
+    },
+    "dryBed": {
+      "cover": "open",
+      "weather": {
+        "dust": {
+          "name": "соляная буря",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.85,
+            "far": 0.6
+          }
+        }
+      }
+    },
+    "intake": {
+      "cover": "gallery",
+      "weather": {
+        "clear": {
+          "hazards": {
+            "drone": 0.06
+          }
+        },
+        "dust": {
+          "name": "водяная пыль",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.95,
+            "far": 0.8
+          },
+          "thermal": false
+        },
+        "storm": {
+          "name": "гроза за проёмами",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.95,
+            "far": 0.9
+          },
+          "hazards": {
+            "collapse": 0.12,
+            "drone": 0.04
+          }
+        },
+        "fog": {
+          "name": "туман с воды",
+          "hazards": {
+            "drone": 0.06
+          }
+        }
+      }
+    },
+    "backwater": {
+      "cover": "open",
+      "weather": {
+        "dust": {
+          "name": "ветер",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.95,
+            "far": 0.75
+          },
+          "thermal": false
+        },
+        "fog": {
+          "name": "туман с воды"
+        }
+      }
+    },
+    "railyard": {
+      "cover": "roof",
+      "weather": {
+        "clear": {
+          "hazards": {
+            "drone": 0.06
+          }
+        },
+        "dust": {
+          "name": "сквозняк",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.95,
+            "far": 0.85
+          }
+        },
+        "storm": {
+          "name": "гроза над депо",
+          "accuracy": {
+            "near": 1,
+            "mid": 1,
+            "far": 1
+          },
+          "turnLimit": 15,
+          "hazards": {
+            "collapse": 0.12,
+            "blackout": 0.2,
+            "drone": 0.05
+          }
+        },
+        "fog": {
+          "name": "дым",
+          "hazards": {
+            "drone": 0.06
+          }
+        }
+      }
+    },
+    "sludgePonds": {
+      "cover": "open",
+      "weather": {
+        "dust": {
+          "name": "ядовитая пыль",
+          "toxic": 2
+        },
+        "fog": {
+          "name": "ядовитые испарения",
+          "toxic": 1
+        }
+      }
+    }
+  },
+  "MAX_STEPS": 16,
+  "MIN_DISTANCE_LIMIT": 4,
+  "MUZZLE_FLASH_BONUS": 0.1,
+  "NIGHT_ACCURACY": 0.75,
+  "NO_STANCE_PENALTY": 0.5,
+  "REGIONS": {
+    "belyYar": {
+      "name": "Белый Яр",
+      "maps": [
+        "saltHall",
+        "blocks"
+      ]
+    },
+    "kaskad": {
+      "name": "Каскад",
+      "maps": [
+        "dam",
+        "dryBed"
+      ]
+    }
+  },
+  "REGION_EVENTS": {
+    "calm": {
+      "name": "Затишье",
+      "odds": {
+        "clear": 40,
+        "dust": 20,
+        "storm": 20,
+        "fog": 20
+      }
+    },
+    "storms": {
+      "name": "Сезон гроз",
+      "odds": {
+        "clear": 20,
+        "dust": 10,
+        "storm": 55,
+        "fog": 15
+      }
+    },
+    "dryWind": {
+      "name": "Суховей",
+      "odds": {
+        "clear": 35,
+        "dust": 50,
+        "storm": 5,
+        "fog": 10
+      }
+    },
+    "chemical": {
+      "name": "Химический выброс",
+      "odds": {
+        "clear": 15,
+        "dust": 15,
+        "storm": 10,
+        "fog": 60
+      }
+    }
+  },
+  "RUN_STEPS": 2,
+  "SHRINK_AFTER_TURN": 6,
+  "SHELLING": {
+    "chance": 0.05,
+    "underFire": 0.35
+  },
+  "STANCE_TURNS": 2,
+  "START_DISTANCE": 7,
+  "SUN_ACCURACY": 0.9,
+  "TIMES": [
+    "morning",
+    "day",
+    "evening",
+    "night"
+  ],
+  "TIME_NAMES": {
+    "morning": "утро",
+    "day": "день",
+    "evening": "вечер",
+    "night": "ночь"
+  },
+  "WEAPONS": {
+    "pistol": {
+      "id": "pistol",
+      "name": "Пистолет",
+      "hands": 1,
+      "power": 12,
+      "flatPen": 6,
+      "crit": 0.15,
+      "critBonus": 0,
+      "accuracy": [
+        0.9,
+        0.9,
+        0.85,
+        0.85,
+        0.7,
+        0.6,
+        0.42,
+        0.42,
+        0.28,
+        0.28,
+        0.18,
+        0.18,
+        0.1,
+        0.1,
+        0.1,
+        0.1
+      ],
+      "falloff": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "needsStance": false
+    },
+    "shotgun": {
+      "id": "shotgun",
+      "name": "Дробовик",
+      "hands": 2,
+      "power": 20,
+      "flatPen": 2,
+      "crit": -0.05,
+      "critBonus": 0,
+      "accuracy": [
+        0.95,
+        0.95,
+        0.9,
+        0.8,
+        0.55,
+        0.35,
+        0.2,
+        0.1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "falloff": [
+        1.4,
+        1.4,
+        1.25,
+        1.25,
+        0.85,
+        0.85,
+        0.6,
+        0.6,
+        0.6,
+        0.6,
+        0.6,
+        0.6,
+        0.6,
+        0.6,
+        0.6,
+        0.6
+      ],
+      "needsStance": false
+    },
+    "rifle": {
+      "id": "rifle",
+      "name": "Автомат",
+      "hands": 2,
+      "power": 14,
+      "flatPen": 8,
+      "crit": 0.03,
+      "critBonus": 0,
+      "accuracy": [
+        0.5,
+        0.55,
+        0.65,
+        0.72,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.68,
+        0.58,
+        0.48,
+        0.38,
+        0.3,
+        0.2,
+        0.2,
+        0.2
+      ],
+      "falloff": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "needsStance": false
+    },
+    "sniper": {
+      "id": "sniper",
+      "name": "Снайперка",
+      "hands": 2,
+      "power": 52,
+      "flatPen": 12,
+      "crit": 0.25,
+      "critBonus": 0.5,
+      "accuracy": [
+        0.25,
+        0.25,
+        0.4,
+        0.4,
+        0.65,
+        0.75,
+        0.88,
+        0.88,
+        0.95,
+        0.95,
+        0.95,
+        0.95,
+        0.95,
+        0.95,
+        0.95,
+        0.95
+      ],
+      "falloff": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "needsStance": true
+    },
+    "knife": {
+      "id": "knife",
+      "name": "Нож",
+      "hands": 1,
+      "power": 8,
+      "flatPen": 4,
+      "crit": 0,
+      "critBonus": 0,
+      "accuracy": [
+        0.95,
+        0.95,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "falloff": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "needsStance": false
+    }
+  },
+  "WEAPON_IDS": [
+    "pistol",
+    "shotgun",
+    "rifle",
+    "sniper"
+  ],
+  "WEATHER": {
+    "clear": {
+      "name": "ясно",
+      "accuracy": {
+        "near": 1,
+        "mid": 1,
+        "far": 1
+      },
+      "crit": 0,
+      "turnLimit": 15,
+      "turnSeconds": 60,
+      "hazards": {
+        "drone": 0.12
+      }
+    },
+    "dust": {
+      "name": "пыльная буря",
+      "accuracy": {
+        "near": 1,
+        "mid": 0.9,
+        "far": 0.7
+      },
+      "crit": -0.05,
+      "turnLimit": 15,
+      "turnSeconds": 45,
+      "hazards": {}
+    },
+    "storm": {
+      "name": "гроза",
+      "accuracy": {
+        "near": 0.9,
+        "mid": 0.9,
+        "far": 0.9
+      },
+      "crit": 0,
+      "turnLimit": 10,
+      "turnSeconds": 60,
+      "hazards": {
+        "lightning": 0.35,
+        "drone": 0.06
+      }
+    },
+    "fog": {
+      "name": "туман",
+      "accuracy": {
+        "near": 1,
+        "mid": 1,
+        "far": 0.8
+      },
+      "crit": 0.05,
+      "turnLimit": 15,
+      "turnSeconds": 60,
+      "hazards": {
+        "drone": 0.12
+      }
+    }
+  },
+  "WEATHERS": [
+    "clear",
+    "dust",
+    "storm",
+    "fog"
+  ],
+  "ZONES": [
+    "head",
+    "body",
+    "groin",
+    "legs"
+  ],
+  "ZONE_MULT": {
+    "head": 1.27,
+    "body": 1,
+    "groin": 1.11,
+    "legs": 0.74
+  },
+  "ZONE_NAMES": {
+    "head": "голова",
+    "body": "корпус",
+    "groin": "пах",
+    "legs": "ноги"
+  },
+  "GEAR_SLOTS": [
+    "weapon1",
+    "weapon2",
+    "head",
+    "body",
+    "suit",
+    "boots",
+    "knife",
+    "grenade"
+  ],
+  "GEAR_SLOT_NAMES": {
+    "weapon1": "Оружие 1",
+    "weapon2": "Оружие 2",
+    "head": "Голова",
+    "body": "Корпус",
+    "suit": "Костюм",
+    "boots": "Ботинки",
+    "knife": "Нож",
+    "grenade": "Граната"
+  },
+  "ITEMS": [
+    {
+      "id": "pistol-pustelga",
+      "kind": "weapon",
+      "weapon": "pistol",
+      "name": "Пистолет «Пустельга»",
+      "tier": 1,
+      "note": "Служебный пистолет ЧВК. Часто критует, носится запасным к любому стволу.",
+      "effects": {},
+      "stock": {
+        "optic": "pistol-optic-stock",
+        "muzzle": "pistol-muzzle-stock",
+        "rail": "pistol-rail-stock",
+        "mag": "pistol-mag-stock",
+        "stock": "pistol-stock-stock"
+      }
+    },
+    {
+      "id": "shotgun-taran",
+      "kind": "weapon",
+      "weapon": "shotgun",
+      "name": "Дробовик «Таран»",
+      "tier": 1,
+      "note": "Полуавтомат 12-го калибра. Страшен вплотную, дальше 8 шагов не достаёт.",
+      "effects": {},
+      "stock": {
+        "optic": "shotgun-optic-stock",
+        "muzzle": "shotgun-muzzle-stock",
+        "rail": "shotgun-rail-stock",
+        "mag": "shotgun-mag-stock",
+        "stock": "shotgun-stock-stock"
+      }
+    },
+    {
+      "id": "rifle-varyag",
+      "kind": "weapon",
+      "weapon": "rifle",
+      "name": "Автомат «Варяг»",
+      "tier": 1,
+      "note": "Армейский автомат. Ровный на любой дистанции, лучший выбор для новичка.",
+      "effects": {},
+      "stock": {
+        "optic": "rifle-optic-stock",
+        "muzzle": "rifle-muzzle-stock",
+        "rail": "rifle-rail-stock",
+        "mag": "rifle-mag-stock",
+        "stock": "rifle-stock-stock"
+      }
+    },
+    {
+      "id": "sniper-berkut",
+      "kind": "weapon",
+      "weapon": "sniper",
+      "name": "Винтовка «Беркут»",
+      "tier": 1,
+      "note": "Снайперская винтовка. Бьёт сильнее всех и часто критует, но стреляет точно только из стойки.",
+      "effects": {},
+      "stock": {
+        "optic": "sniper-optic-stock",
+        "muzzle": "sniper-muzzle-stock",
+        "rail": "sniper-rail-stock",
+        "mag": "sniper-mag-stock",
+        "stock": "sniper-stock-stock"
+      }
+    },
+    {
+      "id": "pistol-optic-stock",
+      "kind": "mod",
+      "slot": "optic",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Открытый прицел",
+      "tier": 1,
+      "note": "Заводская мушка и целик.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "pistol-muzzle-stock",
+      "kind": "mod",
+      "slot": "muzzle",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Без насадки",
+      "tier": 1,
+      "note": "Голый ствол.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "pistol-rail-stock",
+      "kind": "mod",
+      "slot": "rail",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Пустая планка",
+      "tier": 1,
+      "note": "Планка под фонарь или лазер.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "pistol-mag-stock",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Магазин на 15",
+      "tier": 1,
+      "note": "Заводской магазин.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "pistol-stock-stock",
+      "kind": "mod",
+      "slot": "stock",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Заводская рукоять",
+      "tier": 1,
+      "note": "Гладкие пластиковые щёчки.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "shotgun-optic-stock",
+      "kind": "mod",
+      "slot": "optic",
+      "fits": [
+        "shotgun"
+      ],
+      "name": "Мушка",
+      "tier": 1,
+      "note": "Планка с мушкой.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "shotgun-muzzle-stock",
+      "kind": "mod",
+      "slot": "muzzle",
+      "fits": [
+        "shotgun"
+      ],
+      "name": "Цилиндр",
+      "tier": 1,
+      "note": "Ствол без сужения, дробь разлетается широко.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "shotgun-rail-stock",
+      "kind": "mod",
+      "slot": "rail",
+      "fits": [
+        "shotgun"
+      ],
+      "name": "Заводское цевьё",
+      "tier": 1,
+      "note": "Гладкое цевьё.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "shotgun-mag-stock",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "shotgun"
+      ],
+      "name": "Подствольный магазин на 5",
+      "tier": 1,
+      "note": "Трубчатый магазин под стволом.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "shotgun-stock-stock",
+      "kind": "mod",
+      "slot": "stock",
+      "fits": [
+        "shotgun"
+      ],
+      "name": "Заводской приклад",
+      "tier": 1,
+      "note": "Жёсткий пластиковый приклад.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "rifle-optic-stock",
+      "kind": "mod",
+      "slot": "optic",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Открытый прицел",
+      "tier": 1,
+      "note": "Заводская мушка и целик.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "rifle-muzzle-stock",
+      "kind": "mod",
+      "slot": "muzzle",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Пламегаситель",
+      "tier": 1,
+      "note": "Заводская насадка.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "rifle-rail-stock",
+      "kind": "mod",
+      "slot": "rail",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Заводское цевьё",
+      "tier": 1,
+      "note": "Цевьё с планками.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "rifle-mag-stock",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Магазин на 30",
+      "tier": 1,
+      "note": "Заводской магазин.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "rifle-stock-stock",
+      "kind": "mod",
+      "slot": "stock",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Складной приклад",
+      "tier": 1,
+      "note": "Заводской складной приклад.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "sniper-optic-stock",
+      "kind": "mod",
+      "slot": "optic",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Прицел ПСО-6",
+      "tier": 1,
+      "note": "Заводская оптика.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "sniper-muzzle-stock",
+      "kind": "mod",
+      "slot": "muzzle",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Дульный тормоз",
+      "tier": 1,
+      "note": "Заводской тормоз.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "sniper-rail-stock",
+      "kind": "mod",
+      "slot": "rail",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Заводское ложе",
+      "tier": 1,
+      "note": "Ложе без модулей.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "sniper-mag-stock",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Магазин на 5",
+      "tier": 1,
+      "note": "Заводской магазин.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "sniper-stock-stock",
+      "kind": "mod",
+      "slot": "stock",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Заводской приклад",
+      "tier": 1,
+      "note": "Деревянный приклад.",
+      "effects": {},
+      "isStock": true
+    },
+    {
+      "id": "optic-tritium",
+      "kind": "mod",
+      "slot": "optic",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Тритиевые целики",
+      "tier": 1,
+      "note": "Светящиеся точки на мушке видны в темноте.",
+      "effects": {
+        "nightAcc": 0.05
+      }
+    },
+    {
+      "id": "optic-kp1",
+      "kind": "mod",
+      "slot": "optic",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Мини-коллиматор КП-1",
+      "tier": 2,
+      "note": "Маленькая красная точка на затворе. Пистолет держит среднюю дистанцию.",
+      "effects": {
+        "acc": {
+          "near": 0.02,
+          "mid": 0.03
+        }
+      }
+    },
+    {
+      "id": "optic-blik",
+      "kind": "mod",
+      "slot": "optic",
+      "fits": [
+        "shotgun",
+        "rifle"
+      ],
+      "name": "Коллиматор «Блик»",
+      "tier": 1,
+      "note": "Красная точка без увеличения: быстро вблизи, хуже вдали.",
+      "effects": {
+        "acc": {
+          "near": 0.04,
+          "mid": 0.02,
+          "far": -0.02
+        }
+      }
+    },
+    {
+      "id": "optic-gran",
+      "kind": "mod",
+      "slot": "optic",
+      "fits": [
+        "shotgun",
+        "rifle"
+      ],
+      "name": "Призма 2× «Грань»",
+      "tier": 2,
+      "note": "Небольшое увеличение для средней дистанции.",
+      "effects": {
+        "acc": {
+          "near": -0.02,
+          "mid": 0.05
+        }
+      }
+    },
+    {
+      "id": "optic-sokol",
+      "kind": "mod",
+      "slot": "optic",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Оптика 4× «Сокол»",
+      "tier": 2,
+      "note": "Делает из автомата полуснайперку. Вплотную в неё неудобно целиться.",
+      "effects": {
+        "acc": {
+          "near": -0.05,
+          "mid": 0.02,
+          "far": 0.07
+        }
+      }
+    },
+    {
+      "id": "optic-znoy",
+      "kind": "mod",
+      "slot": "optic",
+      "fits": [
+        "rifle",
+        "sniper"
+      ],
+      "name": "Тепловизионный прицел «Зной»",
+      "tier": 3,
+      "note": "Видит тепло сквозь пыль, дым и темноту. Тяжёлый, вплотную медленный.",
+      "effects": {
+        "thermal": true,
+        "nightAcc": 0.04,
+        "acc": {
+          "near": -0.03
+        }
+      }
+    },
+    {
+      "id": "optic-oryol",
+      "kind": "mod",
+      "slot": "optic",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Оптика 12× «Орёл»",
+      "tier": 2,
+      "note": "Сильное увеличение: точный выстрел в уязвимое место, но ближе 9 шагов цель не помещается.",
+      "effects": {
+        "acc": {
+          "near": -0.03,
+          "far": 0.04
+        },
+        "crit": 0.05
+      }
+    },
+    {
+      "id": "optic-blik-b",
+      "kind": "mod",
+      "slot": "optic",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Боковой коллиматор «Блик-Б»",
+      "tier": 2,
+      "note": "Красная точка сбоку от оптики на случай, если враг подбежал.",
+      "effects": {
+        "acc": {
+          "near": 0.06,
+          "far": -0.02
+        }
+      }
+    },
+    {
+      "id": "muzzle-pb9",
+      "kind": "mod",
+      "slot": "muzzle",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Глушитель ПБ-9",
+      "tier": 2,
+      "note": "Ночью нет вспышки. Пуля чуть слабее.",
+      "effects": {
+        "suppressor": true,
+        "power": -2
+      }
+    },
+    {
+      "id": "muzzle-klyk",
+      "kind": "mod",
+      "slot": "muzzle",
+      "fits": [
+        "pistol",
+        "rifle"
+      ],
+      "name": "Компенсатор «Клык»",
+      "tier": 2,
+      "note": "Гасит подброс ствола. Ночью вспышка слепит самого стрелка.",
+      "effects": {
+        "acc": {
+          "near": 0.02,
+          "mid": 0.04
+        },
+        "nightAcc": -0.04
+      }
+    },
+    {
+      "id": "muzzle-choke",
+      "kind": "mod",
+      "slot": "muzzle",
+      "fits": [
+        "shotgun"
+      ],
+      "name": "Чок «Кучность»",
+      "tier": 2,
+      "note": "Сужение ствола: дробь летит кучнее и достаёт дальше, но вплотную легче промахнуться.",
+      "effects": {
+        "acc": {
+          "near": -0.02,
+          "mid": 0.08
+        }
+      }
+    },
+    {
+      "id": "muzzle-vata",
+      "kind": "mod",
+      "slot": "muzzle",
+      "fits": [
+        "shotgun"
+      ],
+      "name": "Глушитель «Вата»",
+      "tier": 3,
+      "note": "Редкий глушитель для дробовика. Ночью нет вспышки.",
+      "effects": {
+        "suppressor": true,
+        "power": -1
+      }
+    },
+    {
+      "id": "muzzle-tishina",
+      "kind": "mod",
+      "slot": "muzzle",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Глушитель «Тишина»",
+      "tier": 2,
+      "note": "Ночью нет вспышки. Дозвуковой патрон хуже летит далеко.",
+      "effects": {
+        "suppressor": true,
+        "acc": {
+          "far": -0.03
+        }
+      }
+    },
+    {
+      "id": "muzzle-tishina-s",
+      "kind": "mod",
+      "slot": "muzzle",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Глушитель «Тишина-С»",
+      "tier": 2,
+      "note": "Ночью нет вспышки. Пуля слабее.",
+      "effects": {
+        "suppressor": true,
+        "power": -3
+      }
+    },
+    {
+      "id": "muzzle-molot",
+      "kind": "mod",
+      "slot": "muzzle",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Тормоз-компенсатор «Молот»",
+      "tier": 3,
+      "note": "Винтовка почти не прыгает. Ночью сильная вспышка.",
+      "effects": {
+        "acc": {
+          "mid": 0.03
+        },
+        "crit": 0.03,
+        "nightAcc": -0.04
+      }
+    },
+    {
+      "id": "rail-luch",
+      "kind": "mod",
+      "slot": "rail",
+      "fits": [
+        "pistol",
+        "shotgun",
+        "rifle"
+      ],
+      "name": "Фонарь «Луч»",
+      "tier": 1,
+      "note": "Тактический фонарь: ночью видно, куда стреляешь.",
+      "effects": {
+        "nightAcc": 0.05
+      }
+    },
+    {
+      "id": "rail-lcu",
+      "kind": "mod",
+      "slot": "rail",
+      "fits": [
+        "pistol",
+        "shotgun",
+        "sniper"
+      ],
+      "name": "Лазер ЛЦУ-2",
+      "tier": 2,
+      "note": "Лазерная точка помогает вести бегущую цель.",
+      "effects": {
+        "acc": {
+          "near": 0.02
+        },
+        "tracking": 0.04
+      }
+    },
+    {
+      "id": "rail-kulak",
+      "kind": "mod",
+      "slot": "rail",
+      "fits": [
+        "pistol",
+        "rifle"
+      ],
+      "name": "Рукоять «Кулак»",
+      "tier": 2,
+      "note": "Вертикальная рукоять: легче довести ствол за бегущим врагом.",
+      "effects": {
+        "tracking": 0.06
+      }
+    },
+    {
+      "id": "rail-koster",
+      "kind": "mod",
+      "slot": "rail",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Подствольник «Костёр»",
+      "tier": 3,
+      "note": "Подствольный гранатомёт: ещё одна граната за бой. Тяжёлый.",
+      "effects": {
+        "grenades": 1,
+        "dodge": -0.01
+      }
+    },
+    {
+      "id": "rail-upor",
+      "kind": "mod",
+      "slot": "rail",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Сошки «Упор»",
+      "tier": 2,
+      "note": "Из стойки винтовка лежит как влитая, а без стойки с ними ещё неудобнее.",
+      "effects": {
+        "acc": {
+          "mid": 0.03,
+          "far": 0.05
+        },
+        "noStance": -0.03
+      }
+    },
+    {
+      "id": "mag-pistol-long",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Удлинённый магазин",
+      "tier": 2,
+      "note": "Больше патронов: иногда успеваешь выстрелить дважды.",
+      "effects": {
+        "doubleShot": 0.04
+      }
+    },
+    {
+      "id": "mag-pistol-hp",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Экспансивные патроны",
+      "tier": 2,
+      "note": "Сильнее по открытым местам, хуже по броне.",
+      "effects": {
+        "power": 2,
+        "pen": -4
+      }
+    },
+    {
+      "id": "mag-pistol-ap",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Бронебойные патроны",
+      "tier": 2,
+      "note": "Прошивают бронежилет, но реже дают крит.",
+      "effects": {
+        "pen": 6,
+        "crit": -0.03
+      }
+    },
+    {
+      "id": "mag-shotgun-box",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "shotgun"
+      ],
+      "name": "Коробчатый магазин на 8",
+      "tier": 2,
+      "note": "Быстрая перезарядка: иногда успеваешь выстрелить дважды.",
+      "effects": {
+        "doubleShot": 0.04
+      }
+    },
+    {
+      "id": "mag-shotgun-slug",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "shotgun"
+      ],
+      "name": "Пули «Жакан»",
+      "tier": 2,
+      "note": "Одна тяжёлая пуля вместо дроби: дальше летит, но вплотную слабее.",
+      "effects": {
+        "falloff": {
+          "near": -0.15,
+          "mid": 0.2
+        },
+        "acc": {
+          "mid": 0.04
+        }
+      }
+    },
+    {
+      "id": "mag-shotgun-buck",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "shotgun"
+      ],
+      "name": "Картечь «Волчья»",
+      "tier": 3,
+      "note": "Крупная картечь: вплотную ещё страшнее, дальше слабее.",
+      "effects": {
+        "falloff": {
+          "near": 0.1,
+          "mid": -0.1
+        }
+      }
+    },
+    {
+      "id": "mag-rifle-twin",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Спаренные магазины",
+      "tier": 2,
+      "note": "Два магазина на скобе: иногда очередь попадает дважды.",
+      "effects": {
+        "doubleShot": 0.05
+      }
+    },
+    {
+      "id": "mag-rifle-ap",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Бронебойные 7Н",
+      "tier": 2,
+      "note": "Прошивают бронежилет, но пуля чуть слабее.",
+      "effects": {
+        "pen": 6,
+        "power": -1
+      }
+    },
+    {
+      "id": "mag-rifle-drum",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Барабан на 75",
+      "tier": 3,
+      "note": "Длинные очереди, но с ним тяжело бегать.",
+      "effects": {
+        "doubleShot": 0.08,
+        "dashEvade": -0.04
+      }
+    },
+    {
+      "id": "mag-sniper-10",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Магазин на 10",
+      "tier": 2,
+      "note": "Иногда успеваешь выстрелить дважды.",
+      "effects": {
+        "doubleShot": 0.04
+      }
+    },
+    {
+      "id": "mag-sniper-ap",
+      "kind": "mod",
+      "slot": "mag",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Бронебойные патроны",
+      "tier": 2,
+      "note": "Прошивают даже тяжёлую броню, но реже дают крит.",
+      "effects": {
+        "pen": 8,
+        "crit": -0.04
+      }
+    },
+    {
+      "id": "stock-pistol-hvat",
+      "kind": "mod",
+      "slot": "stock",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Накладки «Хват»",
+      "tier": 1,
+      "note": "Резиновые накладки: быстрый выстрел вблизи.",
+      "effects": {
+        "acc": {
+          "near": 0.03,
+          "far": -0.02
+        }
+      }
+    },
+    {
+      "id": "stock-pistol-upor",
+      "kind": "mod",
+      "slot": "stock",
+      "fits": [
+        "pistol"
+      ],
+      "name": "Кобура-приклад «Упор-П»",
+      "tier": 2,
+      "note": "Пристёгивается к рукояти, и пистолет стреляет дальше. Вплотную мешает.",
+      "effects": {
+        "acc": {
+          "near": -0.03,
+          "mid": 0.03,
+          "far": 0.03
+        }
+      }
+    },
+    {
+      "id": "stock-shotgun-fold",
+      "kind": "mod",
+      "slot": "stock",
+      "fits": [
+        "shotgun"
+      ],
+      "name": "Складной приклад",
+      "tier": 1,
+      "note": "Короткий и ухватистый, но держит хуже.",
+      "effects": {
+        "tracking": 0.03,
+        "acc": {
+          "mid": -0.02
+        }
+      }
+    },
+    {
+      "id": "stock-shotgun-otdacha",
+      "kind": "mod",
+      "slot": "stock",
+      "fits": [
+        "shotgun"
+      ],
+      "name": "Приклад «Отдача»",
+      "tier": 2,
+      "note": "Амортизатор гасит отдачу. Тяжелее вести бегущую цель.",
+      "effects": {
+        "acc": {
+          "near": 0.02,
+          "mid": 0.03
+        },
+        "tracking": -0.02
+      }
+    },
+    {
+      "id": "stock-rifle-opora",
+      "kind": "mod",
+      "slot": "stock",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Приклад «Опора»",
+      "tier": 2,
+      "note": "Регулируемый приклад для стрельбы на дальность.",
+      "effects": {
+        "acc": {
+          "near": -0.02,
+          "mid": 0.03,
+          "far": 0.03
+        }
+      }
+    },
+    {
+      "id": "stock-rifle-tesno",
+      "kind": "mod",
+      "slot": "stock",
+      "fits": [
+        "rifle"
+      ],
+      "name": "Укороченный приклад «Тесно»",
+      "tier": 2,
+      "note": "Для боя в цехах и подъездах: быстрее вблизи, хуже вдали.",
+      "effects": {
+        "acc": {
+          "near": 0.04,
+          "mid": -0.01,
+          "far": -0.04
+        }
+      }
+    },
+    {
+      "id": "stock-sniper-izgotovka",
+      "kind": "mod",
+      "slot": "stock",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Приклад «Изготовка»",
+      "tier": 3,
+      "note": "Подогнан под щёку: без стойки винтовка теряет меньше точности.",
+      "effects": {
+        "noStance": 0.12
+      }
+    },
+    {
+      "id": "stock-sniper-opora",
+      "kind": "mod",
+      "slot": "stock",
+      "fits": [
+        "sniper"
+      ],
+      "name": "Приклад «Опора-С»",
+      "tier": 2,
+      "note": "Регулируемый приклад: выстрел в уязвимое место чаще.",
+      "effects": {
+        "crit": 0.03
+      }
+    },
+    {
+      "id": "skin-factory",
+      "kind": "skin",
+      "name": "Заводская",
+      "tier": 1,
+      "note": "Воронёный металл и чёрный пластик.",
+      "effects": {}
+    },
+    {
+      "id": "skin-salt",
+      "kind": "skin",
+      "name": "Соль",
+      "tier": 1,
+      "note": "Грязно-белые разводы, как соляной иней.",
+      "effects": {}
+    },
+    {
+      "id": "skin-olive",
+      "kind": "skin",
+      "name": "Олива",
+      "tier": 1,
+      "note": "Армейская олива.",
+      "effects": {}
+    },
+    {
+      "id": "skin-rust",
+      "kind": "skin",
+      "name": "Ржавчина",
+      "tier": 2,
+      "note": "Рыжие пятна, как на технике в Ржавых полях.",
+      "effects": {}
+    },
+    {
+      "id": "skin-pixel",
+      "kind": "skin",
+      "name": "Городской пиксель",
+      "tier": 2,
+      "note": "Серо-бетонный цифровой камуфляж.",
+      "effects": {}
+    },
+    {
+      "id": "head-cap",
+      "kind": "head",
+      "name": "Кепка",
+      "tier": 1,
+      "note": "Не защищает, зато на ней место под шеврон.",
+      "effects": {}
+    },
+    {
+      "id": "head-k6",
+      "kind": "head",
+      "name": "Каска К-6",
+      "tier": 1,
+      "note": "Простая стальная каска.",
+      "effects": {
+        "armor": {
+          "head": 15
+        },
+        "dodge": -0.01
+      }
+    },
+    {
+      "id": "head-sfera",
+      "kind": "head",
+      "name": "Шлем «Сфера-М»",
+      "tier": 2,
+      "note": "Тяжёлый шлем с забралом.",
+      "effects": {
+        "armor": {
+          "head": 25
+        },
+        "dodge": -0.02
+      }
+    },
+    {
+      "id": "head-sych",
+      "kind": "head",
+      "name": "Шлем с ПНВ «Сыч»",
+      "tier": 2,
+      "note": "Лёгкий шлем с прибором ночного видения.",
+      "effects": {
+        "armor": {
+          "head": 8
+        },
+        "nvg": true
+      }
+    },
+    {
+      "id": "body-plita2",
+      "kind": "body",
+      "name": "Бронежилет «Плита-2»",
+      "tier": 1,
+      "note": "Стандартная плита на корпус.",
+      "effects": {
+        "armor": {
+          "body": 20
+        }
+      }
+    },
+    {
+      "id": "body-plita4",
+      "kind": "body",
+      "name": "Бронежилет «Плита-4»",
+      "tier": 2,
+      "note": "Плита, защита паха и подсумок под гранату.",
+      "effects": {
+        "armor": {
+          "body": 20,
+          "groin": 10
+        },
+        "grenades": 1,
+        "dodge": -0.01
+      }
+    },
+    {
+      "id": "suit-field",
+      "kind": "suit",
+      "name": "Полевой костюм",
+      "tier": 1,
+      "note": "Базовый костюм. Красится в любой цвет.",
+      "effects": {}
+    },
+    {
+      "id": "suit-ryvok",
+      "kind": "suit",
+      "name": "Комбинезон «Рывок»",
+      "tier": 2,
+      "note": "Штурмовой комбинезон: легче сделать рывок, но издали заметнее.",
+      "effects": {
+        "dashEvade": 0.03,
+        "camo": {
+          "far": -0.02
+        }
+      }
+    },
+    {
+      "id": "boots-bertsy",
+      "kind": "boots",
+      "name": "Берцы",
+      "tier": 1,
+      "note": "Армейские ботинки с защитой голени.",
+      "effects": {
+        "armor": {
+          "legs": 10
+        }
+      }
+    },
+    {
+      "id": "knife-std",
+      "kind": "knife",
+      "name": "Штатный нож",
+      "tier": 1,
+      "note": "Обычный армейский нож.",
+      "effects": {}
+    },
+    {
+      "id": "grenade-rg1",
+      "kind": "grenade",
+      "name": "Граната РГ-1",
+      "tier": 1,
+      "note": "Осколочная. Бьёт мимо щита по тому, кто стоит на месте.",
+      "effects": {},
+      "grenade": {
+        "type": "frag",
+        "base": 35,
+        "armorPen": 0.24,
+        "minDistance": 2,
+        "maxDistance": 8
+      }
+    }
+  ],
+  "KIND_FOR_SLOT": {
+    "head": "head",
+    "body": "body",
+    "suit": "suit",
+    "boots": "boots",
+    "knife": "knife",
+    "grenade": "grenade"
+  },
+  "MOD_SLOTS": [
+    "optic",
+    "muzzle",
+    "rail",
+    "mag",
+    "stock"
+  ],
+  "MOD_SLOT_NAMES": {
+    "optic": "Прицел",
+    "muzzle": "Дульное устройство",
+    "rail": "Цевьё и модуль",
+    "mag": "Магазин",
+    "stock": "Приклад или рукоять"
+  },
+  "SMOKE_PENALTY": 0.35,
+  "TIER_NAMES": {
+    "1": "серийное",
+    "2": "армейское",
+    "3": "штучное"
+  },
+  "STARTER": {
+    "weapon2": null,
+    "head": "head-cap",
+    "body": "body-plita2",
+    "suit": "suit-field",
+    "boots": "boots-bertsy",
+    "knife": "knife-std",
+    "grenade": "grenade-rg1"
+  },
+  "VETERAN_KITS": {
+    "pistol": {
+      "weapon1": {
+        "item": "pistol-pustelga",
+        "mods": {
+          "optic": "optic-kp1",
+          "rail": "rail-lcu",
+          "mag": "mag-pistol-long",
+          "stock": "stock-pistol-hvat"
+        }
+      },
+      "weapon2": null,
+      "head": "head-k6",
+      "body": "body-plita2",
+      "suit": "suit-ryvok",
+      "boots": "boots-bertsy",
+      "knife": "knife-std",
+      "grenade": "grenade-rg1"
+    },
+    "shotgun": {
+      "weapon1": {
+        "item": "shotgun-taran",
+        "mods": {
+          "optic": "optic-blik",
+          "muzzle": "muzzle-choke",
+          "rail": "rail-luch",
+          "mag": "mag-shotgun-box",
+          "stock": "stock-shotgun-otdacha"
+        }
+      },
+      "weapon2": null,
+      "head": "head-k6",
+      "body": "body-plita4",
+      "suit": "suit-ryvok",
+      "boots": "boots-bertsy",
+      "knife": "knife-std",
+      "grenade": "grenade-rg1"
+    },
+    "rifle": {
+      "weapon1": {
+        "item": "rifle-varyag",
+        "mods": {
+          "optic": "optic-gran",
+          "muzzle": "muzzle-klyk",
+          "rail": "rail-kulak",
+          "mag": "mag-rifle-twin",
+          "stock": "stock-rifle-opora"
+        }
+      },
+      "weapon2": null,
+      "head": "head-sfera",
+      "body": "body-plita4",
+      "suit": "suit-field",
+      "boots": "boots-bertsy",
+      "knife": "knife-std",
+      "grenade": "grenade-rg1"
+    },
+    "sniper": {
+      "weapon1": {
+        "item": "sniper-berkut",
+        "mods": {
+          "optic": "optic-oryol",
+          "rail": "rail-upor",
+          "mag": "mag-sniper-10",
+          "stock": "stock-sniper-izgotovka"
+        }
+      },
+      "weapon2": {
+        "item": "pistol-pustelga",
+        "mods": {
+          "optic": "optic-kp1"
+        }
+      },
+      "head": "head-sych",
+      "body": "body-plita2",
+      "suit": "suit-field",
+      "boots": "boots-bertsy",
+      "knife": "knife-std",
+      "grenade": "grenade-rg1"
+    }
+  },
+  "DEFAULT_BOT": {
+    "foresight": 1.2,
+    "caution": 0.85,
+    "cautionBehind": 1.2,
+    "temperature": 3
+  },
+  "SPREAD": {
+    "shotgun": {
+      "chance": 0.2,
+      "perStep": 0.04,
+      "max": 0.5,
+      "share": 0.35
+    }
+  },
+  "SYNC": {
+    "start": 3,
+    "perLevel": 3,
+    "maxLevel": 30,
+    "half": 6,
+    "levelXp": {
+      "base": 100,
+      "step": 50
+    },
+    "xp": {
+      "win": 100,
+      "draw": 60,
+      "loss": 40,
+      "perDamage": 0.5,
+      "damageCap": 50
+    },
+    "stats": {
+      "power": {
+        "name": "Мощность",
+        "about": "урон, сила крита, пробитие брони",
+        "max": {
+          "damage": 0.25,
+          "critMult": 0.3,
+          "pen": 8
+        }
+      },
+      "cooling": {
+        "name": "Охлаждение",
+        "about": "защита от пробития, восстановление за ход, жара",
+        "max": {
+          "antiPen": 8,
+          "regen": 4,
+          "heat": 1
+        }
+      },
+      "instinct": {
+        "name": "Инстинкт",
+        "about": "шанс крита, двойного выстрела и продавливания щита",
+        "max": {
+          "crit": 0.12,
+          "doubleShot": 0.08,
+          "guard": 0.08
+        }
+      },
+      "reflexes": {
+        "name": "Рефлексы",
+        "about": "уклонение, уклонение в рывке",
+        "max": {
+          "dodge": 0.1,
+          "dashEvade": 0.1
+        }
+      }
+    },
+    "mastery": {
+      "from": 74,
+      "to": 100,
+      "acc": 0.06,
+      "crit": 0.03,
+      "perHit": 0.3,
+      "hitCap": 5,
+      "win": 0.5,
+      "slow": 0.6
+    },
+    "botStats": {
+      "pistol": {
+        "reflexes": 0.4,
+        "instinct": 0.3,
+        "power": 0.2,
+        "cooling": 0.1
+      },
+      "shotgun": {
+        "power": 0.4,
+        "reflexes": 0.3,
+        "cooling": 0.2,
+        "instinct": 0.1
+      },
+      "rifle": {
+        "power": 0.35,
+        "cooling": 0.3,
+        "instinct": 0.2,
+        "reflexes": 0.15
+      },
+      "sniper": {
+        "instinct": 0.4,
+        "power": 0.3,
+        "cooling": 0.2,
+        "reflexes": 0.1
+      }
+    }
+  },
+  "TAG_COUNT": 1000000
+}

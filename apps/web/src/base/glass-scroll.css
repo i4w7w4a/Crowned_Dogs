@@ -1,0 +1,8 @@
+.cd-scroll-frame { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
+.cd-scroll-frame > .cd-scroll-viewport { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: none !important; scrollbar-gutter: auto !important; }
+.cd-scroll-frame > .cd-scroll-viewport::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+.cd-scroll-track { position: absolute; z-index: 2; top: 4px; right: 4px; bottom: 4px; width: 4px; border-radius: 999px; background: transparent; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
+.cd-scroll-track[hidden] { display: none; }
+.cd-scroll-track::before { content: ""; position: absolute; inset: 0 -5px; }
+.cd-scroll-thumb { position: absolute; top: 0; left: 0; width: 100%; border-radius: inherit; background: rgb(255 255 255 / 27%); pointer-events: none; }
+.cd-scroll-track:hover .cd-scroll-thumb, .cd-scroll-track.is-dragging .cd-scroll-thumb { background: rgb(255 255 255 / 50%); }

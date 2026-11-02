@@ -1,0 +1,10 @@
+{
+  "name": "@crowned-dogs/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@crowned-dogs/core": "*",
+    "grammy": "1.46.0"
+  }
+}

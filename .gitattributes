@@ -1,0 +1,12 @@
+# GitHub language bar: count only the code that ships in the game.
+# Frozen pre-Rust copies (test oracles), tests and dev tools stay in the repo but are not counted.
+**/reference/** linguist-detectable=false
+**/browser90/** linguist-detectable=false
+**/test/** linguist-detectable=false
+**/tests/** linguist-detectable=false
+*.test.ts linguist-detectable=false
+**/scripts/** linguist-detectable=false
+tools/** linguist-detectable=false
+
+# Shell scripts must remain executable on Linux after Windows checkouts.
+*.sh text eol=lf

@@ -1,0 +1,401 @@
+/* Trial arena: a painted backdrop with live 3D figures standing in it.
+   Attack: a tap on a ring on the enemy's body. Amber = the aimed zone, cyan = the Zont, white = whatever is picked.
+   Layout (Art's mock-up): the picture fills the screen; health and the turn clock on top, the distance column at the right edge,
+   defence on the left and the attack on the right at the bottom, the fight log line under them. */
+:root {
+  --ink: #0a0b0b;
+  --panel: #0d0e0e;
+  --line: rgba(236, 232, 223, 0.14);
+  --line-strong: rgba(236, 232, 223, 0.32);
+  --fg: #ece8df;
+  --dim: rgba(236, 232, 223, 0.86);
+  --muted: #8e8c86;
+  --cream: #ece3cf;
+  --cream-ink: #17150f;
+  --cyan: #73d3e2;
+  --amber: #e9ac3f;
+  --red: #e0583f;
+  /* a picked choice: a soft light cold fill with dark words and icons; small print stays solid so it reads */
+  --pick-bg: #d2d7da;
+  --pick-fg: #0e1113;
+  --pick-dim: #3a4247;
+  --pick-hi: rgba(255, 255, 255, 0.7);
+  --display: "Inter Tight", "Helvetica Neue", Arial, sans-serif;
+  --body: "Inter", "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--ink);
+  color: var(--fg);
+  font: 15px/1.4 var(--body);
+  padding-left: max(0px, env(safe-area-inset-left, 0px));
+  padding-right: max(0px, env(safe-area-inset-right, 0px));
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible { outline: 1.5px solid var(--fg); outline-offset: 3px; }
+button:disabled { cursor: default; }
+
+.app {
+  position: relative; height: 100%; max-width: 440px; margin: 0 auto; overflow: hidden; overflow: clip;
+  background: var(--panel); display: flex; flex-direction: column;
+}
+@media (min-width: 700px) {
+  .app { width: 420px; height: min(100% - 32px, 900px); margin-top: 16px; border: 1px solid var(--line); border-radius: 22px; }
+}
+
+/* ---------- scene ---------- */
+/* the picture fills the whole screen; the control panel lies over its foot */
+.scene { position: absolute; inset: 0; overflow: hidden; overflow: clip; background: #050606; } /* clip: focus must never scroll the scene */
+.stage { position: absolute; inset: 0; }
+.stage img.bg, .stage canvas.gl { position: absolute; display: block; max-width: none; user-select: none; -webkit-user-drag: none; }
+.stage canvas.gl { pointer-events: none; }
+.flash { position: absolute; inset: 0; pointer-events: none; z-index: 3; opacity: 0; }
+.flash.ours { background: radial-gradient(60% 40% at 10% 100%, rgba(255,236,200,.75), rgba(255,236,200,0) 70%); }
+.flash.hurt { background: radial-gradient(130% 95% at 50% 50%, rgba(224,88,63,0) 50%, rgba(224,88,63,.5) 100%); }
+.flash.on { animation: flash .45s ease-out; }
+@keyframes flash { 0% { opacity: 1 } 100% { opacity: 0 } }
+.shake { animation: shake .28s linear; }
+/* first person, our Persona falls: the bodycam goes down with the body, so the painted hall and the figures tip
+   over together (turning only the 3D camera would swing the enemy off the painted floor) */
+.stage.down { transform-origin: 50% 70%; animation: down 1.25s cubic-bezier(.55, 0, .8, .45) forwards; }
+/* every in-between frame still covers the scene, tall or wide: each angle has the zoom it needs (12deg: 1.73) */
+@keyframes down {
+  0% { transform: none; filter: none }
+  30% { transform: rotate(1.5deg) scale(1.1) }
+  82% { transform: rotate(-12deg) scale(1.93); filter: brightness(.7) blur(1px) }
+  88% { transform: rotate(-10.8deg) scale(1.87) }
+  100% { transform: rotate(-11.2deg) scale(1.89); filter: brightness(.62) blur(1.5px) }
+}
+@keyframes shake { 0%,100% { translate: 0 0 } 25% { translate: -3px 2px } 50% { translate: 3px -1px } 75% { translate: -2px -2px } }
+.status { position: absolute; z-index: 7; left: 0; right: 0; top: 46%; text-align: center; font: 500 11px/1.4 var(--mono); letter-spacing: .08em; color: var(--muted); pointer-events: none; }
+
+/* ---------- icons ---------- */
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.ico { width: 20px; height: 20px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+.ico .fl { fill: currentColor; stroke: none; }
+.ico .fine { stroke-width: .9; stroke-opacity: .6; }
+.ico.flip { transform: scaleX(-1); }
+
+/* Liquid glass (Apple style), on every button of the fight and the menu: the same 60% black tint whatever the state,
+   a light blur, and a rim lit from the top left and the bottom right. In Chromium the picture also bends at the
+   rounded edge (hud/liquid.ts puts the lens filter into --lens). No outline (Art 20:07). A picked choice is filled
+   light with dark words, as on iOS (Art 2026-11-02: the old brighter edge was too easy to miss); an open menu and
+   the confirm button keep the brighter edge. */
+.glass {
+  --rim: linear-gradient(140deg, rgba(255,255,255,.66), rgba(255,255,255,.16) 26%, rgba(255,255,255,.06) 54%, rgba(255,255,255,.36));
+  --rim-w: 1px;
+  position: relative; border-radius: 12px; background: rgba(0,0,0,.6);
+  -webkit-backdrop-filter: blur(2px) saturate(1.6) brightness(1.05);
+  backdrop-filter: var(--lens,) blur(2px) saturate(1.6) brightness(1.05);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.14), inset 0 0 10px rgba(255,255,255,.06), 0 6px 18px rgba(0,0,0,.2);
+  transition: box-shadow .2s, color .18s, background-color .2s;
+}
+.glass::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: var(--rim-w); background: var(--rim); pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+}
+@media (hover: hover) {
+  .glass:hover:not(:disabled) { --rim: linear-gradient(140deg, rgba(255,255,255,.82), rgba(255,255,255,.24) 26%, rgba(255,255,255,.1) 54%, rgba(255,255,255,.48)); }
+}
+.glass[aria-expanded="true"], .go.glass:not(:disabled) {
+  --rim: linear-gradient(140deg, rgba(255,255,255,.98), rgba(255,255,255,.42) 26%, rgba(255,255,255,.22) 54%, rgba(255,255,255,.78));
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.3), inset 0 0 16px rgba(255,255,255,.2), 0 6px 18px rgba(0,0,0,.2);
+}
+/* :is() lifts every picked state above the screens' own colour rules (.cd-shell .glass and the like). */
+.glass:is(.on, [aria-pressed="true"]:not(.srow, .cd-sound-toggle), [aria-selected="true"]) {
+  --rim: linear-gradient(160deg, rgba(255,255,255,.85), rgba(255,255,255,.3) 40%, rgba(255,255,255,.6));
+  background-color: var(--pick-bg); color: var(--pick-fg); text-shadow: none;
+  box-shadow: inset 0 1px 0 var(--pick-hi), inset 0 -12px 18px rgba(40,52,60,.12), 0 6px 18px rgba(0,0,0,.35);
+}
+.glass:is(.on, [aria-pressed="true"]:not(.srow, .cd-sound-toggle), [aria-selected="true"]) .ico { filter: none; }
+.glass:disabled::before { opacity: .5; }
+.glass.round { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; }
+.glass.round .ico { width: 18px; height: 18px; }
+
+/* ---------- attack reticles on the enemy ---------- */
+.ring {
+  position: absolute; left: 0; top: 0; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%;
+  z-index: 4; display: grid; place-items: center; will-change: transform; color: #fff; transition: opacity .25s;
+}
+.ring svg { width: 40px; height: 40px; overflow: visible; filter: drop-shadow(0 0 2px rgba(0,0,0,.8)); transition: filter .18s; }
+.ring .rc { fill: rgba(0,0,0,.1); stroke: currentColor; stroke-opacity: .95; stroke-width: 1.5; transition: fill .18s, stroke .18s, stroke-width .18s; }
+.ring:hover .rc { stroke-opacity: 1; fill: rgba(255,255,255,.08); }
+.ring.sel { color: var(--amber); }
+.ring.sel svg { filter: drop-shadow(0 0 2px rgba(233,172,63,.9)) drop-shadow(0 0 7px rgba(233,172,63,.55)); }
+.ring.sel .rc { fill: rgba(233,172,63,.1); stroke-width: 2; }
+.ring.hint .rc { animation: hint 2.4s ease-in-out infinite; }
+@keyframes hint { 0%,100% { stroke-width: 1.5 } 50% { stroke-width: 2.4 } }
+.rings.idle .ring { opacity: .55; } /* no shot picked: a tap on a ring still makes one */
+.rings.off .ring { opacity: 0; pointer-events: none; } /* the turn is playing out */
+.rings.gone .ring { opacity: 0; pointer-events: none; }
+/* the aimed zone's label, hung off its ring on a short amber line (flip: the label is on the left) */
+.tag {
+  --lead: 16px; position: absolute; left: 0; top: 0; z-index: 5; will-change: transform; pointer-events: none;
+  font: 500 13px/1 var(--body); white-space: nowrap; color: var(--amber); font-variant-numeric: tabular-nums;
+  background: rgba(8,9,9,.72); border: 1px solid rgba(233,172,63,.75); border-radius: 4px; padding: 6px 9px;
+}
+.tag::before { content: ""; position: absolute; top: 50%; right: 100%; width: var(--lead); height: 1px; margin-top: -.5px; background: var(--amber); }
+.tag.flip::before { right: auto; left: 100%; }
+.float {
+  position: absolute; z-index: 6; transform: translate(-50%, -50%); pointer-events: none;
+  font: 700 26px/1 var(--display); letter-spacing: .01em; color: var(--fg); text-shadow: 0 2px 10px rgba(0,0,0,.8);
+  animation: rise 1.6s ease-out forwards; text-align: center; white-space: nowrap;
+}
+.float small { display: block; font: 600 11px/1.2 var(--display); letter-spacing: .12em; margin-top: 3px; text-transform: uppercase; }
+.float.dmg { color: #fff; } .float.dmg small { color: var(--red); }
+.float.blocked { color: var(--cyan); } .float.blocked small { color: var(--cyan); }
+.float.miss { color: var(--muted); font-size: 15px; letter-spacing: .12em; text-transform: uppercase; }
+@keyframes rise { 0% { opacity: 0; translate: 0 6px } 12% { opacity: 1; translate: 0 0 } 75% { opacity: 1 } 100% { opacity: 0; translate: 0 -22px } }
+.ripple { position: absolute; z-index: 5; width: 70px; height: 70px; margin: -35px 0 0 -35px; border-radius: 50%; pointer-events: none;
+  border: 1.5px solid var(--cyan); box-shadow: 0 0 22px rgba(115,211,226,.6), inset 0 0 16px rgba(115,211,226,.4);
+  animation: ripple .8s ease-out forwards; }
+@keyframes ripple { 0% { opacity: .95; transform: scale(.3) } 100% { opacity: 0; transform: scale(1.5) } }
+
+/* ---------- top: names, health and, in the middle, the turn over its clock ---------- */
+.hud { position: absolute; inset: 0 0 auto; z-index: 8; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 0; pointer-events: none;
+  color: var(--fg); text-shadow: 0 1px 2px rgba(0,0,0,.55), 0 0 12px rgba(0,0,0,.5); } /* no gradient behind: the shadows keep it readable on a bright picture */
+.duel { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 12px; }
+/* the warned hazard: one glass line under the health bars, the danger in amber */
+.hazard { display: flex; align-items: center; gap: 8px; width: fit-content; max-width: min(360px, 100%); margin: 10px auto 0; padding: 7px 12px 7px 10px; border-radius: 14px;
+  font: 500 12.5px/1.3 var(--body); color: var(--fg); text-shadow: none; }
+.hazard[hidden] { display: none; }
+.hazard .hz-ico { display: grid; flex: none; color: var(--amber); }
+.hazard .hz-ico .ico { width: 18px; height: 18px; }
+.side { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.side.en { align-items: flex-end; }
+.who { max-width: 100%; font: 500 11.5px/1.25 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hpl { display: flex; align-items: center; gap: 10px; width: 100%; }
+.side.en .hpl { flex-direction: row-reverse; }
+/* the number keeps a three-digit width, so the line never changes length as health falls */
+.hpl b { min-width: 1.75em; font: 600 24px/1 var(--display); letter-spacing: -.01em; font-variant-numeric: tabular-nums; transition: color .3s; }
+.side.en .hpl b { text-align: right; }
+.side.low .hpl b { color: var(--red); }
+/* a thin line running toward the clock, anchored at the number; the red piece behind is the last hit, draining a moment later */
+.bar { position: relative; flex: 1 1 auto; min-width: 0; height: 3px; margin-top: 2px; background: rgba(236,232,223,.14); box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.side.en .bar { transform: scaleX(-1); }
+.bar i { position: absolute; inset: 0 auto 0 0; width: 100%; background: #f4f1ea; transition: width .45s ease; }
+.bar i.lag { background: rgba(224,88,63,.85); transition: width .7s ease .6s; }
+.mid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.clock { font: 600 24px/1 var(--display); letter-spacing: .01em; font-variant-numeric: tabular-nums; transition: color .2s, opacity .3s; }
+.clock.low { color: var(--red); }
+.clock.idle { opacity: .45; }
+.turn { font: 500 11.5px/1.25 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
+
+/* ---------- the fight log line and the menu: the last row of the panel ---------- */
+/* both are the same glass as the buttons above; while the log is open it stands in for the controls */
+.dock { display: flex; gap: 8px; align-items: stretch; }
+.ctl, .moves { transition: opacity .25s, visibility .25s, translate .25s; }
+.app:has(#logBtn[aria-expanded="true"]) :is(.ctl, .moves) { opacity: 0; visibility: hidden; }
+/* while the turn plays out the controls step aside and leave the picture to the fight; the log line stays */
+.panel.playing :is(.ctl, .moves) { opacity: 0; visibility: hidden; translate: 0 12px; }
+.ticker { flex: 1 1 auto; min-width: 0; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 13px; text-align: left; }
+.recdot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--red); box-shadow: 0 0 8px rgba(224,88,63,.7); animation: rec 1.6s steps(2, jump-none) infinite; }
+@keyframes rec { 50% { opacity: .25 } }
+.ticker .tx { flex: 1 1 auto; min-width: 0; font: 400 13px/1.2 var(--body); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker .tx b { font: 600 11px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
+.ticker .tx em { font-style: normal; font-weight: 600; }
+.ticker .tx .ico { width: 12px; height: 12px; vertical-align: -1px; margin-left: 3px; stroke-width: 1.6; }
+.ticker .tx .us { color: var(--amber); } .ticker .tx .them { color: var(--red); } .ticker .tx .blk { color: var(--cyan); } .ticker .tx .nil { color: var(--muted); }
+.ticker > .ico { width: 18px; height: 18px; color: rgba(236,232,223,.85); transition: transform .2s; }
+.ticker[aria-expanded="true"] > .ico { transform: rotate(180deg); }
+.ticker.fresh { animation: fresh .9s ease-out; }
+@keyframes fresh { 0% { background: rgba(255,255,255,.3) } 100% { background: rgba(0,0,0,.6) } }
+.dockbtn { flex: 0 0 auto; width: 40px; display: grid; place-items: center; color: var(--fg); }
+.dockbtn .ico { width: 20px; height: 20px; }
+
+/* the full log slides up from the log line, over the controls: the same glass, darker so the lines read */
+.logsheet.glass { position: absolute; z-index: 9; left: 18px; right: 18px; bottom: calc(58px + env(safe-area-inset-bottom, 0px)); max-height: min(64%, 440px);
+  display: flex; flex-direction: column; overflow: hidden; border-radius: 20px; background: rgba(10,11,11,.62);
+  -webkit-backdrop-filter: blur(10px) saturate(1.5); backdrop-filter: var(--lens,) blur(10px) saturate(1.5); animation: sheetUp .22s ease-out; }
+@keyframes sheetUp { from { opacity: 0; translate: 0 12px } to { opacity: 1; translate: 0 0 } }
+.logsheet header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 13px 8px 11px 14px; border-bottom: 1px solid var(--line); }
+.logsheet h3 { margin: 0 0 6px; font: 600 17px/1.1 var(--display); }
+.logsheet .meta { font: 400 10px/1.4 var(--mono); letter-spacing: .04em; color: var(--muted); }
+.logsheet .meta i { font-style: normal; color: var(--red); }
+.logsheet header button { width: 32px; height: 32px; display: grid; place-items: center; color: var(--muted); margin-top: -6px; }
+.logsheet header button:hover { color: var(--fg); }
+.entries { list-style: none; margin: 0; padding: 4px 0 8px; overflow-y: auto; overscroll-behavior: contain; }
+.entries .empty { padding: 14px; color: var(--muted); font-size: 13px; }
+.entry { padding: 9px 14px 8px; }
+.entry + .entry { border-top: 1px solid rgba(236,230,216,.06); }
+.eh { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; font: 600 10px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.eh span:last-child { font: 400 10px/1 var(--mono); letter-spacing: .04em; }
+.ln { display: grid; grid-template-columns: 16px 46px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 22px; }
+.ln .ico { width: 16px; height: 16px; color: var(--muted); }
+.ln.me .ico { color: rgba(233,172,63,.85); } .ln.en .ico { color: rgba(224,88,63,.85); }
+.ln .w { font: 600 11px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.ln .a { font: 400 13px/1.25 var(--body); color: var(--fg); min-width: 0; }
+.ln .r { display: flex; align-items: center; gap: 4px; font: 600 16px/1 var(--display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ln .r .ico { width: 13px; height: 13px; }
+.ln .r small { font: 600 10px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; }
+.ln.me .r.dmg { color: var(--amber); } .ln.en .r.dmg { color: var(--red); }
+.ln .r.blk, .ln .r.blk .ico { color: var(--cyan); }
+.ln .r.nil { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+/* ---------- panel ---------- */
+/* no fill of its own: the picture runs under it, the words and lines keep a shadow */
+.panel { position: absolute; z-index: 8; left: 0; right: 0; bottom: 0; padding: 0 18px calc(10px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 14px;
+  text-shadow: 0 0 2px rgba(0,0,0,.9), 0 1px 3px rgba(0,0,0,.8), 0 0 12px rgba(0,0,0,.65); }
+.panel .ico { filter: drop-shadow(0 0 1.5px rgba(0,0,0,.85)) drop-shadow(0 1px 3px rgba(0,0,0,.55)); }
+/* defence on the left; on the right the knife and the grenade over the confirm button; the two bottoms line up */
+.ctl { display: grid; grid-template-columns: minmax(0, 1fr) 60%; gap: 14px; align-items: end; }
+
+/* distance: a column at the right edge above the controls; the middle line reads the distance after the move and means "stay" */
+.moves { position: absolute; right: 10px; bottom: calc(100% + 12px); width: 72px; display: flex; flex-direction: column; }
+.mv { height: 34px; display: grid; place-items: center; color: rgba(255,255,255,.82); transition: color .18s, opacity .18s; }
+.mv .ico { width: 24px; height: 24px; stroke-width: 1.7; filter: drop-shadow(0 0 1.5px rgba(0,0,0,.9)) drop-shadow(0 1px 4px rgba(0,0,0,.7)); }
+.mv .ico.down { transform: scaleY(-1); }
+.mv:hover:not(:disabled) { color: #fff; }
+/* the picked step: the same light fill as a picked button */
+.mv.on { align-self: center; min-width: 46px; padding: 0 10px; border-radius: 12px; background: var(--pick-bg); color: var(--pick-fg); text-shadow: none; box-shadow: inset 0 1px 0 var(--pick-hi), 0 4px 14px rgba(0,0,0,.4); }
+.mv.on .ico { stroke-width: 2; filter: none; }
+.mv:disabled { opacity: .22; }
+/* a move that ends inside the warned stretch */
+.mv.risk { color: var(--amber); }
+.mv.risk.on { box-shadow: inset 0 1px 0 var(--pick-hi), inset 0 -3px 0 var(--amber), 0 4px 14px rgba(0,0,0,.4); }
+.ln.hz .a { grid-column: 2 / -1; color: var(--dim); }
+.ln.hz .ico { color: var(--muted); } .ln.hz.hurt .ico, .ln.hz.hurt .a { color: var(--amber); }
+.ticker .tx .hz { color: var(--amber); font-weight: 500; }
+/* the distance is plain text, picked or not (Art, 2026-11-02): no fill, it only turns bright and bold */
+.mv.stay { height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font: 500 14px/1 var(--body); color: rgba(255,255,255,.7); white-space: nowrap; text-shadow: 0 0 2px rgba(0,0,0,.9), 0 1px 5px rgba(0,0,0,.7); }
+.mv.stay.on, .mv.stay.risk.on { background: none; box-shadow: none; padding: 0; color: #fff; font-weight: 700; text-shadow: 0 0 2px rgba(0,0,0,.9), 0 1px 5px rgba(0,0,0,.7); }
+.mv.stay small { font: 500 11px/1 var(--body); color: var(--amber); }
+
+/* defence: four glass buttons, each with a small figure that lights its zone; a guarded zone is filled light.
+   The enemy's hit on us floats over our fighter, the controls are away then */
+.guard { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.glabel { margin-bottom: 1px; font: 500 14px/1.2 var(--body); color: var(--dim); white-space: nowrap; }
+#pips { margin-left: 3px; font-variant-numeric: tabular-nums; transition: color .18s; }
+#pips.done { color: #fff; }
+.dz { height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 11px; text-align: left; font: 500 15px/1 var(--body); color: rgba(236,232,223,.8); }
+.dz .fig { --off: rgba(236,232,223,.3); flex: 0 0 auto; width: 13px; height: 22px; overflow: visible; filter: drop-shadow(0 0 1px rgba(0,0,0,.7));
+  --f-head: var(--off); --f-body: var(--off); --f-groin: var(--off); --f-legs: var(--off); }
+.dz[data-z="head"] .fig { --f-head: currentColor; }
+.dz[data-z="body"] .fig { --f-body: currentColor; }
+.dz[data-z="groin"] .fig { --f-groin: currentColor; }
+.dz[data-z="legs"] .fig { --f-legs: currentColor; }
+.dz .zl { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dz.on { font-weight: 600; }
+.dz.on .fig { --off: rgba(14,17,19,.22); filter: none; }
+.dz:disabled > * { opacity: .45; }
+
+/* attack other than a shot: knife and grenade side by side, edge to edge with the confirm button; the other gun above them when the kit has one */
+.actcol { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.act, .swap { min-width: 0; display: flex; align-items: center; gap: 8px; text-align: left; color: var(--fg); }
+.act { height: 48px; gap: 7px; padding: 0 6px 0 9px; }
+.act .ico { width: 20px; height: 20px; color: rgba(236,232,223,.85); }
+.act .at { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.act .an { font: 500 14px/1 var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.act .as { display: flex; align-items: center; gap: 2px; font: 400 12px/1 var(--body); color: rgba(236,232,223,.62); font-variant-numeric: tabular-nums; }
+/* the steps after a range: small solid footprints */
+.act .as .ico { width: 13px; height: 13px; color: inherit; fill: currentColor; stroke: none; filter: none; }
+.swap { height: 40px; padding: 0 12px 0 10px; }
+.swap .ico { width: 18px; height: 18px; color: rgba(236,232,223,.85); }
+.swap .an { font: 500 14px/1 var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.swap .as { margin-left: auto; font: 400 12px/1 var(--body); color: rgba(236,232,223,.62); white-space: nowrap; }
+.act.on .an, .swap.on .an { font-weight: 600; }
+.act.on .ico, .swap.on .ico { color: inherit; }
+.act.on .as, .swap.on .as { color: var(--pick-dim); }
+.act:disabled > *, .swap:disabled > * { opacity: .38; }
+
+/* confirm the turn: the same glass, its rim turns solid white once the order is complete */
+.go { height: 52px; display: flex; align-items: center; justify-content: center; padding: 0 14px; color: #fff;
+  font: 500 18px/1.1 var(--body); text-align: center; }
+.go .gt { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.go:disabled { color: rgba(236,232,223,.66); font-size: 14.5px; }
+
+@media (max-width: 374px) {
+  .panel { padding-left: 14px; padding-right: 14px; }
+  .logsheet.glass { left: 14px; right: 14px; }
+  .sh-in .seg button { font-size: 12.5px; letter-spacing: -.01em; }
+  .ctl { gap: 12px; }
+  .dz { font-size: 14px; gap: 8px; padding: 0 8px 0 9px; }
+  .act { gap: 6px; padding: 0 5px 0 8px; }
+  .act .an { font-size: 13px; }
+}
+
+/* ---------- menu: a floating sheet of the same glass, darker so the text reads; every control in it is glass too ---------- */
+.veil { position: absolute; inset: 0; z-index: 20; display: flex; align-items: flex-end; background: rgba(0,0,0,.72);
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
+.sheet.glass { width: 100%; max-height: 100%; display: flex; border-radius: 28px; overflow: hidden; background: rgba(12,13,13,.6);
+  -webkit-backdrop-filter: blur(12px) saturate(1.5); backdrop-filter: var(--lens,) blur(12px) saturate(1.5); animation: sheetUp .24s ease-out; }
+.sh-in { flex: 1 1 auto; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+.sh-in > * { flex-shrink: 0; }
+.sheet .sh-head { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  /* the title and the cross stay put while the menu scrolls */
+  position: sticky; top: -18px; z-index: 2; margin: -18px -16px 0; padding: 18px 16px 10px; background: rgba(12,13,13,.99); }
+.sheet h2 { margin: 0 0 0 2px; font: 600 22px/1.1 var(--display); }
+.sheet p { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.5; }
+.sheet .label { margin: 6px 0 -2px 2px; font: 500 14px/1.2 var(--body); color: rgba(236,232,223,.62); }
+.srow { min-height: 52px; display: flex; align-items: center; gap: 12px; padding: 11px 12px 11px 14px; text-align: left; font: 500 15px/1.2 var(--body); }
+.srow .ico { width: 20px; height: 20px; }
+.srow .sl { min-width: 0; }
+.srow .sl small { display: block; margin-top: 4px; font: 400 12px/1.35 var(--body); color: rgba(236,232,223,.6); }
+/* the switch: a white track with the dark knob on the right when on, a grey track with the knob on the left when off */
+.srow .st { position: relative; flex: 0 0 auto; margin-left: auto; width: 46px; height: 28px; border-radius: 14px; background: rgba(255,255,255,.9); font-size: 0; color: transparent; transition: background .2s; }
+.srow .st::after { content: ""; position: absolute; top: 3px; left: 21px; width: 22px; height: 22px; border-radius: 50%; background: #111212; box-shadow: 0 1px 3px rgba(0,0,0,.35); transition: left .2s, background .2s; }
+.srow.off .st { background: rgba(255,255,255,.16); }
+.srow.off .st::after { left: 3px; background: var(--fg); }
+.srow .mute { display: none; }
+.srow.off .mute { display: inline; } .srow.off .wave { display: none; }
+/* volume: fight sounds and music; the switch above stays the master mute */
+.vol { display: flex; flex-direction: column; padding: 0 4px 0 14px; transition: opacity .18s; }
+.srow.off + .vol { opacity: .45; }
+.vrow { display: grid; grid-template-columns: 84px minmax(0, 1fr) 28px; align-items: center; gap: 12px; min-height: 40px; font: 400 14px/1.2 var(--body); color: var(--dim); }
+.vrow output { font: 500 12px/1 var(--body); color: rgba(236,232,223,.6); text-align: right; font-variant-numeric: tabular-nums; }
+.vrow input { --v: 100%; -webkit-appearance: none; appearance: none; width: 100%; height: 28px; margin: 0; background: transparent; cursor: pointer; }
+.vrow input:focus-visible { outline: 1.5px solid var(--fg); outline-offset: 2px; border-radius: 6px; }
+.vrow input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, #fff var(--v), rgba(255,255,255,.18) var(--v)); }
+.vrow input::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,.18); }
+.vrow input::-moz-range-progress { height: 4px; border-radius: 2px; background: #fff; }
+/* the thumb: a round white knob */
+.vrow input::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -9px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.vrow input::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.seg { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 6px; }
+.seg button { height: 44px; padding: 0 2px; font: 500 14px/1.1 var(--body); color: rgba(236,232,223,.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* five in a row (time, weather, graphics): smaller, so «По часам» and «Минимум» fit a phone's width */
+@container style(--n: 5) { .seg button { font-size: 12px; letter-spacing: -.02em; } }
+/* each map shows its own hour and weather under its name */
+#mapSeg button { height: 52px; }
+#mapSeg button small { display: block; margin-top: 3px; font: 400 11px/1.2 var(--body); color: rgba(236,232,223,.55); overflow: hidden; text-overflow: ellipsis; }
+/* a map the clock has shut (it still opens, for checks): amber reason and countdown */
+#mapSeg button small.shut { color: #e9ac3f; }
+#mapSeg button[aria-pressed="true"] small { color: var(--pick-dim); }
+.sheet .gfx-note { margin-top: -6px; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tracks button { text-align: left; padding: 10px 12px; font: 500 14px/1.2 var(--body); color: rgba(236,232,223,.85); }
+.tracks button small { display: block; margin-top: 3px; font: 400 12px/1.2 var(--body); color: rgba(236,232,223,.55); }
+.tracks button[aria-pressed="true"] small { color: var(--pick-dim); }
+.sheet .acts2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.sheet .home { width: 100%; margin-top: 8px; }
+.ghost { height: 52px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 500 16px/1 var(--body); color: var(--fg); }
+.ghost .ico { width: 18px; height: 18px; }
+
+/* ---------- end of the fight ---------- */
+.end { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; text-align: center; background: rgba(5,6,6,.74); padding: 24px; }
+.end .box { display: flex; flex-direction: column; gap: 14px; align-items: center; max-width: 300px; }
+.end .badge { width: 52px; height: 52px; display: grid; place-items: center; color: var(--fg); }
+.end .badge .ico { width: 34px; height: 34px; stroke-width: 1.1; }
+.end.lost .badge { color: var(--cyan); }
+.end h2 { margin: 0; font: 700 34px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; }
+.end.lost h2 { color: var(--cyan); text-shadow: 3px 0 rgba(224,88,63,.55), -3px 0 rgba(115,211,226,.55); }
+.end p { margin: 0; color: #cfcac0; }
+.stats { display: grid; grid-template-columns: repeat(3, auto); gap: 18px; padding: 10px 0 4px; }
+.stats div { display: flex; flex-direction: column; gap: 5px; }
+.stats b { font: 600 24px/1 var(--display); font-variant-numeric: tabular-nums; }
+.stats span { font: 500 10px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.end .sync { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin: 2px 0 6px; font: 500 12px/1.4 var(--display); color: var(--cyan); }
+.end .sync:empty { display: none; }
+.end .go, .end .home { width: 240px; }
+@media (prefers-reduced-motion: reduce) {
+  .ring.hint .rc, .shake, .flash.on, .ripple, .recdot, .ticker.fresh, .logsheet, .sheet { animation: none !important; }
+  .float { animation-duration: 2.4s; }
+}

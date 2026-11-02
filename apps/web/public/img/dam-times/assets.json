@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "source": "Codex image_gen: approved dam-day plate, its clean edit and lighting-weather edits",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/dam-times/morning/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2915020,
+      "sha256": "6eab757a943099b17ca2d52f4f36506aea4eb817fecd87e901d41617d6c799ce"
+    },
+    {
+      "path": "apps/web/public/img/dam-times/morning/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 597486,
+      "sha256": "b199d0216028e8e87254a300d6fb959c7c15348fedbc2bb17056ee0f89799040"
+    },
+    {
+      "path": "apps/web/public/img/dam-times/morning/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2844385,
+      "sha256": "bdf52622ad2bffce971004d5a6fb839089dac822247104a08d519c4b72e6f6fa"
+    },
+    {
+      "path": "apps/web/public/img/dam-times/morning/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 579438,
+      "sha256": "c2558ca26ce1bafc7471d5a9a124ca1921bbb3333a84f59bba0a2b8f6d42925f"
+    },
+    {
+      "path": "apps/web/public/img/dam-times/evening/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3104073,
+      "sha256": "6ae5decf5dcfef15e5913e702fe36f7f90c1c939c2b8326d0fe3edbf64a76c21"
+    },
+    {
+      "path": "apps/web/public/img/dam-times/evening/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 690526,
+      "sha256": "171bd385de528fb498f0a58840c87dbebb5a4f88fcb3c8c1fecad5ada9c0f3f8"
+    },
+    {
+      "path": "apps/web/public/img/dam-times/evening/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2962503,
+      "sha256": "e4afb54f735543bb723524a8f4c68bd12204378106501660edc53d12702f674c"
+    },
+    {
+      "path": "apps/web/public/img/dam-times/evening/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 655756,
+      "sha256": "6c8cdc3d30f8fcf32ebfb8ccf316b54dcb66b14b09f05eba94adec08ae565a79"
+    },
+    {
+      "path": "apps/web/public/img/dam-times/night/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2203474,
+      "sha256": "b7ba13cd7a7f5e6bda73aa4aeaa78a3b369ad5c0ae8a5433261907c46670f43b"
+    },
+    {
+      "path": "apps/web/public/img/dam-times/night/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 335760,
+      "sha256": "87ae6d482e143ae1863c875128b8c38477a7d9daa90ff4e562bc835d46e8a10f"
+    },
+    {
+      "path": "apps/web/public/img/dam-times/night/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2136492,
+      "sha256": "0e43785bb531e7490d2353562fda5e4eb5ced85a48b6d3ab68e167ff124c9df9"
+    },
+    {
+      "path": "apps/web/public/img/dam-times/night/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 326316,
+      "sha256": "4c146df4805fda489980f154e14710e529a2c87114b9aec5feb161db4896e326"
+    }
+  ]
+}

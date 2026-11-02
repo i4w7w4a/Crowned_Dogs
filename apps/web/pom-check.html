@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Crowned Dogs · проверка рельефа</title></head>
+<body><main><h1>Подиум: проверка Silhouette POM</h1><nav>
+<button data-view="close">Крупный план</button><button data-view="grazing">Скользящий угол</button><button data-view="top">Сверху</button><button id="rotate">Повернуть</button>
+<label>Качество <select id="quality"><option value="low">Низкое</option><option value="medium">Среднее</option><option value="high">Высокое</option><option value="ultra" selected>Ультра</option></select></label>
+<button id="verify">Проверить силуэт и глубину</button></nav><canvas id="podium" aria-label="Подиум с рельефом"></canvas><pre id="result" role="status">Загрузка Rust…</pre></main>
+<script type="module" src="/src/base/pom-check.ts"></script></body></html>

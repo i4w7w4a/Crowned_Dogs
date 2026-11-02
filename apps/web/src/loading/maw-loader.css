@@ -1,0 +1,30 @@
+.cd-maw-loader { position: fixed; inset: 0; z-index: 100; margin: 0; padding: 0; border: 0; max-width: none; max-height: none; width: 100%; height: 100%; height: 100dvh; overflow: hidden; color: #e9e3d3; background: radial-gradient(ellipse 70% 55% at 50% 40%, #1a1c1e, #0a0b0c 70%) #0a0b0c; }
+.cd-maw-loader::backdrop { background: #0a0b0c; }
+.cd-maw-loader:not([open]) { display: none; }
+.cd-maw-inner { position: relative; display: grid; grid-template-rows: minmax(0, 1fr) auto; width: min(100%, 480px); height: 100%; margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 24px max(20px, env(safe-area-inset-bottom)); }
+.cd-maw-stage { position: relative; min-height: 0; }
+.cd-maw-stage canvas, .cd-maw-fallback { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.cd-maw-fallback { object-fit: contain; padding: 36px 4px; }
+.cd-maw-stage canvas { opacity: 0; }
+.cd-maw-stage.is-3d canvas { opacity: 1; }
+.cd-maw-stage.is-3d .cd-maw-fallback { visibility: hidden; }
+.cd-maw-hud { display: grid; justify-items: center; gap: 14px; padding: 10px 0 0; }
+.cd-maw-word { margin: 0; width: min(100%, 360px); }
+.cd-maw-word img { display: block; width: 100%; height: auto; }
+.cd-maw-progress { position: relative; height: 2px; width: 100%; background: #e9e3d329; overflow: hidden; }
+.cd-maw-progress::after { content: ""; position: absolute; inset: 0; width: 34%; background: #e9e3d3; transform: translateX(-100%); animation: cd-maw-wait 1.6s ease-in-out infinite; }
+.cd-maw-status { margin: 0; color: #aaa79c; font-size: 13px; letter-spacing: .035em; text-align: center; }
+.cd-maw-actions { display: flex; justify-content: center; gap: 12px; width: 100%; min-height: 44px; margin-top: 8px; }
+.cd-maw-actions button { min-height: 44px; padding: 10px 22px; border-radius: 13px; font-size: 13px; }
+.cd-maw-actions button:focus-visible { outline: 2px solid #e9e3d3; outline-offset: 3px; }
+/* «На базу» sits in the top-left corner like an iOS back button (Art 2026-11-02, variant A), apart from the progress. */
+.cd-maw-loader > .cd-maw-back { position: absolute; z-index: 1; top: max(14px, calc(env(safe-area-inset-top) + 6px)); left: max(14px, calc(env(safe-area-inset-left) + 8px));
+  display: flex; align-items: center; gap: 4px; min-height: 38px; padding: 0 16px 0 9px; border-radius: 19px; font-size: 14px; color: #fff; }
+.cd-maw-loader > .cd-maw-back .ico { width: 18px; height: 18px; }
+.cd-maw-loader > .cd-maw-back:focus-visible { outline: 2px solid #e9e3d3; outline-offset: 3px; }
+.cd-maw-loader.is-ready .cd-maw-progress::after { width: 100%; animation: none; transform: none; }
+.cd-maw-loader.is-error .cd-maw-progress { visibility: hidden; }
+.cd-maw-loader.is-ready { opacity: 0; transition: opacity .28s ease .08s; }
+@keyframes cd-maw-wait { from { transform: translateX(-100%); } to { transform: translateX(400%); } }
+@media (max-height: 660px) { .cd-maw-hud { gap: 11px; } .cd-maw-fallback { padding: 20px 8px; } }
+@media (prefers-reduced-motion: reduce) { .cd-maw-progress::after { animation: none; width: 100%; transform: none; opacity: .55; } .cd-maw-loader.is-ready { transition: none; } }

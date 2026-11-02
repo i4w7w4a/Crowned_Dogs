@@ -1,0 +1,20 @@
+node_modules/
+.env
+data/
+*.log
+.DS_Store
+apps/web/public/media/
+apps/web/public/models/
+apps/web/dist/
+apps/web/.ktx2/
+__pycache__/
+target/
+release-local/
+output/beards/
+packages/runtime/wasm/
+apps/desktop/gen/
+# Sonniss effects and ambience: the licence keeps them out of a public repository.
+# They live in private-audio/ next to the clone (see packages/audio/README.md).
+packages/audio/assets/sfx/
+packages/audio/assets/amb/
+private-audio/

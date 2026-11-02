@@ -1,0 +1,32 @@
+{
+ "voice/sedoy-1.mp3": {
+  "seconds": 5.365,
+  "text": "Оператор, слышишь меня? Я Седой, твой инструктор. Говорю коротко, пока канал держится.",
+  "source": "Google gemini-3.8-flash-tts, voice Algenib"
+ },
+ "voice/sedoy-2.mp3": {
+  "seconds": 6.572,
+  "text": "Воевать будешь не сам. Ляжешь в капсулу, наденешь корону и поведёшь Персону, боевого робота.",
+  "source": "Google gemini-3.8-flash-tts, voice Algenib"
+ },
+ "voice/sedoy-3.mp3": {
+  "seconds": 7.826,
+  "text": "Персона чувствует всё, значит, и ты тоже. Её убьют, ты очнёшься в капсуле. Но больно будет по-настоящему.",
+  "source": "Google gemini-3.8-flash-tts, voice Algenib"
+ },
+ "voice/sedoy-4.mp3": {
+  "seconds": 8.245,
+  "text": "Теперь контракт с ЧВК. Служба по контракту, платим водой. Отказ не принимается: умирать-то будешь не ты.",
+  "source": "Google gemini-3.8-flash-tts, voice Algenib"
+ },
+ "voice/sedoy-5.mp3": {
+  "seconds": 5.543,
+  "text": "Подписано. Вот твой жетон. По нему тебя найдут и по нему заплатят.",
+  "source": "Google gemini-3.8-flash-tts, voice Algenib"
+ },
+ "voice/sedoy-6.mp3": {
+  "seconds": 6.354,
+  "text": "Теперь соберём тебе Персону. Её делают похожей на оператора: так мозг быстрее принимает чужое тело.",
+  "source": "Google gemini-3.8-flash-tts, voice Algenib"
+ }
+}

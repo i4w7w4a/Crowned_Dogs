@@ -1,0 +1,20 @@
+[package]
+name = "crowned-dogs-desktop"
+version.workspace = true
+edition.workspace = true
+build = "build.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde_json.workspace = true
+
+[[bin]]
+name = "CrownedDogs"
+path = "src/main.rs"
+
+[[bin]]
+name = "CrownedDogs-Web"
+path = "src/browser.rs"

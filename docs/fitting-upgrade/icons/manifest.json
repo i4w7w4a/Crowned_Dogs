@@ -1,0 +1,333 @@
+{
+  "name": "Crowned Dogs equipment pictograms",
+  "source": "apps/web/src/base/equipment-icons.ts",
+  "catalogue": "packages/core/src/items.ts",
+  "count": 32,
+  "viewBox": "0 0 48 48",
+  "defaultColor": "#f2f3f3",
+  "colorUsage": "All paths use currentColor. Standalone files set color on the SVG root for viewing. Override it with CSS on the inline svg, for example .cd-equipment-icon { color: #8f969b; }. External img elements cannot inherit their parent's color. Runtime equipmentIcon() has no fixed color.",
+  "regenerate": "node docs/fitting-upgrade/export-equipment-icons.mjs",
+  "items": [
+    {
+      "id": "pistol-pustelga",
+      "name": "Пистолет «Пустельга»",
+      "kind": "weapon",
+      "slots": [
+        "weapon1",
+        "weapon2"
+      ],
+      "file": "pistol-pustelga.svg",
+      "note": "Служебный пистолет ЧВК. Часто критует, носится запасным к любому стволу."
+    },
+    {
+      "id": "shotgun-taran",
+      "name": "Дробовик «Таран»",
+      "kind": "weapon",
+      "slots": [
+        "weapon1"
+      ],
+      "file": "shotgun-taran.svg",
+      "note": "Полуавтомат 12-го калибра. Страшен вплотную, дальше 8 шагов не достаёт."
+    },
+    {
+      "id": "rifle-varyag",
+      "name": "Автомат «Варяг»",
+      "kind": "weapon",
+      "slots": [
+        "weapon1"
+      ],
+      "file": "rifle-varyag.svg",
+      "note": "Армейский автомат. Ровный на любой дистанции, лучший выбор для новичка."
+    },
+    {
+      "id": "sniper-berkut",
+      "name": "Винтовка «Беркут»",
+      "kind": "weapon",
+      "slots": [
+        "weapon1"
+      ],
+      "file": "sniper-berkut.svg",
+      "note": "Снайперская винтовка. Бьёт сильнее всех и часто критует, но стреляет точно только из стойки."
+    },
+    {
+      "id": "head-cap",
+      "name": "Кепка",
+      "kind": "head",
+      "slots": [
+        "head"
+      ],
+      "file": "head-cap.svg",
+      "note": "Не защищает, зато на ней место под шеврон."
+    },
+    {
+      "id": "head-k6",
+      "name": "Каска К-6",
+      "kind": "head",
+      "slots": [
+        "head"
+      ],
+      "file": "head-k6.svg",
+      "note": "Простая стальная каска."
+    },
+    {
+      "id": "head-sfera",
+      "name": "Шлем «Сфера-М»",
+      "kind": "head",
+      "slots": [
+        "head"
+      ],
+      "file": "head-sfera.svg",
+      "note": "Тяжёлый шлем с забралом."
+    },
+    {
+      "id": "head-sych",
+      "name": "Шлем с ПНВ «Сыч»",
+      "kind": "head",
+      "slots": [
+        "head"
+      ],
+      "file": "head-sych.svg",
+      "note": "Лёгкий шлем с прибором ночного видения."
+    },
+    {
+      "id": "head-marevo",
+      "name": "Шлем с тепловизором «Марево»",
+      "kind": "head",
+      "slots": [
+        "head"
+      ],
+      "file": "head-marevo.svg",
+      "note": "Видит тепло сквозь пыль и дым."
+    },
+    {
+      "id": "head-filin",
+      "name": "Шлем «Филин»",
+      "kind": "head",
+      "slots": [
+        "head"
+      ],
+      "file": "head-filin.svg",
+      "note": "Крепкий шлем с ночным видением. Тяжёлый."
+    },
+    {
+      "id": "body-light",
+      "name": "Разгрузка «Лёгкая»",
+      "kind": "body",
+      "slots": [
+        "body"
+      ],
+      "file": "body-light.svg",
+      "note": "Тонкая плита и много подсумков."
+    },
+    {
+      "id": "body-plita2",
+      "name": "Бронежилет «Плита-2»",
+      "kind": "body",
+      "slots": [
+        "body"
+      ],
+      "file": "body-plita2.svg",
+      "note": "Стандартная плита на корпус."
+    },
+    {
+      "id": "body-plita4",
+      "name": "Бронежилет «Плита-4»",
+      "kind": "body",
+      "slots": [
+        "body"
+      ],
+      "file": "body-plita4.svg",
+      "note": "Плита, защита паха и подсумок под гранату."
+    },
+    {
+      "id": "body-bastion",
+      "name": "Бронежилет «Бастион»",
+      "kind": "body",
+      "slots": [
+        "body"
+      ],
+      "file": "body-bastion.svg",
+      "note": "Тяжёлая штурмовая броня. В ней тяжело бегать."
+    },
+    {
+      "id": "suit-field",
+      "name": "Полевой костюм",
+      "kind": "suit",
+      "slots": [
+        "suit"
+      ],
+      "file": "suit-field.svg",
+      "note": "Базовый костюм. Красится в любой цвет."
+    },
+    {
+      "id": "suit-solonchak",
+      "name": "Костюм «Солончак»",
+      "kind": "suit",
+      "slots": [
+        "suit"
+      ],
+      "file": "suit-solonchak.svg",
+      "note": "Светлая ткань с охлаждением: щит не перегревается днём."
+    },
+    {
+      "id": "suit-leshy",
+      "name": "Маскхалат «Леший»",
+      "kind": "suit",
+      "slots": [
+        "suit"
+      ],
+      "file": "suit-leshy.svg",
+      "note": "Издали теряешься на фоне руин. В рывке цепляется."
+    },
+    {
+      "id": "suit-ryvok",
+      "name": "Комбинезон «Рывок»",
+      "kind": "suit",
+      "slots": [
+        "suit"
+      ],
+      "file": "suit-ryvok.svg",
+      "note": "Штурмовой комбинезон: легче сделать рывок, но издали заметнее."
+    },
+    {
+      "id": "suit-ten",
+      "name": "Термокостюм «Тень»",
+      "kind": "suit",
+      "slots": [
+        "suit"
+      ],
+      "file": "suit-ten.svg",
+      "note": "Прячет тепло и охлаждает щит."
+    },
+    {
+      "id": "boots-bertsy",
+      "name": "Берцы",
+      "kind": "boots",
+      "slots": [
+        "boots"
+      ],
+      "file": "boots-bertsy.svg",
+      "note": "Армейские ботинки с защитой голени."
+    },
+    {
+      "id": "boots-sprint",
+      "name": "Кроссовки «Спринт»",
+      "kind": "boots",
+      "slots": [
+        "boots"
+      ],
+      "file": "boots-sprint.svg",
+      "note": "Лёгкие, без защиты: быстрее уходишь из-под выстрела."
+    },
+    {
+      "id": "boots-hodok",
+      "name": "Ботинки «Ходок»",
+      "kind": "boots",
+      "slots": [
+        "boots"
+      ],
+      "file": "boots-hodok.svg",
+      "note": "Защита голени и цепкая подошва для рывка."
+    },
+    {
+      "id": "boots-saper",
+      "name": "Сапоги «Сапёр»",
+      "kind": "boots",
+      "slots": [
+        "boots"
+      ],
+      "file": "boots-saper.svg",
+      "note": "Бронированные сапоги. Тяжёлые."
+    },
+    {
+      "id": "knife-std",
+      "name": "Штатный нож",
+      "kind": "knife",
+      "slots": [
+        "knife"
+      ],
+      "file": "knife-std.svg",
+      "note": "Обычный армейский нож."
+    },
+    {
+      "id": "knife-shtyk",
+      "name": "Штык-нож",
+      "kind": "knife",
+      "slots": [
+        "knife"
+      ],
+      "file": "knife-shtyk.svg",
+      "note": "Узкий клинок проходит между пластинами."
+    },
+    {
+      "id": "knife-zhalo",
+      "name": "Нож «Жало»",
+      "kind": "knife",
+      "slots": [
+        "knife"
+      ],
+      "file": "knife-zhalo.svg",
+      "note": "Тяжёлый клинок: урон выше."
+    },
+    {
+      "id": "knife-kogot",
+      "name": "Керамбит «Коготь»",
+      "kind": "knife",
+      "slots": [
+        "knife"
+      ],
+      "file": "knife-kogot.svg",
+      "note": "Изогнутый клинок: чаще попадает в уязвимое место."
+    },
+    {
+      "id": "knife-iskra",
+      "name": "Термонож «Искра»",
+      "kind": "knife",
+      "slots": [
+        "knife"
+      ],
+      "file": "knife-iskra.svg",
+      "note": "Раскалённое лезвие плохо держит щит."
+    },
+    {
+      "id": "grenade-rg1",
+      "name": "Граната РГ-1",
+      "kind": "grenade",
+      "slots": [
+        "grenade"
+      ],
+      "file": "grenade-rg1.svg",
+      "note": "Осколочная. Бьёт мимо щита по тому, кто стоит на месте."
+    },
+    {
+      "id": "grenade-grad",
+      "name": "Граната «Град»",
+      "kind": "grenade",
+      "slots": [
+        "grenade"
+      ],
+      "file": "grenade-grad.svg",
+      "note": "Тяжёлая осколочная: урон выше, но летит только на 3–7 шагов."
+    },
+    {
+      "id": "grenade-emp",
+      "name": "ЭМИ-граната «Затмение»",
+      "kind": "grenade",
+      "slots": [
+        "grenade"
+      ],
+      "file": "grenade-emp.svg",
+      "note": "Урон слабее осколочной, но щит врага выключен на следующий ход."
+    },
+    {
+      "id": "grenade-smoke",
+      "name": "Дымовая «Завеса»",
+      "kind": "grenade",
+      "slots": [
+        "grenade"
+      ],
+      "file": "grenade-smoke.svg",
+      "note": "Дым под ноги: в этот и следующий ход по тебе трудно попасть. Можно подойти или уйти."
+    }
+  ]
+}

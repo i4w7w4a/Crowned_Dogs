@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "source": "Built-in image_gen: concept-based courtyard and clean architecture edit",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "cleanNormalization": "Generator returned 941x1671; one duplicate bottom edge row added, no resampling or grading.",
+  "files": [
+    {
+      "path": "apps/web/public/img/blocks-day/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3673669,
+      "sha256": "5e01cc829682e859f2a587e1dc69976cad3eaf915d5f3344efd145f5cef52c5c"
+    },
+    {
+      "path": "apps/web/public/img/blocks-day/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 761958,
+      "sha256": "907c4390c31c1d47be3f49a58ef650b0d8294b9bbc6eb7f5771754360f86327f"
+    },
+    {
+      "path": "apps/web/public/img/blocks-day/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 3248759,
+      "sha256": "1d0185ecd60a30e283d517e5f02f0f638df7a104e6fe9d6dd3d1d8388864e913"
+    },
+    {
+      "path": "apps/web/public/img/blocks-day/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 758894,
+      "sha256": "999ea7dff1b128b1f4306739023838a9870926552440a79a5b31035396d76378"
+    }
+  ]
+}

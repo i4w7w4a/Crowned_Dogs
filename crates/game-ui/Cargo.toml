@@ -1,0 +1,9 @@
+[package]
+name = "game-ui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+game-core = { path = "../game-core" }
+game-client = { path = "../game-client" }

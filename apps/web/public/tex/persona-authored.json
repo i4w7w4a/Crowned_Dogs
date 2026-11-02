@@ -1,0 +1,13 @@
+{
+ "sizes": [
+  2048,
+  4096
+ ],
+ "materials": {
+  "M_Head_m1": "tex/persona-male/M_Head_m1",
+  "M_Head_m2": "tex/persona-male/M_Head_m2",
+  "M_Head_m3": "tex/persona-male/M_Head_m3",
+  "M_Head_m4": "tex/persona-male/M_Head_m4",
+  "M_Buff": "tex/persona-male/M_Buff"
+ }
+}

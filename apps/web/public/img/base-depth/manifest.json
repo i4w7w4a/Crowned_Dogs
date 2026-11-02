@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "kind": "depth-photo",
+  "image": "../base/salt-base.webp",
+  "depth": "depth.png",
+  "aspect": 0.562799043062201,
+  "zoom": 1.06,
+  "parallax": 0.002,
+  "targets": {
+    "battle": [
+      0.235,
+      0.527
+    ],
+    "fitting": [
+      0.275,
+      0.36
+    ],
+    "persona": [
+      0.76,
+      0.33
+    ]
+  }
+}

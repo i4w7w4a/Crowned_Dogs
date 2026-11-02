@@ -1,0 +1,63 @@
+{
+  "date": "2026-11-01",
+  "tool": "Built-in image_gen",
+  "mode": "lighting-weather edit",
+  "calibratedSize": [
+    941,
+    1672
+  ],
+  "prompts": [
+    {
+      "time": "morning",
+      "prompt": "Use case: lighting-weather. EDIT TARGET Image1 is an approved EMPTY game environment plate: the ruined five-storey courtyard of White Yar. Preserve the EXACT pixel-registered camera, framing, lens, aspect ratio, every building/window/balcony, mosaic, trees, burned bus, rocket slide, fence, rubble, asphalt cracks and material silhouette. Do not move, add, delete or redesign objects. This is the SAME game map at another time of day. Change ONLY physical illumination, sky, cast shadows and their colour, retaining crisp near-photoreal PBR surfaces, muted cold grey realism, restrained rust and cinematic exposure. Keep the ground DRY, no rain, snow, puddles, wet reflections or new haze wall. Empty scene: no people, robots, weapons, hands, HUD, targeting markers, words or logos. Output exactly941x1672 portrait, no crop or enlargement. Remove the existing overhead noon sun orb because time is changing. Early morning BLUE HOUR just before the sun clears the roofs, with a faint pale warm dawn at the far left sky, no visible bright sun orb. Cool grey-blue diffuse light on concrete and a few faint narrow warm roof edges at left. Long soft shadows, dry muted asphalt, quiet atmospheric depth. Noticeably darker and cooler than noon, but materials remain readable. No neon cyan or orange blockbuster grade, no new artificial lights.",
+      "referenced_image_paths": [
+        "C:/Users/qtas5/OneDrive/Documents/ChatGPT/Crowned Dogs/crowned-dogs-battle-times/apps/web/public/img/blocks-day/hall.png"
+      ],
+      "kind": "hall"
+    },
+    {
+      "time": "evening",
+      "prompt": "Use case: lighting-weather. EDIT TARGET Image1 is an approved EMPTY game environment plate: the ruined five-storey courtyard of White Yar. Preserve the EXACT pixel-registered camera, framing, lens, aspect ratio, every building/window/balcony, mosaic, trees, burned bus, rocket slide, fence, rubble, asphalt cracks and material silhouette. Do not move, add, delete or redesign objects. This is the SAME game map at another time of day. Change ONLY physical illumination, sky, cast shadows and their colour, retaining crisp near-photoreal PBR surfaces, muted cold grey realism, restrained rust and cinematic exposure. Keep the ground DRY, no rain, snow, puddles, wet reflections or new haze wall. Empty scene: no people, robots, weapons, hands, HUD, targeting markers, words or logos. Output exactly941x1672 portrait, no crop or enlargement. Remove the existing overhead noon sun orb because time is changing. Late evening just before sunset. LOW sun outside the RIGHT edge below the roofline, creating restrained pale golden raking highlights on damaged balconies, bus edge and rocket, long diagonal shadows across dry asphalt. Cool neutral graphite shadows, muted peach-grey sky. The scene remains desaturated and grounded, without orange saturation or glowing dust. No overhead sun orb or day-blue sky. No additional lamps.",
+      "referenced_image_paths": [
+        "C:/Users/qtas5/OneDrive/Documents/ChatGPT/Crowned Dogs/crowned-dogs-battle-times/apps/web/public/img/blocks-day/hall.png"
+      ],
+      "kind": "hall"
+    },
+    {
+      "time": "night",
+      "prompt": "Use case: lighting-weather. EDIT TARGET Image1 is an approved EMPTY game environment plate: the ruined five-storey courtyard of White Yar. Preserve the EXACT pixel-registered camera, framing, lens, aspect ratio, every building/window/balcony, mosaic, trees, burned bus, rocket slide, fence, rubble, asphalt cracks and material silhouette. Do not move, add, delete or redesign objects. This is the SAME game map at another time of day. Change ONLY physical illumination, sky, cast shadows and their colour, retaining crisp near-photoreal PBR surfaces, muted cold grey realism, restrained rust and cinematic exposure. Keep the ground DRY, no rain, snow, puddles, wet reflections or new haze wall. Empty scene: no people, robots, weapons, hands, HUD, targeting markers, words or logos. Output exactly941x1672 portrait, no crop or enlargement. Remove the existing overhead noon sun orb because time is changing. A very DARK overcast nearly moonless NIGHT. Image2 is only the approved darkness/colour reference: match its deep neutral near-black shadows and subtle remaining texture; never import its factory geometry. Reduce courtyard daylight illumination dramatically: typical concrete/ground shadows only about4–14 of255 visible brightness; sky dark graphite, no bright moon, no luminous clouds, no sun orb. Most of bus, rocket, walls and foreground merge into near-black silhouettes. NO glowing pale asphalt, bright silver floor, blue daylight or self-lit walls. At most a few tiny dim warm glints deep inside already existing windows, without lighting the courtyard. Keep faint low-level texture for a separately implemented night-vision intensifier, avoid solid clipped black. The unaided scene must be truly dangerous darkness, substantially less visible than dawn. No black gradient overlay: physically relight the materials.",
+      "referenced_image_paths": [
+        "C:/Users/qtas5/OneDrive/Documents/ChatGPT/Crowned Dogs/crowned-dogs-battle-times/apps/web/public/img/blocks-day/hall.png",
+        "C:/Users/qtas5/OneDrive/Documents/ChatGPT/Crowned Dogs/crowned-dogs-battle-times/apps/web/public/img/battle-times/night/hall.png"
+      ],
+      "kind": "hall"
+    },
+    {
+      "time": "morning",
+      "prompt": "Use case: lighting-weather. EDIT TARGET Image1 is the CLEAN ARCHITECTURE PLATE of this exact ruined courtyard. Image2 is the APPROVED matching full-scene TIME/LIGHT reference ONLY. Keep Image1's exact pixel-registered camera, buildings/windows/balconies, mosaic, sky framing, trees and dry cracked asphalt/rubble. Change ONLY Image1's illumination, sky, cast shadows and window light to match Image2 EXACTLY, including exposure/white balance. No crop, zoom, perspective change or geometry redesign. Crucially keep this CLEAN plate EMPTY: NO bus, rocket, slide, swings, close concrete fence segments, foreground camouflage junk, people, robots or weapons; do NOT copy those props from Image2. They are independent 3D objects in the game. Do not alter material roughness or ground condition, no wet surface/puddles/rain/snow. Preserve sharp subdued cinematic near-photorealism. No UI/text/logos. Portrait941x1672 exact. Time: morning. Remove the old overhead noon sun. Sky, light direction and shadows must follow the approved reference.",
+      "referenced_image_paths": [
+        "C:/Users/qtas5/OneDrive/Documents/ChatGPT/Crowned Dogs/crowned-dogs-battle-times/apps/web/public/img/blocks-day/clean.png",
+        "C:/Users/qtas5/.codex/generated_images/01a17e41-f2d1-7312-ac2c-2bee58170faa/exec-a936ed51-2675-4c93-9dc9-315596367d91.png"
+      ],
+      "kind": "clean"
+    },
+    {
+      "time": "evening",
+      "prompt": "Use case: lighting-weather. EDIT TARGET Image1 is the CLEAN ARCHITECTURE PLATE of this exact ruined courtyard. Image2 is the APPROVED matching full-scene TIME/LIGHT reference ONLY. Keep Image1's exact pixel-registered camera, buildings/windows/balconies, mosaic, sky framing, trees and dry cracked asphalt/rubble. Change ONLY Image1's illumination, sky, cast shadows and window light to match Image2 EXACTLY, including exposure/white balance. No crop, zoom, perspective change or geometry redesign. Crucially keep this CLEAN plate EMPTY: NO bus, rocket, slide, swings, close concrete fence segments, foreground camouflage junk, people, robots or weapons; do NOT copy those props from Image2. They are independent 3D objects in the game. Do not alter material roughness or ground condition, no wet surface/puddles/rain/snow. Preserve sharp subdued cinematic near-photorealism. No UI/text/logos. Portrait941x1672 exact. Time: evening. Remove the old overhead noon sun. Sky, light direction and shadows must follow the approved reference.",
+      "referenced_image_paths": [
+        "C:/Users/qtas5/OneDrive/Documents/ChatGPT/Crowned Dogs/crowned-dogs-battle-times/apps/web/public/img/blocks-day/clean.png",
+        "C:/Users/qtas5/.codex/generated_images/01a17e41-f2d1-7312-ac2c-2bee58170faa/exec-eb9a5e41-6676-4b7d-bfff-4dfc085510a5.png"
+      ],
+      "kind": "clean"
+    },
+    {
+      "time": "night",
+      "prompt": "Use case: lighting-weather. EDIT TARGET Image1 is the CLEAN ARCHITECTURE PLATE of this exact ruined courtyard. Image2 is the APPROVED matching full-scene TIME/LIGHT reference ONLY. Keep Image1's exact pixel-registered camera, buildings/windows/balconies, mosaic, sky framing, trees and dry cracked asphalt/rubble. Change ONLY Image1's illumination, sky, cast shadows and window light to match Image2 EXACTLY, including exposure/white balance. No crop, zoom, perspective change or geometry redesign. Crucially keep this CLEAN plate EMPTY: NO bus, rocket, slide, swings, close concrete fence segments, foreground camouflage junk, people, robots or weapons; do NOT copy those props from Image2. They are independent 3D objects in the game. Do not alter material roughness or ground condition, no wet surface/puddles/rain/snow. Preserve sharp subdued cinematic near-photorealism. No UI/text/logos. Portrait941x1672 exact. Time: night. Match Image2's VERY DARK almost moonless night, not a bright blue night. Most architecture is near-black silhouette; keep only faint low-level texture for the image intensifier, a few dim existing-window glints and no bright sky or moon.",
+      "referenced_image_paths": [
+        "C:/Users/qtas5/OneDrive/Documents/ChatGPT/Crowned Dogs/crowned-dogs-battle-times/apps/web/public/img/blocks-day/clean.png",
+        "C:/Users/qtas5/.codex/generated_images/01a17e41-f2d1-7312-ac2c-2bee58170faa/exec-2fe0c4a8-880c-4552-8bb6-076c683de889.png"
+      ],
+      "kind": "clean"
+    }
+  ]
+}

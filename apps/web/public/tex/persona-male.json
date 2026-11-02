@@ -1,0 +1,32 @@
+{
+ "sizes": [
+  2048,
+  4096
+ ],
+ "materials": {
+  "M_Male_Body": "tex/persona-male/M_Male_Body",
+  "M_Suit": "tex/persona-male/M_Suit",
+  "M_Vest": "tex/armor/M_Vest",
+  "M_Helmet": "tex/armor/M_Helmet",
+  "M_Head_m1": "tex/persona-male/M_Head_m1",
+  "M_Head_m2": "tex/persona-male/M_Head_m2",
+  "M_Head_m3": "tex/persona-male/M_Head_m3",
+  "M_Head_m4": "tex/persona-male/M_Head_m4",
+  "M_Buff": "tex/persona-male/M_Buff",
+  "M_Solonchak": {
+   "color": "tex/persona-male/M_Solonchak",
+   "normal": "tex/persona-male/M_Suit",
+   "orm": "tex/persona-male/M_Suit"
+  },
+  "M_Ten": {
+   "color": "tex/persona-male/M_Ten",
+   "normal": "tex/persona-male/M_Suit",
+   "orm": "tex/persona-male/M_Suit"
+  },
+  "M_Ryvok": "tex/persona-male/M_Ryvok",
+  "M_Cap": "tex/armor/M_Cap",
+  "M_Sfera": "tex/armor/M_Sfera",
+  "M_Plita4": "tex/armor/M_Plita4",
+  "M_Boots": "tex/armor/M_Boots"
+ }
+}
