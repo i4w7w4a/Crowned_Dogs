@@ -129,6 +129,10 @@ struct Figure {
     port: JsValue,
     bones: JsValue,
     kick: [f64; 4],
+    /// How far the face turns to the opponent, 0..1 (see `rigging::look_at`).
+    look: f64,
+    /// The gun `arm` last gave this fighter.
+    gun: String,
     fall_t: f64,
     fall_side: f64,
     /// The kit last put on, as `head|body|suit|boots`.
@@ -890,11 +894,12 @@ impl RustArena {
         }
         let enemy = who == "enemy";
         let f = if enemy {
-            s.enemy.as_ref().unwrap()
+            s.enemy.as_mut().unwrap()
         } else {
-            s.me.as_ref().unwrap()
+            s.me.as_mut().unwrap()
         };
         call(&f.motion, "arm", &[gun.clone().into()]);
+        f.gun.clone_from(&gun);
         if present(&f.hand) {
             call(&f.hand, "fit", &[mods.clone()]);
         }
@@ -1321,6 +1326,8 @@ impl ArenaState {
             bones,
             model,
             kick: [0.; 4],
+            look: 1.,
+            gun: String::new(),
             fall_t: -1.,
             fall_side,
             worn: String::new(),
@@ -1640,6 +1647,22 @@ impl ArenaState {
         }
         self.place();
         self.step(dt, speed);
+        // Each face turns to the other fighter's head; in first person ours is the camera. The positions come from
+        // the last drawn frame: refreshing world matrices here would move the camera before the frame places it.
+        let three = get(&self.host, "THREE");
+        let at = |o: &JsValue| {
+            call(&self.tmp_a, "setFromMatrixPosition", &[get(o, "matrixWorld")]);
+            xyz(&self.tmp_a)
+        };
+        let head = |f: &Option<Figure>| at(&get(&f.as_ref().unwrap().bones, "head"));
+        let targets = [
+            if self.fp {
+                at(&self.camera)
+            } else {
+                head(&self.me)
+            },
+            head(&self.enemy),
+        ];
         for (is_me, f) in [
             (false, self.enemy.as_mut().unwrap()),
             (true, self.me.as_mut().unwrap()),
@@ -1663,6 +1686,23 @@ impl ArenaState {
                     );
                 }
                 call(&f.feet, "update", &[n(dt), get(&f.motion, "planted")]);
+                // A falling fighter lets the head go with the collapse; a cheek on the rifle or sniper stock keeps
+                // the clip's head behind the sight.
+                let aim = if matches!(f.gun.as_str(), "rifle" | "sniper") {
+                    num(&get(&f.motion, "gunReady"))
+                } else {
+                    0.
+                };
+                let goal = if f.fall_t < 0. { 1. - aim } else { 0. };
+                f.look += (goal - f.look) * (1. - (-dt * 6.).exp());
+                let bone = |name| get(&f.bones, name);
+                super::rigging::look_at(
+                    &three,
+                    &bone("neck"),
+                    &bone("head"),
+                    &targets[usize::from(is_me)],
+                    f.look,
+                );
             }
             reactions(&self.host, f, dt);
         }
@@ -2360,6 +2400,7 @@ fn pace(f: &Figure, speed: f64) {
 }
 fn reset_figure(f: &mut Figure, offset: f64) {
     f.fall_t = -1.;
+    f.look = 1.;
     vec_set(&get(&f.tilt, "rotation"), &[0., 0., 0.]);
     vec_set(&get(&f.tilt, "position"), &[0., 0., 0.]);
     vec_set(&get(&f.blob, "scale"), &[1., 1., 1.]);

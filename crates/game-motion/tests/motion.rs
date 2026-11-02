@@ -76,3 +76,39 @@ fn dust_remains_inside_the_original_salt_hall_volume() {
     }
     assert!(output[1024 * 3..].iter().all(|n| (0.0..1.0).contains(n)));
 }
+#[test]
+fn look_turns_the_face_to_the_target_across_neck_and_head() {
+    // A head turned 40° to its right (the rifle stance) and canted 25° onto the stock; the target is straight ahead.
+    let neck = DQuat::from_rotation_y(-0.3);
+    let head = DQuat::from_rotation_y(-40f64.to_radians()) * DQuat::from_rotation_z(0.44);
+    let mut input = neck.to_array().to_vec();
+    input.extend(head.to_array());
+    input.extend(DVec3::X.to_array()); // ear-to-ear axis in the head's frame (its rest is the identity)
+    input.extend([0.0, 1.6, 0.0, 0.3, 1.5, 8.0, 1.0, 0.4, 1.3]);
+    let out = compute("look", &input).unwrap();
+    let to = (0.3f64).atan2(8.0);
+    assert!(
+        (out[8] - (40f64.to_radians() + to)).abs() < 1e-9,
+        "the cant does not change the heading"
+    );
+    let (dn, dh) = (DQuat::from_slice(&out[0..4]), DQuat::from_slice(&out[4..8]));
+    // The neck carries 40% of the turn; the head ends up facing the target with its cant kept.
+    let turned_neck = neck * dn;
+    assert!(
+        ((turned_neck * DVec3::Z).x.atan2((turned_neck * DVec3::Z).z) - (-0.3 + 0.4 * out[8]))
+            .abs()
+            < 1e-9
+    );
+    let turned_head = DQuat::from_rotation_y(0.4 * out[8]) * head * dh;
+    let face = (turned_head * DVec3::X).cross(DVec3::Y);
+    assert!((face.x.atan2(face.z) - to).abs() < 1e-9);
+    assert!(((turned_head * DVec3::X).y - (head * DVec3::X).y).abs() < 1e-9);
+    // Half weight turns half way; a turn past the limit stops at it.
+    input[17] = 0.5;
+    let half = compute("look", &input).unwrap();
+    assert!((DQuat::from_slice(&half[4..8]).to_axis_angle().1 - 0.5 * 0.6 * out[8]).abs() < 1e-9);
+    input[17] = 1.0;
+    input[19] = 0.2;
+    let capped = compute("look", &input).unwrap();
+    assert!((DQuat::from_slice(&capped[4..8]).to_axis_angle().1 - 0.6 * 0.2).abs() < 1e-9);
+}

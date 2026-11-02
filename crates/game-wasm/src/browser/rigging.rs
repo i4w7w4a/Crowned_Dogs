@@ -105,6 +105,37 @@ pub fn rig_axes_roll(bone: &JsValue, angle: f64) -> JsValue {
         )
     })
 }
+/// Turns the neck and head about the world up so the face looks at `target`, `weight` of the way. The mocap
+/// stances hold the face 30-40° off the gun line, so a fighter looked past the opponent (Art, 2026-11-02).
+/// Runs after the mixer each frame; the next frame's clip pose replaces it.
+pub(super) fn look_at(
+    three: &JsValue,
+    neck: &JsValue,
+    head: &JsValue,
+    target: &[f64],
+    weight: f64,
+) {
+    let ears = AXES.with(|axes| call(axes, "get", &[head.clone()]));
+    // A head that `rig_find_bones` never saw has no ear axis to steer by.
+    if weight < 1e-3 || !present(&ears) {
+        return;
+    }
+    let ears = get(&ears, "pitch");
+    call(head, "updateWorldMatrix", &[true.into(), false.into()]);
+    let mut input = components(&world_quat(three, neck));
+    input.extend(components(&world_quat(three, head)));
+    input.extend(components(&ears));
+    input.extend(components(&world_position(three, head)));
+    input.extend(target);
+    // The neck takes two fifths; past 75° the clip pose is left to show the rest.
+    input.extend([weight, 0.4, 1.3]);
+    let q = math("look", &input);
+    let turn = quaternion(three);
+    upload(&turn, &q[0..4]);
+    call(&get(neck, "quaternion"), "multiply", &[turn.clone()]);
+    upload(&turn, &q[4..8]);
+    call(&get(head, "quaternion"), "multiply", &[turn]);
+}
 fn arm_bone(name: &str) -> bool {
     [
         "upperarm_",

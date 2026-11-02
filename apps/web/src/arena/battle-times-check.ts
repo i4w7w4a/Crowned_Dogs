@@ -15,6 +15,8 @@ const query = new URLSearchParams(location.search);
 const reviewSeed = query.get("seed") ?? "battle-times-gpu-review";
 const WEATHERS: Weather[] = ["clear", "dust", "storm", "fog"];
 const reviewWeather: Weather = WEATHERS.find(w => w === query.get("weather")) ?? "clear";
+// ?foe=pistol|shotgun|sniper arms the enemy with another gun; the rifle is the default.
+const foeGun = (["pistol", "shotgun", "sniper"] as const).find(g => g === query.get("foe")) ?? "rifle";
 const reviewURL = new URL(location.href);
 reviewURL.searchParams.set("muted", "1"); reviewURL.searchParams.set("motionDebug", "1");
 history.replaceState(null, "", reviewURL);
@@ -42,6 +44,8 @@ console.error = reviewError;
 window.addEventListener("unhandledrejection", event => fail(event.reason), eventOptions);
 
 const arena = new Arena(canvas);
+// Lets a review script play any clip, e.g. reviewArena.attack("enemy", "knife", 0).
+Object.assign(window, { reviewArena: arena });
 let match: Match;
 let generation = 0;
 let modelsReady = false;
@@ -99,18 +103,20 @@ async function reset() {
   const own = loadout();
   match = createMatch({
     seed: reviewSeed, mapId: chosen.mapId, weather: reviewWeather, time: chosen.time,
-    fighters: [kitFighter("qa-me", "Оператор", own), kitFighter("qa-enemy", "Искра", starterLoadout("rifle"))], startDistance: 7,
+    fighters: [kitFighter("qa-me", "Оператор", own), kitFighter("qa-enemy", "Искра", starterLoadout(foeGun))], startDistance: 7,
   });
   plate.src = quality.value === "low" ? chosen.src : chosen.src2x ?? chosen.src;
   plate.alt = chosen.name;
   arena.setFrame(chosen); arena.setQuality(QUALITY[quality.value as QualityId]); arena.setFirstPerson(fp.checked);
   resize(); arena.resume();
   if (!modelsReady) {
-    await arena.load("models/persona-male.json", "models/persona-female.json", 7);
+    // ?me=female plays the female Persona against the male one, as the game does for a female player.
+    const male = "models/persona-male.json", female = "models/persona-female.json";
+    if (query.get("me") === "female") await arena.load(female, male, 7); else await arena.load(male, female, 7);
     modelsReady = true;
   }
   if (request !== generation) return;
-  arena.arm("me", "rifle", own.weapon1.mods ?? {}); arena.arm("enemy", "rifle", {});
+  arena.arm("me", "rifle", own.weapon1.mods ?? {}); arena.arm("enemy", foeGun, {});
   arena.reset(match.distance); arena.setConditions(match);
   await arena.warm();
   if (request !== generation) return;
