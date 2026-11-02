@@ -17,6 +17,11 @@
 .cd-maw-actions { display: flex; justify-content: center; gap: 12px; width: 100%; min-height: 44px; margin-top: 8px; }
 .cd-maw-actions button { min-height: 44px; padding: 10px 22px; border-radius: 13px; font-size: 13px; }
 .cd-maw-actions button:focus-visible { outline: 2px solid #e9e3d3; outline-offset: 3px; }
+/* «На базу» sits in the top-left corner like an iOS back button (Art 2026-11-02, variant A), apart from the progress. */
+.cd-maw-loader > .cd-maw-back { position: absolute; z-index: 1; top: max(14px, calc(env(safe-area-inset-top) + 6px)); left: max(14px, calc(env(safe-area-inset-left) + 8px));
+  display: flex; align-items: center; gap: 4px; min-height: 38px; padding: 0 16px 0 9px; border-radius: 19px; font-size: 14px; color: #fff; }
+.cd-maw-loader > .cd-maw-back .ico { width: 18px; height: 18px; }
+.cd-maw-loader > .cd-maw-back:focus-visible { outline: 2px solid #e9e3d3; outline-offset: 3px; }
 .cd-maw-loader.is-ready .cd-maw-progress::after { width: 100%; animation: none; transform: none; }
 .cd-maw-loader.is-error .cd-maw-progress { visibility: hidden; }
 .cd-maw-loader.is-ready { opacity: 0; transition: opacity .28s ease .08s; }
