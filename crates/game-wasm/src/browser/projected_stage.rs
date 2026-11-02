@@ -95,13 +95,18 @@ impl RustProjectedStage {
                 ]),
             ],
         );
+        // The stage's proxies are rough boxes; weather and focus read this depth
+        // from a blurred mip so their edges never show as cut lines.
         let depth = make(
             &three,
             "WebGLRenderTarget",
             &[
                 n(1.),
                 n(1.),
-                object(&[("minFilter", get(&three, "LinearFilter"))]),
+                object(&[
+                    ("generateMipmaps", true.into()),
+                    ("minFilter", get(&three, "LinearMipmapLinearFilter")),
+                ]),
             ],
         );
         for target in [&color, &depth] {

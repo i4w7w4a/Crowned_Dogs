@@ -362,6 +362,8 @@ button:disabled { cursor: default; }
 .stats div { display: flex; flex-direction: column; gap: 5px; }
 .stats b { font: 600 24px/1 var(--display); font-variant-numeric: tabular-nums; }
 .stats span { font: 500 10px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.end .sync { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin: 2px 0 6px; font: 500 12px/1.4 var(--display); color: var(--cyan); }
+.end .sync:empty { display: none; }
 .end .go, .end .home { width: 240px; }
 @media (prefers-reduced-motion: reduce) {
   .ring.hint .rc, .shake, .flash.on, .ripple, .recdot, .ticker.fresh, .logsheet, .sheet { animation: none !important; }

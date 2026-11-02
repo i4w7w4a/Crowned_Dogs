@@ -44,10 +44,36 @@ const cast = (T, o, d, len) => { let best = Infinity;
   return best; };
 const VESTS = [['vest', 'Vest'], ['plita4', 'Plita4']].filter(([, m]) => nodeOf(m)).map(([k, m]) => [k, front(m)]);
 const UP = 0.1, IN = 0.01, RINGS = [0.75, 0.5, 0.25];
+// The body faces still drawn under a suit and a vest (no corner in either mask): the tucked jacket must stay
+// GAP above them, or skin shows where a deep tuck (a bust under a vest) pulls it in past the body.
+const BODY = ["FemBody", "MaleBody"].map(nodeOf).find(Boolean), GAP = 0.004;
+const bodyRest = BODY && rest(BODY);
+const skin = (suitMask, vestMask) => { if (!bodyRest) return [];
+  const masks = [suitMask, vestMask].map((m) => bodyRest.p.getAttribute(m)).filter(Boolean), V = bodyRest, T = [];
+  for (let q = 0; q < V.ix.length; q += 3) { const ids = [0, 1, 2].map((k) => V.ix[q + k]);
+    if (ids.some((i) => masks.some((m) => m.getScalar(i) >= 0.5))) continue;
+    const v = ids.map((i) => V.pos[i]), n = cross(sub(v[1], v[0]), sub(v[2], v[0])), l = Math.hypot(...n) || 1;
+    T.push({ v, n: n.map((x) => x / l), lo: [0, 1, 2].map((k) => Math.min(v[0][k], v[1][k], v[2][k])), hi: [0, 1, 2].map((k) => Math.max(v[0][k], v[1][k], v[2][k])) }); }
+  return T; };
+// Skin near the tucked jacket goes too while both are worn: `_<SUIT>_<VEST>` on the body (the game adds it to the
+// masks). Neck and head stay, so the collar never opens a hole.
+const NEAR = 0.03, combos = new Map();
+const bodyNeck = BODY && (() => { const skin = BODY.getSkin(), joints = skin.listJoints(), p = BODY.getMesh().listPrimitives()[0];
+  const J = p.getAttribute("JOINTS_0"), W = p.getAttribute("WEIGHTS_0"), neck = joints.map((j) => /neck|head/i.test(j.getName()));
+  return Array.from({ length: J.getCount() }, (_, i) => { const j = J.getElement(i, []), w = W.getElement(i, []); let s = 0;
+    for (let k = 0; k < 4; k++) if (neck[j[k]]) s += w[k]; return s; }); })();
+// Skin that pokes out through a suit (the throat at Ryvok's collar, a shoulder through a sleeve) joins that suit's
+// body mask: a short ray in along the skin's normal meets the suit's outside.
+if (bodyRest) for (const [suit, m] of [['Suit', '_SUIT'], ['Ryvok', '_RYVOK']]) { const mask = bodyRest.p.getAttribute(m); if (!nodeOf(suit) || !mask) continue;
+  const T = front(suit); let poke = 0;
+  bodyRest.pos.forEach((p, i) => { if (mask.getScalar(i) >= 0.5 || bodyNeck[i] > 0.9) return;
+    if (cast(T, p, bodyRest.nor[i].map((c) => -c), 0.03) < Infinity) { mask.setScalar(i, 1); poke++; } });
+  console.log('body poking through', suit, poke); }
 const done = new Map();
 for (const name of ['Suit', 'Ryvok', 'Solonchak', 'Ten']) {
   const node = nodeOf(name); if (!node) continue;
   const prim = node.getMesh().listPrimitives()[0], key = prim.getAttribute('POSITION');
+  for (const t of prim.listTargets()) { prim.removeTarget(t); if (!t.listParents().some((p) => p !== doc.getRoot())) { t.getAttribute("POSITION")?.dispose(); t.dispose(); } }  // a rerun replaces the old tuck
   if (!done.has(key)) {
     const S = rest(node), n = S.pos.length, weld = new Int32Array(n), seen = new Map();
     for (let i = 0; i < n; i++) { const k = S.pos[i].map((x) => Math.round(x * 1e4)).join(); if (!seen.has(k)) seen.set(k, i); weld[i] = seen.get(k); }
@@ -77,6 +103,21 @@ for (const name of ['Suit', 'Ryvok', 'Solonchak', 'Ten']) {
         for (const j of next) { let m = 0; for (const k of nb[j]) if (depth[k] > 0) m = Math.max(m, depth[k]); depth[j] = m * f; }
         ring = next; }
       for (let it = 0; it < 2; it++) { const sm = depth.slice(); for (let i = 0; i < n; i++) if (weld[i] === i && depth[i] > 0) { let s = depth[i], c = 1; for (const j of nb[i]) { s += depth[j]; c++; } sm[i] = Math.max(depth[i] * 0.5, s / c); } depth.set(sm); }
+      const TB = skin(name === "Ryvok" ? "_RYVOK" : "_SUIT", "_" + tname.toUpperCase()); let held = 0;
+      for (let i = 0; i < n; i++) { if (depth[i] <= 0) continue;
+        const t = cast(TB, S.pos[i], sn[i].map((c) => -c), depth[i] + GAP);
+        if (t < Infinity) { const cap = Math.max(0, t - GAP); if (cap < depth[i]) { depth[i] = cap; held++; } } }
+      console.log(name, tname, "held above skin", held, "of", TB.length, "skin faces");
+      if (bodyRest && !combos.has(`${name === "Ryvok" ? "RYVOK" : "SUIT"}_${tname.toUpperCase()}`)) {
+        const moved = []; for (let i = 0; i < n; i++) if (depth[i] > 0.002) moved.push(S.pos[i]);
+        const cell = (p) => p.map((c) => Math.floor(c / NEAR)).join(), grid = new Map();
+        for (const p of moved) { const k = cell(p); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(p); }
+        const mask = new Float32Array(bodyRest.pos.length); let hit = 0;
+        bodyRest.pos.forEach((p, i) => { if (bodyNeck[i] > 0.7) return; const c = p.map((x) => Math.floor(x / NEAR));
+          for (let a = -1; a <= 1 && !mask[i]; a++) for (let b = -1; b <= 1 && !mask[i]; b++) for (let d = -1; d <= 1 && !mask[i]; d++)
+            for (const q of grid.get([c[0] + a, c[1] + b, c[2] + d].join()) ?? []) if (Math.hypot(...sub(p, q)) < NEAR) { mask[i] = 1; hit++; break; } });
+        combos.set(`${name === "Ryvok" ? "RYVOK" : "SUIT"}_${tname.toUpperCase()}`, mask);
+        console.log("body near", name, tname, hit); }
       const arr = new Float32Array(n * 3); let moved = 0, max = 0;
       for (let i = 0; i < n; i++) { const dd = depth[weld[i]]; if (dd <= 0) continue; moved++; max = Math.max(max, dd);
         const w = sn[weld[i]].map((c) => -c * dd), B = S.back[i], l = [0, 1, 2].map((r) => B[r][0] * w[0] + B[r][1] * w[1] + B[r][2] * w[2]);
@@ -91,4 +132,6 @@ for (const name of ['Suit', 'Ryvok', 'Solonchak', 'Ten']) {
   for (const [, t] of targets) prim.addTarget(t);
   node.getMesh().setWeights(targets.map(() => 0)).setExtras({ ...node.getMesh().getExtras(), targetNames: targets.map(([k]) => k) });
 }
+if (bodyRest) for (const [k, mask] of combos) { const old = bodyRest.p.getAttribute("_" + k); if (old) old.dispose();
+  bodyRest.p.setAttribute("_" + k, doc.createAccessor("_" + k).setType("SCALAR").setArray(mask).setBuffer(bodyRest.p.getAttribute("POSITION").getBuffer())); }
 await IO.write(out, doc);

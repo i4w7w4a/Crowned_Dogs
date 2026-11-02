@@ -2,6 +2,8 @@
 //! that was hit shows when it stops a hit: a flash where the shot lands, a wave over that
 //! section lighting its hex cells, deflected sparks (and the bullet going off), then a fade.
 //! Flight and wave are worked out on the GPU; the CPU writes the spark buffers once per hit.
+//! In heat and in rain the whole field shows faintly at rest: hot air ripples through it,
+//! drops run down it. It is the whole dome, so it never tells which zones are guarded.
 use super::bridge::*;
 use js_sys::{Float32Array, Math, Uint16Array};
 use wasm_bindgen::prelude::*;
@@ -86,6 +88,9 @@ pub struct ShieldFx {
     age: f64,
     life: f64,
     count: usize,
+    /// How much the resting field shows (heat, rain); zero hides it between hits.
+    rest: f64,
+    time: f64,
 }
 
 impl ShieldFx {
@@ -118,12 +123,16 @@ impl ShieldFx {
                     uniforms(&[
                         ("uHit", make(three, "Vector3", &[n(0.), n(0.), n(1.)])),
                         ("uAge", n(0.)),
-                        ("uLife", n(1.)),
+                        // no hit yet: nothing lit until the first one
+                        ("uLife", n(0.)),
                         ("uPower", n(1.)),
                         ("uBroken", n(0.)),
                         ("uCells", n(30.)),
                         ("uReach", n(0.4)),
                         ("uDetail", n(1.)),
+                        ("uHeat", n(0.)),
+                        ("uWet", n(0.)),
+                        ("uTime", n(0.)),
                         ("uColor", color(CYAN)),
                     ]),
                 ),
@@ -191,6 +200,8 @@ impl ShieldFx {
             age: 0.,
             life: 0.,
             count: MAX_SPARKS,
+            rest: 0.,
+            time: 0.,
         }
     }
     /// Sparks and the echo wave follow the graphics setting; the dome itself is cheap everywhere.
@@ -204,6 +215,30 @@ impl ShieldFx {
         self.count = count;
         put(&self.dome_mat, "uDetail", n(detail));
         call(&get(&self.sparks, "geometry"), "setDrawRange", &[n(0.), n((count * 6) as f64)]);
+    }
+    /// How much the field shows at rest: `heat` ripples it, `wet` runs drops down it.
+    pub fn set_weather(&mut self, heat: f64, wet: f64) {
+        put(&self.dome_mat, "uHeat", n(heat));
+        put(&self.dome_mat, "uWet", n(wet));
+        self.rest = heat + wet;
+        if self.rest <= 0. && self.age >= self.life {
+            set(&self.dome, "visible", &false.into());
+        }
+    }
+    /// Keeps the resting field round the fighter standing on `feet`, `height` tall.
+    pub fn follow(&mut self, feet: [f64; 3], height: f64) {
+        if self.rest <= 0. {
+            return;
+        }
+        let c = [feet[0], feet[1] + CENTER * height, feet[2]];
+        call(&get(&self.dome, "position"), "set", &[n(c[0]), n(c[1]), n(c[2])]);
+        call(
+            &get(&self.dome, "scale"),
+            "set",
+            &[n(RADIUS * height), n(HALF * height), n(RADIUS * height)],
+        );
+        put(&self.dome_mat, "uCells", n((height * 36.).round().max(40.)));
+        set(&self.dome, "visible", &true.into());
     }
     /// A blocked hit on the fighter standing on `feet` (world), `height` tall.
     /// The shot runs from `from` towards the zone point `to`; `weapon` is the catalogue id.
@@ -286,6 +321,10 @@ impl ShieldFx {
         set(&self.sparks, "visible", &true.into());
     }
     pub fn update(&mut self, dt: f64, aspect: f64) {
+        self.time += dt;
+        if self.rest > 0. {
+            put(&self.dome_mat, "uTime", n(self.time % 1000.));
+        }
         if self.age >= self.life {
             return;
         }
@@ -294,12 +333,12 @@ impl ShieldFx {
         put(&self.dome_mat, "uAge", n(self.age));
         put(&self.spark_mat, "uAge", n(self.age));
         put(&self.spark_mat, "uAspect", n(aspect));
-        set(&self.dome, "visible", &on.into());
+        set(&self.dome, "visible", &(on || self.rest > 0.).into());
         set(&self.sparks, "visible", &on.into());
     }
     pub fn stop(&mut self) {
         self.age = self.life;
-        set(&self.dome, "visible", &false.into());
+        set(&self.dome, "visible", &(self.rest > 0.).into());
         set(&self.sparks, "visible", &false.into());
     }
     pub fn dispose(&self) {

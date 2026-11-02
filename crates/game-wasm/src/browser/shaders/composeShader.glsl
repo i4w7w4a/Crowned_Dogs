@@ -67,8 +67,13 @@ vec3 painting(vec2 uv) {
 
 // Depth of field: the camera is focused on the enemy. The painting's depth map gives each pixel its
 // distance, and the blur grows with how far it lies behind him (much less in front of him).
+// A blurred read of the depth: a projected stage's proxy boxes would otherwise cut
+// hard lines into the blur and the weather (painted depth maps have no mips and stay sharp).
+float softInv(vec2 uv, float spread) {
+  return textureLod(tDepth, uv, log2(max(1.0, float(textureSize(tDepth, 0).y) * spread))).r * 1.25;
+}
 float coc(vec2 uv) {
-  float d = focusInv - texture(tDepth, uv).r * 1.25; // the map holds 1/z, 1.0 = 1/0.8 m
+  float d = focusInv - softInv(uv, 0.012); // the map holds 1/z, 1.0 = 1/0.8 m
   // radius in texels of the painting; held at 0.13 so a close enemy doesn't wash the hall out
   return dof * min(d > 0.0 ? d : -d * dofNear, 0.13) * bgSize.y;
 }

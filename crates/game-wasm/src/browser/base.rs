@@ -1,7 +1,7 @@
 //! Base and fitting-room navigation, catalogue interaction and asynchronous viewer lifecycle.
 use super::{
     base_region::{self, Region},
-    creation,
+    capsule, creation,
     dom_support::*,
     platform,
     scroll::BrowserScroll,
@@ -15,7 +15,7 @@ use wasm_bindgen::{closure::Closure, prelude::*};
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 
 /// Home buttons that stay still while the camera travels.
-const HOME_BUTTONS: [&str; 5] = [".cd-enter", ".cd-to-fitting", ".cd-to-persona", ".cd-to-region", ".cd-operator"];
+const HOME_BUTTONS: [&str; 6] = [".cd-enter", ".cd-to-fitting", ".cd-to-sync", ".cd-to-persona", ".cd-to-region", ".cd-operator"];
 struct Drift {
     home: JsValue,
     image: JsValue,
@@ -116,6 +116,10 @@ impl Base {
         }
         let was = std::mem::replace(&mut self.view, view.into());
         hidden(&self.home, view != "base");
+        hidden(&query(&self.root, ".cd-sync"), view != "sync");
+        if view == "sync" {
+            self.render_sync(None);
+        }
         hidden(&self.fitting, !self.staged());
         self.region_map(view == "region");
         toggle(&self.fitting, "cd-creating", view == "persona");
@@ -154,6 +158,19 @@ impl Base {
             "setActive",
             &[flag(self.active && self.staged())],
         );
+    }
+    /// Fills the tablet. Without `before` the tablet is raised and its screen boots; after a spend only
+    /// the changed stat moves.
+    fn render_sync(&self, before: Option<&serde_json::Value>) {
+        let body = query(&self.root, ".cd-sync-body");
+        html(&body, &capsule::markup(before));
+        if before.is_none() {
+            set(&body, "scrollTop", &number(0.0));
+            let tablet = query(&self.root, ".cd-tab");
+            toggle(&tablet, "cd-tab-up", false);
+            get(&tablet, "offsetWidth");
+            toggle(&tablet, "cd-tab-up", true);
+        }
     }
     /// Views that show the Persona on its stand.
     fn staged(&self) -> bool {
@@ -205,6 +222,11 @@ impl Base {
         content(
             &query(&contract, ".cd-contract-tag b"),
             if tag.is_empty() { "K-···-···" } else { &tag },
+        );
+        let callup = tag.get(2..5).and_then(|n| n.parse::<u32>().ok());
+        content(
+            &query(&contract, ".cd-contract-tag span"),
+            &callup.map_or("Жетон".into(), |n| format!("Жетон · призыв {n}")),
         );
         hidden(
             &query(&self.fitting, ".cd-briefing-skip"),
@@ -756,6 +778,7 @@ impl Base {
         content(&query(&self.home, ".cd-home-title h1"), region.base);
         for (image, picture, alt) in [
             (query(&self.home, "img.cd-backdrop"), region.home_picture.to_string(), region.home_alt),
+            (query(&self.root, ".cd-sync img.cd-backdrop"), region.home_picture.to_string(), ""),
             (query(&self.fitting, "img.cd-backdrop:not(.cd-create-backdrop)"), region.fitting.to_string(), region.fitting_alt),
             (query(&self.fitting, ".cd-create-backdrop"), format!("{}.webp", region.bay.photo), ""),
         ] {
@@ -1321,6 +1344,9 @@ fn bind(state: &Rc<RefCell<Base>>) {
         (query(&root, ".cd-to-fitting"), "click", "fitting"),
         (query(&root, ".cd-operator"), "click", "persona"),
         (query(&root, ".cd-to-persona"), "click", "persona"),
+        (query(&root, ".cd-to-sync"), "click", "sync"),
+        (query(&root, ".cd-sync-back"), "click", "base"),
+        (query(&root, ".cd-sync-body"), "click", "syncSpend"),
         (query(&root, ".cd-briefing-next"), "click", "briefNext"),
         (query(&root, ".cd-briefing-skip"), "click", "briefSkip"),
         (query(&root, ".cd-create-steps"), "click", "step"),
@@ -1396,7 +1422,17 @@ fn listen(state: &Rc<RefCell<Base>>, target: &JsValue, event: &str, action: &'st
             return;
         }
         match action {
-            "base" | "fitting" | "persona" | "region" => s.navigate(action, weak.clone()),
+            "base" | "fitting" | "persona" | "sync" | "region" => s.navigate(action, weak.clone()),
+            "syncSpend" => {
+                let plus = closest(&event, "[data-stat]");
+                if let Some(before) = exists(&plus).then(|| capsule::spend(&data(&plus, "stat"))).flatten() {
+                    s.render_sync(Some(&before));
+                    let again = query(&s.root, &format!(".cd-sync-plus[data-stat=\"{}\"]", data(&plus, "stat")));
+                    if !boolean(&again, "disabled") {
+                        focus(&again);
+                    }
+                }
+            }
             "briefNext" => s.brief_next(),
             "briefSkip" => s.brief_skip(),
             "step" => {

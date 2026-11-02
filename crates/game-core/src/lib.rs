@@ -7,6 +7,8 @@ mod combat;
 mod draft;
 mod loadout;
 pub mod rng;
+mod sync;
+mod tag;
 
 pub(crate) const ZONES: [&str; 4] = ["head", "body", "groin", "legs"];
 pub(crate) const BANDS: [&str; 3] = ["near", "mid", "far"];
@@ -181,6 +183,14 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             let kit = loadout::compile(x(2))?;
             json!({"id":x(0),"name":x(1),"weapon":kit["weapon"]["id"],"kit":kit})
         }
+        "syncFresh" => sync::fresh(),
+        "syncClean" => sync::clean(x(0)),
+        "syncPlays" => json!(sync::plays(x(0))),
+        "syncApply" => sync::apply(x(0), x(1)),
+        "syncSpend" => sync::spend(x(0), s(x(1))),
+        "syncBot" => sync::bot(x(0), s(x(1))),
+        "syncGain" => sync::gain(x(0), x(1), side(2)),
+        "syncView" => sync::view(x(0)),
         "effectLines" => json!(loadout::effect_lines(x(0))),
         "describeEffects" => json!(loadout::effect_lines(x(0))
             .iter()
@@ -197,6 +207,11 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
                     .collect::<Vec<_>>())
             }
         }
+        "nextTag" => {
+            let taken = x(1).as_array().ok_or("tags must be a list")?;
+            json!(tag::next(n(x(0)), taken.iter().filter_map(Value::as_str))?)
+        }
+        "localTag" => json!(tag::local(n(x(0)))),
         "formatTag" => {
             let v = n(x(0));
             if v.fract() != 0.0 || !(0.0..1_000_000.0).contains(&v) {

@@ -13,8 +13,8 @@ pub struct Region {
     pub home_picture: &'static str,
     pub home_alt: &'static str,
     /// Where the home rings stand on the picture (u, v from the top left): equipment, battle,
-    /// Persona and the region table.
-    pub rings: [(&'static str, f64, f64); 4],
+    /// synchronisation, Persona and the region table.
+    pub rings: [(&'static str, f64, f64); 5],
     /// Equipment room under `img/`: the picture, a sharper one for dense screens, its depth map.
     pub fitting: &'static str,
     pub fitting_sharp: &'static str,
@@ -41,8 +41,9 @@ pub const REGIONS: [Region; 2] = [
         rings: [
             (".cd-to-fitting", 0.275, 0.36),
             (".cd-enter", 0.235, 0.527),
+            (".cd-to-sync", 0.43, 0.64),
             (".cd-to-persona", 0.76, 0.33),
-            (".cd-to-region", 0.42, 0.73),
+            (".cd-to-region", 0.74, 0.81),
         ],
         fitting: "base/fitting-room-v2.png",
         fitting_sharp: "base/fitting-room-v2@2x.webp",
@@ -59,6 +60,7 @@ pub const REGIONS: [Region; 2] = [
         rings: [
             (".cd-to-fitting", 0.21, 0.36),
             (".cd-enter", 0.53, 0.43),
+            (".cd-to-sync", 0.7, 0.58),
             (".cd-to-persona", 0.83, 0.3),
             (".cd-to-region", 0.3, 0.66),
         ],

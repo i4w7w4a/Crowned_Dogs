@@ -497,6 +497,10 @@ pub fn compute(kind: &str, v: &[f64]) -> Result<Vec<f64>, String> {
 /// Tuned on close-ups (Art, 2026-11-01): a two-hand wrap on the pistol, the hand far out on the
 /// pump and the forends, and the vertical foregrip on the pistol and the rifle when fitted.
 fn support(stance: usize, foregrip: bool) -> (DVec3, DVec3, DVec3, f64, f64) {
+    // The stocked pistol is the same gun, held in the same places.
+    if stance == 4 {
+        return support(0, foregrip);
+    }
     // Under a barrel or a pump: the fingers wrap across it, tilted `th` and swept forward `ph`.
     let barrel = |at: [f64; 3], th: f64, ph: f64| {
         let along = DVec3::new(ph.sin(), -ph.cos() * th.sin(), ph.cos() * th.cos());

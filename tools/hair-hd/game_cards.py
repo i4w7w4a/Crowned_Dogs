@@ -20,12 +20,16 @@ PLAN = {
     'bob': [('Hair_bob', 'cards', 520, 10, (0.0045, 0.02))],
     'braid': [('Hair_braid_scalp', 'cards', 440, 10, (0.0045, 0.02)),
               ('Hair_braid_plait', 'plait', 90, 18, (0.003, 0.012))],
-    # male: the HD grooms in male_short/slick/medium.blend
+    # male: the HD grooms in male_short/slick/medium/ponytail.blend
     'crop': [('Hair_short', 'cards', 480, 4, (0.0045, 0.014))],
     'slick': [('Hair_slick', 'cards', 420, 8, (0.006, 0.02))],
     'medium': [('Hair_medium', 'cards', 520, 10, (0.0045, 0.018))],
+    'ponytail': [('Hair_ponytail', 'cards', 440, 8, (0.006, 0.02)),
+                 ('Hair_ponytail_tail', 'tail', 80, 14, (0.003, 0.012))],
 }[style]
-FACES = [f'Head_{"m" if style in ("crop", "slick", "medium") else "f"}{i}' for i in range(1, 5)]
+FACES = [f'Head_{"m" if style in ("crop", "slick", "medium", "ponytail") else "f"}{i}' for i in range(1, 5)]
+# combed flat back over the skull: one layer, roots narrowed only at the thin hairline, a fade under it
+SLEEK = style in ('slick', 'ponytail')
 rng = np.random.default_rng(7)
 dg = bpy.context.evaluated_depsgraph_get()
 
@@ -93,7 +97,7 @@ def kmeans(X, k, iters=10):
 
 
 head = bpy.data.objects[FACES[0]]
-hv, _ = world_mesh(head)
+hv, hf = world_mesh(head)
 zt = hv[:, 2].max(); top = hv[hv[:, 2] > zt - 0.06]
 C = np.array([top[:, 0].mean(), top[:, 1].mean(), zt - 0.095])
 
@@ -106,6 +110,24 @@ for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
     # only the top gets strips and the male head's own baked buzz shows the fade
     keep = L > (0.014 if style == 'crop' else 0.004)
     R, L = R[keep], L[keep]
+    # the ponytail's groom has a few thousand strands that run through the skull or hang over the face (hidden
+    # or fine in HD): mixed into clumps they made strips across the forehead
+    if style == 'ponytail' and suffix == 'cards':
+        bvh = BVHTree.FromPolygons([tuple(v) for v in hv], hf)
+        depth = np.zeros(len(R))
+        for i, st in enumerate(R):
+            for q in st[::2]:
+                d = unit(q - C)
+                hit = bvh.ray_cast(tuple(C + d * 0.4), tuple(-d))
+                if hit[0] is not None:
+                    depth[i] = max(depth[i], np.linalg.norm(np.array(hit[0]) - C) - np.linalg.norm(q - C))
+        face = (np.abs(R[..., 0] - C[0]) < 0.06) & (R[..., 1] < C[1] - 0.05) & (R[..., 2] < zt - 0.085)
+        # and those that leave the front hairline downwards: as a strip one ran down over the temple
+        d0 = unit(R[:, SEG // 4] - R[:, 0])
+        down = (R[:, 0, 1] < C[1] - 0.05) & (np.abs(R[:, 0, 0] - C[0]) < 0.05) & (d0[:, 2] < -0.2)
+        bad = (depth > 0.006) | (face.sum(1) >= 3) | down
+        print('DROPPED through the skull or over the face', int(bad.sum()), 'of', len(R))
+        R, L = R[~bad], L[~bad]
     roots.append(R[:, 0])
     feat = np.concatenate([R[:, 0], R[:, SEG // 3] * 0.8, R[:, 2 * SEG // 3] * 0.6, R[:, -1] * 0.4], 1)
     lab = kmeans(feat, K)
@@ -114,6 +136,8 @@ for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
     kd = KDTree(len(R)); [kd.insert(tuple(r), i) for i, r in enumerate(R[:, 0])]; kd.balance()
     rdens = np.array([len(kd.find_range(tuple(r), 0.008)) for r in R[:, 0]]); rmed = np.median(rdens)
     t = np.linspace(0, 1, SEG + 1)
+    sleek = SLEEK and suffix == 'cards'
+    axis = smooth(np.median(R, axis=0), 2)   # a tail's strips lie round its own axis, not the skull's centre
     verts, faces, uvs, normals = [], [], [], []
     for j in range(K):
         grp = R[lab == j]
@@ -129,22 +153,30 @@ for obj_name, suffix, K, SEG, (wmin, wmax) in PLAN:
                 continue
         tan = unit(np.gradient(centre, axis=0))
         out = unit(centre - C)
+        if suffix == 'tail':
+            ra = centre - axis
+            ra = ra - tan * np.einsum('kc,kc->k', ra, tan)[:, None]
+            out = unit(np.where(np.linalg.norm(ra, axis=1, keepdims=True) > 0.002, ra, out))
         across = unit(np.cross(tan, out))
         nrm = unit(np.cross(across, tan))
         off = grp - centre[None]
         wa = np.percentile(np.abs(np.einsum('skc,kc->sk', off, across)), 80, axis=0)
         wn = np.percentile(np.abs(np.einsum('skc,kc->sk', off, nrm)), 80, axis=0)
-        taper = {'slick': 0.1, 'medium': 0.75}.get(style, 0.35)   # the medium's fringe ends in points, not a cut line
+        taper = 0.8 if suffix == 'tail' else {'slick': 0.1, 'ponytail': 0.1, 'medium': 0.75}.get(style, 0.35)   # the medium's fringe and the tail end in points
         half = np.clip(smooth(wa, 2) * 1.3, wmin, wmax) * (1 - taper * t ** 2)
         # blunt strip roots stacked along the hairline read as dark steps: they start narrow
         # (the slick lies flat and every strip root shows on the back of the head: narrow roots and a
         # second layer there stacked into rows of scales, so there only the hairline's strips narrow)
-        if style != 'slick' or np.percentile(rdens[lab == j], 20) < 0.55 * rmed:
-            half = half * (0.3 + 0.7 * np.clip(t * SEG / 1.5, 0, 1) ** 0.7)
+        if not sleek or np.percentile(rdens[lab == j], 20) < 0.55 * rmed:
+            # (over a segment and a half; the ponytail's long strips over 12 mm, or the strips meeting at
+            # its hairline's centre, where the hair parts both ways, left bare spikes between them)
+            arc = np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(centre, axis=0), axis=1))])
+            ramp = arc / 0.012 if style == 'ponytail' else t * SEG / 1.5
+            half = half * (0.3 + 0.7 * np.clip(ramp, 0, 1) ** 0.7)
         thick = np.clip(smooth(wn, 2), 0, 0.01)
-        n = unit(0.7 * nrm + 0.3 * out) if suffix != 'plait' else nrm
-        vtip = 0.8 if style == 'slick' else 1.0   # the slick's strips end bluntly, short of the texture's tips
-        for layer in ((0,) if style == 'slick' else (0, 1)):
+        n = unit(0.7 * nrm + 0.3 * out) if suffix not in ('plait', 'tail') else nrm
+        vtip = 0.8 if sleek else 1.0   # the slick's strips end bluntly, short of the texture's tips
+        for layer in ((0,) if sleek else (0, 1)):
             k = 1.0 if layer == 0 else 0.65
             shift = 0.0 if layer == 0 else rng.uniform(-0.35, 0.35)
             lift = (0.0 if layer == 0 else 0.6) * thick + 0.0006 * layer
@@ -207,7 +239,7 @@ for i, r in enumerate(rk):
     kr.insert(tuple(r), i)
 kr.balance()
 dens = np.array([len(kr.find_range(tuple(v), 0.008)) for v in cv])
-if style == 'slick':
+if SLEEK:
     # the slick's hairline: strips there stood as teeth on bare skin (Art's game, 2026-11-02). The
     # whole HD cap gets the fade's dashes, v by root density: sparse at the hairline, a solid pile
     # under the strips, so the hairline thins out the way fine hairs do
@@ -216,8 +248,14 @@ if style == 'slick':
     az = np.degrees(np.arctan2(d[:, 0], -d[:, 1]))
     fu = (az + 180) / 360 * 14
     fv = 0.04 + 0.86 * np.clip(dens / np.median(dens), 0, 1) ** 0.8
+    if style == 'ponytail':
+        # the ponytail's groom has a whorl at the hairline's centre: its strips radiate from there and left a
+        # bare notch under it (fine hairs in HD), so the fade there is a dense pile thinning to the hairline
+        W = np.array([-0.004, -0.0866, 1.758])
+        rw = np.hypot(cv[:, 0] - W[0], cv[:, 2] - W[2])
+        fv = np.where(cv[:, 1] < W[1] + 0.03, np.maximum(fv, 0.85 * np.clip((0.015 - rw) / 0.009, 0, 1)), fv)
     fp = cv + unit(d) * 0.0004
-    me = bpy.data.meshes.new('Hair_slick_fade'); me.from_pydata([tuple(v) for v in fp], [], cf); me.shade_smooth()
+    me = bpy.data.meshes.new(f'Hair_{style}_fade'); me.from_pydata([tuple(v) for v in fp], [], cf); me.shade_smooth()
     uv = me.uv_layers.new(name='UVMap')
     for poly in me.polygons:
         us = [fu[me.loops[li].vertex_index] for li in poly.loop_indices]
@@ -227,7 +265,7 @@ if style == 'slick':
             uv.data[li].uv = (fu[vi] + (14 if wrap and fu[vi] < 7 else 0), fv[vi])
     me.normals_split_custom_set_from_vertices([tuple(n) for n in unit(d)])
     me.update()
-    out_objs.append(bpy.data.objects.new('Hair_slick_fade', me))
+    out_objs.append(bpy.data.objects.new(f'Hair_{style}_fade', me))
     print('FADE', len(fp), 'verts')
 dense = dens >= 0.5 * np.median(dens)
 cf = [f for f in cf if dense[list(f)].all()]

@@ -310,6 +310,41 @@ test("map changes preserve the fitted kit and move to that map's own hour", asyn
   assert.equal(h.stored.get("cd-map"), "dryBed");
 }, { now: MIDNIGHT + GAME_HOUR / 60 }));
 
+test("menu time and weather pickers override the clock until it is chosen again", async () => harness(async h => {
+  const kit = { ...starterLoadout("rifle"), head: "head-sych" };
+  const start = h.battle!.start(kit, () => {}, async () => {}, undefined); await h.ready(); await start;
+  assert.equal(h.duel().match.config.time, "night");
+  h.click("moreBtn");
+  const names = (seg: string) => [...h.element(seg).children].map(b => b.innerHTML);
+  assert.deepEqual(names("timeSeg"), ["По часам", "Утро", "День", "Вечер", "Ночь"]);
+  assert.deepEqual(names("weatherSeg"), ["По часам", "Ясно", "Туман", "Пыль", "Гроза"]);
+  assert.equal(h.element("timeSeg").children[0]!.getAttribute("aria-pressed"), "true");
+  const first = h.duel();
+  h.element("timeSeg").children[2]!.click();
+  assert.notEqual(h.duel(), first, "a pick starts a new fight");
+  assert.deepEqual(h.duel().fighters[0].kit, kit);
+  assert.equal(h.duel().match.config.time, "day");
+  assert.equal(h.stored.get("cd-test-time"), "day");
+  h.click("moreBtn");
+  h.element("weatherSeg").children[4]!.click();
+  assert.equal(h.duel().match.config.weather, "storm");
+  assert.equal(h.duel().match.config.time, "day", "the time pick holds");
+  h.click("moreBtn");
+  assert.equal(h.element("weatherSeg").children[4]!.getAttribute("aria-pressed"), "true");
+  assert.match(h.element("clockNote").textContent, /отключены/);
+  h.element("mapSeg").children[1]!.click();
+  assert.equal(h.duel().match.config.mapId, "blocks");
+  assert.equal(h.duel().match.config.weather, "storm", "picks follow to another map");
+  h.click("moreBtn");
+  h.element("timeSeg").children[0]!.click();
+  h.click("moreBtn");
+  h.element("weatherSeg").children[0]!.click();
+  assert.equal(h.stored.get("cd-test-time"), "");
+  assert.equal(h.duel().match.config.weather, world(h.now, "blocks").weather);
+  h.click("moreBtn");
+  assert.doesNotMatch(h.element("clockNote").textContent, /отключены/);
+}, { now: MIDNIGHT + GAME_HOUR / 60 }));
+
 test("saved blocks map is restored at its own hour", async () => harness(async h => {
   assert.equal(h.duel().match.config.mapId, "blocks");
   assert.equal(h.duel().match.config.time, "day");

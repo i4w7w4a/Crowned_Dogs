@@ -603,7 +603,7 @@
       "unitsPerMeter": 1.0
     },
     "pustelga": {
-      "intendedMaxDimensionMeters": 0.36644187569618225,
+      "intendedMaxDimensionMeters": 0.3801245093345642,
       "materials": {
         "M_KP1": {
           "depthMeters": 0.0015999999595806003,
@@ -1052,43 +1052,43 @@
           "profile": "Reconstructed normal-derived hard-surface relief, recalibrated for readable parallax and actual light visibility.",
           "relief": "tex/relief/pustelga-M_UporP.relief.png",
           "resolution": [
-            512,
-            512
+            1024,
+            1024
           ],
           "scaleNote": "Conservative artistic microrelief amplitude; absolute depth is not recoverable from a normal map alone. Large geometry unchanged.",
           "seamFadePixels": 6,
           "solver": {
-            "iterations": 271,
+            "iterations": 284,
             "maxSlope": 2.0,
             "meanIslandSlopeRemoved": true,
             "method": "screened Poisson, Jacobi-preconditioned conjugate gradient",
             "normalConvention": "glTF tangent-space; dH/du=-Nx/Nz, dH/dv=-Ny/Nz; texture row v increases downward",
-            "relativeResidual": 9.71045080440559e-6,
-            "robustHeightHalfRangePixels": 3.872269868850708,
+            "relativeResidual": 9.847322888887185e-6,
+            "robustHeightHalfRangePixels": 5.829833984375,
             "screeningLambda": 0.0024999999441206455
           },
           "sourceDepthMeters": 0.0003499999875202775,
           "sourceMaterial": "M_UporP",
           "sourceResolution": [
-            512,
-            512
+            1024,
+            1024
           ],
-          "uvIslands": 183,
+          "uvIslands": 206,
           "uvSet": 0,
           "validation": {
-            "clippedInteriorPixels": 110,
-            "detrendedNormalSlopeRms": 0.31895652656816514,
-            "flatNormalMeanErrorDegrees": 7.877458546278755,
-            "integratedNormalMeanErrorDegrees": 3.8088391077077066,
-            "interiorPixels": 18639,
+            "clippedInteriorPixels": 1166,
+            "detrendedNormalSlopeRms": 0.25841827415991386,
+            "flatNormalMeanErrorDegrees": 6.203166167328798,
+            "integratedNormalMeanErrorDegrees": 3.706003567745856,
+            "interiorPixels": 216516,
             "sourceNormalsAreNotGuaranteedIntegrable": true,
-            "uvCoveredPixels": 95195
+            "uvCoveredPixels": 405573
           }
         }
       },
       "physicalDimensionEstimated": false,
       "source": "preview/pustelga.json",
-      "sourceMaxDimension": 0.36644187569618225,
+      "sourceMaxDimension": 0.3801245093345642,
       "unitsPerMeter": 1.0
     },
     "taran": {

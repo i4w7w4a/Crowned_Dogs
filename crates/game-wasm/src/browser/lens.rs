@@ -70,7 +70,9 @@ struct LensState {
     night_vision: bool,
     heat: bool,
     sun_glare: bool,
-    heat_depth: [f64; 2],
+    /// Near and far inverse depth of the shimmer, then its strength (the
+    /// shader gets the horizon as a fourth value).
+    heat_depth: [f64; 3],
     /// The match weather as the world clock describes it (`client.world.fx`).
     weather: serde_json::Value,
     /// Lightning strikes drawn so far, and whether one is lit right now.
@@ -255,7 +257,7 @@ impl RustLens {
                 night_vision: false,
                 heat: false,
                 sun_glare: false,
-                heat_depth: [0.2, 0.1],
+                heat_depth: [0.2, 0.1, 1.0],
                 weather: serde_json::Value::Null,
                 strikes: Default::default(),
                 shader_features: 0,
@@ -400,6 +402,7 @@ impl RustLens {
         sun_glare: bool,
         near_depth: f64,
         far_depth: f64,
+        heat_power: Option<f64>,
     ) {
         let mut s = self.state.borrow_mut();
         if s.disposed {
@@ -412,7 +415,10 @@ impl RustLens {
             && near_depth > far_depth
             && far_depth > 0.
         {
-            s.heat_depth = [near_depth, far_depth];
+            s.heat_depth = [near_depth, far_depth, s.heat_depth[2]];
+        }
+        if let Some(power) = heat_power.filter(|p| p.is_finite()) {
+            s.heat_depth[2] = power;
         }
         s.refresh_battle_shader();
     }
@@ -635,6 +641,10 @@ impl RustLens {
             put(&s.compose, "cdWeatherTime", n(t));
             let flash = s.weather["flash"].as_f64().unwrap_or(0.) * lightning(t);
             set(&uniform(&s.compose, "cdWeather"), "w", &n(flash));
+            let w2 = uniform(&s.compose, "cdWeather2");
+            let surge = s.weather["surge"].as_f64().unwrap_or(0.) * dust_surge(t);
+            set(&w2, "x", &n(surge));
+            set(&w2, "w", &n(1. - s.horizon));
             let (count, lit) = s.strikes.get();
             s.strikes
                 .set((count + u32::from(flash > 0.05 && !lit), flash > 0.05));
@@ -788,6 +798,20 @@ fn set_defines(material: &JsValue, defines: JsValue) {
 
 /// A lightning strike every eight to twenty seconds: a bright double flicker
 /// that dies away within a second. Returns 0..1.
+/// Dust storms come in waves: every half minute or so a gust thickens for a few
+/// seconds until it nearly closes the view, then thins out again.
+pub(crate) fn dust_surge(t: f64) -> f64 {
+    let period = 30.0;
+    let k = (t / period).floor();
+    let h = |x: f64| ((x * 78.233).sin() * 43758.5453).fract().abs();
+    let dt = t - (k * period + 4.0 + h(k) * (period - 16.0));
+    let smooth = |x: f64| {
+        let x = x.clamp(0.0, 1.0);
+        x * x * (3.0 - 2.0 * x)
+    };
+    // two seconds to thicken, three held, four to clear
+    smooth(dt / 2.0) * (1.0 - smooth((dt - 5.0) / 4.0)) * (0.8 + 0.2 * h(k + 1.7))
+}
 pub(crate) fn lightning(t: f64) -> f64 {
     let period = 14.0;
     let k = (t / period).floor();
@@ -830,7 +854,12 @@ impl LensState {
                 call(
                     &uniform(&self.compose, "cdHeatDepth"),
                     "set",
-                    &[n(self.heat_depth[0]), n(self.heat_depth[1])],
+                    &[
+                        n(self.heat_depth[0]),
+                        n(self.heat_depth[1]),
+                        n(self.heat_depth[2]),
+                        n(1. - self.horizon),
+                    ],
                 );
             }
             return;
@@ -849,6 +878,7 @@ impl LensState {
             "cdFogColor",
             "cdDustColor",
             "cdRainColor",
+            "cdWeather2",
         ] {
             let _ = js_sys::Reflect::delete_property(
                 &js_sys::Object::from(uniforms.clone()),
@@ -857,7 +887,7 @@ impl LensState {
         }
         let mut declarations = String::new();
         if heat {
-            declarations.push_str("uniform float cdBattleTime;\nuniform vec2 cdHeatDepth;\n");
+            declarations.push_str("uniform float cdBattleTime;\nuniform vec4 cdHeatDepth;\n");
             set(&uniforms, "cdBattleTime", &object(&[("value", n(0.))]));
             set(
                 &uniforms,
@@ -866,8 +896,13 @@ impl LensState {
                     "value",
                     make(
                         &self.three,
-                        "Vector2",
-                        &[n(self.heat_depth[0]), n(self.heat_depth[1])],
+                        "Vector4",
+                        &[
+                            n(self.heat_depth[0]),
+                            n(self.heat_depth[1]),
+                            n(self.heat_depth[2]),
+                            n(1. - self.horizon),
+                        ],
                     ),
                 )]),
             );
@@ -890,6 +925,11 @@ impl LensState {
             fragment = fragment.replace(
                 "vec4 n = smoothRead(tNear, vUv, nearSize);",
                 include_str!("shaders/weather.glsl"),
+            );
+            // what sits on the lens itself comes after the gun and the hands
+            fragment = fragment.replace(
+                "c = tone(n) + c * (1.0 - n.a);",
+                include_str!("shaders/weatherLens.glsl"),
             );
             self.weather_uniforms();
         }
@@ -926,6 +966,7 @@ impl LensState {
             }
         };
         ensure("cdWeather", make(three, "Vector4", &[]));
+        ensure("cdWeather2", make(three, "Vector4", &[]));
         ensure("cdWeatherTime", n(0.));
         ensure("cdWeatherDim", n(1.));
         for key in ["cdFogColor", "cdDustColor", "cdRainColor"] {
@@ -936,6 +977,10 @@ impl LensState {
             "set",
             &[n(f("fog")), n(f("dust")), n(f("rain")), n(0.)],
         );
+        let w2 = uniform(&self.compose, "cdWeather2");
+        set(&w2, "y", &n(f("dust")));
+        set(&w2, "z", &n(f("wet")));
+        set(&w2, "w", &n(1. - self.horizon));
         put(
             &self.compose,
             "cdWeatherDim",

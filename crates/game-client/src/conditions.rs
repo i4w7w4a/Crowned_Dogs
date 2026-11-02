@@ -83,6 +83,30 @@ fn time_choices(frames: Option<&Vec<Value>>, map: &str) -> Value {
         .collect::<Vec<_>>())
 }
 
+/// The menu's test pickers: the clock first, then each drawn time of the map and
+/// every weather. An empty id means "follow the map's game clock".
+fn picks(frames: Option<&Vec<Value>>, map: &str) -> Value {
+    let clock = json!({"id": "", "name": "По часам"});
+    let mut times = vec![clock.clone()];
+    times.extend(
+        time_choices(frames, map)
+            .as_array()
+            .cloned()
+            .unwrap_or_default(),
+    );
+    // Short names: five buttons share one row on a phone.
+    let mut weathers = vec![clock];
+    for (id, name) in [
+        ("clear", "Ясно"),
+        ("fog", "Туман"),
+        ("dust", "Пыль"),
+        ("storm", "Гроза"),
+    ] {
+        weathers.push(json!({"id": id, "name": name}));
+    }
+    json!({"times": times, "weathers": weathers})
+}
+
 /// Maps that have a picture, in frame order, each with the catalogue region it belongs to.
 fn drawn_maps(frames: &[Value]) -> Vec<Value> {
     let constants = game_core::constants();
@@ -216,6 +240,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
                 .unwrap_or_default())
         }
         "client.conditions.choices" => time_choices(args[0].as_array(), text(&args[1])),
+        "client.conditions.picks" => picks(args[0].as_array(), text(&args[1])),
         "client.conditions.frame" => frame_for(
             args[0].as_array().ok_or("Conditions require frames")?,
             &args[1],
@@ -337,6 +362,16 @@ mod tests {
             regions,
             json!([{"id":"belyYar","name":"Белый Яр"},{"id":"kaskad","name":"Каскад"}])
         );
+        let picks = dispatch("client.conditions.picks", json!([frames(), "blocks"])).unwrap();
+        assert_eq!(picks["times"][0], json!({"id": "", "name": "По часам"}));
+        assert_eq!(picks["times"][1]["id"], "day");
+        let weathers: Vec<&str> = picks["weathers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|w| text(&w["name"]))
+            .collect();
+        assert_eq!(weathers, ["По часам", "Ясно", "Туман", "Пыль", "Гроза"]);
         let choices = dispatch("client.conditions.choices", json!([frames(), "blocks"])).unwrap();
         assert_eq!(choices.as_array().unwrap().len(), 1);
         assert_eq!(choices[0]["id"], "day");

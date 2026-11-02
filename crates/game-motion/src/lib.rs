@@ -50,10 +50,13 @@ fn appendv(out: &mut Vec<f64>, v: DVec3) {
 /// Each stance's gun in first person: where it rests and where it rises to fire (right, down,
 /// forward from the eye), then its kick. The pistol is held out at arm's length, a little right
 /// of centre (Art, 2026-11-01: not pressed to the chest). Not quite at full length: the left hand
-/// still has to reach a foregrip ahead of the larger pistol.
+/// still has to reach a foregrip ahead of the larger pistol. 4 is the pistol with a shoulder stock
+/// (Art, 2026-11-02: its own hold): the grip high and close in, so the butt plate 30 cm behind
+/// and below it sits in the right shoulder pocket, and the stock takes most of the kick.
 fn held(i: usize) -> ([f64; 3], [f64; 3], [f64; 3]) {
     match i {
         0 => ([0.08, 0.27, 0.46], [0.025, 0.15, 0.51], [0.035, 0.02, 0.3]),
+        4 => ([0.09, 0.17, 0.405], [0.06, 0.125, 0.415], [0.03, 0.012, 0.12]),
         2 => ([0.07, 0.33, 0.2], [0.07, 0.275, 0.23], [0.09, 0.025, 0.2]),
         3 => ([0.09, 0.36, 0.22], [0.08, 0.29, 0.25], [0.08, 0.02, 0.14]),
         _ => ([0.07, 0.33, 0.22], [0.07, 0.27, 0.25], [0.05, 0.012, 0.1]),

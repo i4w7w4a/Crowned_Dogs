@@ -2,6 +2,7 @@
 // A hot point where the shot lands, a wave that runs out over that section and lights
 // its hex cells, the glassy curve of the section, then a fade. The section's edge
 // follows whole cells. Light is added (alpha 0), so it never covers the picture.
+// In heat and in rain the field shows faintly at rest, a small patch here and there.
 uniform vec3 uHit;
 uniform float uAge;
 uniform float uLife;
@@ -10,6 +11,9 @@ uniform float uBroken;
 uniform float uCells;
 uniform float uReach;
 uniform float uDetail;
+uniform float uHeat;
+uniform float uWet;
+uniform float uTime;
 uniform vec3 uColor;
 varying vec3 vLocal;
 varying vec3 vNormal;
@@ -20,10 +24,11 @@ float hash(vec2 p) {
 }
 
 void main() {
-  float k = clamp(uAge / uLife, 0.0, 1.0);
+  float k = clamp(uAge / max(uLife, 0.001), 0.0, 1.0);
   vec3 p = normalize(vLocal);
   float d = acos(clamp(dot(p, uHit), -1.0, 1.0));
-  if (d > uReach * 1.3) discard;
+  float resting = uHeat + uWet;
+  if (d > uReach * 1.3 && resting <= 0.0) discard;
 
   // Hex cells: the longitude holds a whole number of cells, so the seam does not show.
   float toAngle = 6.2831853 / uCells;
@@ -70,7 +75,41 @@ void main() {
     float hole = smoothstep(uReach * 0.8, uReach * 0.2, d) * step(cell, 0.2 + k * 1.1);
     light *= (1.0 - hole) * (0.5 + 0.5 * step(0.4, hash(vec2(floor(uAge * 32.0), 7.0))));
   }
+  light *= uAge < uLife ? 1.0 : 0.0;
   light *= gl_FrontFacing ? 1.0 : 0.35;
   vec3 color = mix(uColor, vec3(1.0), clamp(core * 0.4 + glow * 0.25, 0.0, 1.0));
-  gl_FragColor = vec4(color * light * uPower, 0.0);
+  vec3 outLight = color * light * uPower;
+
+  // The field at rest never shows whole: a small patch of cells surfaces here and there for
+  // a moment and sinks again, hot air rippling through it or rain running down it. The
+  // patches go anywhere on the dome, so they never tell which zones are guarded.
+  if (resting > 0.0) {
+    float edgeOn = pow(1.0 - abs(dot(normalize(vNormal), normalize(-vView))), 2.0);
+    float lon = atan(p.z, p.x);
+    float spots = 0.0;
+    for (int i = 0; i < 3; i++) {
+      float fi = float(i);
+      float clock = uTime * 0.45 + fi * 0.37;
+      float slot = floor(clock);
+      float y = mix(-0.35, 0.85, hash(vec2(fi + 4.1, slot)));
+      float around = hash(vec2(slot, fi)) * 6.2831853;
+      vec3 spot = vec3(sqrt(1.0 - y * y) * cos(around), y, sqrt(1.0 - y * y) * sin(around));
+      float size = 0.2 + 0.16 * hash(vec2(slot + 2.7, fi));
+      // measured from cell centres, so a patch is made of whole cells with a ragged edge
+      float ds = acos(clamp(dot(cp, spot), -1.0, 1.0)) + (cell - 0.5) * 0.12;
+      spots = max(spots, smoothstep(size, size * 0.45, ds) * sin(3.1415927 * fract(clock)));
+    }
+    float ripple = 0.6 + 0.4 * sin(p.y * 9.0 - uTime * 1.7 + sin(lon * 5.0 + uTime * 0.6) * 1.5);
+    float glass = line * 0.1 + 0.02 + edgeOn * 0.05 + smoothstep(0.8, 1.0, cell) * 0.025;
+    float heat = uHeat * ripple * glass;
+    float col = floor(lon / 6.2831853 * uCells * 1.5);
+    float hc = hash(vec2(col, 3.0));
+    float phase = fract(p.y * 2.5 + uTime * (0.35 + 0.4 * hc) + hc * 9.0);
+    float across = abs(fract(lon / 6.2831853 * uCells * 1.5) - 0.5);
+    float run = step(0.5, hc) * smoothstep(0.2, 0.0, across) * (smoothstep(0.05, 0.0, phase) + 0.25 * exp(-phase * 10.0));
+    float wet = uWet * (glass + run * 0.25);
+    float rest = (heat + wet) * spots * (gl_FrontFacing ? 1.0 : 0.35);
+    outLight += mix(uColor, vec3(1.0), 0.35) * rest;
+  }
+  gl_FragColor = vec4(outLight, 0.0);
 }

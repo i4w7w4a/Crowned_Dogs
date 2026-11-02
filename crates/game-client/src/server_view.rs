@@ -337,16 +337,26 @@ fn attack_words(a: &Value, r: &Value, m: f64) -> String {
             (num(&r["chance"]) * 100.0 + 0.5).floor()
         );
     }
-    let mut notes = vec![];
+    let mut notes: Vec<String> = vec![];
     if truth(&r["crit"]) {
-        notes.push("крит");
+        notes.push("крит".into());
     }
     if truth(&r["blocked"]) {
-        notes.push(if truth(&r["shieldBroken"]) {
-            "щит пробит"
-        } else {
-            "щит принял"
-        });
+        notes.push(
+            if truth(&r["shieldBroken"]) {
+                "щит пробит"
+            } else {
+                "щит принял"
+            }
+            .into(),
+        );
+    }
+    for h in r["splash"].as_array().into_iter().flatten() {
+        notes.push(format!(
+            "дробь в {} −{}",
+            zone(text(&h["zone"])),
+            num(&h["damage"])
+        ));
     }
     format!(
         "{what}: −{}{}",

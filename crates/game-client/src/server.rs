@@ -345,26 +345,12 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             if let Some(known) = list.iter().find(|op| &op["telegramId"] == id) {
                 return Ok(json!({"operator":known,"operators":list,"existing":true}));
             }
-            if list.len() >= 1_000_000 {
-                return Err("all tags are taken".into());
-            }
-            let candidates = args[4].as_array().ok_or("Invalid tag candidates")?;
-            let mut chosen = None;
-            for pick in candidates {
-                let tag = core("formatTag", json!([pick]))?;
-                if !list.iter().any(|op| op["tag"] == tag) {
-                    chosen = Some(tag);
-                    break;
-                }
-            }
-            if let Some(tag) = chosen {
-                let op = json!({"tag":tag,"telegramId":id,"name":args[2],"signedAt":args[3]});
-                let mut list = list.clone();
-                list.push(op.clone());
-                json!({"operator":op,"operators":list,"existing":false})
-            } else {
-                json!({"needsPick":true})
-            }
+            let taken: Vec<Value> = list.iter().map(|op| op["tag"].clone()).collect();
+            let tag = core("nextTag", json!([args[3], taken]))?;
+            let op = json!({"tag":tag,"telegramId":id,"name":args[2],"signedAt":args[3]});
+            let mut list = list.clone();
+            list.push(op.clone());
+            json!({"operator":op,"operators":list,"existing":false})
         }
         _ => return Err(format!("Unknown server operation: {method}")),
     })

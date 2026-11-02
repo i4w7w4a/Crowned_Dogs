@@ -35,7 +35,8 @@
 - Игровая «Длинные» (`shag.py`), v2 от 2026-11-02 по замечаниям Арта: рваные пряди с острыми кончиками
   (края каждой пряди короче середины), затылок клином без ступеньки (сзади пряди сходятся к середине,
   верхний слой сзади не короче нижнего), тонкая рваная чёлка, торчащие волоски. HD `3d\hair-hd\shag.blend`,
-  сравнение `previews/shag-v2.jpg` (сверху игра, снизу новая; старый черновик `previews/shag-wip.jpg`). Ждёт Арта.
+  сравнение `previews/shag-v2.jpg` (сверху игра, снизу новая; старый черновик `previews/shag-wip.jpg`). Арт отклонил
+  v2 (2026-11-02): в игре остаётся старая «Длинные», переделка закрыта.
 - Пикси, боб и коса в игре с 2026-11-01 (см. ниже). Игровая «Длинные» осталась старой.
 
 ## Мужские (2026-11-02)
@@ -45,12 +46,15 @@
 `male_slick.py` (m2 зачёс назад), `male_medium.py` (m3 средняя). HD: `3d\hair-hd\male_*.blend`, лист для Арта
 `research/hair-ref/male-hd-v1.jpg`. Дреды (m4) Арт отменил; вместо них низкий хвост по его эскизу: `male_ponytail.py`
 (хвост с резинкой на затылке, свисает до лопаток), HD `3d\hair-hd\male_ponytail.blend`, лист
-`research/hair-ref/male-ponytail-v1.jpg`, ждёт Арта; игровой версии пока нет.
+`research/hair-ref/male-ponytail-v1.jpg`, Арт одобрил 2026-11-02.
 
-В игре они называются `crop` «Короткая», `slick` «Зачёс назад», `medium` «Средняя» (пакет `hair-male.glb`),
-«Ёжик» остаётся. У короткой бока «под машинку» — не полоски, а слой `Hair_crop_fade` с текстурой щетины
+В игре они называются `crop` «Короткая», `slick` «Зачёс назад», `medium` «Средняя», `ponytail` «Низкий хвост»
+(пакет `hair-male.glb`), «Ёжик» остаётся. У короткой бока «под машинку» — не полоски, а слой `Hair_crop_fade` с текстурой щетины
 `hair-fade.png` (`fade_texture.py`): к уху и шее реже, наверху сплошная. У зачёса тот же слой `Hair_slick_fade`
 под всей шапкой, плотность по корням: у линии роста редкие волоски, иначе концы полосок торчали зубцами на коже.
+Хвост: полоски по голове `Hair_ponytail_cards`, сам хвост `Hair_ponytail_tail`, чёрная резинка `Hair_ponytail_tie`,
+слой `Hair_ponytail_fade` как у зачёса. В HD есть пряди сквозь череп и свободные у висков: в игровой версии их нет
+(полосками они висели на лбу). У лба в центре HD-волосы расходятся «звездой», под ней слой fade густой.
 
 ## Игровые версии (`apps/web/models/hair-female.glb`, `hair-male.glb`)
 
@@ -67,7 +71,8 @@ python -I tools/hair-hd/finish.py output/hair-hd/raw/hair-female.glb
 npx @gltf-transform/cli@4.5.1 meshopt output/hair-hd/raw/hair-female.glb apps/web/models/hair-female.glb --quantize-position 16 --quantize-normal 12 --quantize-texcoord 14
 ```
 
-Мужские: то же с `male_short.blend → crop`, `male_slick.blend → slick`, `male_medium.blend → medium`, затем
+Мужские: то же с `male_short.blend → crop`, `male_slick.blend → slick`, `male_medium.blend → medium`,
+`male_ponytail.blend → ponytail`, затем
 `pack.py -- <tmp> <текстура> male`, `finish.py output/hair-hd/raw/hair-male.glb` и meshopt в `apps/web/models/hair-male.glb`.
 
 `hair-strands.png`: текстура прядей старых женских волос (та же, что в persona-female.glb).

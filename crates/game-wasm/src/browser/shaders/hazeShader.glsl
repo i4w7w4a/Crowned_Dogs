@@ -39,7 +39,7 @@ void main() {
   vec3 dir = normalize((camWorld * vec4(v.xyz / v.w, 0.0)).xyz);
   float tMax = 24.0;
   if (dir.y < -0.001) tMax = min(tMax, camPos.y / -dir.y); // the painted floor
-  if (hasDepth > 0.5) tMax = min(tMax, 1.0 / max(texture(tDepth, vUv).r * 1.25, 0.01) / max(-dir.z, 0.05)); // the painted walls and machines
+  if (hasDepth > 0.5) tMax = min(tMax, 1.0 / max(textureLod(tDepth, vUv, log2(max(1.0, float(textureSize(tDepth, 0).y) * 0.04))).r * 1.25, 0.01) / max(-dir.z, 0.05)); // the painted walls and machines
   if (texture(tFig, vUv).a > 0.5) tMax = min(tMax, enemyDist / max(-dir.z, 0.2)); // the enemy's body
   float cosT = dot(dir, sunDir);
   float lobe = phase(cosT, 0.6) * 3.0 + phase(cosT, -0.2) * 1.5;

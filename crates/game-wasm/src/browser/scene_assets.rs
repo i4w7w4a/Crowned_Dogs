@@ -655,9 +655,15 @@ pub fn dress(host: JsValue, model: JsValue, wear: JsValue) {
         // the tucked suit hides only faces the vest covers whole: a face with one corner under it reached past its edge
         let clothes = gear_slot(&name).is_some();
         let mut geometry = get(&node, "geometry");
+        // the body also carries `_<suit>_<vest>`: skin near a tucked jacket, hidden while both are worn
+        let pairs = on
+            .iter()
+            .flat_map(|a| on.iter().map(move |b| format!("{}{}", mask_of(a), mask_of(b))));
         let masks = on
             .iter()
-            .map(|m| call(&geometry, "getAttribute", &[mask_of(m).into()]))
+            .map(|m| mask_of(m))
+            .chain(pairs)
+            .map(|k| call(&geometry, "getAttribute", &[k.into()]))
             .filter(present)
             .collect::<Vec<_>>();
         let attributes = Object::keys(&Object::from(get(&geometry, "attributes")));
