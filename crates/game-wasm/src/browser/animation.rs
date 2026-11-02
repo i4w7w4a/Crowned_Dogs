@@ -397,34 +397,45 @@ impl Drop for RustMotion {
 
 #[wasm_bindgen]
 pub struct RustPose {
-    bones: Vec<(JsValue, JsValue, JsValue)>,
+    // each bone's live position and quaternion, then the saved copies
+    bones: Vec<[JsValue; 4]>,
+    copy: JsValue,
 }
 #[wasm_bindgen]
 impl RustPose {
     #[wasm_bindgen(constructor)]
     pub fn new(model: &JsValue) -> Self {
-        Self {
-            bones: descendants(model)
-                .into_iter()
-                .filter(|o| boolean(&get(o, "isBone")))
-                .map(|o| {
-                    let p = clone_value(&get(&o, "position"));
-                    let q = clone_value(&get(&o, "quaternion"));
-                    (o, p, q)
-                })
-                .collect(),
-        }
+        let bones: Vec<[JsValue; 4]> = descendants(model)
+            .into_iter()
+            .filter(|o| boolean(&get(o, "isBone")))
+            .map(|o| {
+                let p = get(&o, "position");
+                let q = get(&o, "quaternion");
+                let (sp, sq) = (clone_value(&p), clone_value(&q));
+                [p, q, sp, sq]
+            })
+            .collect();
+        let copy = bones
+            .first()
+            .map(|b| get(&b[0], "copy"))
+            .unwrap_or(JsValue::UNDEFINED);
+        Self { bones, copy }
     }
     pub fn save(&self) {
-        for (o, p, q) in &self.bones {
-            copy(p, &get(o, "position"));
-            copy(q, &get(o, "quaternion"));
+        for [p, q, sp, sq] in &self.bones {
+            self.copy_vec(sp, p);
+            copy(sq, q);
         }
     }
     pub fn restore(&self) {
-        for (o, p, q) in &self.bones {
-            copy(&get(o, "position"), p);
-            copy(&get(o, "quaternion"), q);
+        for [p, q, sp, sq] in &self.bones {
+            self.copy_vec(p, sp);
+            copy(q, sq);
         }
+    }
+}
+impl RustPose {
+    fn copy_vec(&self, to: &JsValue, from: &JsValue) {
+        apply(&self.copy, to, std::slice::from_ref(from)).unwrap_throw();
     }
 }

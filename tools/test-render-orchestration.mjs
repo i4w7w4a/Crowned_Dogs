@@ -293,8 +293,10 @@ async function exerciseArena(useRust) {
   const screen = ["head", "body", "groin", "legs"].map(zone => Array.from(arena.zoneOnScreen(zone)));
   const renderer = h.renderers[0];
   // The «Зонт» dome and its sparks came after the frozen arena.
+  // A hidden mirror figure is no longer posed each frame; it catches up the frame the reflection turns on.
+  const still = o => o.type === "Group" && !o.visible;
   const snapshot = renderer.scene.children.filter(o => o.name !== "shield").map(o => ({
-    type: o.type, position: o.position.toArray(), rotation: o.rotation.toArray(), scale: o.scale.toArray(), visible: o.visible,
+    type: o.type, position: still(o) ? null : o.position.toArray(), rotation: still(o) ? null : o.rotation.toArray(), scale: o.scale.toArray(), visible: o.visible,
     // The muzzle light burns at 9x the flash now, not the frozen arena's 6x.
     intensity: !useRust && o.color?.getHex?.() === 0xffb36b ? o.intensity * 1.5 : o.intensity, color: o.color?.toArray(),
   }));

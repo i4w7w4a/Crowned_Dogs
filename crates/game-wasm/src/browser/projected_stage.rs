@@ -578,28 +578,51 @@ async fn load_assets(
     } else {
         textures[0].clone()
     };
+    // Parts with the same material settings become one mesh: a stage has dozens of small pieces
+    // and is drawn three times a frame (colour, depth, figure occlusion).
+    let mut groups: Vec<(String, Vec<&serde_json::Value>)> = vec![];
     for part in manifest_data["meshes"].as_array().unwrap() {
+        let kind = part["material"].as_str().unwrap();
+        let key = format!(
+            "{kind}|{}|{}|{}",
+            present(&textures[5]) && part["uvs"].is_array(),
+            if kind == "side" { part["color"].to_string() } else { String::new() },
+            part["occludesFigures"].as_bool() != Some(false)
+        );
+        match groups.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, list)) => list.push(part),
+            None => groups.push((key, vec![part])),
+        }
+    }
+    let floats = |v: &serde_json::Value| -> Vec<f32> {
+        v.as_array()
+            .map(|a| a.iter().map(|v| v.as_f64().unwrap_or(0.) as f32).collect())
+            .unwrap_or_default()
+    };
+    for (_, group) in &groups {
+        let part = group[0];
+        let baked_uv = present(&textures[5]) && part["uvs"].is_array();
+        let (mut positions, mut uvs, mut indices) = (vec![], vec![], vec![]);
+        for piece in group {
+            let base = (positions.len() / 3) as u32;
+            let at = floats(&piece["positions"]);
+            match piece["indices"].as_array() {
+                Some(list) => indices.extend(list.iter().map(|i| base + i.as_u64().unwrap_or(0) as u32)),
+                None => indices.extend(base..base + (at.len() / 3) as u32),
+            }
+            positions.extend(at);
+            if baked_uv {
+                uvs.extend(floats(&piece["uvs"]));
+            }
+        }
         let geometry = make(&three, "BufferGeometry", &[]);
-        let positions: Vec<f32> = part["positions"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|v| v.as_f64().unwrap() as f32)
-            .collect();
         let attribute = make(
             &three,
             "Float32BufferAttribute",
             &[Float32Array::from(positions.as_slice()).into(), n(3.)],
         );
         call(&geometry, "setAttribute", &["position".into(), attribute]);
-        let baked_uv = present(&textures[5]) && part["uvs"].is_array();
         if baked_uv {
-            let uvs: Vec<f32> = part["uvs"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|v| v.as_f64().unwrap() as f32)
-                .collect();
             let attribute = make(
                 &three,
                 "Float32BufferAttribute",
@@ -607,7 +630,21 @@ async fn load_assets(
             );
             call(&geometry, "setAttribute", &["uv".into(), attribute]);
         }
-        call(&geometry, "setIndex", &[json(&part["indices"])]);
+        let index = if positions.len() / 3 > 65535 {
+            make(
+                &three,
+                "Uint32BufferAttribute",
+                &[js_sys::Uint32Array::from(indices.as_slice()).into(), n(1.)],
+            )
+        } else {
+            let short: Vec<u16> = indices.iter().map(|&i| i as u16).collect();
+            make(
+                &three,
+                "Uint16BufferAttribute",
+                &[js_sys::Uint16Array::from(short.as_slice()).into(), n(1.)],
+            )
+        };
+        call(&geometry, "setIndex", &[index]);
         call(&geometry, "computeBoundingSphere", &[]);
         let kind = part["material"].as_str().unwrap();
         let projected_side =

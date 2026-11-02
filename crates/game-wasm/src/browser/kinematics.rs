@@ -19,10 +19,8 @@ pub(super) fn quaternion(three: &JsValue) -> JsValue {
     make(three, "Quaternion", &[])
 }
 pub(super) fn components(value: &JsValue) -> Vec<f64> {
-    values(&call(value, "toArray", &[]))
-        .iter()
-        .map(num)
-        .collect()
+    // one typed-array copy instead of a host call per number
+    Float64Array::new(&call(value, "toArray", &[])).to_vec()
 }
 pub(super) fn numbers(value: &JsValue) -> Vec<f64> {
     values(value).iter().map(num).collect()

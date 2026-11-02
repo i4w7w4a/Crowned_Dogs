@@ -1,28 +1,56 @@
 //! Small foreign-object boundary. State, scheduling and decisions stay in Rust.
 use js_sys::{Array, Function, Object, Reflect};
+use std::{cell::RefCell, collections::HashMap};
 use wasm_bindgen::{JsCast, JsValue, UnwrapThrowExt};
+
+thread_local! {
+    // Property names cross into JavaScript once: decoding the same short strings every frame
+    // was a seventh of the battle's CPU time.
+    static KEYS: RefCell<HashMap<String, JsValue>> = RefCell::new(HashMap::with_capacity(1024));
+}
+/// The JavaScript string for a property name, cached; generated names stop being cached at 8k.
+pub fn cached_key(name: &str) -> JsValue {
+    KEYS.with(|keys| {
+        if let Some(k) = keys.borrow().get(name) {
+            return k.clone();
+        }
+        let k = JsValue::from_str(name);
+        let mut keys = keys.borrow_mut();
+        if keys.len() < 8192 {
+            keys.insert(name.to_owned(), k.clone());
+        }
+        k
+    })
+}
 
 pub fn get(object: &JsValue, key: &str) -> JsValue {
     if object.is_null() || object.is_undefined() {
         return JsValue::UNDEFINED;
     }
-    Reflect::get(object, &key.into()).unwrap_throw()
+    Reflect::get(object, &cached_key(key)).unwrap_throw()
 }
 pub fn set(object: &JsValue, key: &str, value: &JsValue) {
-    Reflect::set(object, &key.into(), value).unwrap_throw();
+    Reflect::set(object, &cached_key(key), value).unwrap_throw();
 }
 pub fn call(object: &JsValue, key: &str, args: &[JsValue]) -> JsValue {
     try_call(object, key, args).unwrap_throw()
 }
 pub fn try_call(object: &JsValue, key: &str, args: &[JsValue]) -> Result<JsValue, JsValue> {
-    let f = Reflect::get(object, &key.into())?;
+    let f = Reflect::get(object, &cached_key(key))?;
     apply(&f, object, args)
 }
 pub fn apply(function: &JsValue, this: &JsValue, args: &[JsValue]) -> Result<JsValue, JsValue> {
-    function
+    let f = function
         .dyn_ref::<Function>()
-        .ok_or_else(|| js_sys::Error::new("Expected callable host binding"))?
-        .apply(this, &array(args))
+        .ok_or_else(|| js_sys::Error::new("Expected callable host binding"))?;
+    // short calls skip building an argument array
+    match args {
+        [] => f.call0(this),
+        [a] => f.call1(this, a),
+        [a, b] => f.call2(this, a, b),
+        [a, b, c] => f.call3(this, a, b, c),
+        _ => f.apply(this, &array(args)),
+    }
 }
 pub fn invoke(function: &JsValue, args: &[JsValue]) -> JsValue {
     apply(function, &JsValue::UNDEFINED, args).unwrap_throw()

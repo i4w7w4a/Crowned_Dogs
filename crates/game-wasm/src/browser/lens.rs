@@ -4,7 +4,7 @@ use js_sys::{Float64Array, Promise, Uint8ClampedArray};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::{JsFuture, spawn_local};
+use wasm_bindgen_futures::{JsFuture, future_to_promise, spawn_local};
 
 fn n(v: f64) -> JsValue {
     v.into()
@@ -698,7 +698,12 @@ impl RustLens {
         set(&shadow_map, "autoUpdate", &false.into());
         call(r, "setRenderTarget", &[s.near.clone()]);
         call(r, "clear", &[]);
-        call(r, "render", &[scene, camera.clone()]);
+        // nothing moved since the first pass, so its world matrices still hold
+        let matrices = get(&scene, "matrixWorldAutoUpdate");
+        set(&scene, "matrixWorldAutoUpdate", &false.into());
+        let drawn = try_call(r, "render", &[scene.clone(), camera.clone()]);
+        set(&scene, "matrixWorldAutoUpdate", &matrices);
+        drawn.unwrap_throw();
         set(&shadow_map, "autoUpdate", &auto);
         set(&layers, "mask", &mask);
         if present(&s.haze) && present(&s.look) && has_bg {
@@ -765,6 +770,54 @@ impl RustLens {
         }
         put(&s.lens, "hasBg", n(if has_bg { 1. } else { 0. }));
         s.pass(&s.lens, &JsValue::NULL);
+    }
+
+    /// Compiles the scene for both lens passes and the lens's own passes, each with the render
+    /// target and layers `render` uses (programs differ by target), so the first frame links
+    /// nothing; the browser compiles them in parallel where it can.
+    pub fn warm(&self, scene: JsValue, camera: JsValue, near: f64) -> Promise {
+        let s = self.state.borrow();
+        let r = &s.renderer;
+        if s.disposed || !get(r, "compileAsync").is_function() {
+            return Promise::resolve(&JsValue::UNDEFINED);
+        }
+        let layers = get(&camera, "layers");
+        let mask = get(&layers, "mask");
+        let target = call(r, "getRenderTarget", &[]);
+        let material = get(&s.quad, "material");
+        let mesh = get(&s.quad, "_mesh");
+        let mut jobs = vec![];
+        for (layer, at) in [(0., &s.fig), (near, &s.near)] {
+            call(&layers, "set", &[n(layer)]);
+            call(r, "setRenderTarget", &[at.clone()]);
+            jobs.extend(try_call(r, "compileAsync", &[scene.clone(), camera.clone()]).ok());
+        }
+        set(&layers, "mask", &mask);
+        if present(&mesh) {
+            let passes = [
+                (&s.haze_mat, &s.haze),
+                (&s.compose, &s.comp),
+                (&s.mask, &s.rays_a),
+                (&s.blur, &s.rays_b),
+                (&s.lens, &JsValue::NULL),
+            ];
+            for (m, at) in passes {
+                // only the last pass draws to the screen; the others skip when their target is off
+                if !present(at) && !std::ptr::eq(m, &s.lens) {
+                    continue;
+                }
+                set(&s.quad, "material", m);
+                call(r, "setRenderTarget", &[at.clone()]);
+                jobs.extend(try_call(r, "compileAsync", &[mesh.clone(), camera.clone()]).ok());
+            }
+            set(&s.quad, "material", &material);
+        }
+        call(r, "setRenderTarget", &[target]);
+        let all = Promise::all_settled(&array(&jobs));
+        future_to_promise(async move {
+            let _ = JsFuture::from(all).await;
+            Ok(JsValue::UNDEFINED)
+        })
     }
 
     #[wasm_bindgen(js_name = sunDirection)]

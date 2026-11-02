@@ -138,9 +138,51 @@ struct Mirror {
     group: JsValue,
     tilt: JsValue,
     model: JsValue,
-    pairs: Vec<(JsValue, JsValue)>,
+    // (source, reflection) bone positions and quaternions
+    pairs: Vec<[JsValue; 4]>,
     mats: Rc<RefCell<Vec<JsValue>>>,
 }
+/// Holds the battle at about 120 frames a second on 240 Hz and faster screens: drawing every
+/// refresh there only heats the machine, and a whole number of refreshes per frame paces evenly.
+/// `?nocap` turns it off for measurements.
+#[derive(Default)]
+struct FramePace {
+    last: f64,
+    gaps: Vec<f64>,
+    refresh: f64,
+    every: f64,
+    drawn: f64,
+}
+impl FramePace {
+    fn due(&mut self, time: f64) -> bool {
+        if self.every == 0. {
+            let gap = time - self.last;
+            self.last = time;
+            if gap > 0. && gap < 50. {
+                self.gaps.push(gap);
+            }
+            if self.gaps.len() >= 90 {
+                self.gaps.sort_by(f64::total_cmp);
+                self.refresh = self.gaps[self.gaps.len() / 2];
+                let search = string(&get(&get(&global(), "location"), "search"));
+                let off = js_sys::RegExp::new(r"[?&]nocap\b", "").test(&search);
+                self.every = if self.refresh < 4.6 && !off {
+                    (8.0 / self.refresh).ceil()
+                } else {
+                    1.
+                };
+                self.gaps = vec![];
+            }
+            return true;
+        }
+        if self.every <= 1. || time - self.drawn >= self.every * self.refresh - self.refresh * 0.5 {
+            self.drawn = time;
+            return true;
+        }
+        false
+    }
+}
+
 #[derive(Clone)]
 struct Walk {
     from: f64,
@@ -259,6 +301,7 @@ struct ArenaState {
     /// Resolvers waiting for the next frame that reaches the screen.
     drawn: Vec<JsValue>,
     animation: Option<Closure<dyn FnMut(f64)>>,
+    pace: FramePace,
     widen: Closure<dyn FnMut(JsValue)>,
     mirror_shader: Closure<dyn FnMut(JsValue)>,
     callbacks: Vec<Closure<dyn FnMut(JsValue)>>,
@@ -552,6 +595,7 @@ impl RustArena {
             on_frame: JsValue::NULL,
             drawn: vec![],
             animation: None,
+            pace: FramePace::default(),
             widen,
             mirror_shader,
             callbacks: vec![],
@@ -566,7 +610,7 @@ impl RustArena {
             };
             let (callback, drawn) = {
                 let mut s = state.borrow_mut();
-                if !s.running || !s.ready {
+                if !s.running || !s.ready || !s.pace.due(time) {
                     return;
                 }
                 s.tick(time);
@@ -711,10 +755,11 @@ impl RustArena {
         if !get(&s.renderer, "compileAsync").is_function() {
             return Promise::resolve(&JsValue::UNDEFINED);
         }
+        // the lens renders into its own targets, which need other programs than the screen
         match try_call(
-            &s.renderer,
-            "compileAsync",
-            &[s.scene.clone(), s.camera.clone()],
+            &s.lens,
+            "warm",
+            &[s.scene.clone(), s.camera.clone(), n(NEAR)],
         ) {
             Ok(p) => future_to_promise(async move {
                 let _ = JsFuture::from(Promise::resolve(&p)).await;
@@ -1310,7 +1355,17 @@ impl ArenaState {
             group,
             tilt,
             model,
-            pairs: a.zip(b).collect(),
+            pairs: a
+                .zip(b)
+                .map(|(a, b)| {
+                    [
+                        get(&a, "position"),
+                        get(&a, "quaternion"),
+                        get(&b, "position"),
+                        get(&b, "quaternion"),
+                    ]
+                })
+                .collect(),
             mats: Rc::new(RefCell::new(copies.into_iter().map(|(_, m)| m).collect())),
         }
     }
@@ -1658,7 +1713,9 @@ impl ArenaState {
         }
         let enemy = self.enemy.as_ref().unwrap();
         let me = self.me.as_ref().unwrap();
-        sync_mirror(self.mirror.as_ref().unwrap(), enemy);
+        if self.reflection_enabled() {
+            sync_mirror(self.mirror.as_ref().unwrap(), enemy);
+        }
         call(&self.scene, "updateMatrixWorld", &[]);
         place_port(enemy, &self.tmp_a, &self.tmp_b);
         place_port(me, &self.tmp_a, &self.tmp_b);
@@ -2309,9 +2366,9 @@ fn sync_mirror(mirror: &Mirror, source: &Figure) {
         &get(&mirror.tilt, "rotation"),
         &[-p(&r, "x"), p(&r, "y"), -p(&r, "z")],
     );
-    for (a, b) in &mirror.pairs {
-        copy(&get(b, "position"), &get(a, "position"));
-        copy(&get(b, "quaternion"), &get(a, "quaternion"));
+    for [ap, aq, bp, bq] in &mirror.pairs {
+        copy(bp, ap);
+        copy(bq, aq);
     }
 }
 fn reactions(host: &JsValue, f: &mut Figure, dt: f64) {
