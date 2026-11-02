@@ -15,10 +15,11 @@
   --cyan: #73d3e2;
   --amber: #e9ac3f;
   --red: #e0583f;
-  /* a picked choice: a light cold fill with dark words and icons */
-  --pick-bg: #e6eaec;
+  /* a picked choice: a soft light cold fill with dark words and icons; small print stays solid so it reads */
+  --pick-bg: #d2d7da;
   --pick-fg: #0e1113;
-  --pick-dim: rgba(14, 17, 19, 0.62);
+  --pick-dim: #3a4247;
+  --pick-hi: rgba(255, 255, 255, 0.7);
   --display: "Inter Tight", "Helvetica Neue", Arial, sans-serif;
   --body: "Inter", "Segoe UI", Roboto, sans-serif;
   --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
@@ -109,9 +110,9 @@ button:disabled { cursor: default; }
 }
 /* :is() lifts every picked state above the screens' own colour rules (.cd-shell .glass and the like). */
 .glass:is(.on, [aria-pressed="true"]:not(.srow, .cd-sound-toggle), [aria-selected="true"]) {
-  --rim: linear-gradient(160deg, #fff, rgba(255,255,255,.4) 40%, rgba(255,255,255,.75));
+  --rim: linear-gradient(160deg, rgba(255,255,255,.85), rgba(255,255,255,.3) 40%, rgba(255,255,255,.6));
   background-color: var(--pick-bg); color: var(--pick-fg); text-shadow: none;
-  box-shadow: inset 0 1px 0 #fff, inset 0 -12px 18px rgba(40,52,60,.14), 0 6px 18px rgba(0,0,0,.35);
+  box-shadow: inset 0 1px 0 var(--pick-hi), inset 0 -12px 18px rgba(40,52,60,.12), 0 6px 18px rgba(0,0,0,.35);
 }
 .glass:is(.on, [aria-pressed="true"]:not(.srow, .cd-sound-toggle), [aria-selected="true"]) .ico { filter: none; }
 .glass:disabled::before { opacity: .5; }
@@ -247,7 +248,7 @@ button:disabled { cursor: default; }
 .mv .ico.down { transform: scaleY(-1); }
 .mv:hover:not(:disabled) { color: #fff; }
 /* the picked step: the same light fill as a picked button */
-.mv.on { align-self: center; min-width: 46px; padding: 0 10px; border-radius: 12px; background: var(--pick-bg); color: var(--pick-fg); text-shadow: none; box-shadow: inset 0 1px 0 #fff, 0 4px 14px rgba(0,0,0,.4); }
+.mv.on { align-self: center; min-width: 46px; padding: 0 10px; border-radius: 12px; background: var(--pick-bg); color: var(--pick-fg); text-shadow: none; box-shadow: inset 0 1px 0 var(--pick-hi), 0 4px 14px rgba(0,0,0,.4); }
 .mv.on .ico { stroke-width: 2; filter: none; }
 .mv:disabled { opacity: .22; }
 .mv.stay { height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font: 500 14px/1 var(--body); color: var(--fg); white-space: nowrap; }
@@ -353,6 +354,9 @@ button:disabled { cursor: default; }
 /* each map shows its own hour and weather under its name */
 #mapSeg button { height: 52px; }
 #mapSeg button small { display: block; margin-top: 3px; font: 400 11px/1.2 var(--body); color: rgba(236,232,223,.55); overflow: hidden; text-overflow: ellipsis; }
+/* a map the clock has shut: dim name, amber reason and countdown */
+#mapSeg button:disabled { color: rgba(236,232,223,.42); }
+#mapSeg button small.shut { color: #e9ac3f; }
 #mapSeg button[aria-pressed="true"] small { color: var(--pick-dim); }
 .sheet .gfx-note { margin-top: -6px; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

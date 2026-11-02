@@ -184,15 +184,25 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             } else if pinned && truth(&o["cal"]) {
                 frames.first().cloned().unwrap_or(Value::Null)
             } else {
+                let now = o["now"].as_f64().unwrap_or(0.0);
+                // A saved map the clock has shut for now gives way to its region's
+                // home; an address that names the map still opens it for checks.
+                let saved = text(&o["savedMap"]);
+                let home = crate::world::home(saved);
+                let saved = if crate::world::open(now, saved) {
+                    saved
+                } else {
+                    home.as_str()
+                };
                 let map = [
                     text(&o["map"]),
                     named.as_ref().map_or("", |f| text(&f["mapId"])),
-                    text(&o["savedMap"]),
+                    saved,
                 ]
                 .into_iter()
                 .find(|m| !m.is_empty() && frames.iter().any(|f| text(&f["mapId"]) == *m))
                 .unwrap_or("saltHall");
-                let world = crate::world::at(o["now"].as_f64().unwrap_or(0.0), map);
+                let world = crate::world::at(now, map);
                 let weather = text(&o["weather"]);
                 let weathers = game_core::constants()["WEATHERS"]
                     .as_array()
@@ -428,9 +438,17 @@ mod tests {
         assert_eq!(pinned["time"], "evening");
         assert_eq!(pinned["weather"], "storm");
         // Blocks only has its day plate here: the rules follow the plate.
-        let blocks = live(json!({"now": noon, "savedMap": "blocks"}));
+        let blocks = live(json!({"now": noon, "map": "blocks"}));
         assert_eq!(blocks["mapId"], "blocks");
         assert_eq!(blocks["time"], "day");
+        // A saved map opens while the clock keeps it open and gives way to the
+        // salt hall while it is shut.
+        for h in 0..24 {
+            let now = noon + hour / 24.0 * h as f64;
+            let saved = live(json!({"now": now, "savedMap": "blocks"}));
+            let open = crate::world::open(now, "blocks");
+            assert_eq!(saved["mapId"], if open { "blocks" } else { "saltHall" });
+        }
         assert_eq!(live(json!({"now": noon, "frame": "hall2"}))["id"], "hall2");
     }
     #[test]

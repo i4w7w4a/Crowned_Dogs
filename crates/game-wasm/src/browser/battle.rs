@@ -1212,14 +1212,20 @@ fn segment(name: &str, count: usize) -> JsValue {
     );
     el
 }
-fn option(parent: &JsValue, content: &str, selected: bool, action: impl FnMut(JsValue) + 'static) {
+fn option(
+    parent: &JsValue,
+    content: &str,
+    selected: bool,
+    action: impl FnMut(JsValue) + 'static,
+) -> JsValue {
     let b = call(&document(), "createElement", &["button".into()]);
     set(&b, "type", &"button".into());
     set(&b, "className", &"glass".into());
     html(&b, content);
     attr(&b, "aria-pressed", if selected { "true" } else { "false" });
     listen(&b, "click", action);
-    call(parent, "appendChild", &[b]);
+    call(parent, "appendChild", &[b.clone()]);
+    b
 }
 /// The game clock picks the map's hour and weather. Address keys (`time`,
 /// `weather`, `frame`, `map`, `cal`) pin them for checks and screenshots; the
@@ -1443,16 +1449,34 @@ fn render_menu(s: &JsValue) {
         let wanted = word(&choice, "id");
         let current = wanted == current_map;
         let c = clock_of(&wanted);
-        let state = s.clone();
-        option(
-            &ms,
-            &format!(
-                "{}<small>{} · {}, {}</small>",
-                word(&choice, "name"),
+        let left = number(&c, "changeInMs");
+        let shut = get(&c, "open") == JsValue::FALSE;
+        // A shut map says why and for how long; an open one warns five minutes
+        // before the clock shuts it.
+        let note = if shut {
+            format!(
+                "<small class=\"shut\">{} · ещё {}</small>",
+                word(&c, "closedName"),
+                minutes(left)
+            )
+        } else if left > 0. && left <= 300_000. && present(&get(&c, "nextClosed")) {
+            format!(
+                "<small class=\"shut\">{} через {}</small>",
+                word(&c, "nextClosedName"),
+                minutes(left)
+            )
+        } else {
+            format!(
+                "<small>{} · {}, {}</small>",
                 word(&c, "clock"),
                 word(&c, "timeName"),
                 word(&c, "weatherName")
-            ),
+            )
+        };
+        let state = s.clone();
+        let button = option(
+            &ms,
+            &format!("{}{note}", word(&choice, "name")),
             current,
             move |_| {
                 if !current {
@@ -1460,6 +1484,7 @@ fn render_menu(s: &JsValue) {
                 }
             },
         );
+        set(&button, "disabled", &(shut && !current).into());
     }
     let c = clock_of(&current_map);
     hide(&id("frameLabel"), false);

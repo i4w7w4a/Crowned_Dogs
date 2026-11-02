@@ -923,28 +923,28 @@ impl Base {
             .find(|c| text(&get(c, "id")) == current)
             .map(name)
             .unwrap_or_default();
-        let mut out = format!(
-            "<div class=\"cd-paint\" role=\"group\" aria-label=\"Цвет\"><span class=\"cd-overline\">Цвет</span><span class=\"cd-create-picked\">{picked}</span><div class=\"cd-paint-row\">"
-        );
+        // the word choices on one row, the colour dots on their own row below
+        let (mut words, mut swatches) = (String::new(), String::new());
         for c in &colors {
             let id = text(&get(c, "id"));
             let hex = text(&get(c, "color"));
-            out.push_str(&if hex.is_empty() {
-                format!(
+            if hex.is_empty() {
+                words.push_str(&format!(
                     "<button class=\"glass cd-paint-word\" type=\"button\" data-paint=\"{id}\" aria-pressed=\"{}\">{}</button>",
                     id == current,
                     name(c)
-                )
+                ));
             } else {
-                format!(
+                swatches.push_str(&format!(
                     "<button class=\"cd-swatch\" type=\"button\" data-paint=\"{id}\" aria-pressed=\"{on}\" aria-label=\"{label}\" title=\"{label}\" style=\"--swatch:{hex}\"></button>",
                     on = id == current,
                     label = name(c),
-                )
-            });
+                ));
+            }
         }
-        out.push_str("</div></div>");
-        out
+        format!(
+            "<div class=\"cd-paint\" role=\"group\" aria-label=\"Цвет\"><span class=\"cd-overline\">Цвет</span><span class=\"cd-create-picked\">{picked}</span><div class=\"cd-paint-row\">{words}</div><div class=\"cd-paint-row\">{swatches}</div></div>"
+        )
     }
     fn paint_click(&mut self, button: JsValue) {
         let item = self.equipped(&self.selected);

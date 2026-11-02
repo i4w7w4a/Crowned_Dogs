@@ -239,6 +239,8 @@ button.cd-operator { width: 100%; border: 0; border-bottom: 1px solid #e1e6dd2b;
 /* the worn piece's colour, above its catalogue */
 .cd-paint { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 12px; margin: 0 0 6px; }
 .cd-paint-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+/* the colour dots sit on their own row under the word choices */
+.cd-paint-row + .cd-paint-row { margin-top: 4px; }
 .cd-paint .cd-swatch { width: 32px; height: 32px; }
 .cd-paint-word { min-height: 34px; padding: 0 12px; border-radius: 17px; font-size: 12px; color: var(--cd-secondary); }
 
@@ -254,7 +256,7 @@ button.cd-operator { width: 100%; border: 0; border-bottom: 1px solid #e1e6dd2b;
 .cd-region-styles button { position: relative; z-index: 1; width: 40px; height: 34px; padding: 0; border: 0; border-radius: 99px; display: grid; place-items: center; background: none; color: var(--cd-muted); cursor: pointer; transition: color .3s; }
 .cd-region-styles button svg { width: 18px; height: 18px; }
 .cd-region-styles button[aria-pressed="true"] { color: var(--pick-fg); }
-.cd-region-knob { position: absolute; top: 3px; left: 3px; width: 40px; height: 34px; border-radius: 99px; background: var(--pick-bg); box-shadow: inset 0 1px 0 #fff, 0 3px 10px rgba(0,0,0,.4); transition: transform .45s cubic-bezier(.3,1.35,.45,1); }
+.cd-region-knob { position: absolute; top: 3px; left: 3px; width: 40px; height: 34px; border-radius: 99px; background: var(--pick-bg); box-shadow: inset 0 1px 0 var(--pick-hi), 0 3px 10px rgba(0,0,0,.4); transition: transform .45s cubic-bezier(.3,1.35,.45,1); }
 .cd-region-styles[data-style="relief"] .cd-region-knob { transform: translateX(40px); }
 
 .cd-mark { position: absolute; left: 0; top: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; white-space: nowrap; will-change: transform; }
@@ -296,6 +298,8 @@ button.cd-operator { width: 100%; border: 0; border-bottom: 1px solid #e1e6dd2b;
 .cd-region-maps small svg { width: 11px; height: 11px; }
 .cd-region-maps .cd-locked { color: rgba(236,232,223,.55); }
 .cd-region-maps .cd-locked small { color: var(--cd-amber); }
+.cd-region-maps .cd-soon { color: var(--cd-amber); }
+.cd-region-shelling { margin: 10px 0 0; font: 400 10px/1.3 var(--mono); color: var(--cd-amber); }
 .cd-region-maps .cd-locked .cd-region-dot { background: none; box-shadow: inset 0 0 0 1px var(--cd-amber); }
 .cd-region-go { display: block; width: 100%; height: 44px; margin-top: 12px; border-radius: 12px; font: 600 14px/1 var(--display); letter-spacing: .02em; cursor: pointer; }
 .cd-region-go.cd-here { color: var(--cd-muted); }

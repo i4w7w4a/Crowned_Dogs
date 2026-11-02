@@ -59,6 +59,73 @@
       "maxDistance": 13
     }
   },
+  "MAP_ACCESS": {
+    "shellingMinutes": 360,
+    "shellingWhy": "под обстрелом",
+    "planned": {
+      "belyYar": {
+        "railyard": "Сортировка",
+        "sludgePonds": "Шламовые пруды"
+      },
+      "kaskad": {
+        "intake": "Водозабор",
+        "backwater": "Затон"
+      }
+    },
+    "events": {
+      "storms": {
+        "maps": [
+          "backwater",
+          "dryBed"
+        ],
+        "why": "вода поднялась"
+      },
+      "dryWind": {
+        "maps": [
+          "sludgePonds"
+        ],
+        "why": "ядовитая пыль"
+      },
+      "chemical": {
+        "maps": [
+          "intake"
+        ],
+        "why": "заражена вода"
+      }
+    },
+    "hours": {
+      "railyard": {
+        "shut": [
+          "morning",
+          "day",
+          "evening"
+        ],
+        "why": "открыта только ночью"
+      },
+      "sludgePonds": {
+        "shut": [
+          "day"
+        ],
+        "why": "дневные испарения"
+      },
+      "backwater": {
+        "shut": [
+          "morning"
+        ],
+        "why": "утренний туман"
+      }
+    },
+    "release": {
+      "map": "dryBed",
+      "clock": "dam",
+      "starts": [
+        480,
+        1200
+      ],
+      "minutes": 360,
+      "why": "сброс воды"
+    }
+  },
   "MAX_STEPS": 16,
   "MIN_DISTANCE_LIMIT": 4,
   "MUZZLE_FLASH_BONUS": 0.1,
