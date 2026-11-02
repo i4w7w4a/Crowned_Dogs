@@ -66,29 +66,29 @@
       "path": "apps/web/public/img/railyard-times/night/hall.png",
       "width": 941,
       "height": 1672,
-      "bytes": 2873133,
-      "sha256": "7c5fb2c337ed86ddadc7a34faf82065476bd303b816575e6e8680b9afbfd28f5"
+      "bytes": 1964779,
+      "sha256": "301cd55a917e61bf4252c44f66ff7948a93807e4df1c6c89ee77bb91991d92b1"
     },
     {
       "path": "apps/web/public/img/railyard-times/night/hall.webp",
       "width": 941,
       "height": 1672,
-      "bytes": 480242,
-      "sha256": "6e44e9843b5c1946f06249f98dfb2fcbfa91e0ebe19ee914c039d416ee058bf9"
+      "bytes": 187988,
+      "sha256": "e79c75d2d22c22f912b9453277ab6c7615996ed62b6de242bf78c867add7467c"
     },
     {
       "path": "apps/web/public/img/railyard-times/night/clean.png",
       "width": 941,
       "height": 1672,
-      "bytes": 2753312,
-      "sha256": "fe8f176b7c7cd734b33356e667ec24b675d16030ef4ca842ada82a122b0bf223"
+      "bytes": 2075529,
+      "sha256": "e6b7dd9b96a80336ec8efc677550e5d3d4cf027f228b2220e3ccd2619d8aaacd"
     },
     {
       "path": "apps/web/public/img/railyard-times/night/clean.webp",
       "width": 941,
       "height": 1672,
-      "bytes": 434142,
-      "sha256": "84baf683759c6a29b330051d42097e4501490d4b96b63bc5faa7b4d405af1e28"
+      "bytes": 225934,
+      "sha256": "51608912a161684282fe583bcf171d44fc095f6de340a215c6d843cf0db56344"
     }
   ]
 }

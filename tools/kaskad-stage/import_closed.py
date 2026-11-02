@@ -1,8 +1,10 @@
 """Copy the approved plates of the four closing maps from Art's folder into the game.
 
-Run: python -P tools/kaskad-stage/import_closed.py C:/Users/qtas5/Documents/CrownedDogs/art/14-closed-maps/times
+Run: python -P tools/kaskad-stage/import_closed.py C:/Users/qtas5/Documents/CrownedDogs/art/14-closed-maps/times [map ...]
 Then pack_times.py encodes them. Each map's picked frame (`*-pick.png`) is its hall plate at
-the time it was drawn in; the other halls and every clean plate are relit edits of it.
+the time it was drawn in, unless a relit `<map>-<time>-hall.png` for that time replaces it
+(railyard night: Art wanted it dead dark, without the lit lamp). The other halls and every clean
+plate are relit edits of the pick.
 All plates must be pixel registered to the pick: a plate that the model returned at another
 size is fitted back with SIFT matches and an affine; where the fit leaves no source, the pick
 fills in, colour-matched to the relit band beside the gap.
@@ -15,6 +17,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = Path(sys.argv[1])
+ONLY = set(sys.argv[2:])
 W, H = 941, 1672
 # Folder name in the game, the time the pick was drawn in.
 MAPS = {'intake': 'day', 'backwater': 'day', 'railyard': 'night', 'sludgeponds': 'evening'}
@@ -62,6 +65,8 @@ def register(image, ref):
 
 
 for name, own in MAPS.items():
+    if ONLY and name not in ONLY:
+        continue
     pick = load(SRC / f'{name}-pick.png')
     if pick.shape[:2] != (H, W):
         raise ValueError(f'{name}-pick must be {W}x{H}')
@@ -69,7 +74,9 @@ for name, own in MAPS.items():
         folder = ROOT / 'apps/web/public/img' / (f'{name}-day' if time == 'day' else f'{name}-times/{time}')
         folder.mkdir(parents=True, exist_ok=True)
         for kind in ('hall', 'clean'):
-            source = SRC / (f'{name}-pick.png' if kind == 'hall' and time == own else f'{name}-{time}-{kind}.png')
+            source = SRC / f'{name}-{time}-{kind}.png'
+            if kind == 'hall' and time == own and not source.exists():
+                source = SRC / f'{name}-pick.png'
             image = load(source)
             size = image.shape[1], image.shape[0]
             if size != (W, H):
