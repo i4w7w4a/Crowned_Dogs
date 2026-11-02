@@ -232,6 +232,22 @@ pub fn sharp_pictures() -> bool {
     sharp
 }
 
+/// A fresh UUID for a duel's seed. `crypto.randomUUID` exists only on https and localhost, so
+/// a phone opening the game by its home-network address builds one from random bytes instead.
+fn random_seed() -> String {
+    let crypto = get(&global(), "crypto");
+    if let Ok(id) = try_call(&crypto, "randomUUID", &[]) {
+        return string(&id);
+    }
+    let mut bytes = [0u8; 16];
+    let buffer = js_sys::Uint8Array::new_with_length(16);
+    call(&crypto, "getRandomValues", &[buffer.clone().into()]);
+    buffer.copy_to(&mut bytes);
+    bytes[6] = bytes[6] & 0x0f | 0x40;
+    bytes[8] = bytes[8] & 0x3f | 0x80;
+    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+    format!("{}-{}-{}-{}-{}", &hex[..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..])
+}
 #[wasm_bindgen]
 pub struct RustLocalDuel {
     state: JsValue,
@@ -245,11 +261,7 @@ impl RustLocalDuel {
             options.unchecked_ref::<js_sys::Object>(),
         );
         if !present(&get(&opts, "seed")) {
-            set(
-                &opts,
-                "seed",
-                &call(&get(&global(), "crypto"), "randomUUID", &[]),
-            );
+            set(&opts, "seed", &random_seed().into());
         }
         Self {
             state: rust("client.duel.create", &[opts.into()]),
