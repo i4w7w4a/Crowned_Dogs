@@ -11,7 +11,11 @@ if (hasBg > 0.5) {
   c *= cdWeatherDim;
   // fog: slow banks rolling across, thicker low down
   if (cdWeather.x > 0.0) {
+#ifdef CD_WX_MINIMAL
+    float bank = 0.5; // minimal quality: one even layer, no rolling banks
+#else
     float bank = wxFbm(vec2(p.x * 2.2 + t * 0.018, p.y * 3.0 - t * 0.005));
+#endif
     float low = 1.15 - 0.35 * vUv.y;
     float fog = cdWeather.x * low * (1.0 - exp(-z * (0.045 + 0.06 * bank)));
     c = mix(c, cdFogColor, clamp(fog, 0.0, 0.93));
@@ -19,23 +23,29 @@ if (hasBg > 0.5) {
   // salt dust: gusts of grains streaming sideways, in layers that move at different speeds
   if (cdWeather.y > 0.0) {
     float gust = 0.7 + 0.3 * sin(t * 0.6 + sin(t * 0.21) * 3.0);
+#ifdef CD_WX_MINIMAL
+    float veil = 0.3, billow = 0.5; // minimal quality: an even veil that breathes with the gusts
+#else
     float wave = sin(p.x * 3.0 + t * 0.4) * 0.25;
     float s1 = wxFbm(vec2(p.x * 1.1 - t * 0.5, p.y * 9.0 + wave));
     float s2 = wxFbm(vec2(p.x * 2.6 - t * 1.3, p.y * 24.0 - wave) + 7.3);
     float veil = smoothstep(0.42, 0.72, s1) * 0.7 + smoothstep(0.48, 0.78, s2) * 0.5;
+    float billow = wxFbm(vec2(p.x * 1.3 - t * 0.8, p.y * 1.8 + t * 0.06));
+#endif
     float low = 1.2 - 0.4 * vUv.y; // the grains ride low over the floor
     float dust = cdWeather.y * gust * low * (0.2 + 0.8 * far) * (0.12 + 1.1 * veil);
     // a gust comes through every half minute or so and nearly closes the view
     float surge = cdWeather2.x;
-    float billow = wxFbm(vec2(p.x * 1.3 - t * 0.8, p.y * 1.8 + t * 0.06));
     dust += surge * (0.8 + 0.25 * billow + 0.1 * veil);
     // grains darken the sunlit air a touch and lift the shadows to the dust's tone
     c = mix(c, cdDustColor * (0.82 + 0.18 * veil), clamp(dust, 0.0, 0.88 + 0.09 * surge));
+#ifndef CD_WX_MINIMAL
     // single grains flicking past the lens: fine sideways specks, never round drops
     vec2 g = vec2(p.x * 150.0 - t * 70.0, vUv.y * 170.0 + sin(p.x * 9.0 + t) * 0.6);
     vec2 d = (fract(g) - 0.5) * vec2(0.45, 2.2);
     float grain = step(0.988 - 0.025 * surge, wxHash(floor(g))) * smoothstep(0.32, 0.0, length(d));
     c = mix(c, cdDustColor, grain * cdWeather.y * (0.3 + 0.4 * surge));
+#endif
   }
   // rain: thin slanted streaks in three depth layers, hidden behind what stands nearer
   if (cdWeather.z > 0.0) {
@@ -60,6 +70,9 @@ if (hasBg > 0.5) {
     // only the floor itself: anything standing up is nearer than the floor behind it
     float onFloor = hasDepth > 0.5 ? smoothstep(0.55, 0.8, z / ground.y) : 1.0;
     float wet = cdWeather2.z * onFloor * smoothstep(40.0, 6.0, ground.y);
+#ifdef CD_WX_MINIMAL
+    c *= 1.0 - 0.12 * wet; // minimal quality: the soaked floor only darkens
+#else
     float puddle = smoothstep(0.5, 0.75, wxFbm(ground * 0.35));
     vec3 sky = textureLod(tBg, vec2(vUv.x, min(cdWeather2.w + below * 0.6, 0.999)), 4.0).rgb * cdWeatherDim;
     c = mix(c * (1.0 - 0.12 * wet), sky * 0.55, wet * puddle * 0.22);
@@ -82,6 +95,7 @@ if (hasBg > 0.5) {
     // the water catches the sky: a light line on the ground, brighter in a flash
     float lum = dot(c, vec3(0.3, 0.5, 0.2));
     c += cdRainColor * clamp(rings * wet * near, 0.0, 1.0) * (0.22 + 0.6 * lum + 0.6 * cdWeather.w);
+#endif
   }
   // lightning: the far, open parts flare first, the floor near the lens least
   if (cdWeather.w > 0.0) {
