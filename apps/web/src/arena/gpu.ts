@@ -91,6 +91,7 @@ const LUMA = vec3(0.2126, 0.7152, 0.0722);
 function compose(u: Shader["uniforms"], features: number): V4 {
   const minimal = (features & 32) !== 0, nvg = (features & 1) !== 0, glare = (features & 4) !== 0;
   const weather = (features & 8) !== 0;
+  const events = (features & 64) !== 0;
   const at = uv();
   const exposure = num(u, "exposure"), saturation = num(u, "saturation"), tint = v3(u, "tint");
   const hasBg = num(u, "hasBg");
@@ -136,6 +137,11 @@ function compose(u: Shader["uniforms"], features: number): V4 {
     c = tone(n).add(c.mul(float(1).sub(n.a)));
   }
   if (weather) c = onLens(u, c, n, at);
+  if (events) {
+    // a strike close by flashes the picture, a blackout darkens it
+    const pulse = v4(u, "cdPulse");
+    c = c.mul(pulse.w).add(pulse.rgb.mul(c.mul(0.7).add(0.3))) as V3;
+  }
   const alpha = max(a, n.a) as F;
   if (glare) {
     const bgSize = v2(u, "bgSize");
@@ -332,6 +338,7 @@ class ShaderMaterial {
           cdBattleTime: 0, cdHeatDepth: new WEBGPU.Vector4(), cdGlareSun: new WEBGPU.Vector2(0.7, 0.75),
           cdWeather: new WEBGPU.Vector4(), cdWeather2: new WEBGPU.Vector4(), cdWeatherTime: 0, cdWeatherDim: 1,
           cdFogColor: new WEBGPU.Vector3(), cdDustColor: new WEBGPU.Vector3(), cdRainColor: new WEBGPU.Vector3(),
+          cdPulse: new WEBGPU.Vector4(0, 0, 0, 1),
         })) material.uniforms[key] = uniform(value as number) as never;
         material.vertexNode = quad;
         material.setFeatures = (bits) => {
