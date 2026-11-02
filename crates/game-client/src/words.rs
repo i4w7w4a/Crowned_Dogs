@@ -1,4 +1,4 @@
-use crate::{data, num, text, truth};
+use crate::{core, data, num, text, truth};
 use serde_json::{json, Value};
 
 fn plural<'a>(n: f64, one: &'a str, few: &'a str, many: &'a str) -> &'a str {
@@ -159,6 +159,148 @@ fn end_words(res: &Value, me: u64, foe: &str, turns: f64) -> Value {
     };
     json!({"title":title,"text":line,"again":if lost{"Очнуться в капсуле"}else{"Новый бой"},"lost":lost})
 }
+/// Whether lane position `x` is inside a warned stretch (as `game_core::hazard::inside`).
+fn inside(h: &Value, x: f64) -> bool {
+    !h["at"].is_null() && (x - num(&h["at"])).abs() < num(&h["radius"]) + 0.5
+}
+/// Where a warned stretch lies for the player: under them, ahead or behind, in whole steps.
+fn stretch_words(h: &Value, x: f64) -> String {
+    if inside(h, x) {
+        return "там, где ты стоишь".into();
+    }
+    let at = num(&h["at"]);
+    let r = num(&h["radius"]);
+    let (near, far) = ((at - x).abs() - r, (at - x).abs() + r);
+    let near = near.ceil().max(1.0);
+    let far = far.floor().max(near);
+    let side = if at > x { "перед тобой" } else { "позади" };
+    if near == far {
+        format!("в {near} {} {side}", plural(near, "шаге", "шагах", "шагах"))
+    } else {
+        format!("в {near}–{far} шагах {side}")
+    }
+}
+/// The warning for the turn being planned and the moves that end inside the danger, for
+/// the player (fighter 0). Null when nothing threatens and the air is clean.
+fn hazard_warning(m: &Value) -> Value {
+    let me = &m["fighters"][0];
+    let stunned = num(&me["stunned"]) > 0.0;
+    let h = &m["hazard"];
+    let spec = &game_core::constants()["HAZARDS"][text(&h["kind"])];
+    let mut risky: Vec<f64> = vec![];
+    let warned = !h["kind"].is_null() && h["turn"] == m["turn"];
+    let line = if !warned {
+        String::new()
+    } else {
+        let x = num(&m["lane"][0]);
+        let foe = num(&m["lane"][1]);
+        let distance = num(&m["distance"]);
+        for mv in [3.0, 2.0, 1.0, 0.0, -1.0, -2.0] {
+            let planned = num(&core("plannedDistance", json!([m, mv])).unwrap_or(Value::Null));
+            let landing = x + (distance - planned);
+            if (text(&h["kind"]) == "drone" && mv == 0.0) || inside(h, landing) {
+                risky.push(mv);
+            }
+        }
+        let foe_in = if inside(h, foe) { " Противник тоже под ударом." } else { "" };
+        let damage = num(&spec["damage"]);
+        match text(&h["kind"]) {
+            "lightning" => format!(
+                "Молния ударит {}: −{damage} и оглушение на ход.{foe_in}",
+                stretch_words(h, x)
+            ),
+            "shell" => format!(
+                "Снаряд ляжет {}: −{damage}, на краю −{}.{foe_in}",
+                stretch_words(h, x),
+                (damage * num(&spec["edge"])).floor()
+            ),
+            "collapse" => format!("Потолок рухнет {}: −{damage}.{foe_in}", stretch_words(h, x)),
+            "drone" => format!("Дрон-камикадзе: ударит в того, кто останется на месте, −{damage}."),
+            "blackout" => "Свет погаснет: этот ход пройдёт в темноте.".into(),
+            _ => String::new(),
+        }
+    };
+    let toxic = num(&core("conditionToxic", json!([m])).unwrap_or(Value::Null));
+    let mut text_out = if stunned {
+        "Оглушён молнией: этот ход стоишь на месте, щит не работает.".to_string()
+    } else {
+        String::new()
+    };
+    if !line.is_empty() {
+        if !text_out.is_empty() {
+            text_out.push(' ');
+        }
+        text_out.push_str(&line);
+    }
+    if text_out.is_empty() && toxic > 0.0 {
+        text_out = format!("Ядовитый воздух: −{toxic} здоровья обоим каждый ход.");
+    }
+    if text_out.is_empty() {
+        return Value::Null;
+    }
+    json!({"kind": if warned { h["kind"].clone() } else if stunned { json!("stun") } else { json!("toxic") },
+        "text": text_out, "risky": risky, "stunned": stunned})
+}
+/// What a turn's hazard did, for the fight log: null when nothing happened.
+fn hazard_line(r: &Value, names: &Value) -> Value {
+    let h = &r["hazard"];
+    if h.is_null() {
+        return Value::Null;
+    }
+    let who = |side: u64| {
+        if side == 0 {
+            "Ты".to_string()
+        } else {
+            text(&names[1]).to_string()
+        }
+    };
+    let mut parts: Vec<String> = h["hits"]
+        .as_array()
+        .map(|hits| {
+            hits.iter()
+                .map(|hit| {
+                    format!(
+                        "{} −{}{}",
+                        who(hit["side"].as_u64().unwrap_or(0)),
+                        hit["damage"],
+                        if truth(&hit["stun"]) { ", оглушение" } else { "" }
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let kind = text(&h["kind"]);
+    let mut out = String::new();
+    if !kind.is_empty() {
+        let name = text(&h["name"]);
+        let mut chars = name.chars();
+        let name = chars
+            .next()
+            .map(|c| c.to_uppercase().collect::<String>() + chars.as_str())
+            .unwrap_or_default();
+        if parts.is_empty() && kind != "blackout" {
+            parts.push("мимо".into());
+        }
+        out = if parts.is_empty() {
+            name
+        } else {
+            format!("{name}: {}", parts.join(", "))
+        };
+    }
+    if num(&h["toxic"]) > 0.0 {
+        if !out.is_empty() {
+            out.push_str(" · ");
+        }
+        out.push_str(&format!("яд: оба −{}", h["toxic"]));
+    }
+    let icon = match kind {
+        "lightning" | "blackout" => "storm",
+        "drone" => "drone",
+        "shell" | "collapse" => "blast",
+        _ => "dust",
+    };
+    json!({"icon": icon, "text": out, "hurt": h["hits"].as_array().is_some_and(|a| a.iter().any(|x| x["side"] == 0))})
+}
 pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
     Ok(match method {
         "words.plural" => json!(plural(
@@ -176,6 +318,8 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             args[1].as_u64().unwrap_or(0) as usize,
             text(&args[2]),
         ),
+        "words.hazardWarning" => hazard_warning(&args[0]),
+        "words.hazardLine" => hazard_line(&args[0], &args[1]),
         "words.endWords" => end_words(
             &args[0],
             args[1].as_u64().unwrap_or(0),

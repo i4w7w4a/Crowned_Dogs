@@ -3,7 +3,7 @@
 use super::bridge::*;
 use js_sys::{Float32Array, Promise};
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     rc::{Rc, Weak},
 };
 use wasm_bindgen::{JsCast, prelude::*};
@@ -67,6 +67,14 @@ struct StageState {
     meshes: Vec<JsValue>,
     textures: Vec<JsValue>,
     manifest: serde_json::Value,
+    /// Minimal quality (see `set_still`), whether the targets hold the camera's current view, whether
+    /// the depth lags the colour, a frame count, and the view and lens the targets were drawn for.
+    still: bool,
+    fresh: Cell<bool>,
+    depth_stale: Cell<bool>,
+    frame: Cell<u32>,
+    seen_view: JsValue,
+    seen_projection: JsValue,
 }
 
 #[wasm_bindgen]
@@ -132,6 +140,8 @@ impl RustProjectedStage {
                 ("polygonOffsetUnits", n(1.)),
             ])],
         );
+        let seen_view = make(&three, "Matrix4", &[]);
+        let seen_projection = make(&three, "Matrix4", &[]);
         Self {
             state: Rc::new(RefCell::new(StageState {
                 disposed: false,
@@ -152,8 +162,29 @@ impl RustProjectedStage {
                 meshes: vec![],
                 textures: vec![],
                 manifest: serde_json::Value::Null,
+                still: false,
+                fresh: Cell::new(false),
+                depth_stale: Cell::new(false),
+                frame: Cell::new(0),
+                seen_view,
+                seen_projection,
             })),
         }
+    }
+
+    /// Minimal quality: the stage's colour drops its multisampling, the picture is redrawn only
+    /// when the camera moved, and its depth, read only blurred for focus and weather, every
+    /// third frame.
+    #[wasm_bindgen(js_name = setStill)]
+    pub fn set_still(&self, still: bool) {
+        let mut s = self.state.borrow_mut();
+        if s.disposed || s.still == still {
+            return;
+        }
+        s.still = still;
+        set(&s.color, "samples", &n(if still { 0. } else { 4. }));
+        release(&s.color);
+        s.fresh.set(false);
     }
 
     #[wasm_bindgen(getter)]
@@ -216,6 +247,7 @@ impl RustProjectedStage {
                 "set",
                 &[n(-x * metres), n(0.), n(metres)],
             );
+            s.fresh.set(false);
         }
     }
 
@@ -258,6 +290,32 @@ impl RustProjectedStage {
         {
             call(&s.color, "setSize", &[width.into(), height.into()]);
             call(&s.depth, "setSize", &[width.into(), height.into()]);
+            s.fresh.set(false);
+        }
+        let done = || {
+            object(&[
+                ("color", get(&s.color, "texture")),
+                ("depth", get(&s.depth, "texture")),
+            ])
+        };
+        let (paint, measure) = if s.still {
+            call(&camera, "updateMatrixWorld", &[]);
+            let moved = !s.fresh.get()
+                || !boolean(&call(&s.seen_view, "equals", &[get(&camera, "matrixWorld")]))
+                || !boolean(&call(
+                    &s.seen_projection,
+                    "equals",
+                    &[get(&camera, "projectionMatrix")],
+                ));
+            let frame = s.frame.get().wrapping_add(1);
+            s.frame.set(frame);
+            let due = !s.fresh.get() || frame % 3 == 0 || (!moved && s.depth_stale.get());
+            (moved, due)
+        } else {
+            (true, true)
+        };
+        if !paint && !measure {
+            return Ok(done());
         }
         let r = &s.renderer;
         let target = call(r, "getRenderTarget", &[]);
@@ -277,19 +335,26 @@ impl RustProjectedStage {
             );
             set(&get(r, "shadowMap"), "autoUpdate", &false.into());
             try_call(r, "setClearColor", &[n(0.), n(1.)])?;
-            set(&s.scene, "background", &s.backdrop);
-            try_call(r, "setRenderTarget", &[s.color.clone()])?;
-            try_call(r, "clear", &[])?;
-            try_call(r, "render", &[s.scene.clone(), camera.clone()])?;
-            set(&s.scene, "background", &JsValue::NULL);
-            set(&s.scene, "overrideMaterial", &s.depth_material);
-            try_call(r, "setRenderTarget", &[s.depth.clone()])?;
-            try_call(r, "clear", &[])?;
-            try_call(r, "render", &[s.scene.clone(), camera])?;
-            Ok(object(&[
-                ("color", get(&s.color, "texture")),
-                ("depth", get(&s.depth, "texture")),
-            ]))
+            if paint {
+                set(&s.scene, "background", &s.backdrop);
+                try_call(r, "setRenderTarget", &[s.color.clone()])?;
+                try_call(r, "clear", &[])?;
+                try_call(r, "render", &[s.scene.clone(), camera.clone()])?;
+                set(&s.scene, "background", &JsValue::NULL);
+            }
+            if measure {
+                set(&s.scene, "overrideMaterial", &s.depth_material);
+                try_call(r, "setRenderTarget", &[s.depth.clone()])?;
+                try_call(r, "clear", &[])?;
+                try_call(r, "render", &[s.scene.clone(), camera.clone()])?;
+            }
+            if s.still {
+                call(&s.seen_view, "copy", &[get(&camera, "matrixWorld")]);
+                call(&s.seen_projection, "copy", &[get(&camera, "projectionMatrix")]);
+                s.fresh.set(true);
+                s.depth_stale.set(!measure);
+            }
+            Ok(done())
         })();
         set(&s.scene, "overrideMaterial", &override_material);
         set(&s.scene, "background", &background);
@@ -344,6 +409,7 @@ impl Drop for RustProjectedStage {
 impl StageState {
     fn clear_assets(&mut self) {
         self.ready = false;
+        self.fresh.set(false);
         for mesh in self.meshes.drain(..) {
             release(&get(&mesh, "geometry"));
             release(&get(&mesh, "material"));

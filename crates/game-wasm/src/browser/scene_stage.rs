@@ -841,6 +841,7 @@ struct BackdropState {
     width: f64,
     height: f64,
     last: String,
+    clock: super::live::Clock,
     disposed: bool,
 }
 #[wasm_bindgen]
@@ -896,6 +897,15 @@ impl RustDepthBackdrop {
             ),
             ("uShift", uniform(make(&host, "Vector2", &[]))),
         ]);
+        // The room's life is found by its picture.
+        let life = super::base_region::REGIONS
+            .iter()
+            .find(|r| color.ends_with(r.fitting) || color.ends_with(r.fitting_sharp))
+            .map_or(&super::live::STILL, |r| r.fitting_life);
+        let vec4 = |v: [f64; 4]| make(&host, "Vector4", &v.map(JsValue::from));
+        for (key, value) in super::live::uniforms(life, ratio, &vec4) {
+            set(&uniforms, key, &value);
+        }
         let shader = compute(&host, "graphics.backdropShader", Object::new().into());
         let material = make(
             &host,
@@ -926,6 +936,7 @@ impl RustDepthBackdrop {
             width: 0.,
             height: 0.,
             last: String::new(),
+            clock: super::live::Clock::default(),
             disposed: false,
         }));
         let weak = Rc::downgrade(&state);
@@ -1030,7 +1041,11 @@ fn draw_backdrop(state: &Rc<RefCell<BackdropState>>, x: f64, y: f64) {
         s.height = h;
         s.last.clear();
     }
-    let key = format!("{x:.2} {y:.2}");
+    let (alive, time) = s.clock.tick();
+    let mut key = format!("{x:.2} {y:.2}");
+    if alive > 0. {
+        key.push_str(&format!(" {alive} {time}"));
+    }
     if key == s.last {
         return;
     }
@@ -1056,6 +1071,8 @@ fn draw_backdrop(state: &Rc<RefCell<BackdropState>>, x: f64, y: f64) {
         "fromArray",
         &[get(&frame, "shift")],
     );
+    put(&uniforms, "uLive", alive.into());
+    put(&uniforms, "uTime", time.into());
     call(&renderer, "render", &[scene, camera]);
 }
 fn dispose_backdrop(state: &Rc<RefCell<BackdropState>>) {

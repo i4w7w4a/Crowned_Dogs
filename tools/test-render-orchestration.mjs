@@ -34,6 +34,38 @@ float coc(vec2 uv) {
       vec3 w = mix(vec3(1.0), spectrum(t), 0.45);
       t = (float(i) + jitter) / float(TAPS);
 `],
+  // 2 Nov 2026 (later): no taps means no depth of field, and no lens smear or glow (minimal quality)
+  ["composeShader", `vec3 focused(vec2 uv) {
+  if (hasDepth < 0.5) return painting(uv);`, `vec3 focused(vec2 uv) {
+#if DOF_TAPS < 1
+  return painting(uv); // no depth of field: the hall stays sharp
+#else
+  if (hasDepth < 0.5) return painting(uv);`],
+  ["composeShader", `  return sum / wsum;
+#endif
+}`, `  return sum / wsum;
+#endif
+#endif
+}`],
+  ["lensShader", `  vec4 c;
+  if (amount < 0.0004 && r < 0.0004) {`, `  vec4 c;
+#if TAPS < 1
+  c = clean(src); // no smear: clean glass to the edges, and no glow, which reads the frame's mips
+#else
+  if (amount < 0.0004 && r < 0.0004) {`],
+  ["lensShader", `    c = vec4(sum / wsum, a / float(TAPS));
+  }
+`, `    c = vec4(sum / wsum, a / float(TAPS));
+  }
+#endif
+`],
+  ["lensShader", `  vec3 halo = max(textureLod(tComp, src, 4.5 + glowLod).rgb - 0.55, 0.0) + max(textureLod(tComp, src, 6.0 + glowLod).rgb - 0.5, 0.0);
+  c.rgb += halo * glow * hasBg;
+`, `#if TAPS > 0
+  vec3 halo = max(textureLod(tComp, src, 4.5 + glowLod).rgb - 0.55, 0.0) + max(textureLod(tComp, src, 6.0 + glowLod).rgb - 0.5, 0.0);
+  c.rgb += halo * glow * hasBg;
+#endif
+`],
 ];
 for (const [name, from, to] of revisions) {
   assert.equal(shaders[name].split(from).length, 2, `${name} revision must match the oracle once`);
@@ -292,10 +324,10 @@ async function exerciseArena(useRust) {
   arena.fall("enemy"); h.renderers[0].loop(1300);
   const screen = ["head", "body", "groin", "legs"].map(zone => Array.from(arena.zoneOnScreen(zone)));
   const renderer = h.renderers[0];
-  // The «Зонт» dome and its sparks came after the frozen arena.
+  // The «Зонт» dome and its sparks, and the living world's strikes, came after the frozen arena.
   // A hidden mirror figure is no longer posed each frame; it catches up the frame the reflection turns on.
   const still = o => o.type === "Group" && !o.visible;
-  const snapshot = renderer.scene.children.filter(o => o.name !== "shield").map(o => ({
+  const snapshot = renderer.scene.children.filter(o => o.name !== "shield" && o.name !== "hazard").map(o => ({
     type: o.type, position: still(o) ? null : o.position.toArray(), rotation: still(o) ? null : o.rotation.toArray(), scale: o.scale.toArray(), visible: o.visible,
     // The muzzle light burns at 9x the flash now, not the frozen arena's 6x.
     intensity: !useRust && o.color?.getHex?.() === 0xffb36b ? o.intensity * 1.5 : o.intensity, color: o.color?.toArray(),

@@ -4,6 +4,8 @@
 
 **Локальная сборка Windows и браузера:** [запуск, установка Rust и устройство проекта](LOCAL_BUILD.md). `npm run local:build` создаёт две программы в `release-local/Crowned-Dogs/`; `npm run web:build` — браузерную папку в `apps/web/dist/`.
 
+**Совместная работа и деплой:** [CONTRIBUTING.md](CONTRIBUTING.md) — ветки и Pull Request для двух разработчиков, проверки и одна безопасная команда обновления VPS.
+
 Концепт игры (сеттинг, правила, оружие, стиль): [документ](https://claude.ai/artifact/F5ZwmpZkDkQiYptP9DvEgc).
 
 ## Что уже есть

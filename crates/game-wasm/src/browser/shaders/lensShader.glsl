@@ -43,6 +43,9 @@ void main() {
   float amount = smear * smoothstep(0.08, 1.0, q);
   float r = soft * smoothstep(0.15, 1.0, q);
   vec4 c;
+#if TAPS < 1
+  c = clean(src); // no smear: clean glass to the edges, and no glow, which reads the frame's mips
+#else
   if (amount < 0.0004 && r < 0.0004) {
     c = clean(src);
   } else {
@@ -64,9 +67,12 @@ void main() {
     }
     c = vec4(sum / wsum, a / float(TAPS));
   }
+#endif
   // the bright parts bleed light over everything near them: two blurred copies, only what is near white
+#if TAPS > 0
   vec3 halo = max(textureLod(tComp, src, 4.5 + glowLod).rgb - 0.55, 0.0) + max(textureLod(tComp, src, 6.0 + glowLod).rgb - 0.5, 0.0);
   c.rgb += halo * glow * hasBg;
+#endif
 #ifdef RAYS
   vec3 ray = texture(tRays, src).rgb * rays * hasBg;
   c.rgb = 1.0 - (1.0 - c.rgb) * (1.0 - clamp(ray, 0.0, 1.0));

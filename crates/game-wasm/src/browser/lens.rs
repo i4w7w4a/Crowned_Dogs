@@ -77,7 +77,20 @@ struct LensState {
     weather: serde_json::Value,
     /// Lightning strikes drawn so far, and whether one is lit right now.
     strikes: std::cell::Cell<(u32, bool)>,
+    /// The living world is on: a strike close by flashes the whole picture and a blackout
+    /// darkens it, the painting included.
+    events: bool,
+    /// The last close flash: when it went off, its colour times strength, and whether it
+    /// flickers like lightning or dies away like a blast.
+    pulse: std::cell::Cell<(f64, [f64; 3], bool)>,
+    /// How much light is left (1 lit, lower in a blackout), where it is heading, and when it
+    /// was last eased.
+    dim: std::cell::Cell<(f64, f64, f64)>,
     shader_features: u8,
+    /// Minimal quality: 8-bit frame, the gun and the hands drawn into the fighters' picture.
+    minimal: bool,
+    /// A quad behind the gun and the hands that marks their pixels (alpha one half) for the compose.
+    mark: Option<(JsValue, JsValue)>,
     px: [f64; 2],
     css: [f64; 2],
     view: [f64; 4],
@@ -260,7 +273,12 @@ impl RustLens {
                 heat_depth: [0.2, 0.1, 1.0],
                 weather: serde_json::Value::Null,
                 strikes: Default::default(),
+                events: false,
+                pulse: std::cell::Cell::new((-100., [0.; 3], false)),
+                dim: std::cell::Cell::new((1., 1., 0.)),
                 shader_features: 0,
+                minimal: false,
+                mark: None,
                 px: [1., 1.],
                 css: [1., 1.],
                 view: [0., 0., 1., 1.],
@@ -275,6 +293,9 @@ impl RustLens {
             return;
         }
         s.stage = stage;
+        if present(&s.stage) {
+            let _ = try_call(&s.stage, "setStill", &[s.minimal.into()]);
+        }
         // The stage owns its resources. Detaching it restores the painted hall
         // without transferring or disposing either set of textures.
         if !present(&s.stage) {
@@ -443,6 +464,30 @@ impl RustLens {
         s.refresh_battle_shader();
     }
 
+    /// The living world's strikes light and darken the whole picture; without events the
+    /// compose shader stays as it was.
+    #[wasm_bindgen(js_name = setEvents)]
+    pub fn set_events(&self, on: bool) {
+        let mut s = self.state.borrow_mut();
+        if s.disposed || s.events == on {
+            return;
+        }
+        s.events = on;
+        s.refresh_battle_shader();
+    }
+    /// A strike close by: `lightning` flickers twice, a blast flares and dies away.
+    pub fn flash(&self, r: f64, g: f64, b: f64, lightning: bool) {
+        let s = self.state.borrow();
+        let t = num(&call(&s.clock, "getElapsed", &[]));
+        s.pulse.set((t, [r, g, b], lightning));
+    }
+    /// The light left in the picture: 1 is normal, a blackout takes most of it.
+    #[wasm_bindgen(js_name = setDim)]
+    pub fn set_dim(&self, target: f64) {
+        let s = self.state.borrow();
+        let (now, _, at) = s.dim.get();
+        s.dim.set((now, target, at));
+    }
     /// How many lightning strikes have flashed; the battle rolls thunder after each.
     #[wasm_bindgen(getter)]
     pub fn strikes(&self) -> u32 {
@@ -463,11 +508,41 @@ impl RustLens {
     pub fn set_quality(&self, q: JsValue) {
         {
             let mut s = self.state.borrow_mut();
-            if !present(&s.quality) || prop(&s.quality, "msaa") != prop(&q, "msaa") {
+            let minimal = string(&get(&q, "id")) == "minimal";
+            if !present(&s.quality)
+                || prop(&s.quality, "msaa") != prop(&q, "msaa")
+                || minimal != s.minimal
+            {
+                // Minimal quality keeps the frame in 8 bits: sRGB storage holds the dark tones, and
+                // only highlights above white clip.
+                let (kind, space) = if minimal {
+                    (get(&s.three, "UnsignedByteType"), "SRGBColorSpace")
+                } else {
+                    (s.float.clone(), "NoColorSpace")
+                };
+                for t in [&s.fig, &s.comp] {
+                    set(&get(t, "texture"), "type", &kind);
+                }
+                set(&get(&s.fig, "texture"), "colorSpace", &get(&s.three, space));
+                // a lens without smear or glow (no taps) reads the frame only at full size, so
+                // its mips are not rebuilt every frame
+                let mips = prop(&q, "taps") > 0.;
+                let comp = get(&s.comp, "texture");
+                set(&comp, "generateMipmaps", &mips.into());
+                let filter = if mips { "LinearMipmapLinearFilter" } else { "LinearFilter" };
+                set(&comp, "minFilter", &get(&s.three, filter));
                 set(&s.fig, "samples", &get(&q, "msaa"));
-                dispose(&s.fig);
                 set(&s.near, "samples", &n(prop(&q, "msaa").min(4.)));
-                dispose(&s.near);
+                for t in [&s.fig, &s.near, &s.comp] {
+                    dispose(t);
+                }
+            }
+            s.minimal = minimal;
+            if minimal && s.mark.is_none() {
+                s.mark = Some(hand_mark(&s.three));
+            }
+            if present(&s.stage) {
+                let _ = try_call(&s.stage, "setStill", &[minimal.into()]);
             }
             s.quality = q.clone();
             s.refresh_battle_shader();
@@ -640,7 +715,10 @@ impl RustLens {
             let t = num(&call(&s.clock, "getElapsed", &[]));
             put(&s.compose, "cdWeatherTime", n(t));
             let flash = s.weather["flash"].as_f64().unwrap_or(0.) * lightning(t);
-            set(&uniform(&s.compose, "cdWeather"), "w", &n(flash));
+            // a bolt close by lights the sky as the far ones do, without rolling more thunder
+            let (at, _, bolt) = s.pulse.get();
+            let near = if bolt { flicker(t - at) } else { 0. };
+            set(&uniform(&s.compose, "cdWeather"), "w", &n(flash.max(near)));
             let w2 = uniform(&s.compose, "cdWeather2");
             let surge = s.weather["surge"].as_f64().unwrap_or(0.) * dust_surge(t);
             set(&w2, "x", &n(surge));
@@ -648,6 +726,34 @@ impl RustLens {
             let (count, lit) = s.strikes.get();
             s.strikes
                 .set((count + u32::from(flash > 0.05 && !lit), flash > 0.05));
+        }
+        if s.shader_features & 64 != 0 {
+            let t = num(&call(&s.clock, "getElapsed", &[]));
+            let (at, color, bolt) = s.pulse.get();
+            let k = if bolt {
+                flicker(t - at)
+            } else if t >= at {
+                (-(t - at) * 7.).exp()
+            } else {
+                0.
+            };
+            // The lights sputter out and come back with a flicker.
+            let (now, target, last) = s.dim.get();
+            let step = (t - last).clamp(0., 0.1);
+            let next = now + (target - now) * (1. - (-step * 4.).exp());
+            let shown = if (target - next).abs() > 0.03
+                && ((t * 37.).sin() * 43758.5).fract().abs() < 0.3
+            {
+                target.min(next)
+            } else {
+                next
+            };
+            s.dim.set((next, target, t));
+            call(
+                &uniform(&s.compose, "cdPulse"),
+                "set",
+                &[n(color[0] * k), n(color[1] * k), n(color[2] * k), n(shown)],
+            );
         }
         call(&layers, "set", &[n(0.)]);
         if present(&stage) {
@@ -696,12 +802,27 @@ impl RustLens {
         }
         call(&layers, "set", &[n(near)]);
         set(&shadow_map, "autoUpdate", &false.into());
-        call(r, "setRenderTarget", &[s.near.clone()]);
-        call(r, "clear", &[]);
         // nothing moved since the first pass, so its world matrices still hold
         let matrices = get(&scene, "matrixWorldAutoUpdate");
         set(&scene, "matrixWorldAutoUpdate", &false.into());
-        let drawn = try_call(r, "render", &[scene.clone(), camera.clone()]);
+        let drawn = match (&s.mark, s.minimal) {
+            // Minimal quality: the gun and the hands go straight over the fighters, on a cleared
+            // depth, and the quad behind them marks their pixels; one picture fewer to fill.
+            (Some((mark, ortho)), true) => {
+                let auto_clear = get(r, "autoClear");
+                set(r, "autoClear", &false.into());
+                call(r, "clearDepth", &[]);
+                let drawn = try_call(r, "render", &[scene.clone(), camera.clone()])
+                    .and_then(|_| try_call(r, "render", &[mark.clone(), ortho.clone()]));
+                set(r, "autoClear", &auto_clear);
+                drawn
+            }
+            _ => {
+                call(r, "setRenderTarget", &[s.near.clone()]);
+                call(r, "clear", &[]);
+                try_call(r, "render", &[scene.clone(), camera.clone()])
+            }
+        };
         set(&scene, "matrixWorldAutoUpdate", &matrices);
         drawn.unwrap_throw();
         set(&shadow_map, "autoUpdate", &auto);
@@ -844,6 +965,47 @@ impl Drop for RustLens {
     }
 }
 
+/// A screen quad just short of the far plane that passes only where something nearer was drawn
+/// after the depth was cleared, and there sets the alpha to one half, leaving the colour.
+fn hand_mark(three: &JsValue) -> (JsValue, JsValue) {
+    let material = make(
+        three,
+        "ShaderMaterial",
+        &[object(&[
+            (
+                "vertexShader",
+                "void main() { gl_Position = vec4(position.xy, 0.9999, 1.0); }".into(),
+            ),
+            (
+                "fragmentShader",
+                "void main() { gl_FragColor = vec4(0.0, 0.0, 0.0, 0.5); }".into(),
+            ),
+            ("depthWrite", false.into()),
+            ("depthFunc", get(three, "GreaterDepth")),
+            ("blending", get(three, "CustomBlending")),
+            ("blendSrc", get(three, "ZeroFactor")),
+            ("blendDst", get(three, "OneFactor")),
+            ("blendSrcAlpha", get(three, "OneFactor")),
+            ("blendDstAlpha", get(three, "ZeroFactor")),
+            ("toneMapped", false.into()),
+        ])],
+    );
+    let quad = make(
+        three,
+        "Mesh",
+        &[make(three, "PlaneGeometry", &[n(2.), n(2.)]), material],
+    );
+    set(&quad, "frustumCulled", &false.into());
+    let scene = make(three, "Scene", &[]);
+    call(&scene, "add", &[quad]);
+    let camera = make(
+        three,
+        "OrthographicCamera",
+        &[n(-1.), n(1.), n(1.), n(-1.), n(0.), n(1.)],
+    );
+    (scene, camera)
+}
+
 fn set_defines(material: &JsValue, defines: JsValue) {
     set(material, "defines", &defines);
     set(material, "needsUpdate", &true.into());
@@ -864,6 +1026,20 @@ pub(crate) fn dust_surge(t: f64) -> f64 {
     };
     // two seconds to thicken, three held, four to clear
     smooth(dt / 2.0) * (1.0 - smooth((dt - 5.0) / 4.0)) * (0.8 + 0.2 * h(k + 1.7))
+}
+/// A bolt close by: a white-hot stroke, a dark gap, the second stroke, then the glow dies.
+pub(crate) fn flicker(dt: f64) -> f64 {
+    if dt < 0. {
+        0.
+    } else if dt < 0.07 {
+        1.
+    } else if dt < 0.11 {
+        0.15
+    } else if dt < 0.2 {
+        0.9
+    } else {
+        0.9 * (-(dt - 0.2) * 9.).exp()
+    }
 }
 pub(crate) fn lightning(t: f64) -> f64 {
     let period = 14.0;
@@ -896,11 +1072,14 @@ impl LensState {
         let weather = self.weather_on();
         // Low and minimal draw the weather with fewer layers of noise, rain and drops.
         let lite = weather && light;
+        let minimal = self.minimal;
         let features = u8::from(self.night_vision)
             | (u8::from(heat) << 1)
             | (u8::from(self.sun_glare) << 2)
             | (u8::from(weather) << 3)
-            | (u8::from(lite) << 4);
+            | (u8::from(lite) << 4)
+            | (u8::from(minimal) << 5)
+            | (u8::from(self.events) << 6);
         if weather {
             self.weather_uniforms();
         }
@@ -934,6 +1113,7 @@ impl LensState {
             "cdDustColor",
             "cdRainColor",
             "cdWeather2",
+            "cdPulse",
         ] {
             let _ = js_sys::Reflect::delete_property(
                 &js_sys::Object::from(uniforms.clone()),
@@ -976,7 +1156,13 @@ impl LensState {
             fragment = fragment.replace("gl_FragColor = vec4(c, max(a, n.a));", "vec2 glareDelta = (vUv - cdGlareSun) * vec2(bgSize.x / max(bgSize.y, 1.0), 1.0);\n  float glare = exp(-length(glareDelta) * 5.5);\n  c += vec3(1.0, 0.83, 0.62) * glare * 0.14;\n  gl_FragColor = vec4(c, max(a, n.a));");
         }
         if weather {
-            declarations.push_str(if lite {
+            declarations.push_str(if minimal {
+                // one flat layer: veils without noise, one rain layer, coarse drops on the lens
+                "#define CD_WX_LITE
+#define CD_WX_MINIMAL
+#define CD_WX_LAYERS 1
+"
+            } else if lite {
                 "#define CD_WX_LITE
 #define CD_WX_LAYERS 2
 "
@@ -995,6 +1181,52 @@ impl LensState {
                 include_str!("shaders/weatherLens.glsl"),
             );
             self.weather_uniforms();
+        }
+        if minimal {
+            // the gun and the hands are in the fighters' picture, marked by an alpha of one half;
+            // the air's weather stays behind them and the lens's lies over them
+            fragment = fragment.replace(
+                "vec4 f = texture(tFig, vUv);",
+                r#"vec4 f = texture(tFig, vUv);
+  float hand = 1.0 - step(0.01, abs(f.a - 0.5));
+  f.a = mix(f.a, 1.0, hand);
+  // beside the gun a soft fringe of its colour, as the separate picture's smooth read gave
+  vec4 rim = vec4(0.0);
+  if (hand < 0.5) {
+    ivec2 at = ivec2(gl_FragCoord.xy), top = textureSize(tFig, 0) - 1;
+    for (int i = 0; i < 4; i++) {
+      ivec2 o = i < 2 ? ivec2(i * 2 - 1, 0) : ivec2(0, i * 2 - 5);
+      vec4 t = texelFetch(tFig, clamp(at + o, ivec2(0), top), 0);
+      rim += vec4(t.rgb, 1.0) * (1.0 - step(0.01, abs(t.a - 0.5)));
+    }
+  }"#,
+            );
+            fragment = fragment.replace(
+                "float a = hasBg > 0.5 ? 1.0 : f.a;",
+                "float a = hasBg > 0.5 ? 1.0 : f.a;\n  vec3 c0 = c;",
+            );
+            fragment = fragment.replace(
+                "vec4 n = smoothRead(tNear, vUv, nearSize);",
+                r#"c = mix(c, c0, hand);
+  float fringe = min(rim.a * 0.2, 0.6);
+  if (rim.a > 0.0) c = mix(c, tone(vec4(rim.rgb / rim.a, 1.0)), fringe);
+  vec4 n = vec4(0.0, 0.0, 0.0, max(hand, fringe));"#,
+            );
+            fragment = fragment.replace("c = tone(n) + c * (1.0 - n.a);", "");
+        }
+        if self.events {
+            declarations.push_str("uniform vec4 cdPulse;
+");
+            set(
+                &uniforms,
+                "cdPulse",
+                &object(&[("value", make(&self.three, "Vector4", &[n(0.), n(0.), n(0.), n(1.)]))]),
+            );
+            fragment = fragment.replace(
+                "gl_FragColor = vec4(c, max(a, n.a));",
+                "c = c * cdPulse.w + cdPulse.rgb * (0.3 + 0.7 * c);
+  gl_FragColor = vec4(c, max(a, n.a));",
+            );
         }
         if self.night_vision {
             // Daylight ACES subtracts a black offset and clamps faint HDR
@@ -1156,7 +1388,9 @@ impl LensState {
         for t in [&self.fig, &self.comp] {
             call(t, "setSize", &[n(p[0]), n(p[1])]);
         }
-        call(&self.near, "setSize", &[n(p[2]), n(p[3])]);
+        // at minimal quality the near picture goes unused; it keeps a single pixel
+        let (nw, nh) = if self.minimal { (1., 1.) } else { (p[2], p[3]) };
+        call(&self.near, "setSize", &[n(nw), n(nh)]);
         call(
             &uniform(&self.compose, "nearSize"),
             "set",

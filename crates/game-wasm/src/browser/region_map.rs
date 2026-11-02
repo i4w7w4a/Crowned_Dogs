@@ -31,17 +31,16 @@ const RAIL: &[P] = &[[1.0, 1.02], [0.6, 1.08], [0.32, 1.12], [0.0, 1.06], [-0.3,
 const LEP: &[P] = &[[0.56, -0.36], [0.42, 0.0], [0.14, 0.34], [-0.2, 0.56], [-0.56, 0.72]];
 const TRICKLE: &[P] = &[[-0.28, 0.6], [-0.36, 0.88], [-0.4, 1.18], [-0.48, 1.5]];
 const FLATS: [[f64; 4]; 5] = [[-0.56, 0.72, 0.14, 0.11], [-0.16, 1.0, 0.13, 0.1], [0.32, 1.12, 0.14, 0.1], [-0.78, 1.12, 0.14, 0.1], [-0.72, 0.52, 0.07, 0.11]];
-/// Guns beyond the block that shell the maps not open yet.
+/// Guns beyond the block; the nearest one shells the region's map under fire.
 const GUNS: [P; 4] = [[1.6, -0.2], [1.5, 1.7], [-1.6, 1.6], [-1.5, -1.6]];
 const CYAN: u32 = 0x73d3e2;
 const FG: u32 = 0xece8df;
 const AMBER: u32 = 0xe9ac3f;
 const GLYPHS: &str = "АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЭЮЯ0123456789#/";
 
-/// A place on the map: a catalogue map, or (no `map`) one not open yet, under shelling.
+/// A place on the map: a catalogue map, drawn or still planned (`MAP_ACCESS`).
 struct Spot {
     map: &'static str,
-    name: &'static str,
     at: P,
     left: bool,
 }
@@ -60,10 +59,10 @@ const AREAS: [Area; 2] = [
         label: [-0.5, -1.12],
         base: [0.47, -0.37],
         spots: [
-            Spot { map: "dam", name: "", at: [0.24, -0.36], left: true },
-            Spot { map: "dryBed", name: "", at: [0.14, 0.08], left: false },
-            Spot { map: "", name: "Водозабор", at: [-0.2, -0.7], left: true },
-            Spot { map: "", name: "Затон", at: [0.62, -1.14], left: false },
+            Spot { map: "dam", at: [0.24, -0.36], left: true },
+            Spot { map: "dryBed", at: [0.14, 0.08], left: false },
+            Spot { map: "intake", at: [-0.2, -0.7], left: true },
+            Spot { map: "backwater", at: [0.62, -1.14], left: false },
         ],
     },
     Area {
@@ -72,10 +71,10 @@ const AREAS: [Area; 2] = [
         label: [0.56, 0.74],
         base: [-0.72, 0.52],
         spots: [
-            Spot { map: "saltHall", name: "", at: [-0.56, 0.72], left: false },
-            Spot { map: "blocks", name: "", at: [-0.16, 1.0], left: false },
-            Spot { map: "", name: "Сортировка", at: [0.32, 1.12], left: false },
-            Spot { map: "", name: "Шламовые пруды", at: [-0.78, 1.12], left: false },
+            Spot { map: "saltHall", at: [-0.56, 0.72], left: false },
+            Spot { map: "blocks", at: [-0.16, 1.0], left: false },
+            Spot { map: "railyard", at: [0.32, 1.12], left: false },
+            Spot { map: "sludgePonds", at: [-0.78, 1.12], left: false },
         ],
     },
 ];
@@ -865,12 +864,21 @@ impl Gl {
         Self::uniform_of(&material, "uAlpha")
     }
 
-    fn build_scene(&mut self, events: &[String]) {
+    fn build_scene(&mut self, views: &[AreaView]) {
+        let events: Vec<String> = views.iter().map(|v| v.event.clone()).collect();
         let ter = terrain();
+        // The maps under fire, one per region at most.
+        let shelled: Vec<P> = AREAS
+            .iter()
+            .zip(views)
+            .filter_map(|(a, v)| v.shelled.map(|i| a.spots[i].at))
+            .collect();
         // Terrain: a fine smooth mesh for the contours, a faceted one for the relief.
+        // The shader takes four scorched zones; the spare ones sit off the block.
         let zones = js_sys::Array::new();
-        for spot in AREAS.iter().flat_map(|a| a.spots.iter()).filter(|s| s.map.is_empty()) {
-            zones.push(&self.make("Vector3", &[n(spot.at[0]), n(spot.at[1]), n(0.085)]));
+        for k in 0..4 {
+            let [x, z, r] = shelled.get(k).map_or([9., 9., 0.01], |p| [p[0], p[1], 0.085]);
+            zones.push(&self.make("Vector3", &[n(x), n(z), n(r)]));
         }
         let zones: JsValue = zones.into();
         let contour = self.geometry(&[("position", &ter.contour_pos, 3), ("salt", &ter.contour_salt, 1)]);
@@ -1132,7 +1140,7 @@ impl Gl {
             self.radars.push((Self::uniform_of(&m, "uOn"), ai, 0.));
             for (si, spot) in area.spots.iter().enumerate() {
                 let at = at + 0.12 + si as f64 * 0.08;
-                if spot.map.is_empty() {
+                if views[ai].maps[si].locked() {
                     self.ring(spot.at, 0.085, AMBER, 0.7, Pen { dash: Some((0.014, 0.01)), at: Some(at), ..Pen::default() });
                     self.ring(spot.at, 0.05, 0xe0583f, 0.35, Pen { dash: Some((0.006, 0.008)), at: Some(at), ..Pen::default() });
                     self.stem(spot.at, 0.08, AMBER, 0.6, at);
@@ -1143,10 +1151,11 @@ impl Gl {
             }
         }
 
-        // Shelling: arcs from beyond the border, shells riding them, smoke and craters.
-        let shelled: Vec<P> = AREAS.iter().flat_map(|a| a.spots.iter()).filter(|s| s.map.is_empty()).map(|s| s.at).collect();
+        // Shelling: an arc from the nearest gun beyond the border, shells riding
+        // it, smoke and craters.
         for (i, &[tx, tz]) in shelled.iter().enumerate() {
-            let [gx, gz] = GUNS[i % GUNS.len()];
+            let far = |g: &P| (g[0] - tx).hypot(g[1] - tz);
+            let [gx, gz] = GUNS.into_iter().min_by(|a, b| far(a).total_cmp(&far(b))).unwrap_or(GUNS[0]);
             let fi = i as f64;
             let pts: Vec<[f64; 3]> = (0..=40)
                 .map(|k| {
@@ -1434,8 +1443,17 @@ impl Gl {
 // ---------- the region card and the marks over the map ----------
 struct MapLine {
     name: String,
-    /// Weather and clock of an open map; none for a map under shelling.
+    /// Weather and clock of an open map, none while the clock keeps it shut.
     now: Option<(String, String)>,
+    /// Why it is shut and for how long, or the warning before it shuts.
+    note: String,
+    /// Still being drawn: shut even while the clock keeps it open.
+    planned: bool,
+}
+impl MapLine {
+    fn locked(&self) -> bool {
+        self.now.is_none() || self.planned
+    }
 }
 /// What the card says about a region right now.
 struct AreaView {
@@ -1445,6 +1463,12 @@ struct AreaView {
     event_name: String,
     odds: Vec<(String, f64)>,
     maps: Vec<MapLine>,
+    /// The spot under fire now, and where the guns go next and when.
+    shelled: Option<usize>,
+    shelling: String,
+}
+fn mins(ms: f64) -> String {
+    format!("{} мин", (ms / 60_000.).ceil().max(1.))
 }
 fn world_at(now: f64, map: &str) -> Value {
     crate::dispatch("client.world.at", &serde_json::json!([now, map]).to_string())
@@ -1464,20 +1488,45 @@ impl AreaView {
             .filter_map(|w| w.as_str())
             .map(|w| (w.to_string(), c["REGION_EVENTS"][&event]["odds"][w].as_f64().unwrap_or(0.)))
             .collect();
+        let worlds: Vec<Value> = area.spots.iter().map(|spot| world_at(now, spot.map)).collect();
+        let word = |w: &Value, key: &str| w[key].as_str().unwrap_or("").to_string();
+        let left = |w: &Value| w["changeInMs"].as_f64().map(mins);
         let maps = area
             .spots
             .iter()
-            .map(|spot| {
-                if spot.map.is_empty() {
-                    return MapLine { name: spot.name.into(), now: None };
-                }
-                let at = world_at(now, spot.map);
+            .zip(&worlds)
+            .map(|(spot, w)| {
+                let open = w["open"].as_bool().unwrap_or(true);
+                let planned = !c["MAPS"][spot.map].is_object();
+                let note = match (open, left(w)) {
+                    (false, Some(left)) => format!("{} · {left}", word(w, "closedName")),
+                    (false, None) => word(w, "closedName"),
+                    (true, _) if planned => "разминирование".into(),
+                    (true, Some(left)) if w["changeInMs"].as_f64().unwrap_or(f64::MAX) <= 300_000. => {
+                        format!("{} через {left}", word(w, "nextClosedName"))
+                    }
+                    _ => String::new(),
+                };
                 MapLine {
-                    name: c["MAPS"][spot.map]["name"].as_str().unwrap_or(spot.map).into(),
-                    now: Some((at["weather"].as_str().unwrap_or("clear").into(), at["clock"].as_str().unwrap_or("").into())),
+                    name: word(w, "mapName"),
+                    now: open.then(|| (word(w, "weather"), word(w, "clock"))),
+                    note,
+                    planned,
                 }
             })
             .collect();
+        let named = |key: &str| area.spots.iter().position(|s| Some(s.map) == worlds[0][key].as_str());
+        let name_of = |i: Option<usize>| i.map(|i| word(&worlds[i], "mapName")).unwrap_or_default();
+        let (shelled, next) = (named("shelled"), named("nextShelled"));
+        let moves = worlds[0]["shellingMovesInMs"].as_f64().map(mins).unwrap_or_default();
+        let shelling = match (shelled, next) {
+            (Some(_), Some(n)) if Some(n) != shelled => {
+                format!("Обстрел: {} · через {moves} → {}", name_of(shelled), name_of(next))
+            }
+            (Some(_), _) => format!("Обстрел: {} · ещё {moves}", name_of(shelled)),
+            (None, Some(_)) => format!("Обстрел через {moves}: {}", name_of(next)),
+            _ => String::new(),
+        };
         Self {
             name: base_region::name(area.id),
             base: base_region::REGIONS.iter().find(|r| r.id == area.id).map(|r| r.title()).unwrap_or_default(),
@@ -1485,6 +1534,8 @@ impl AreaView {
             event,
             odds,
             maps,
+            shelled,
+            shelling,
         }
     }
 }
@@ -1672,7 +1723,7 @@ impl State {
         let events: Vec<String> = views.iter().map(|v| v.event.clone()).collect();
         let gl = match Gl::new(host, &canvas, &events) {
             Ok(mut gl) => {
-                gl.build_scene(&events);
+                gl.build_scene(&views);
                 Some(gl)
             }
             Err(error) => {
@@ -1688,7 +1739,7 @@ impl State {
             let top = |c: P, h: f64| [c[0], ground_y(c[0], c[1]) + h, c[1]];
             marks.push(Mark::new(&labels, Kind::Base, ai, top(area.base, 0.17), false, &view.base));
             for (si, spot) in area.spots.iter().enumerate() {
-                let (kind, h) = if spot.map.is_empty() { (Kind::Locked, 0.08) } else { (Kind::Map, 0.11) };
+                let (kind, h) = if view.maps[si].locked() { (Kind::Locked, 0.08) } else { (Kind::Map, 0.11) };
                 marks.push(Mark::new(&labels, kind, ai, top(spot.at, h), spot.left, &view.maps[si].name));
             }
             marks.push(Mark::new(&labels, Kind::Area, ai, top(area.label, 0.05), false, &view.name));
@@ -1761,17 +1812,25 @@ impl State {
             .maps
             .iter()
             .map(|m| match &m.now {
-                None => format!(r#"<li class="cd-locked"><span class="cd-region-dot"></span><div>{}<small>под обстрелом</small></div></li>"#, m.name),
-                Some((weather, clock)) => format!(r#"<li><span class="cd-region-dot"></span><div>{}<small>{}{clock}</small></div></li>"#, m.name, icon(weather)),
+                Some((weather, clock)) if !m.locked() => {
+                    let soon = if m.note.is_empty() { String::new() } else { format!(r#"<small class="cd-soon">{}</small>"#, m.note) };
+                    format!(r#"<li><span class="cd-region-dot"></span><div>{}<small>{}{clock}</small>{soon}</div></li>"#, m.name, icon(weather))
+                }
+                _ => format!(r#"<li class="cd-locked"><span class="cd-region-dot"></span><div>{}<small>{}</small></div></li>"#, m.name, m.note),
             })
             .collect();
+        let shelling = if view.shelling.is_empty() {
+            String::new()
+        } else {
+            format!(r#"<p class="cd-region-shelling">{}</p>"#, view.shelling)
+        };
         let go = if self.selected == self.current {
             r#"<button class="cd-region-go glass cd-here" type="button">Вы здесь</button>"#.to_string()
         } else {
             format!(r#"<button class="cd-region-go glass" type="button">Перейти на базу «{}»</button>"#, view.base)
         };
         format!(
-            r#"<div class="cd-region-top"><h2>{}</h2><span class="cd-region-chip">База «{}»</span></div><div class="cd-region-event">{}<b>{}</b></div><div class="cd-region-odds">{odds}</div><ul class="cd-region-maps">{maps}</ul>{go}"#,
+            r#"<div class="cd-region-top"><h2>{}</h2><span class="cd-region-chip">База «{}»</span></div><div class="cd-region-event">{}<b>{}</b></div><div class="cd-region-odds">{odds}</div><ul class="cd-region-maps">{maps}</ul>{shelling}{go}"#,
             view.name,
             view.base,
             icon(event_icon(&view.event)),

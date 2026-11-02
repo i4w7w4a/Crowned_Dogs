@@ -47,6 +47,13 @@ fn create(opts: &Value) -> Result<Value, String> {
     if num(&opts["startDistance"]) != 0.0 {
         config["startDistance"] = opts["startDistance"].clone();
     }
+    // The living world: the map's own weather, lightning, drones and shells. The guns
+    // working on this map bring far more shells.
+    for key in ["events", "shelled"] {
+        if opts[key].as_bool() == Some(true) {
+            config[key] = json!(true);
+        }
+    }
     let m = core("createMatch", json!([config]))?;
     let draft = core("freshDraft", json!([m, 0]))?;
     Ok(json!({"match":m,"draft":draft,"fighters":fighters}))

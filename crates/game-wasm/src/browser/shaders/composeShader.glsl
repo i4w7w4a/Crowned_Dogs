@@ -79,6 +79,9 @@ float coc(vec2 uv) {
 }
 
 vec3 focused(vec2 uv) {
+#if DOF_TAPS < 1
+  return painting(uv); // no depth of field: the hall stays sharp
+#else
   if (hasDepth < 0.5) return painting(uv);
   float r = coc(uv);
 #if DOF_TAPS < 2
@@ -98,6 +101,7 @@ vec3 focused(vec2 uv) {
     wsum += w;
   }
   return sum / wsum;
+#endif
 #endif
 }
 

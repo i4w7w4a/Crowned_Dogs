@@ -1,5 +1,6 @@
 import "./style.css";
 import "./base/base.css";
+import "./base/live.css";
 import { mount_application, unmount_application } from "../../../packages/runtime/src/index.ts";
 import { BaseScreen } from "./base/base-screen.ts";
 import { loadLocalLoadout } from "./base/loadout-state.ts";

@@ -240,7 +240,15 @@ test("time links choose matching art and rules before the first fight, overridin
 
 // A UTC hour boundary: the salt hall reads 00:00 (night), the blocks run 12 game hours ahead (day).
 const DAY = 3_600_000, MIDNIGHT = 1_800_000_000_000, GAME_HOUR = DAY / 24;
-const world = (now: number, map: string) => callRust<{ time: string; weather: string; clock: string }>("client.world.at", [now, map]);
+const world = (now: number, map: string) => callRust<{ time: string; weather: string; clock: string; open: boolean }>("client.world.at", [now, map]);
+// The first such midnight, a game minute in, when the clock leaves all these maps open
+// (a shut map's button shows why instead of its hour).
+const openAt = (...maps: string[]) => {
+  for (let day = 0; ; day++) {
+    const now = MIDNIGHT + day * DAY + GAME_HOUR / 60;
+    if (maps.every(map => world(now, map).open)) return now;
+  }
+};
 
 test("the fight takes its time and weather from the map's game clock", async () => harness(async h => {
   const now = h.now, kit = starterLoadout("rifle");
@@ -308,7 +316,7 @@ test("map changes preserve the fitted kit and move to that map's own hour", asyn
   assert.equal(h.duel().match.config.time, "evening", "the dry bed runs eighteen game hours ahead");
   assert.equal(h.duel().match.map.maxDistance, 13);
   assert.equal(h.stored.get("cd-map"), "dryBed");
-}, { now: MIDNIGHT + GAME_HOUR / 60 }));
+}, { now: openAt("blocks") }));
 
 test("menu time and weather pickers override the clock until it is chosen again", async () => harness(async h => {
   const kit = { ...starterLoadout("rifle"), head: "head-sych" };

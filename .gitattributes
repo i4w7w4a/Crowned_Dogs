@@ -7,3 +7,6 @@
 *.test.ts linguist-detectable=false
 **/scripts/** linguist-detectable=false
 tools/** linguist-detectable=false
+
+# Shell scripts must remain executable on Linux after Windows checkouts.
+*.sh text eol=lf

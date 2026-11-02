@@ -203,6 +203,31 @@ pub fn start_quality(gl: JsValue) -> JsValue {
 #[wasm_bindgen]
 pub fn keep_quality(id: &str) {
     store_set("cd-quality", id);
+    super::live::mark(id);
+}
+thread_local! {
+    static GPU_NAME: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+/// The graphics card's name as WebGL reports it, asked once on a throwaway context.
+pub fn gpu_name() -> String {
+    if let Some(name) = GPU_NAME.with(|c| c.borrow().clone()) {
+        return name;
+    }
+    let gl = try_call(&get(&global(), "document"), "createElement", &["canvas".into()])
+        .and_then(|canvas| try_call(&canvas, "getContext", &["webgl2".into()]))
+        .unwrap_or(JsValue::NULL);
+    let name = if present(&gl) {
+        let name = string(&get(&device_facts(&gl), "gpu"));
+        let lose = call(&gl, "getExtension", &["WEBGL_lose_context".into()]);
+        if present(&lose) {
+            call(&lose, "loseContext", &[]);
+        }
+        name
+    } else {
+        "нет WebGL 2".to_owned()
+    };
+    GPU_NAME.with(|c| *c.borrow_mut() = Some(name.clone()));
+    name
 }
 thread_local! {
     static PICKED: std::cell::RefCell<Option<JsValue>> = const { std::cell::RefCell::new(None) };
@@ -230,6 +255,10 @@ fn picked() -> JsValue {
     };
     PICKED.with(|c| *c.borrow_mut() = Some(quality.clone()));
     quality
+}
+/// The id of the quality picked for this device (empty without a page).
+pub fn quality_id() -> String {
+    string(&get(&picked(), "id"))
 }
 /// Whether this device gets the double-size painted backgrounds: its quality draws the arena's backdrop sharp.
 pub fn sharp_pictures() -> bool {

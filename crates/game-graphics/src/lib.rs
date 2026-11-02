@@ -17,6 +17,10 @@ pub fn texture(kind: &str, size: u32) -> Result<Vec<u8>, String> {
     Ok(texture::generate(kind, size as usize))
 }
 
+/// Brings a still base photograph to life on high and ultra: lamps, screens, water and air. A
+/// picture's fragment shader comes after it and calls `cdLiveWarp` and `cdLiveLight`.
+pub const LIVE_SCENE: &str = include_str!("live-scene.glsl");
+
 pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
     match method {
         "graphics.fittingCamera" => view::fitting_camera(&args),
@@ -33,7 +37,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
         "graphics.backdrop" => view::backdrop(&args),
         "graphics.backdropShader" => Ok(json!({
             "vertex":"varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }",
-            "fragment":include_str!("depth-backdrop.glsl")
+            "fragment":format!("{LIVE_SCENE}{}", include_str!("depth-backdrop.glsl"))
         })),
         "graphics.stage" => Ok(stage::stage()),
         "graphics.sling" => stage::sling(&args),

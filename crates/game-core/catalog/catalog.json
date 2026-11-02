@@ -31,6 +31,33 @@
     "perFight": 1
   },
   "GUARD": 0.26,
+  "HAZARDS": {
+    "lightning": {
+      "name": "молния",
+      "radius": 1,
+      "damage": 6,
+      "stun": 1,
+      "shieldOff": 1
+    },
+    "shell": {
+      "name": "снаряд",
+      "radius": 1,
+      "damage": 22,
+      "edge": 0.5
+    },
+    "collapse": {
+      "name": "обвал",
+      "radius": 0,
+      "damage": 18
+    },
+    "drone": {
+      "name": "дрон-камикадзе",
+      "damage": 16
+    },
+    "blackout": {
+      "name": "свет погас"
+    }
+  },
   "KNIFE_GUARD": 0.5,
   "KNIFE_REACH": 2,
   "MAPS": {
@@ -57,6 +84,256 @@
       "name": "Сухое дно",
       "region": "Каскад",
       "maxDistance": 13
+    }
+  },
+  "MAP_ACCESS": {
+    "shellingMinutes": 360,
+    "shellingWhy": "под обстрелом",
+    "planned": {
+      "belyYar": {
+        "railyard": "Сортировка",
+        "sludgePonds": "Шламовые пруды"
+      },
+      "kaskad": {
+        "intake": "Водозабор",
+        "backwater": "Затон"
+      }
+    },
+    "events": {
+      "storms": {
+        "maps": [
+          "backwater",
+          "dryBed"
+        ],
+        "why": "вода поднялась"
+      },
+      "dryWind": {
+        "maps": [
+          "sludgePonds"
+        ],
+        "why": "ядовитая пыль"
+      },
+      "chemical": {
+        "maps": [
+          "intake"
+        ],
+        "why": "заражена вода"
+      }
+    },
+    "hours": {
+      "railyard": {
+        "shut": [
+          "morning",
+          "day",
+          "evening"
+        ],
+        "why": "открыта только ночью"
+      },
+      "sludgePonds": {
+        "shut": [
+          "day"
+        ],
+        "why": "дневные испарения"
+      },
+      "backwater": {
+        "shut": [
+          "morning"
+        ],
+        "why": "утренний туман"
+      }
+    },
+    "release": {
+      "map": "dryBed",
+      "clock": "dam",
+      "starts": [
+        480,
+        1200
+      ],
+      "minutes": 360,
+      "why": "сброс воды"
+    }
+  },
+  "MAP_WEATHER": {
+    "saltHall": {
+      "cover": "roof",
+      "weather": {
+        "clear": {
+          "hazards": {
+            "drone": 0.06
+          }
+        },
+        "dust": {
+          "name": "соляная взвесь",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.95,
+            "far": 0.8
+          }
+        },
+        "storm": {
+          "name": "гроза над крышей",
+          "accuracy": {
+            "near": 1,
+            "mid": 1,
+            "far": 1
+          },
+          "turnLimit": 15,
+          "hazards": {
+            "collapse": 0.15,
+            "blackout": 0.2,
+            "drone": 0.04
+          }
+        },
+        "fog": {
+          "name": "дым",
+          "hazards": {
+            "drone": 0.06
+          }
+        }
+      }
+    },
+    "blocks": {
+      "cover": "open",
+      "weather": {
+        "fog": {
+          "name": "смог"
+        }
+      }
+    },
+    "dam": {
+      "cover": "open",
+      "weather": {
+        "dust": {
+          "name": "ветер с водохранилища",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.95,
+            "far": 0.75
+          },
+          "thermal": false
+        },
+        "fog": {
+          "name": "туман с воды"
+        }
+      }
+    },
+    "dryBed": {
+      "cover": "open",
+      "weather": {
+        "dust": {
+          "name": "соляная буря",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.85,
+            "far": 0.6
+          }
+        }
+      }
+    },
+    "intake": {
+      "cover": "gallery",
+      "weather": {
+        "clear": {
+          "hazards": {
+            "drone": 0.06
+          }
+        },
+        "dust": {
+          "name": "водяная пыль",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.95,
+            "far": 0.8
+          },
+          "thermal": false
+        },
+        "storm": {
+          "name": "гроза за проёмами",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.95,
+            "far": 0.9
+          },
+          "hazards": {
+            "collapse": 0.12,
+            "drone": 0.04
+          }
+        },
+        "fog": {
+          "name": "туман с воды",
+          "hazards": {
+            "drone": 0.06
+          }
+        }
+      }
+    },
+    "backwater": {
+      "cover": "open",
+      "weather": {
+        "dust": {
+          "name": "ветер",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.95,
+            "far": 0.75
+          },
+          "thermal": false
+        },
+        "fog": {
+          "name": "туман с воды"
+        }
+      }
+    },
+    "railyard": {
+      "cover": "roof",
+      "weather": {
+        "clear": {
+          "hazards": {
+            "drone": 0.06
+          }
+        },
+        "dust": {
+          "name": "сквозняк",
+          "accuracy": {
+            "near": 1,
+            "mid": 0.95,
+            "far": 0.85
+          }
+        },
+        "storm": {
+          "name": "гроза над депо",
+          "accuracy": {
+            "near": 1,
+            "mid": 1,
+            "far": 1
+          },
+          "turnLimit": 15,
+          "hazards": {
+            "collapse": 0.12,
+            "blackout": 0.2,
+            "drone": 0.05
+          }
+        },
+        "fog": {
+          "name": "дым",
+          "hazards": {
+            "drone": 0.06
+          }
+        }
+      }
+    },
+    "sludgePonds": {
+      "cover": "open",
+      "weather": {
+        "dust": {
+          "name": "ядовитая пыль",
+          "toxic": 2
+        },
+        "fog": {
+          "name": "ядовитые испарения",
+          "toxic": 1
+        }
+      }
     }
   },
   "MAX_STEPS": 16,
@@ -120,6 +397,10 @@
   },
   "RUN_STEPS": 2,
   "SHRINK_AFTER_TURN": 6,
+  "SHELLING": {
+    "chance": 0.05,
+    "underFire": 0.35
+  },
   "STANCE_TURNS": 2,
   "START_DISTANCE": 7,
   "SUN_ACCURACY": 0.9,
@@ -383,7 +664,10 @@
       },
       "crit": 0,
       "turnLimit": 15,
-      "turnSeconds": 60
+      "turnSeconds": 60,
+      "hazards": {
+        "drone": 0.12
+      }
     },
     "dust": {
       "name": "пыльная буря",
@@ -394,7 +678,8 @@
       },
       "crit": -0.05,
       "turnLimit": 15,
-      "turnSeconds": 45
+      "turnSeconds": 45,
+      "hazards": {}
     },
     "storm": {
       "name": "гроза",
@@ -405,7 +690,11 @@
       },
       "crit": 0,
       "turnLimit": 10,
-      "turnSeconds": 60
+      "turnSeconds": 60,
+      "hazards": {
+        "lightning": 0.35,
+        "drone": 0.06
+      }
     },
     "fog": {
       "name": "туман",
@@ -416,7 +705,10 @@
       },
       "crit": 0.05,
       "turnLimit": 15,
-      "turnSeconds": 60
+      "turnSeconds": 60,
+      "hazards": {
+        "drone": 0.12
+      }
     }
   },
   "WEATHERS": [

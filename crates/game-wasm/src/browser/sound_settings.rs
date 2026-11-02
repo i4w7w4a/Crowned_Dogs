@@ -10,6 +10,34 @@ struct Settings {
     listeners: Vec<Listener>,
 }
 thread_local! { static SETTINGS:RefCell<Option<Rc<RefCell<Settings>>>>=const{RefCell::new(None)}; }
+thread_local! { static GPU: RefCell<Option<String>> = const { RefCell::new(None) }; }
+/// Whether this browser hands out a WebGPU adapter, and whose. WebGPU lives only on secure
+/// pages, so a phone on the home-network address (plain http) never sees it.
+async fn webgpu() -> String {
+    let gpu = get(&get(&global(), "navigator"), "gpu");
+    if !exists(&gpu) {
+        return if boolean(&global(), "isSecureContext") { "нет" } else { "нет на http" }.to_owned();
+    }
+    let Ok(asked) = invoke(&gpu, "requestAdapter", &[]) else {
+        return "нет".to_owned();
+    };
+    match wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(asked)).await {
+        Ok(adapter) if exists(&adapter) => {
+            let info = get(&adapter, "info");
+            let about: Vec<String> = ["vendor", "architecture"]
+                .iter()
+                .map(|key| text(&get(&info, key)))
+                .filter(|part| !part.is_empty())
+                .collect();
+            if about.is_empty() {
+                "есть".to_owned()
+            } else {
+                format!("есть ({})", about.join(" "))
+            }
+        }
+        _ => "нет".to_owned(),
+    }
+}
 impl Settings {
     fn draw(&self) {
         let audio = get(&self.host, "gameAudio");
@@ -28,6 +56,7 @@ impl Settings {
         let fps = query(&self.dialog, ".cd-fps-toggle");
         content(&query(&fps, "b"), if meter { "Вкл" } else { "Выкл" });
         attr(&fps, "aria-pressed", &meter.to_string());
+        self.gpu();
         let store = get(&self.host, "store");
         let camera = call(&store, "get", &[js("cd-camera")]);
         let camera = if text(&camera) == "back" {
@@ -84,6 +113,24 @@ impl Settings {
         let location = get(&global(), "location");
         set(&location, "hash", &js(""));
         call(&location, "reload", &[]);
+    }
+    /// Under the frame counter: the graphics card and WebGPU, so a phone's numbers come with
+    /// its hardware. Asked once per page.
+    fn gpu(&self) {
+        let line = query(&self.dialog, ".cd-gpu");
+        if let Some(known) = GPU.with(|g| g.borrow().clone()) {
+            content(&line, &known);
+            return;
+        }
+        let name = super::platform::gpu_name();
+        let first = format!("Видеокарта: {name}. WebGPU: проверяю…");
+        GPU.with(|g| *g.borrow_mut() = Some(first.clone()));
+        content(&line, &first);
+        wasm_bindgen_futures::spawn_local(async move {
+            let known = format!("Видеокарта: {name}. WebGPU: {}", webgpu().await);
+            GPU.with(|g| *g.borrow_mut() = Some(known.clone()));
+            content(&line, &known);
+        });
     }
     fn segments(&self, group: &str, list: Vec<(String, String)>, current: &str) {
         let element = query(&self.dialog, &format!("[data-g={group}]"));

@@ -7,7 +7,11 @@ c = tone(n) + c * (1.0 - n.a);
   // dust: a gust thickens until it swallows even the gun, and grains catch on the glass
   if (cdWeather2.y > 0.0) {
     float surge = cdWeather2.x;
+#ifdef CD_WX_MINIMAL
+    float roll = 0.5;
+#else
     float roll = wxFbm(vec2(q.x * 1.6 - wt * 0.9, q.y * 2.4 + wt * 0.12));
+#endif
     c = mix(c, cdDustColor * (0.88 + 0.12 * roll), clamp(surge * (0.3 + 0.25 * roll) * n.a, 0.0, 0.6));
     // out-of-focus specks: a few stuck on the glass, more blown past in a gust
     float specks = 0.0;
@@ -26,16 +30,19 @@ c = tone(n) + c * (1.0 - n.a);
       specks += smoothstep(r, r * 0.6, d) * (0.7 + 0.3 * smoothstep(r * 0.3, r * 0.85, d)) * show * (0.75 - fi * 0.25);
     }
     c = mix(c, cdDustColor * 1.18, clamp(specks * 0.32, 0.0, 0.55));
+#ifndef CD_WX_MINIMAL
     // grains streaking past right in front of the lens
     vec2 sg = vec2(q.x * 38.0 - wt * 60.0, q.y * 210.0);
     vec2 sd = (fract(sg) - 0.5) * vec2(0.28, 2.0);
     float streak = step(0.994 - 0.012 * surge, wxHash(floor(sg))) * smoothstep(0.35, 0.0, length(sd));
     c = mix(c, cdDustColor * 1.1, streak * (0.15 + 0.45 * surge) * cdWeather2.y);
+#endif
   }
   // rain: drops on the glass bend the view behind them; the gun and the hands are wet
   if (cdWeather2.z > 0.0) {
     float wet = cdWeather2.z;
     vec3 drop = wxDrops(q, 4.5, wt, 1.0, 0.4 * wet);
+#ifndef CD_WX_MINIMAL // minimal quality: only the big drops, no running ones or beads
     vec3 d2 = wxDrops(q, 10.0, wt, 7.0, 0.5 * wet);
     vec3 sl = wxSlide(q, 7.0, wt, 21.0);
     if (d2.z > drop.z) drop = d2;
@@ -44,9 +51,11 @@ c = tone(n) + c * (1.0 - n.a);
     if (d3.z > drop.z) drop = d3;
 #endif
     if (sl.z > drop.z) drop = sl;
+#endif
     // wet metal and gloves: a little darker, with beads that catch the light
     float lit = dot(c, vec3(0.3, 0.5, 0.2));
     c *= 1.0 - 0.14 * wet * n.a;
+#ifndef CD_WX_MINIMAL
     vec2 bq = q * 70.0;
     // beads sit only on the gun and the hands, and in one cell of eight
     if (n.a > 0.0 && wxHash(floor(bq) + 5.0) >= 0.88) {
@@ -54,6 +63,7 @@ c = tone(n) + c * (1.0 - n.a);
       float bead = smoothstep(1.0, 0.3, length(bd));
       c += vec3(0.9, 0.94, 1.0) * bead * n.a * wet * (0.5 * lit + 0.05 + 0.8 * cdWeather.w);
     }
+#endif
     if (drop.z > 0.001) {
       vec2 s = drop.xy / drop.z;
       float l2 = min(dot(s, s), 1.0);

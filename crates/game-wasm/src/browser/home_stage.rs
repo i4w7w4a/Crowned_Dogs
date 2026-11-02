@@ -1,6 +1,8 @@
 //! One intact base photograph, a soft depth field and a bounded 5–7% approach.
 //! Combat projection and the fitting-room backdrop have independent renderers.
-use super::bridge::*;
+//! On high and ultra the photograph lives (live.rs): the camera breathes and the base's lamps,
+//! screens, water and air move.
+use super::{base_region::REGIONS, bridge::*, live};
 use js_sys::Promise;
 use std::{
     cell::RefCell,
@@ -114,6 +116,7 @@ struct State {
     width: f64,
     height: f64,
     last: String,
+    clock: live::Clock,
     disposed: bool,
 }
 impl State {
@@ -185,13 +188,20 @@ impl RustHomeStage {
             ("uZoom", uniform(n(1.))),
             ("uParallax", uniform(n(0.))),
         ]);
+        let life = REGIONS
+            .iter()
+            .find(|region| url.ends_with(region.home))
+            .map_or(&live::STILL, |region| region.home_life);
+        for (key, value) in live::uniforms(life, 1., &|v| make(&three, "Vector4", &v.map(n))) {
+            set(&uniforms, key, &value);
+        }
         let material = make(
             &three,
             "ShaderMaterial",
             &[object(&[
                 ("uniforms", uniforms.clone()),
                 ("vertexShader", VERTEX.into()),
-                ("fragmentShader", FRAGMENT.into()),
+                ("fragmentShader", format!("{}{FRAGMENT}", live::SCENE).into()),
                 ("toneMapped", false.into()),
                 ("depthTest", false.into()),
                 ("depthWrite", false.into()),
@@ -217,6 +227,7 @@ impl RustHomeStage {
             width: 0.,
             height: 0.,
             last: String::new(),
+            clock: live::Clock::default(),
             disposed: false,
         }));
         let weak = Rc::downgrade(&state);
@@ -249,7 +260,11 @@ impl RustHomeStage {
             _ => ([0.5, 0.5], 0.),
         };
         let p = if p.is_finite() { p.clamp(0., 1.) } else { 0. };
-        let key = format!("{target}:{p:.6}:{w}:{h}");
+        let (alive, time) = s.clock.tick();
+        let mut key = format!("{target}:{p:.6}:{w}:{h}");
+        if alive > 0. {
+            key.push_str(&format!(":{alive}:{time}"));
+        }
         if key == s.last {
             return Ok(());
         }
@@ -277,6 +292,8 @@ impl RustHomeStage {
         call(&uv(&s.uniforms, "uPivot"), "set", &pivot.map(n));
         put(&s.uniforms, "uZoom", n(zoom));
         put(&s.uniforms, "uParallax", n(config.parallax * eased));
+        put(&s.uniforms, "uLive", n(alive));
+        put(&s.uniforms, "uTime", n(time));
         for (key, value) in [
             ("data-home-progress", format!("{p:.4}")),
             ("data-home-target", target.to_string()),
@@ -388,6 +405,7 @@ async fn load_assets(weak: &Weak<RefCell<State>>, url: &str) -> Result<(), JsVal
         "set",
         &[n(1. / width), n(1. / height)],
     );
+    put(&s.uniforms, "uAspect", n(config.aspect));
     s.textures = textures;
     s.config = Some(config);
     s.abort = None;

@@ -209,8 +209,23 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             } else {
                 format!("{} → {}", r["distanceBefore"], r["distanceAfter"])
             };
-            json!({"entry":format!("<div class=\"eh\"><span>Ход {}</span><span>дистанция {dist}</span></div>{}{}",r["turn"],line_html("me","Ты",&a),line_html("en",s(&names[1]),&c)),
-                "ticker":format!("<b>Ход {}</b>Ты: {} · {}: {}",r["turn"],short_result(&a,true),escape(s(&names[1])),short_result(&c,false))})
+            // Lightning, a drone, a shell, a collapse or poisoned air: one more line under the two fighters.
+            let hz = client("words.hazardLine", json!([r, names]))?;
+            let (hz_line, hz_tick) = if hz.is_null() {
+                (String::new(), String::new())
+            } else {
+                (
+                    format!(
+                        "<div class=\"ln hz{}\">{}<span class=\"a\">{}</span></div>",
+                        if b(&hz["hurt"]) { " hurt" } else { "" },
+                        icon(&format!("i-{}", s(&hz["icon"])), ""),
+                        escape(s(&hz["text"]))
+                    ),
+                    format!(" · <em class=\"hz\">{}</em>", escape(s(&hz["text"]))),
+                )
+            };
+            json!({"entry":format!("<div class=\"eh\"><span>Ход {}</span><span>дистанция {dist}</span></div>{}{}{hz_line}",r["turn"],line_html("me","Ты",&a),line_html("en",s(&names[1]),&c)),
+                "ticker":format!("<b>Ход {}</b>Ты: {} · {}: {}{hz_tick}",r["turn"],short_result(&a,true),escape(s(&names[1])),short_result(&c,false))})
         }
         "ui.finishStats" => {
             let history = x(0).as_array().ok_or("Missing battle history")?;

@@ -262,6 +262,7 @@ pub fn order(m: &Value, side: usize, rng: &mut State, style: &Value) -> Value {
     let mut action = choices[soft_pick(rng, &scores, n(&style["temperature"]))]
         .0
         .clone();
+    action = crate::hazard::dodge(m, side, &action, rng);
     if ["shoot", "knife"].contains(&s(&action["type"])) {
         let w = if s(&action["type"]) == "knife" {
             "knife"

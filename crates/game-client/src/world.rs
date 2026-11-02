@@ -2,6 +2,9 @@
 //! so every device sees the same hour. Each map keeps its own hour offset, which
 //! spreads the four times of day over the maps at any moment. Weather changes
 //! every four game hours from the odds of the region's event of the day.
+//! The clock also shuts maps for a while: the region's event, a map's own hours,
+//! the water released at the dam and the shelling that moves round the region
+//! (`MAP_ACCESS` in the catalogue). A region's home map never shuts.
 use crate::text;
 use game_core::{constants, rng};
 use serde_json::{json, Value};
@@ -12,20 +15,49 @@ const DAY_MINUTES: f64 = 1440.0;
 /// Weather holds for four game hours (ten real minutes).
 const WEATHER_MINUTES: f64 = 240.0;
 
-/// Game hours each map runs ahead of the shared clock. The salt hall is the
-/// reference; the others sit a quarter, a half and three quarters of a day off.
+/// Game hours each map runs ahead of the shared clock. The salt hall and the
+/// water intake are the reference; in each region the other three maps sit a
+/// quarter, a half and three quarters of a day off.
 fn map_offset(map: &str) -> f64 {
     match map {
-        "blocks" => 12.0,
-        "dam" => 6.0,
-        "dryBed" => 18.0,
+        "blocks" | "backwater" => 12.0,
+        "dam" | "railyard" => 6.0,
+        "dryBed" | "sludgePonds" => 18.0,
         _ => 0.0,
     }
 }
 
-/// Covered maps never get rain or snow inside; lightning still shows through the roof.
+/// Covered maps (a roof, or the intake's gallery) never get rain inside; lightning still
+/// shows through the roof and the openings. The cover is in `MAP_WEATHER`.
 fn indoor(map: &str) -> bool {
-    map == "saltHall"
+    constants()["MAP_WEATHER"][map]["cover"]
+        .as_str()
+        .is_some_and(|c| c != "open")
+}
+
+/// The weather's name on this map: the salt hall's dust is a salt haze, the ponds' fog is fumes.
+fn weather_name(map: &str, weather: &str) -> Value {
+    let c = constants();
+    let own = &c["MAP_WEATHER"][map]["weather"][weather]["name"];
+    if own.is_string() {
+        own.clone()
+    } else {
+        c["WEATHER"][weather]["name"].clone()
+    }
+}
+
+/// The colour of a map's own fog or dust, by day: smoke under a roof, mist off the water,
+/// salt in the air of the hall, yellow fumes over the sludge ponds.
+fn tint(map: &str, weather: &str) -> Option<u32> {
+    match (map, weather) {
+        ("saltHall" | "railyard", "fog") => Some(0x8f8a84),
+        ("saltHall", "dust") => Some(0xd3d6d4),
+        ("dryBed", "dust") => Some(0xd0d0c8),
+        ("dam" | "intake" | "backwater", "fog") => Some(0xa7b2bb),
+        ("sludgePonds", "fog") => Some(0x9fa184),
+        ("sludgePonds", "dust") => Some(0xbdb98f),
+        _ => None,
+    }
 }
 
 /// Where each time of day starts, in game minutes. Four equal quarters.
@@ -66,19 +98,132 @@ fn phase_at(minute: f64) -> (&'static str, f64) {
     (current.0, next)
 }
 
+/// The region's maps, home first, then the ones still being drawn.
+fn region_maps(region: &str) -> Vec<String> {
+    let c = constants();
+    let drawn = c["REGIONS"][region]["maps"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let planned = c["MAP_ACCESS"]["planned"][region].as_object();
+    drawn
+        .iter()
+        .map(|m| text(m).to_string())
+        .chain(planned.into_iter().flat_map(|p| p.keys().cloned()))
+        .collect()
+}
+
 fn region_of(map: &str) -> String {
-    let regions = &constants()["REGIONS"];
-    regions
+    constants()["REGIONS"]
         .as_object()
         .and_then(|all| {
-            all.iter().find(|(_, r)| {
-                r["maps"]
-                    .as_array()
-                    .is_some_and(|maps| maps.iter().any(|m| text(m) == map))
-            })
+            all.keys()
+                .find(|r| region_maps(r).iter().any(|m| m == map))
         })
-        .map(|(id, _)| id.clone())
+        .cloned()
         .unwrap_or_else(|| "belyYar".into())
+}
+
+fn listed(list: &Value, id: &str) -> bool {
+    list.as_array()
+        .is_some_and(|l| l.iter().any(|v| text(v) == id))
+}
+
+/// Why the world itself shuts `map` at shared game minute `shared`: the region's
+/// event of the day, the map's own hours or the water released at the dam.
+fn shut_by_world(map: &str, region: &str, shared: f64) -> Option<String> {
+    let a = &constants()["MAP_ACCESS"];
+    let event = event_for(region, (shared / DAY_MINUTES).floor() as i64);
+    if listed(&a["events"][event]["maps"], map) {
+        return Some(event.into());
+    }
+    let minute = (shared + map_offset(map) * 60.0).rem_euclid(DAY_MINUTES);
+    if listed(&a["hours"][map]["shut"], phase_at(minute).0) {
+        return Some("hours".into());
+    }
+    let release = &a["release"];
+    if text(&release["map"]) == map {
+        // The release keeps the dam's own clock.
+        let clock = (shared + map_offset(text(&release["clock"])) * 60.0).rem_euclid(DAY_MINUTES);
+        let length = release["minutes"].as_f64().unwrap_or(0.0);
+        let starts = release["starts"].as_array().cloned().unwrap_or_default();
+        if starts
+            .iter()
+            .any(|s| (clock - s.as_f64().unwrap_or(0.0)).rem_euclid(DAY_MINUTES) < length)
+        {
+            return Some("release".into());
+        }
+    }
+    None
+}
+
+/// Game minutes the guns stay on one map.
+fn shelling_minutes() -> f64 {
+    constants()["MAP_ACCESS"]["shellingMinutes"]
+        .as_f64()
+        .unwrap_or(360.0)
+}
+
+/// The map under fire during shelling turn `turn`. The guns move round the
+/// region's maps other than home, one map a turn, so each of them is under fire
+/// a third of the time. They do not skip a map the world has shut already:
+/// skipping piled the fire onto the maps that stay open.
+fn shelled(region: &str, turn: i64) -> Option<String> {
+    let targets: Vec<String> = region_maps(region).into_iter().skip(1).collect();
+    let n = targets.len() as i64;
+    if n == 0 {
+        return None;
+    }
+    let shift = (rng::next(&mut rng::seed(&format!("world:shelling:{region}"))) * n as f64) as i64;
+    targets.get((turn + shift).rem_euclid(n) as usize).cloned()
+}
+
+/// Why `map` is shut at shared game minute `shared`, or None while it is open.
+fn closure(map: &str, region: &str, shared: f64) -> Option<String> {
+    if region_maps(region).first().is_none_or(|home| home == map) {
+        return None;
+    }
+    shut_by_world(map, region, shared).or_else(|| {
+        let turn = (shared / shelling_minutes()).floor() as i64;
+        (shelled(region, turn).as_deref() == Some(map)).then(|| "shelling".into())
+    })
+}
+
+/// What the player reads for a closure.
+fn closed_name(reason: &str, map: &str) -> Value {
+    let a = &constants()["MAP_ACCESS"];
+    match reason {
+        "shelling" => a["shellingWhy"].clone(),
+        "hours" => a["hours"][map]["why"].clone(),
+        "release" => a["release"]["why"].clone(),
+        event => a["events"][event]["why"].clone(),
+    }
+}
+
+/// When `map` next opens or shuts, and why it shuts then. Every rule turns on a
+/// whole game hour, so the hours ahead are checked one by one, three days out.
+fn next_change(
+    map: &str,
+    region: &str,
+    shared: f64,
+    now: &Option<String>,
+) -> Option<(f64, Option<String>)> {
+    let hour = (shared / 60.0).floor();
+    (1..=72).map(|k| (hour + k as f64) * 60.0).find_map(|start| {
+        let then = closure(map, region, start);
+        (then.is_some() != now.is_some()).then_some((start, then))
+    })
+}
+
+/// A map's name, drawn or still planned.
+fn map_name(map: &str, region: &str) -> Value {
+    let c = constants();
+    let drawn = &c["MAPS"][map]["name"];
+    if drawn.is_string() {
+        drawn.clone()
+    } else {
+        c["MAP_ACCESS"]["planned"][region][map].clone()
+    }
 }
 
 fn weighted<'a>(seed: &str, items: impl Iterator<Item = (&'a str, f64)> + Clone) -> &'a str {
@@ -145,9 +290,14 @@ pub fn at(ms: f64, map: &str) -> Value {
     let next_weather = weather_for(map, &region, window + 1, next_day);
     let to_minutes = |game: f64| game / DAY_MINUTES * DAY_MS;
     let event = event_for(&region, day);
+    let closed = closure(map, &region, shared);
+    let change = next_change(map, &region, shared, &closed);
+    let next_closed = change.as_ref().and_then(|(_, why)| why.clone());
+    let turn = (shared / shelling_minutes()).floor() as i64;
     let c = constants();
     json!({
         "mapId": map,
+        "mapName": map_name(map, &region),
         "regionId": region,
         "minute": minute,
         "clock": clock_text(minute),
@@ -157,13 +307,24 @@ pub fn at(ms: f64, map: &str) -> Value {
         "nextTimeName": c["TIME_NAMES"][next_time],
         "nextTimeInMs": to_minutes(to_next),
         "weather": weather,
-        "weatherName": c["WEATHER"][&weather]["name"],
+        "weatherName": weather_name(map, &weather),
         "nextWeather": next_weather,
-        "nextWeatherName": c["WEATHER"][&next_weather]["name"],
+        "nextWeatherName": weather_name(map, &next_weather),
         "nextWeatherInMs": to_minutes(window_end - local),
         "event": event,
         "eventName": c["REGION_EVENTS"][event]["name"],
         "indoor": indoor(map),
+        "toxic": constants()["MAP_WEATHER"][map]["weather"][&weather]["toxic"].as_f64().unwrap_or(0.0) > 0.0,
+        "home": region_maps(&region).first().is_some_and(|h| h == map),
+        "open": closed.is_none(),
+        "closedName": closed.as_deref().map(|why| closed_name(why, map)),
+        "closed": closed,
+        "changeInMs": change.as_ref().map(|(start, _)| to_minutes(start - shared)),
+        "nextClosedName": next_closed.as_deref().map(|why| closed_name(why, map)),
+        "nextClosed": next_closed,
+        "shelled": shelled(&region, turn),
+        "nextShelled": shelled(&region, turn + 1),
+        "shellingMovesInMs": to_minutes((turn + 1) as f64 * shelling_minutes() - shared),
     })
 }
 
@@ -188,6 +349,26 @@ pub fn fx(weather: &str, time: &str, map: &str) -> Value {
         _ => (0xa3a9ad, 0xbfc1bd, 0xc3c9ce),
     };
     let outdoor = !indoor(map);
+    // The map's own fog or dust colour, darker at dusk and at night like the plain ones.
+    let (fog_color, dust_color) = match tint(map, weather) {
+        Some(day) => {
+            let k = match time {
+                "night" => 0.3,
+                "evening" | "morning" => 0.85,
+                _ => 1.0,
+            };
+            let shade = |hex: u32| {
+                let ch = |sh: u32| ((((hex >> sh) & 255) as f64 * k).round() as u32).min(255) << sh;
+                ch(16) | ch(8) | ch(0)
+            };
+            if weather == "fog" {
+                (shade(day), dust_color)
+            } else {
+                (fog_color, shade(day))
+            }
+        }
+        None => (fog_color, dust_color),
+    };
     let (fog, dust, rain, flash, dim, haze) = match weather {
         "fog" => (if night { 0.75 } else { 0.78 }, 0.0, 0.0, 0.0, 0.94, 3.0),
         "dust" => (0.1, if night { 0.6 } else { 0.8 }, 0.0, 0.0, 0.94, 2.4),
@@ -237,7 +418,15 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             let maps = constants()["MAPS"].as_object().ok_or("No maps")?;
             json!(maps.keys().map(|m| at(ms, m)).collect::<Vec<_>>())
         }
+        "client.world.region" => {
+            let ms = args[0].as_f64().ok_or("World clock needs a time")?;
+            json!(region_maps(text(&args[1]))
+                .iter()
+                .map(|m| at(ms, m))
+                .collect::<Vec<_>>())
+        }
         "client.world.fx" => fx(text(&args[0]), text(&args[1]), text(&args[2])),
+        "client.world.weatherName" => weather_name(text(&args[0]), text(&args[1])),
         _ => return Err(format!("Unknown world operation: {method}")),
     })
 }
@@ -300,6 +489,123 @@ mod tests {
             seen.insert(text(&at(start + i as f64 * 600_000.0, "saltHall")["weather"]).to_string());
         }
         assert_eq!(seen.len(), 4, "all four weathers come up: {seen:?}");
+    }
+
+    /// Every game hour of three real days, from a whole real hour.
+    fn hours() -> impl Iterator<Item = f64> {
+        let start = 1_800_000_000_000.0_f64.div_euclid(HOUR) * HOUR;
+        (0..72 * 24).map(move |h| start + h as f64 * HOUR / 24.0 + 1.0)
+    }
+
+    const AWAY: [&str; 6] = ["blocks", "railyard", "sludgePonds", "dryBed", "intake", "backwater"];
+
+    #[test]
+    fn a_region_home_never_shuts() {
+        for ms in hours() {
+            for map in ["saltHall", "dam"] {
+                let w = at(ms, map);
+                assert_eq!(w["open"], true, "{map} at {ms}");
+                assert_eq!(w["home"], true);
+                assert!(w["changeInMs"].is_null());
+            }
+        }
+        assert_eq!(at(0.0, "dam")["home"], true);
+        assert_eq!(at(0.0, "railyard")["home"], false);
+        assert_eq!(at(0.0, "railyard")["mapName"], "Сортировка");
+    }
+
+    #[test]
+    fn the_shelling_moves_on_every_quarter_and_hits_what_it_names() {
+        let mut targets = std::collections::HashSet::new();
+        for ms in hours() {
+            for region in ["belyYar", "kaskad"] {
+                let all = dispatch("client.world.region", json!([ms, region])).unwrap();
+                let all = all.as_array().unwrap();
+                assert_eq!(all.len(), 4, "every region has four maps");
+                let shelled = &all[0]["shelled"];
+                let hit: Vec<&Value> = all.iter().filter(|w| w["closed"] == "shelling").collect();
+                assert!(hit.len() <= 1, "one map under fire at a time");
+                if let Some(w) = hit.first() {
+                    assert_eq!(&w["mapId"], shelled);
+                }
+                targets.insert(text(shelled).to_string());
+            }
+            let left = at(ms, "blocks")["shellingMovesInMs"].as_f64().unwrap();
+            assert!(left > 0.0 && left <= HOUR / 4.0 + 1.0);
+        }
+        for map in AWAY {
+            assert!(targets.contains(map), "the guns reach {map}: {targets:?}");
+        }
+    }
+
+    #[test]
+    fn the_world_shuts_maps_for_its_own_reasons() {
+        let mut why = std::collections::HashSet::<(String, String)>::new();
+        for ms in hours() {
+            for map in AWAY {
+                let w = at(ms, map);
+                if let Some(r) = w["closed"].as_str() {
+                    assert!(w["closedName"].is_string(), "{map} {r}");
+                    why.insert((map.into(), r.into()));
+                }
+                // The map's own hours shut it exactly in those times of day.
+                let shut_time = match map {
+                    "railyard" => w["time"] != "night",
+                    "sludgePonds" => w["time"] == "day",
+                    "backwater" => w["time"] == "morning",
+                    _ => false,
+                };
+                assert!(w["closed"] != "hours" || shut_time, "{map} at {}", w["time"]);
+                assert!(!shut_time || w["open"] == false, "{map} shuts at {}", w["time"]);
+            }
+        }
+        let seen = |map: &str, r: &str| why.contains(&(map.to_string(), r.to_string()));
+        assert!(seen("dryBed", "release"));
+        assert!(seen("dryBed", "storms") && seen("backwater", "storms"));
+        assert!(seen("sludgePonds", "dryWind"));
+        assert!(seen("intake", "chemical"));
+        assert!(!seen("blocks", "hours") && !seen("blocks", "release"));
+    }
+
+    #[test]
+    fn the_dam_releases_water_twice_a_day() {
+        let start = 1_800_000_000_000.0_f64.div_euclid(HOUR) * HOUR;
+        // Dam 08:00 and 20:00 are shared 02:00 and 14:00, six game hours each.
+        for (h, shut) in [
+            (1.5, false),
+            (2.5, true),
+            (7.5, true),
+            (8.5, false),
+            (14.5, true),
+            (19.5, true),
+            (20.5, false),
+        ] {
+            let w = at(start + h * HOUR / 24.0, "dryBed");
+            let release = w["closed"] == "release";
+            // A storm day shuts the dry bed first and hides the release.
+            if w["event"] != "storms" {
+                assert_eq!(release, shut, "shared hour {h}: {}", w["closed"]);
+            }
+        }
+    }
+
+    #[test]
+    fn the_countdown_lands_on_the_change() {
+        for ms in hours().step_by(5) {
+            for map in AWAY {
+                let w = at(ms, map);
+                let Some(left) = w["changeInMs"].as_f64() else {
+                    continue;
+                };
+                assert!(left > 0.0, "{map}");
+                assert_eq!(at(ms + left - 2.0, map)["open"], w["open"], "{map} holds until the change");
+                let after = at(ms + left + 2.0, map);
+                assert_ne!(after["open"], w["open"], "{map} flips at the change");
+                if w["open"] == true {
+                    assert_eq!(after["closed"], w["nextClosed"]);
+                }
+            }
+        }
     }
 
     #[test]
