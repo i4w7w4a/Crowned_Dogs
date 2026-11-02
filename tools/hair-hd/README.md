@@ -88,7 +88,8 @@ morph target `Head_m1…m4` (выходит там, где череп этого
 перекрашивается в цвет причёски с сохранением рисунка щетины (`shaders/look-scalp.glsl`). Маска, средняя яркость
 каждой стрижки, цвет кожи лба и щетины каждого лица (`scalp-male.json`: `luma`, `skin`, `buzz`) едут в пакете на
 скрытом квадрате `Hair_scalp`, маски линии роста — на `Hair_line_slick` и `Hair_line_ponytail` (квадраты делает
-`pack.py`, PNG вешает `finish.py`).
+`pack.py`, PNG вешает `finish.py`). В сжатой копии для телефона (`npm run models:ktx2`) эти маски остаются PNG
+(`apps/web/scripts/compress-models.ts`): сжатие смешало бы каналы разных лиц.
 
 ```bash
 B="/c/Program Files/Blender Foundation/Blender 5.2/blender.exe"
