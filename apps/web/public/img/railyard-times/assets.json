@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "source": "Codex image_gen: approved railyard plate, its clean edit and lighting-weather edits",
+  "nativeSize": [
+    941,
+    1672
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/img/railyard-times/morning/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2782946,
+      "sha256": "92685abe2787fd2190c590652d1ac71441654db2e404544b9984453cf54aa3b1"
+    },
+    {
+      "path": "apps/web/public/img/railyard-times/morning/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 462824,
+      "sha256": "8d1a620ea4e7957264d16da6fd79d2b46db5c0734f14ffdd655fb00b555ecf74"
+    },
+    {
+      "path": "apps/web/public/img/railyard-times/morning/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2822426,
+      "sha256": "0ffd43218a4f94d1809afb7f8a2f2f93ff8da51b74d075ab7aa90a984525a6db"
+    },
+    {
+      "path": "apps/web/public/img/railyard-times/morning/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 474154,
+      "sha256": "a354feaab001b87e0ae8384094ac492162e13ebe1eec11585e7f978bab4f71cc"
+    },
+    {
+      "path": "apps/web/public/img/railyard-times/evening/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2810081,
+      "sha256": "1c4409e0b09e6614ae66c04a1aabe877c422a3aa70bc9c5895025694d4a9657b"
+    },
+    {
+      "path": "apps/web/public/img/railyard-times/evening/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 462436,
+      "sha256": "1de1d1bb9cbb0b463d5936aeac287027ebdc05f3642d99b09695babf06c4e104"
+    },
+    {
+      "path": "apps/web/public/img/railyard-times/evening/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2713027,
+      "sha256": "19a9870903235189ef531c8a96c158e83845fe7b451eea06fbd0e0eccf59a41e"
+    },
+    {
+      "path": "apps/web/public/img/railyard-times/evening/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 425102,
+      "sha256": "e961eff3ed0f3b326f8327b504b11ef19ae035fe68427e42f656e3fdf867b477"
+    },
+    {
+      "path": "apps/web/public/img/railyard-times/night/hall.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2873133,
+      "sha256": "7c5fb2c337ed86ddadc7a34faf82065476bd303b816575e6e8680b9afbfd28f5"
+    },
+    {
+      "path": "apps/web/public/img/railyard-times/night/hall.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 480242,
+      "sha256": "6e44e9843b5c1946f06249f98dfb2fcbfa91e0ebe19ee914c039d416ee058bf9"
+    },
+    {
+      "path": "apps/web/public/img/railyard-times/night/clean.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 2753312,
+      "sha256": "fe8f176b7c7cd734b33356e667ec24b675d16030ef4ca842ada82a122b0bf223"
+    },
+    {
+      "path": "apps/web/public/img/railyard-times/night/clean.webp",
+      "width": 941,
+      "height": 1672,
+      "bytes": 434142,
+      "sha256": "84baf683759c6a29b330051d42097e4501490d4b96b63bc5faa7b4d405af1e28"
+    }
+  ]
+}

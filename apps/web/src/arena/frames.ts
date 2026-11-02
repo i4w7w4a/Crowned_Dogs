@@ -155,8 +155,15 @@ const BLOCKS_NIGHT_LOOK: Look = {
 const kaskadCal = (horizon: number): Frame["cal"] => ({ ...GREY_HALL.cal, feet: [0.55, horizon + GREY_HALL.cal.camH * GREY_HALL.cal.height / 1.8] });
 const DAM_CAL = kaskadCal(0.462);
 const DRYBED_CAL = kaskadCal(0.365);
+const INTAKE_CAL = kaskadCal(0.40);
+const BACKWATER_CAL = kaskadCal(0.395);
+const RAILYARD_CAL = kaskadCal(0.41);
+const SLUDGEPONDS_CAL = kaskadCal(0.381);
 
-const kaskadStage = (map: "dam" | "drybed", time: "morning" | "evening" | "night", extensionTint: number, extensionExposure: number, sideTint: number, sideExposure: number): StageProjection => ({
+type KaskadStageMap = "dam" | "drybed" | "intake" | "backwater" | "railyard" | "sludgeponds";
+type KaskadLooks = Record<"day" | "morning" | "evening" | "night", Look>;
+
+const kaskadStage = (map: KaskadStageMap, time: "morning" | "evening" | "night", extensionTint: number, extensionExposure: number, sideTint: number, sideExposure: number): StageProjection => ({
   manifest: `img/${map}-stage/manifest.json`,
   textures: { clean: `img/${map}-times/${time}/clean.webp`, equipment: `img/${map}-times/${time}/hall.webp` },
   textures2x: { clean: `img/${map}-times/${time}/clean.png`, equipment: `img/${map}-times/${time}/hall.png` },
@@ -211,7 +218,48 @@ const DRYBED_NIGHT_LOOK: Look = {
   sun: [0.1, 0.72, -1],
 };
 
-const kaskadFrames = (map: "dam" | "drybed", mapId: string, name: string, cal: Frame["cal"], looks: Record<"day" | "morning" | "evening" | "night", Look>): Frame[] => [
+/** Morning, evening and night of a newer map from its own day look, with the dam's tuned light. */
+const kaskadLooks = (day: Look): KaskadLooks => ({
+  day,
+  morning: { ...day, exposure: 0.92, rim: 0xd9dfe8, fill: 0xa9bacb, fog: 0x8a96a3, sky: 0xaabcce, ground: 0x272a2e,
+    lighting: { sky: 0.5, rim: 2.6, fill: 1.3, key: 3.2 }, sun: [-0.65, 0.27, -1],
+    lens: { ...day.lens, contrast: 0.26, saturation: 0.55, tint: 0xdde5ee, rays: 0.15, glow: 0.16, haze: 0.016, hazeColor: 0xa5b4c3 } },
+  evening: { ...day, exposure: 0.9, rim: 0xffcf98, fill: 0x9eabb8, fog: 0x8a7867, sky: 0xb7b6b5, ground: 0x2a241f,
+    lighting: { sky: 0.34, rim: 3.8, fill: 1.0, key: 3.0 }, sun: [0.7, 0.12, -1],
+    lens: { ...day.lens, contrast: 0.28, saturation: 0.6, tint: 0xf2dfca, rays: 0.4, glow: 0.3, haze: 0.012, hazeColor: 0xc19b72 } },
+  night: { ...BLOCKS_NIGHT_LOOK, sun: [day.sun?.[0] ?? 0.1, 0.72, -1] },
+});
+
+/** Intake gallery: concrete roof overhead, grey daylight through the broken openings on the right. */
+const INTAKE_LOOK: Look = {
+  ...BLOCKS_LOOK,
+  exposure: 0.95, rim: 0xe4e8ea, fill: 0xa9b5bf, fog: 0x8d9396, sky: 0xbfc8cf, ground: 0x2c2b29,
+  lighting: { sky: 0.6, rim: 3.0, fill: 1.4, key: 3.6 }, sun: [0.85, 0.35, -0.6],
+  lens: { ...BLOCKS_LOOK.lens, saturation: 0.52, tint: 0xe2e7eb, rays: 0.24, glow: 0.2, haze: 0.016, hazeColor: 0xb4bcc2 },
+};
+/** Dry dock: flat overcast light from straight above between the high walls. */
+const BACKWATER_LOOK: Look = {
+  ...BLOCKS_LOOK,
+  exposure: 0.97, rim: 0xe9ecee, fill: 0xb4bfc8, fog: 0x9fa4a8, sky: 0xc9cfd4, ground: 0x302f2c,
+  lighting: { sky: 0.74, rim: 3.0, fill: 1.6, key: 3.9 }, sun: [-0.1, 0.95, -0.4],
+  lens: { ...BLOCKS_LOOK.lens, saturation: 0.54, tint: 0xe4e8ec, rays: 0.12, glow: 0.18, haze: 0.014, hazeColor: 0xbfc5ca },
+};
+/** Engine shed: dusty air, light through the tall windows on the right and the skylights. */
+const RAILYARD_LOOK: Look = {
+  ...BLOCKS_LOOK,
+  exposure: 0.94, rim: 0xe8eef2, fill: 0xa5b0ba, fog: 0x8a929a, sky: 0xbac6d0, ground: 0x2a2b2c,
+  lighting: { sky: 0.55, rim: 3.2, fill: 1.3, key: 3.8 }, sun: [0.75, 0.6, -0.6],
+  lens: { ...BLOCKS_LOOK.lens, saturation: 0.5, tint: 0xe0e7ed, rays: 0.34, glow: 0.24, haze: 0.022, hazeColor: 0xb0bac3 },
+};
+/** Salt flat: white crust, veiled sun ahead, nothing to hide behind. */
+const SLUDGEPONDS_LOOK: Look = {
+  ...BLOCKS_LOOK,
+  exposure: 1.0, rim: 0xf4f2ec, fill: 0xc5ccd2, fog: 0xc0c3c4, sky: 0xd6dadd, ground: 0x4a4946,
+  lighting: { sky: 0.9, rim: 3.4, fill: 1.9, key: 4.6 }, sun: [0.05, 0.75, -1],
+  lens: { ...BLOCKS_LOOK.lens, saturation: 0.5, tint: 0xeceef0, rays: 0.3, glow: 0.3, haze: 0.02, hazeColor: 0xcfd2d4 },
+};
+
+const kaskadFrames = (map: KaskadStageMap, mapId: string, name: string, cal: Frame["cal"], looks: KaskadLooks): Frame[] => [
   { ...GREY_HALL, cal, id: `${map}-day`, name, mapId, time: "day", weather: "clear",
     src: `img/${map}-day/hall.webp`, src2x: `img/${map}-day/hall.png`, look: looks.day,
     projectedStage: { manifest: `img/${map}-stage/manifest.json`, extensionTint: 0xa9a99e, extensionExposure: 0.80 } },
@@ -246,6 +294,10 @@ export const FRAMES: Frame[] = [
     projectedStage: blocksStage("night", 0x7f8790, 0.06, 0x7f8790, 0.06) },
   ...kaskadFrames("dam", "dam", "Плотина", DAM_CAL, { day: DAM_LOOK, morning: DAM_MORNING_LOOK, evening: DAM_EVENING_LOOK, night: DAM_NIGHT_LOOK }),
   ...kaskadFrames("drybed", "dryBed", "Сухое дно", DRYBED_CAL, { day: DRYBED_LOOK, morning: DRYBED_MORNING_LOOK, evening: DRYBED_EVENING_LOOK, night: DRYBED_NIGHT_LOOK }),
+  ...kaskadFrames("intake", "intake", "Водозабор", INTAKE_CAL, kaskadLooks(INTAKE_LOOK)),
+  ...kaskadFrames("backwater", "backwater", "Затон", BACKWATER_CAL, kaskadLooks(BACKWATER_LOOK)),
+  ...kaskadFrames("railyard", "railyard", "Сортировка", RAILYARD_CAL, kaskadLooks(RAILYARD_LOOK)),
+  ...kaskadFrames("sludgeponds", "sludgePonds", "Шламовые пруды", SLUDGEPONDS_CAL, kaskadLooks(SLUDGEPONDS_LOOK)),
 ];
 
 /** Art's fight screen with a painted soldier: the live enemy must cover him exactly. Open with ?cal. */

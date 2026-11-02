@@ -499,6 +499,24 @@ mod tests {
 
     const AWAY: [&str; 6] = ["blocks", "railyard", "sludgePonds", "dryBed", "intake", "backwater"];
 
+    /// The open-share table in docs/map-access.md: every game hour of 30 game days.
+    /// cargo test -p game-client open_share -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn open_share() {
+        let start = 1_800_000_000_000.0_f64.div_euclid(HOUR) * HOUR;
+        for map in AWAY {
+            let mut why = std::collections::BTreeMap::<String, u32>::new();
+            let n = 30 * 24;
+            for h in 0..n {
+                let w = at(start + h as f64 * HOUR / 24.0 + 1.0, map);
+                *why.entry(w["closed"].as_str().unwrap_or("open").to_string()).or_default() += 1;
+            }
+            let share = |k: &str| (why.get(k).copied().unwrap_or(0) as f64 / n as f64 * 100.0).round();
+            println!("{map}: {}", why.keys().map(|k| format!("{k} {}%", share(k))).collect::<Vec<_>>().join(", "));
+        }
+    }
+
     #[test]
     fn a_region_home_never_shuts() {
         for ms in hours() {

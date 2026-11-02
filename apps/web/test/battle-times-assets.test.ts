@@ -15,7 +15,7 @@ else Reflect.deleteProperty(globalThis, "location");
 const publicFile = (path: string) => fileURLToPath(new URL(`../public/${path}`, import.meta.url));
 
 test("every drawn map has four complete time variants with their own shared calibration and geometry", () => {
-  for (const mapId of ["saltHall", "blocks", "dam", "dryBed"]) {
+  for (const mapId of ["saltHall", "blocks", "dam", "dryBed", "intake", "backwater", "railyard", "sludgePonds"]) {
     const times = FRAMES.filter(frame => frame.mapId === mapId && frame.weather === "clear");
     const day = times.find(frame => frame.time === "day")!;
     assert.deepEqual(times.map(frame => frame.time).sort(), ["day", "evening", "morning", "night"], mapId);
@@ -55,7 +55,8 @@ test("real map frames route blocks night to its night plate with the catalogue's
 });
 
 test("Kaskad maps route every time to their own plate with the catalogue's field size", () => {
-  for (const [mapId, prefix, maxDistance] of [["dam", "dam", 14], ["dryBed", "drybed", 13]] as const) {
+  for (const [mapId, prefix, maxDistance] of [["dam", "dam", 14], ["dryBed", "drybed", 13], ["intake", "intake", 12], ["backwater", "backwater", 13],
+    ["railyard", "railyard", 13], ["sludgePonds", "sludgeponds", 14]] as const) {
     for (const time of ["morning", "day", "evening", "night"] as const) {
       const chosen = callRust<Frame>("client.conditions.initial", [FRAMES, time, null, null, false, mapId, null]);
       assert.deepEqual([chosen.id, chosen.mapId, chosen.time], [`${prefix}-${time}`, mapId, time]);

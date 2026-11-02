@@ -15,7 +15,9 @@ const load = (map: string) => {
   return { source, manifest: JSON.parse(readFileSync(source, "utf8")) as Manifest };
 };
 
-for (const [map, horizon, props] of [["dam", 0.462, ["APC", "AA gun", "Near blocks"]], ["drybed", 0.365, ["Tanker barge", "River tug", "Near concrete ruin"]]] as const) {
+for (const [map, horizon, props] of [["dam", 0.462, ["APC", "AA gun", "Near blocks"]], ["drybed", 0.365, ["Tanker barge", "River tug", "Near concrete ruin"]],
+  ["intake", 0.40, ["Collapse rubble", "Curb debris"]], ["backwater", 0.395, ["Ship hull", "Keel blocks"]],
+  ["railyard", 0.41, ["Diesel locomotive", "Wheelsets", "Workbench"]], ["sludgeponds", 0.381, ["Far excavator"]]] as const) {
   test(`${map}: its own stage resolves every material and keeps the measured horizon`, () => {
     const { source, manifest } = load(map);
     assert.equal(manifest.version, 1); assert.equal(manifest.reconstruction.id, `${map}-day`);

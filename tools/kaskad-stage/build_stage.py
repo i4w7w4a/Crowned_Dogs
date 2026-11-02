@@ -1,6 +1,6 @@
 """Build the bounded 3D set of a «Каскад» map, shared by Blender and the Rust renderer.
 
-Blender 5.2 --background --factory-startup --python tools/kaskad-stage/build_stage.py -- --map dam|drybed [--no-render]
+Blender 5.2 --background --factory-startup --python tools/kaskad-stage/build_stage.py -- --map dam|drybed|intake|backwater|railyard|sludgeponds [--no-render]
 Same method as tools/blocks-stage: the source camera is fixed, only VIEW moves,
 traced objects get their own depth, no depth displacement or zoom is used.
 """
@@ -17,7 +17,7 @@ from mathutils import Vector
 
 REPO = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser()
-parser.add_argument('--map', choices=['dam', 'drybed'], required=True)
+parser.add_argument('--map', choices=['dam', 'drybed', 'intake', 'backwater', 'railyard', 'sludgeponds'], required=True)
 parser.add_argument('--no-render', action='store_true')
 args = parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
 MAP = args.map
@@ -30,8 +30,12 @@ W, H, CAMERA_H, FOV = 941, 1672, 2.0, 55.0
 ASPECT = W/H
 FOCAL = .5/math.tan(math.radians(FOV*.5))
 # Measured on the approved day plates: where the lane, parapets and hull bottoms converge.
-HORIZON = {'dam': .462, 'drybed': .365}[MAP]
-TITLE = {'dam': '11 · ПЛОТИНА — гребень под сетками', 'drybed': '12 · СУХОЕ ДНО — между корпусами'}[MAP]
+HORIZON = {'dam': .462, 'drybed': .365, 'intake': .40, 'backwater': .395, 'railyard': .41, 'sludgeponds': .381}[MAP]
+# Column where the walls of a corridor converge; the closed maps are drawn a little yawed.
+VANISH_U = {'intake': .40, 'backwater': .49, 'railyard': .33}.get(MAP, .5)
+TITLE = {'dam': '11 · ПЛОТИНА — гребень под сетками', 'drybed': '12 · СУХОЕ ДНО — между корпусами',
+    'intake': '13 · ВОДОЗАБОР — галерея над решётками', 'backwater': '14 · ЗАТОН — сухой док',
+    'railyard': '15 · СОРТИРОВКА — депо', 'sludgeponds': '16 · ШЛАМОВЫЕ ПРУДЫ — солончак'}[MAP]
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
@@ -154,6 +158,17 @@ def plane_x_depth(u, x):
     """Depth where the source ray through column u meets the vertical plane at lateral x."""
     return x/((u-.5)*ASPECT/FOCAL)
 
+# Corridor frame: lateral L across it, s along it towards the vanishing column.
+YAW = math.atan((VANISH_U-.5)*ASPECT/FOCAL)
+COS, SIN = math.cos(YAW), math.sin(YAW)
+
+def at(L, s, z=0):
+    return Vector((L*COS+s*SIN, -L*SIN+s*COS, z))
+
+def lateral_depth(u, L):
+    """Depth where the source ray through column u meets the corridor wall at lateral L."""
+    return L/((u-.5)*ASPECT/FOCAL*COS-SIN)
+
 def mesh(name, vertices, faces, materials, face_materials=None, target=props, occludes=True):
     data = bpy.data.meshes.new(name)
     data.from_pydata([tuple(p) for p in vertices], [], faces)
@@ -172,6 +187,22 @@ def box(name, x0, x1, y0, y1, z0, z1, material, target=architecture, occludes=Tr
     v = [(x0,y0,z0),(x1,y0,z0),(x1,y1,z0),(x0,y1,z0),(x0,y0,z1),(x1,y0,z1),(x1,y1,z1),(x0,y1,z1)]
     faces = [(0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
     return mesh(name, v, faces, [material], target=target, occludes=occludes)
+
+def cbox(name, L0, L1, s0, s1, z0, z1, material, target=architecture, occludes=True, z1_far=None):
+    """Closed volume squared to the corridor; z1_far slopes its top towards s1."""
+    top_far = z1 if z1_far is None else z1_far
+    v = [at(L0,s0,z0),at(L1,s0,z0),at(L1,s1,z0),at(L0,s1,z0),at(L0,s0,z1),at(L1,s0,z1),at(L1,s1,top_far),at(L0,s1,top_far)]
+    faces = [(0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
+    return mesh(name, v, faces, [material], target=target, occludes=occludes)
+
+def cquad(name, L0, L1, s0, s1, z, material, down=False, occludes=False):
+    """Open floor (faces up) or ceiling (faces down) squared to the corridor."""
+    face = (0,3,2,1) if down else (0,1,2,3)
+    return mesh(name, [at(L0,s0,z),at(L1,s0,z),at(L1,s1,z),at(L0,s1,z)], [face], [material], target=architecture, occludes=occludes)
+
+def standing(outline, foot=None):
+    """One depth for a prop that stands on the floor: where its lowest edge meets the ground."""
+    return floor_depth(foot if foot is not None else max(v for u, v in outline))
 
 def slab(name, outline, depths, thickness, back_material=concrete, front_material=photo, direction=None, target=props, repair_plate=True):
     n = len(outline)
@@ -250,7 +281,7 @@ if MAP == 'dam':
     # Rusty frames and barrels along the right parapet.
     slab('Parapet junk · frames and barrels', [(.80,.53),(.80,.50),(.86,.495),(.93,.49),(1.15,.49),(1.15,.62),(.95,.585),(.88,.56)], 22, 1.0, direction=(.9,.8,0), back_material=steel)
     TILE, GROUND_TINT = 'concrete', (.31, .30, .27)
-else:
+elif MAP == 'drybed':
     mesh('Dry reservoir bed · y=0 in game', [(-60,-12,0),(60,-12,0),(60,420,0),(-60,420,0)], [(0,1,2,3)], [floor], target=architecture, occludes=False)
     # Long tanker barge on the left, receding from about 50 m to 75 m, with its collapsed deck crane.
     barge = [(-.15,.39),(-.15,.20),(.06,.21),(.10,.20),(.25,.18),(.34,.18),(.34,.21),(.28,.26),(.38,.30),(.45,.33),(.465,.39),(.25,.392)]
@@ -269,6 +300,61 @@ else:
     junk = [(-.15,.68),(.12,.66),(.22,.70),(.30,.78),(.38,.85),(.35,.95),(.25,1.10),(-.15,1.10)]
     slab('Bollard, beams and rope', junk, 4.8, .7, direction=(-.4,.8,0), back_material=steel)
     TILE, GROUND_TINT = 'silt', (.36, .33, .29)
+elif MAP == 'intake':
+    # Gallery over the trash racks: rack wall on the left, low parapet and openings on the right.
+    LEFT, RIGHT, CEILING, END = -2.0, 5.62, 6.0, 90
+    cquad('Gallery floor · y=0 in game', LEFT, RIGHT, -12, END, 0, floor)
+    cbox('Trash-rack wall and railings', LEFT-.6, LEFT, -12, END, -3, CEILING, wall)
+    cbox('Reservoir parapet', RIGHT, RIGHT+.5, -12, END, 0, 1.5, wall)
+    # The roof fell in between 18 and 27 m: through the gap the far bank stays far away.
+    cbox('Reservoir wall · near bays', RIGHT, RIGHT+.5, -12, 18, 1.5, CEILING, wall)
+    cbox('Reservoir wall · far bays and windows', RIGHT, RIGHT+.5, 27.4, END, 1.5, CEILING, wall)
+    cquad('Gallery ceiling and beams', LEFT-.6, RIGHT+.5, -12, END, CEILING, wall, down=True)
+    cbox('Far end wall', LEFT-.6, RIGHT+.5, END, END+1, 0, CEILING, wall)
+    # Collapse at the broken opening: the heap and the snapped column above it.
+    rubble = [(.64,.46),(.66,.445),(.70,.43),(.715,.36),(.72,.30),(.74,.27),(.77,.27),(.775,.33),(.77,.40),(.80,.42),(.84,.41),(.88,.42),(.93,.41),(.96,.42),(.96,.50),(.90,.50),(.85,.49),(.78,.485),(.72,.475),(.66,.47)]
+    slab('Collapse rubble and broken column', rubble, 22, 6, direction=(.6,6,0))
+    debris = [(-.15,.60),(.07,.60),(.13,.64),(.13,.70),(.05,.78),(.03,.82),(-.15,.83)]
+    slab('Curb debris', debris, standing(debris), .9, direction=(-.4,.8,0))
+    TILE, GROUND_TINT = 'concrete', (.27, .27, .26)
+elif MAP == 'backwater':
+    # Dry dock: stepped walls 14 m apart, the closed caisson gate 55 m ahead.
+    LEFT, RIGHT, END = -6.6, 7.5, 55
+    cquad('Dock floor · y=0 in game', LEFT, RIGHT, -12, END, 0, floor)
+    cbox('Left dock wall', LEFT-1.5, LEFT, -12, END, 0, 14.7, wall, z1_far=8.9)
+    cbox('Right dock wall', RIGHT, RIGHT+1.5, -12, END, 0, 13.5, wall, z1_far=8.9)
+    cbox('Caisson gate', LEFT-1.5, RIGHT+1.5, END, END+2, 0, 8.6, wall)
+    # The rusty ship stands on keel blocks along the right wall, stern towards the lane.
+    hull = [(.585,-.05),(.585,.02),(.58,.12),(.575,.20),(.578,.26),(.595,.33),(.625,.39),(.64,.42),(.72,.42),(.80,.425),(.89,.43),(1.15,.43),(1.15,-.05)]
+    hull_depth = lambda u: 20+max(0, .70-u)/.12*20
+    slab('Ship hull · stern and propeller', hull, [hull_depth(u) for u, v in hull], 0, direction=(1,10,0), back_material=steel)
+    blocks = [(.64,.425),(1.15,.425),(1.15,.515),(.98,.51),(.87,.505),(.80,.48),(.755,.47),(.70,.455),(.65,.44)]
+    slab('Keel blocks', blocks, [17.5+max(0, .87-u)/.22*20 for u, v in blocks], 0, direction=(.5,8,0))
+    TILE, GROUND_TINT = 'concrete', (.33, .32, .30)
+elif MAP == 'railyard':
+    # Engine shed: raised track bed with the locomotive on the left, inspection pit, brick wall on the right.
+    LEFT, RIGHT, ROOF, END, PIT = -8.4, 8.6, 11.0, 64, -1.76
+    cquad('Shed floor · y=0 in game', PIT, RIGHT, -12, END, 0, floor)
+    cquad('Inspection pit bottom', -3.2, PIT, -12, END, -1.3, wall)
+    cbox('Inspection pit near wall', PIT-.1, PIT, -12, END, -1.3, 0, wall, occludes=False)
+    cbox('Track bed under the locomotive', LEFT, -3.2, -12, END, -1.3, 1.2, wall)
+    cbox('Left shed wall', LEFT-.6, LEFT, -12, END, 1.2, ROOF, wall)
+    cbox('Brick wall with arched windows', RIGHT, RIGHT+.6, -12, END, 0, ROOF, wall)
+    cquad('Roof trusses and skylights', LEFT-.6, RIGHT+.6, -12, END, ROOF, wall, down=True)
+    cbox('Far gates', LEFT-.6, RIGHT+.6, END, END+1, -1.3, ROOF, wall)
+    loco = [(-.15,.12),(0,.13),(.06,.15),(.12,.19),(.15,.21),(.22,.22),(.25,.27),(.29,.31),(.29,.45),(.22,.47),(.15,.50),(.10,.53),(.05,.58),(0,.62),(-.15,.64)]
+    slab('Diesel locomotive', loco, [min(60, lateral_depth(u, -2.0)) for u, v in loco], 0, direction=(-3*COS,3*SIN,0), back_material=steel)
+    wheels = [(.48,.44),(.48,.35),(.54,.35),(.55,.42),(.58,.40),(.64,.39),(.72,.395),(.745,.41),(.75,.46),(.66,.465),(.57,.46)]
+    slab('Wheelsets and far machines', wheels, standing(wheels), 2.5, direction=(1.2,2.2,0), back_material=steel)
+    bench = [(.75,.51),(.75,.38),(.80,.36),(.86,.37),(.90,.35),(.95,.36),(1.15,.36),(1.15,.53),(.95,.52),(.85,.515)]
+    slab('Workbench and shelves', bench, standing(bench, .515), 1.5, direction=(.6,1.2,0))
+    TILE, GROUND_TINT = 'concrete', (.30, .30, .30)
+else:
+    # Salt flat to the horizon: only the ground, the near power pole and a far excavator.
+    mesh('Salt crust · y=0 in game', [(-220,-12,0),(220,-12,0),(220,420,0),(-220,420,0)], [(0,1,2,3)], [floor], target=architecture, occludes=False)
+    pole('Near power pole', .925, .315, 39.8, 0)
+    slab('Far excavator', [(.085,.39),(.085,.375),(.10,.37),(.12,.366),(.135,.362),(.148,.372),(.148,.392)], 200, 0, direction=(-3,6,0), back_material=steel)
+    TILE, GROUND_TINT = 'salt', (.66, .66, .64)
 
 def noise(x,y):
     return math.sin(x*12.13+y*17.19)*math.sin(x*4.37-y*8.23)
