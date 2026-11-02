@@ -167,10 +167,44 @@ impl Base {
         if before.is_none() {
             set(&body, "scrollTop", &number(0.0));
             let tablet = query(&self.root, ".cd-tab");
+            toggle(&tablet, "cd-tab-off", false);
             toggle(&tablet, "cd-tab-up", false);
             get(&tablet, "offsetWidth");
             toggle(&tablet, "cd-tab-up", true);
+            // Escape needs focus inside the tablet; the body also scrolls from the keyboard.
+            focus(&body);
         }
+    }
+    /// The tablet's power key: the screen shuts off and the tablet goes down, then the base comes back.
+    /// Without motion, or on a second press while it shuts off, the base comes back at once.
+    fn close_sync(&mut self, weak: Weak<RefCell<Self>>) {
+        if self.view != "sync" {
+            return;
+        }
+        let tablet = query(&self.root, ".cd-tab");
+        let off = call(&get(&tablet, "classList"), "contains", &[js("cd-tab-off")]).as_bool()
+            == Some(true);
+        let reduce = boolean(
+            &call(
+                &global(),
+                "matchMedia",
+                &[js("(prefers-reduced-motion: reduce)")],
+            ),
+            "matches",
+        );
+        if off || reduce {
+            self.leave_sync(weak);
+        } else {
+            toggle(&tablet, "cd-tab-off", true);
+        }
+    }
+    fn leave_sync(&mut self, weak: Weak<RefCell<Self>>) {
+        if self.view != "sync" {
+            return;
+        }
+        self.navigate("base", weak);
+        toggle(&query(&self.root, ".cd-tab"), "cd-tab-off", false);
+        focus(&query(&self.home, ".cd-to-sync"));
     }
     /// Views that show the Persona on its stand.
     fn staged(&self) -> bool {
@@ -1345,7 +1379,9 @@ fn bind(state: &Rc<RefCell<Base>>) {
         (query(&root, ".cd-operator"), "click", "persona"),
         (query(&root, ".cd-to-persona"), "click", "persona"),
         (query(&root, ".cd-to-sync"), "click", "sync"),
-        (query(&root, ".cd-sync-back"), "click", "base"),
+        (query(&root, ".cd-tab-power"), "click", "syncClose"),
+        (query(&root, ".cd-tab"), "animationend", "syncOff"),
+        (query(&root, ".cd-sync"), "keydown", "syncKeys"),
         (query(&root, ".cd-sync-body"), "click", "syncSpend"),
         (query(&root, ".cd-briefing-next"), "click", "briefNext"),
         (query(&root, ".cd-briefing-skip"), "click", "briefSkip"),
@@ -1585,6 +1621,18 @@ fn listen(state: &Rc<RefCell<Base>>, target: &JsValue, event: &str, action: &'st
                         (at + items.len() - 1) % items.len()
                     };
                     focus(&items[next]);
+                }
+            }
+            "syncClose" => s.close_sync(weak.clone()),
+            "syncOff" => {
+                if text(&get(&event, "animationName")) == "cd-tab-drop" {
+                    s.leave_sync(weak.clone());
+                }
+            }
+            "syncKeys" => {
+                if text(&get(&event, "key")) == "Escape" {
+                    call(&event, "preventDefault", &[]);
+                    s.close_sync(weak.clone());
                 }
             }
             "regionKeys" => {

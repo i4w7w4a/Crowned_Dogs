@@ -309,21 +309,48 @@ button.cd-operator { width: 100%; border: 0; border-bottom: 1px solid #e1e6dd2b;
 .cd-sync > .cd-backdrop { object-position: 30% 62%; filter: blur(4px) brightness(.45); transform: scale(1.08); }
 .cd-sync-shade { position: absolute; inset: 0; z-index: -2; pointer-events: none; background: linear-gradient(180deg, #04080aa0, #04080a60 30%, #04080ae0); }
 
-.cd-tab { position: relative; flex: 1; min-height: 0; margin-top: 12px; display: flex; flex-direction: column; padding: 16px 11px 24px; border-radius: 32px;
+.cd-tab { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 44px 11px 24px; border-radius: 32px;
   background: linear-gradient(165deg, #4a5157 0%, #262b2f 8%, #16191b 46%, #1d2124 86%, #2d3337 100%);
   box-shadow: 0 40px 70px -24px #000, 0 0 0 1px rgba(0,0,0,.75), inset 0 1px 0 rgba(255,255,255,.14), inset 0 -2px 0 rgba(0,0,0,.6), inset 0 0 0 3px rgba(255,255,255,.02);
   transform-origin: 50% 100%; }
 .cd-tab::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: repeating-linear-gradient(90deg, rgba(255,255,255,.014) 0 1px, transparent 1px 3px); }
 .cd-tab-up { animation: cd-tab-raise .75s cubic-bezier(.16,.9,.25,1) both; }
 @keyframes cd-tab-raise { from { opacity: 0; transform: translateY(60px) rotateX(14deg) scale(.96); } }
+/* Speaker slots on the top strip, opposite the power key. */
+.cd-tab::after { content: ""; position: absolute; top: 20px; left: 30px; width: 38px; height: 5px; border-radius: 3px; pointer-events: none; background: repeating-linear-gradient(90deg, #07090a 0 4px, transparent 4px 7px); box-shadow: 0 1px 0 rgba(255,255,255,.05); }
 .cd-tab-corner { position: absolute; width: 58px; height: 58px; border: 0 solid #0b0d0e; pointer-events: none; filter: drop-shadow(0 1px 0 rgba(255,255,255,.07)); }
 .cd-tl { top: -4px; left: -4px; border-width: 8px 0 0 8px; border-top-left-radius: 36px; }
 .cd-tr { top: -4px; right: -4px; border-width: 8px 8px 0 0; border-top-right-radius: 36px; }
 .cd-bl { bottom: -4px; left: -4px; border-width: 0 0 8px 8px; border-bottom-left-radius: 36px; }
 .cd-br { bottom: -4px; right: -4px; border-width: 0 8px 8px 0; border-bottom-right-radius: 36px; }
-.cd-tab-cam { position: absolute; top: 5px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #5d7d93, #07090a 62%); }
-.cd-tab-led { position: absolute; top: 6px; right: 64px; width: 4px; height: 4px; border-radius: 50%; background: #74e2a2; box-shadow: 0 0 6px #74e2a2; animation: cd-led 2.4s steps(1) infinite; }
+.cd-tab-cam { position: absolute; top: 19px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #5d7d93, #07090a 62%); }
+.cd-tab-led { position: absolute; top: 20px; right: 62px; width: 4px; height: 4px; border-radius: 50%; background: #74e2a2; box-shadow: 0 0 6px #74e2a2; animation: cd-led 2.4s steps(1) infinite; }
 @keyframes cd-led { 50% { opacity: .2; } }
+/* The power key closes the tablet: a rubber key in a dark collar with a lit ring, nested in the corner guard. */
+.cd-tab-power { position: absolute; top: 10px; right: 16px; z-index: 2; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: var(--cd-sync); -webkit-tap-highlight-color: transparent;
+  background: radial-gradient(circle at 50% 30%, #353c41, #15181a 72%);
+  box-shadow: 0 0 0 3px #060708, 0 1px 0 3.5px rgba(255,255,255,.06), inset 0 1px 0 rgba(255,255,255,.18), inset 0 -3px 5px rgba(0,0,0,.6);
+  transition: transform .12s, box-shadow .12s, color .2s; }
+.cd-tab-power svg { width: 13px; height: 13px; filter: drop-shadow(0 0 3px rgba(115,211,226,.9)); }
+.cd-tab-power::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; }
+.cd-tab-power::after { content: ""; position: absolute; inset: -4.5px; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 1.5px rgba(115,211,226,.75), 0 0 12px 2px rgba(115,211,226,.32); animation: cd-breathe 3.2s ease-in-out infinite; }
+@keyframes cd-breathe { 50% { opacity: .4; } }
+.cd-tab-power:hover { color: #d4f7fc; }
+.cd-tab-power:active { transform: scale(.92); box-shadow: 0 0 0 3px #060708, 0 1px 0 3.5px rgba(255,255,255,.06), inset 0 2px 6px rgba(0,0,0,.85); }
+/* Off: the picture folds into a bright line and a dot like an old CRT, the light dies, the tablet goes down. */
+.cd-tab.cd-tab-off { animation: cd-tab-drop .5s cubic-bezier(.55,0,.8,.3) .6s both; pointer-events: none; }
+@keyframes cd-tab-drop { to { opacity: 0; transform: translateY(90px) rotateX(16deg) scale(.95); } }
+.cd-tab-off .cd-tab-power { color: #24363b; transform: scale(.92); box-shadow: 0 0 0 3px #060708, 0 1px 0 3.5px rgba(255,255,255,.06), inset 0 2px 6px rgba(0,0,0,.85); }
+.cd-tab-off .cd-tab-power svg { filter: none; }
+.cd-tab-off .cd-tab-power::after { animation: cd-ring-out .45s ease-out both; }
+@keyframes cd-ring-out { 0% { opacity: 1; box-shadow: 0 0 0 1.5px #e6fbff, 0 0 18px 5px rgba(115,211,226,.8); } 100% { opacity: 0; } }
+.cd-tab-off .cd-tab-led { animation: none; background: #1f2b24; box-shadow: none; }
+.cd-tab-off .cd-sync-body { animation: cd-crt-off .32s cubic-bezier(.7,0,.9,.4) both; transform-origin: 50% 50%; }
+@keyframes cd-crt-off { 60% { opacity: 1; transform: scale(1.02, .008); filter: brightness(4); } 100% { opacity: 0; transform: scale(.9, .002); filter: brightness(6); } }
+.cd-tab-off .cd-tab-screen { animation: cd-screen-dark .3s .12s both; }
+@keyframes cd-screen-dark { to { box-shadow: inset 0 0 0 1px #000, inset 0 0 0 999px #020304; } }
+.cd-tab-off .cd-tab-beam { top: 50%; height: 2px; margin-top: -1px; border-radius: 1px; background: #e9fcff; box-shadow: 0 0 10px 2px rgba(115,211,226,.9), 0 0 30px 6px rgba(115,211,226,.35); animation: cd-crt-line .62s cubic-bezier(.5,0,.2,1) both; }
+@keyframes cd-crt-line { 0% { opacity: 0; transform: scaleX(1); } 30% { opacity: 1; transform: scaleX(1); } 82% { opacity: 1; transform: scaleX(.012) scaleY(1.6); } 100% { opacity: 0; transform: scaleX(0); } }
 .cd-tab-brand { position: absolute; left: 0; right: 0; bottom: 7px; margin: 0; text-align: center; font: 8px/1 var(--mono); letter-spacing: .3em; text-transform: uppercase; color: #5a636b; text-shadow: 0 1px 0 rgba(255,255,255,.05); }
 .cd-tab-screen { position: relative; flex: 1; min-height: 0; border-radius: 16px; overflow: hidden;
   background: radial-gradient(130% 60% at 50% -8%, #10252c 0%, #071114 46%, #040708 100%);
