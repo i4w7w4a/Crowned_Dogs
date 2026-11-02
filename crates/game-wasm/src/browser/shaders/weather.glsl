@@ -40,7 +40,7 @@ if (hasBg > 0.5) {
   // rain: thin slanted streaks in three depth layers, hidden behind what stands nearer
   if (cdWeather.z > 0.0) {
     float rain = 0.0;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < CD_WX_LAYERS; i++) {
       float fi = float(i);
       float cols = 70.0 + fi * 60.0;
       vec2 q = vec2((p.x + vUv.y * 0.07) * cols, vUv.y * cols * 0.09 + t * (2.6 - fi * 0.55));
@@ -64,7 +64,7 @@ if (hasBg > 0.5) {
     vec3 sky = textureLod(tBg, vec2(vUv.x, min(cdWeather2.w + below * 0.6, 0.999)), 4.0).rgb * cdWeatherDim;
     c = mix(c * (1.0 - 0.12 * wet), sky * 0.55, wet * puddle * 0.22);
     float rings = 0.0;
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < CD_WX_LAYERS - 1; i++) {
       float fi = float(i);
       vec2 cell = ground / 0.45 + fi * 0.5;
       vec2 id = floor(cell);

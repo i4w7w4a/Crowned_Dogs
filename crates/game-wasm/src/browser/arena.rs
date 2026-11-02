@@ -631,6 +631,7 @@ impl RustArena {
                 if !s.running || !s.ready || !s.pace.due(time) {
                     return;
                 }
+                super::fps_meter::frame(time);
                 s.tick(time);
                 (s.on_frame.clone(), std::mem::take(&mut s.drawn))
             };

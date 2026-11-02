@@ -20,6 +20,14 @@ function versioned(base: URL, input: RequestInfo | URL): string | null {
   return v ? `${url.origin}${url.pathname}?cdv=${v}` : null;
 }
 
+/** Whether the build ships this file next to the page (always no in dev, which has no list). */
+export function shipped(input: string): boolean {
+  if (!base) return false;
+  const url = new URL(input, document.baseURI);
+  return url.origin === base.origin && url.pathname.startsWith(base.pathname)
+    && decodeURIComponent(url.pathname.slice(base.pathname.length)) in VERSIONS;
+}
+
 function install(base: URL | null): void {
   if (!base || !Object.keys(VERSIONS).length || typeof caches === "undefined") return;
   const network = window.fetch.bind(window);

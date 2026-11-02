@@ -46,6 +46,8 @@ export interface Quality {
   mirror: boolean;
   /** The double-size painting, drawn with a sharp filter. */
   sharpBackdrop: boolean;
+  /** The figures' maps GPU-compressed (KTX2): a quarter of the video memory, no decoding on load. */
+  compressedTextures: boolean;
 }
 
 export const QUALITY = callRust<{ QUALITY: Record<QualityId, Quality> }>("client.data", []).QUALITY;

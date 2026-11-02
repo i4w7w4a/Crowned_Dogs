@@ -64,6 +64,95 @@ pub(super) fn local_position(three: &JsValue, model: &JsValue, bone: &JsValue) -
     call(model, "worldToLocal", &[world_position(three, bone)])
 }
 
+/// A bone's world matrix as Three last computed it: one copy, no walk up its parents and no
+/// new vector. The caller makes sure it is current (an `updateWorldMatrix` above it this frame).
+pub(super) fn world_matrix(bone: &JsValue) -> Vec<f64> {
+    elements(&get(bone, "matrixWorld"))
+}
+/// A Three matrix's sixteen numbers in one typed-array copy.
+pub(super) fn elements(matrix: &JsValue) -> Vec<f64> {
+    Float64Array::new(&get(matrix, "elements")).to_vec()
+}
+pub(super) fn matrix_position(m: &[f64]) -> [f64; 3] {
+    [m[12], m[13], m[14]]
+}
+/// The rotation in a world matrix, taken apart as Three's `decompose` does it.
+pub(super) fn matrix_rotation(m: &[f64]) -> [f64; 4] {
+    let det = m[0] * (m[5] * m[10] - m[9] * m[6]) - m[4] * (m[1] * m[10] - m[9] * m[2])
+        + m[8] * (m[1] * m[6] - m[5] * m[2]);
+    if det == 0. {
+        return [0., 0., 0., 1.];
+    }
+    let length = |a: f64, b: f64, c: f64| (a * a + b * b + c * c).sqrt();
+    let mut sx = length(m[0], m[1], m[2]);
+    let (sy, sz) = (length(m[4], m[5], m[6]), length(m[8], m[9], m[10]));
+    if det < 0. {
+        sx = -sx;
+    }
+    let (ix, iy, iz) = (1. / sx, 1. / sy, 1. / sz);
+    let (m11, m12, m13) = (m[0] * ix, m[4] * iy, m[8] * iz);
+    let (m21, m22, m23) = (m[1] * ix, m[5] * iy, m[9] * iz);
+    let (m31, m32, m33) = (m[2] * ix, m[6] * iy, m[10] * iz);
+    let trace = m11 + m22 + m33;
+    if trace > 0. {
+        let s = 0.5 / (trace + 1.).sqrt();
+        [(m32 - m23) * s, (m13 - m31) * s, (m21 - m12) * s, 0.25 / s]
+    } else if m11 > m22 && m11 > m33 {
+        let s = 2. * (1. + m11 - m22 - m33).sqrt();
+        [0.25 * s, (m12 + m21) / s, (m13 + m31) / s, (m32 - m23) / s]
+    } else if m22 > m33 {
+        let s = 2. * (1. + m22 - m11 - m33).sqrt();
+        [(m12 + m21) / s, 0.25 * s, (m23 + m32) / s, (m13 - m31) / s]
+    } else {
+        let s = 2. * (1. + m33 - m11 - m22).sqrt();
+        [(m13 + m31) / s, (m23 + m32) / s, 0.25 * s, (m21 - m12) / s]
+    }
+}
+/// Brings a bone and every parent above it up to date in one walk, leaving what hangs below.
+pub(super) fn refresh(bone: &JsValue) {
+    call(bone, "updateWorldMatrix", &[true.into(), false.into()]);
+}
+fn parent_rotation(bone: &JsValue) -> [f64; 4] {
+    matrix_rotation(&world_matrix(&get(bone, "parent")))
+}
+/// `rig_set_world_quat` for a bone whose parent's world matrix is current.
+pub(super) fn set_world_rotation(bone: &JsValue, rotation: &[f64]) {
+    let mut input = parent_rotation(bone).to_vec();
+    input.extend(rotation);
+    upload(&get(bone, "quaternion"), &math("worldQuat", &input));
+    update(bone);
+}
+/// `rig_turn` for a bone whose world matrix and its parent's are current.
+pub(super) fn turn(bone: &JsValue, from: &[f64], to: &[f64]) {
+    let mut input = from.to_vec();
+    input.extend(to);
+    input.extend(matrix_rotation(&world_matrix(bone)));
+    input.extend(parent_rotation(bone));
+    upload(&get(bone, "quaternion"), &math("turn", &input));
+    update(bone);
+}
+/// `rig_reach` for a chain whose world matrices are current: reads them instead of walking up.
+pub(super) fn reach(a: &JsValue, b: &JsValue, c: &JsValue, target: &[f64], pole: &[f64]) {
+    let (ma, mb) = (world_matrix(a), world_matrix(b));
+    let mut input = Vec::with_capacity(31);
+    input.extend(matrix_position(&ma));
+    input.extend(matrix_position(&mb));
+    input.extend(matrix_position(&world_matrix(c)));
+    input.extend(target);
+    input.extend(pole);
+    input.extend(matrix_rotation(&ma));
+    input.extend(matrix_rotation(&mb));
+    input.extend(parent_rotation(a));
+    input.extend(parent_rotation(b));
+    let pose = math("reach", &input);
+    if pose[0] == 0. {
+        return;
+    }
+    upload(&get(a, "quaternion"), &pose[1..5]);
+    upload(&get(b, "quaternion"), &pose[5..9]);
+    update(a);
+}
+
 #[wasm_bindgen]
 pub fn rig_set_world_quat(three: &JsValue, bone: &JsValue, rotation: &JsValue) {
     let mut input = components(&world_quat(three, &get(bone, "parent")));
@@ -108,11 +197,26 @@ pub fn rig_reach(
 }
 
 struct Joint {
-    bone: JsValue,
-    rest: JsValue,
-    axis: JsValue,
-    finger: String,
+    /// The bone's own `quaternion`: Three never swaps it, so it is fetched once.
+    quaternion: JsValue,
+    rest: [f64; 4],
+    axis: [f64; 3],
+    finger: usize,
     n: usize,
+}
+const FINGERS: [&str; 5] = ["thumb", "index", "middle", "ring", "pinky"];
+/// A hand's curl in degrees: up to three joints for each of `FINGERS`.
+pub(super) type Curl = [[Option<f64>; 3]; 5];
+/// Reads a `{thumb: [a, b, c], …}` curl once, so a frame's grip makes no host calls for it.
+pub(super) fn curl_of(curl: &JsValue) -> Curl {
+    FINGERS.map(|finger| {
+        let angles = get(curl, finger);
+        if !present(&angles) {
+            return [None; 3];
+        }
+        let angles = values(&angles);
+        [0, 1, 2].map(|n| angles.get(n).filter(|a| present(a)).map(num))
+    })
 }
 #[wasm_bindgen]
 pub struct RustGrip {
@@ -147,7 +251,7 @@ impl RustGrip {
             "multiplyScalar",
             &[if side == "r" { -1. } else { 1. }.into()],
         );
-        for finger in ["thumb", "index", "middle", "ring", "pinky"] {
+        for (f, finger) in FINGERS.into_iter().enumerate() {
             for n in 1..=3 {
                 let b = bone(&format!("{finger}_0{n}"));
                 if !present(&b) {
@@ -170,11 +274,13 @@ impl RustGrip {
                 let q = world_quat(three, &b);
                 call(&q, "invert", &[]);
                 call(&axis, "applyQuaternion", &[q]);
+                let rest = components(&get(&b, "quaternion"));
+                let axis = components(&axis);
                 result.joints.push(Joint {
-                    rest: clone_value(&get(&b, "quaternion")),
-                    bone: b,
-                    axis,
-                    finger: finger.into(),
+                    rest: [rest[0], rest[1], rest[2], rest[3]],
+                    quaternion: get(&b, "quaternion"),
+                    axis: [axis[0], axis[1], axis[2]],
+                    finger: f,
                     n,
                 });
             }
@@ -182,23 +288,27 @@ impl RustGrip {
         result
     }
     pub fn close(&self, curl: &JsValue, weight: f64) {
+        self.close_curl(&curl_of(curl), weight);
+    }
+}
+impl RustGrip {
+    /// Closes the fingers by `curl`; only each joint's current rotation crosses to Three and back.
+    pub(super) fn close_curl(&self, curl: &Curl, weight: f64) {
         let joints = self
             .joints
             .iter()
-            .filter(|j| {
-                present(&get(curl, &j.finger)) && present(&at(&get(curl, &j.finger), j.n - 1))
-            })
+            .filter_map(|j| curl[j.finger][j.n - 1].map(|angle| (j, angle)))
             .collect::<Vec<_>>();
         let mut input = Vec::with_capacity(joints.len() * 13);
-        for j in &joints {
-            input.extend(components(&get(&j.bone, "quaternion")));
-            input.extend(components(&j.rest));
-            input.extend(components(&j.axis));
-            input.extend([num(&at(&get(curl, &j.finger), j.n - 1)), weight]);
+        for (j, angle) in &joints {
+            input.extend(components(&j.quaternion));
+            input.extend(j.rest);
+            input.extend(j.axis);
+            input.extend([*angle, weight]);
         }
         let output = math("grip", &input);
-        for (i, j) in joints.iter().enumerate() {
-            upload(&get(&j.bone, "quaternion"), &output[i * 4..i * 4 + 4]);
+        for (i, (j, _)) in joints.iter().enumerate() {
+            upload(&j.quaternion, &output[i * 4..i * 4 + 4]);
         }
     }
 }
@@ -226,19 +336,21 @@ pub(super) fn at_bind<T>(three: &JsValue, model: &JsValue, measure: impl FnOnce(
     measure()
 }
 /// The support hand's cup, its fingers closed `fingers` times and its thumb `thumb` times as far.
-pub(super) fn cupped(fingers: f64, thumb: f64) -> JsValue {
+pub(super) fn cupped(fingers: f64, thumb: f64) -> Curl {
+    // thumb, index, middle, ring, pinky
     let cup = [
-        ("thumb", [10., 20., 10.]),
-        ("index", [45., 55., 35.]),
-        ("middle", [50., 60., 35.]),
-        ("ring", [52., 60., 35.]),
-        ("pinky", [55., 60., 35.]),
+        [10., 20., 10.],
+        [45., 55., 35.],
+        [50., 60., 35.],
+        [52., 60., 35.],
+        [55., 60., 35.],
     ];
-    let pairs = cup.map(|(finger, angles)| {
-        let k = if finger == "thumb" { thumb } else { fingers };
-        (finger, array(&angles.map(|a| (a * k).into())).into())
-    });
-    object(&pairs)
+    let mut curl = [[None; 3]; 5];
+    for (f, angles) in cup.into_iter().enumerate() {
+        let k = if f == 0 { thumb } else { fingers };
+        curl[f] = angles.map(|a| Some(a * k));
+    }
+    curl
 }
 /// The forearm's line in the hand bone's own frame, measured at the current pose.
 pub(super) fn forearm(three: &JsValue, lower: &JsValue, hand: &JsValue) -> JsValue {
@@ -447,36 +559,32 @@ impl RustFeet {
             return;
         };
         self.last = Some(print.clone());
-        update(&self.model);
-        let mq = world_quat(&self.three, &self.model);
+        // Each foot's walk up brings its leg, the hips and the figure up to date; the legs then
+        // read their matrices instead of walking up for every number.
+        for leg in &self.legs {
+            refresh(&leg.foot);
+        }
+        let mq = matrix_rotation(&world_matrix(&self.model));
         for (leg, p) in self.legs.iter().zip(print) {
+            let foot = world_matrix(&leg.foot);
             let mut input = vec![self.weight];
             input.extend(components(&call(
                 &self.model,
                 "localToWorld",
                 &[clone_value(&p.at)],
             )));
-            input.extend(components(&world_position(&self.three, &leg.foot)));
+            input.extend(matrix_position(&foot));
             input.extend(components(&p.toe));
-            input.extend(components(&world_position(&self.three, &leg.thigh)));
-            input.extend(components(&mq));
+            input.extend(matrix_position(&world_matrix(&leg.thigh)));
+            input.extend(mq);
             input.extend(components(&p.turn));
-            input.extend(components(&world_quat(&self.three, &leg.foot)));
+            input.extend(matrix_rotation(&foot));
             let pose = math("feet", &input);
-            rig_reach(
-                &self.three,
-                &leg.thigh,
-                &leg.calf,
-                &leg.foot,
-                &vector(&self.three, &pose[..3]),
-                &vector(&self.three, &pose[3..6]),
-            );
-            let mut input = components(&world_quat(&self.three, &leg.foot));
+            reach(&leg.thigh, &leg.calf, &leg.foot, &pose[..3], &pose[3..6]);
+            let mut input = matrix_rotation(&world_matrix(&leg.foot)).to_vec();
             input.extend(&pose[6..10]);
             input.push(self.weight);
-            let q = quaternion(&self.three);
-            upload(&q, &math("worldBlend", &input));
-            rig_set_world_quat(&self.three, &leg.foot, &q);
+            set_world_rotation(&leg.foot, &math("worldBlend", &input));
         }
     }
 }

@@ -211,6 +211,19 @@ impl TierState {
 }
 
 fn copy_with(three: &JsValue, original: &JsValue, image: JsValue) -> JsValue {
+    if boolean(&get(original, "isCompressedTexture")) {
+        // A GPU-compressed map's clone would stay compressed: the copy is a plain texture
+        // that keeps the map's sampling.
+        let copy = construct(&get(three, "Texture"), &[image]);
+        for key in ["name", "mapping", "channel", "wrapS", "wrapT", "magFilter", "anisotropy", "colorSpace", "flipY", "rotation"] {
+            set(&copy, key, &get(original, key));
+        }
+        for key in ["offset", "repeat", "center"] {
+            call(&get(&copy, key), "copy", &[get(original, key)]);
+        }
+        set(&copy, "needsUpdate", &true.into());
+        return copy;
+    }
     let copy = call(original, "clone", &[]);
     set(
         &copy,
@@ -233,6 +246,11 @@ fn shrink(three: &JsValue, materials: &[Material], size: u32) -> Vec<Maps> {
                 if let Some((_, copy)) = done.iter().find(|(t, _)| t == original) {
                     return copy.clone();
                 }
+                if boolean(&get(original, "isCompressedTexture")) {
+                    let copy = drop_mips(three, original, size);
+                    done.push((original.clone(), copy.clone()));
+                    return copy;
+                }
                 let image = get(original, "image");
                 let canvas = call(&document(), "createElement", &["canvas".into()]);
                 let w = (size as f64).min(num(&get(&image, "width")));
@@ -251,6 +269,28 @@ fn shrink(three: &JsValue, materials: &[Material], size: u32) -> Vec<Maps> {
             })
         })
         .collect()
+}
+
+/// A GPU-compressed map has no pixels to redraw: it gets smaller by dropping its top mip levels,
+/// the rest being the same picture already encoded. A map that fits keeps itself (undefined), and
+/// so does one the GPU keeps compressed: at 1K it takes less memory than a plain 512 copy, and its
+/// smaller levels came out with a purple cast on the camouflage.
+fn drop_mips(three: &JsValue, original: &JsValue, size: u32) -> JsValue {
+    if get(original, "format") != get(three, "RGBAFormat") {
+        return JsValue::UNDEFINED;
+    }
+    let mipmaps = values(&get(original, "mipmaps"));
+    let fits = |m: &JsValue| num(&get(m, "width")) <= size as f64 && num(&get(m, "height")) <= size as f64;
+    let Some(first) = mipmaps.iter().position(fits).filter(|&first| first > 0) else {
+        return JsValue::UNDEFINED;
+    };
+    let copy = call(original, "clone", &[]);
+    let kept = &mipmaps[first..];
+    set(&copy, "mipmaps", &array(kept));
+    let image = object(&[("width", get(&kept[0], "width")), ("height", get(&kept[0], "height"))]);
+    set(&copy, "source", &construct(&get(three, "TextureSource"), &[image]));
+    set(&copy, "needsUpdate", &true.into());
+    copy
 }
 
 async fn fetch_size(

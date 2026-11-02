@@ -1,4 +1,5 @@
 import "./asset-cache.ts";
+export { shipped } from "./asset-cache.ts";
 import init, { initSync, dispatch, graphics_texture, engine_version, audio_samples, motion_compute } from "../wasm/game_wasm.js";
 export { RustBattle, RustArena, RustLens, RustTextureTiers, BrowserScroll, BrowserWeapon, RustItemViewer, RustPersonaViewer, RustMawLoader } from "../wasm/game_wasm.js";
 export { BrowserBase, mount_sound_settings, show_sound_settings, equipment_icon, equipment_item_icon, fitting_room_icon, navigation_back_arrow } from "../wasm/game_wasm.js";

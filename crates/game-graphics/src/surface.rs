@@ -65,7 +65,8 @@ pub fn program(args: &Value) -> Result<Value, String> {
     let quality = args["quality"].as_str().unwrap_or("medium");
     let (steps, refine, shadows) = match quality {
         "low" => (0, 0, 0),
-        "medium" => (20, 4, 6),
+        // Medium is the phones' default: a coarser march and no self-shadow in the weave.
+        "medium" => (12, 3, 0),
         "high" => (36, 5, 10),
         "ultra" => (56, 6, 14),
         _ => return Err(format!("Unknown graphics quality: {quality}")),

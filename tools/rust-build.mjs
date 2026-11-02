@@ -30,6 +30,8 @@ if (mode === "check") {
   run(exe("cargo"), ["test", "--locked", "--workspace", "--release"]);
 }
 if (mode === "local") {
+  // The phone qualities' model copies with KTX2 maps; only models that changed are encoded again.
+  run(process.execPath, ["apps/web/scripts/compress-models.ts"]);
   run(process.execPath, ["node_modules/vite/bin/vite.js", "build", "apps/web", "--config", "apps/web/vite.config.ts"]);
   run(exe("cargo"), ["build", "--locked", "-p", "crowned-dogs-desktop", "--release"]);
   const output = join(root, "release-local/Crowned-Dogs");

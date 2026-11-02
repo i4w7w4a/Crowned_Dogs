@@ -19,7 +19,6 @@ struct Support {
 }
 #[wasm_bindgen]
 pub struct RustHoldOut {
-    three: JsValue,
     model: JsValue,
     arms: Vec<Arm>,
     support: Option<Support>,
@@ -53,7 +52,6 @@ impl RustHoldOut {
             })
         });
         Self {
-            three,
             model: model.clone(),
             arms,
             support,
@@ -63,24 +61,20 @@ impl RustHoldOut {
         if weight < 0.01 || self.arms.len() < 2 {
             return;
         }
-        let group_turn = components(&world_quat(&self.three, group));
+        refresh(group);
+        let group_turn = matrix_rotation(&world_matrix(group));
         for arm in &self.arms {
-            let keep = world_quat(&self.three, &arm.hand);
-            let mut input = group_turn.clone();
+            // One walk up from the hand brings the whole arm up to date; the rest reads matrices.
+            refresh(&arm.hand);
+            let keep = matrix_rotation(&world_matrix(&arm.hand));
+            let mut input = group_turn.to_vec();
             input.extend([weight, arm.out]);
             for bone in [&arm.hand, &arm.lower, &arm.upper] {
-                input.extend(components(&world_position(&self.three, bone)));
+                input.extend(matrix_position(&world_matrix(bone)));
             }
             let pose = math("holdOut", &input);
-            rig_reach(
-                &self.three,
-                &arm.upper,
-                &arm.lower,
-                &arm.hand,
-                &vector(&self.three, &pose[..3]),
-                &vector(&self.three, &pose[3..6]),
-            );
-            rig_set_world_quat(&self.three, &arm.hand, &keep);
+            reach(&arm.upper, &arm.lower, &arm.hand, &pose[..3], &pose[3..6]);
+            set_world_rotation(&arm.hand, &keep);
         }
     }
     /// Puts the left hand on the gun that `hand` shows (a wrap round the pistol hand, the pump,
@@ -97,58 +91,51 @@ impl RustHoldOut {
         if weight < 0.01 || self.arms.len() < 2 {
             return;
         }
-        let three = &self.three;
         if stance == 0 {
             let arm = &self.arms[1];
-            let keep = world_quat(three, &arm.hand);
-            let mut input = vec![];
-            for bone in [&arm.upper, &arm.lower, &arm.hand] {
-                input.extend(components(&world_position(three, bone)));
-            }
-            input.extend(components(&keep));
+            // Walks up from the right hand and the left shoulder bring both arms up to date.
+            refresh(&arm.hand);
+            refresh(&self.arms[0].upper);
+            let (shoulder, at) = (world_matrix(&arm.upper), world_matrix(&arm.hand));
+            let (wrist, keep) = (matrix_position(&at), matrix_rotation(&at));
+            let mut input = matrix_position(&shoulder).to_vec();
+            input.extend(matrix_position(&world_matrix(&arm.lower)));
+            input.extend(wrist);
+            input.extend(keep);
             input.extend(components(&arm.forearm));
             input.push(weight);
             // Out of the body on the right: from the left shoulder to the right one.
-            let side = world_position(three, &arm.upper);
-            call(&side, "sub", &[world_position(three, &self.arms[0].upper)]);
-            input.extend(components(&side));
+            let left = matrix_position(&world_matrix(&self.arms[0].upper));
+            input.extend([shoulder[12] - left[0], shoulder[13] - left[1], shoulder[14] - left[2]]);
             let pole = math("wristPole", &input);
-            let at = world_position(three, &arm.hand);
-            rig_reach(
-                three,
-                &arm.upper,
-                &arm.lower,
-                &arm.hand,
-                &at,
-                &vector(three, &pole),
-            );
-            rig_set_world_quat(three, &arm.hand, &keep);
+            reach(&arm.upper, &arm.lower, &arm.hand, &wrist, &pole);
+            set_world_rotation(&arm.hand, &keep);
         }
         let mount = get(hand, "mount");
-        call(&mount, "updateWorldMatrix", &[true.into(), false.into()]);
-        let mut input = numbers(&get(&get(&mount, "matrixWorld"), "elements"));
-        input.extend(numbers(&get(&support.palm, "elements")));
+        refresh(&mount);
+        let mut input = world_matrix(&mount);
+        input.extend(elements(&support.palm));
         input.extend([stance as f64, f64::from(boolean(&get(hand, "foregrip")))]);
         let grip = math("support", &input);
         let arm = &self.arms[0];
+        // The walk up from the left hand also brings its clavicle and the figure up to date.
+        refresh(&arm.hand);
+        let at = world_matrix(&arm.hand);
         let mut input = grip[..16].to_vec();
         input.push(weight);
-        for bone in [&support.clavicle, &arm.upper, &arm.lower, &arm.hand] {
-            input.extend(components(&world_position(three, bone)));
+        for bone in [&support.clavicle, &arm.upper, &arm.lower] {
+            input.extend(matrix_position(&world_matrix(bone)));
         }
-        input.extend(components(&world_quat(three, &arm.hand)));
-        input.extend(components(&world_quat(three, &self.model)));
+        input.extend(matrix_position(&at));
+        input.extend(matrix_rotation(&at));
+        input.extend(matrix_rotation(&world_matrix(&self.model)));
         let pose = math("supportArm", &input);
         if pose[..3] != pose[3..6] {
-            let (from, to) = (vector(three, &pose[..3]), vector(three, &pose[3..6]));
-            rig_turn(three, &support.clavicle, &from, &to);
+            turn(&support.clavicle, &pose[..3], &pose[3..6]);
         }
-        let (target, pole) = (vector(three, &pose[6..9]), vector(three, &pose[9..12]));
-        rig_reach(three, &arm.upper, &arm.lower, &arm.hand, &target, &pole);
-        let rotation = quaternion(three);
-        upload(&rotation, &pose[12..16]);
-        rig_set_world_quat(three, &arm.hand, &rotation);
-        support.grip.close(&cupped(grip[16], grip[17]), weight);
+        reach(&arm.upper, &arm.lower, &arm.hand, &pose[6..9], &pose[9..12]);
+        set_world_rotation(&arm.hand, &pose[12..16]);
+        support.grip.close_curl(&cupped(grip[16], grip[17]), weight);
     }
 }
 
