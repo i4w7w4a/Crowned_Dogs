@@ -28,6 +28,7 @@ pub mod persona_hd;
 pub mod platform;
 pub mod projected_stage;
 pub mod radio;
+pub mod region_map;
 pub mod rigging;
 pub mod scene_assets;
 pub mod scene_stage;

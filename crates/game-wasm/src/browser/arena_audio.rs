@@ -195,7 +195,7 @@ impl BrowserArenaAudio {
     }
     pub fn screen(&mut self, view: &str) {
         self.mode = "menu".into();
-        let base = view == "base";
+        let base = view == "base" || view == "region";
         self.list = get(
             &self.host,
             if base {

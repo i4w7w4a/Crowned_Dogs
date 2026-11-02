@@ -133,6 +133,7 @@ fn view_hash() -> JsValue {
         "#weapon" => "weapon".into(),
         "#fitting" => "fitting".into(),
         "#persona" => "persona".into(),
+        "#region" => "region".into(),
         _ => "base".into(),
     }
 }

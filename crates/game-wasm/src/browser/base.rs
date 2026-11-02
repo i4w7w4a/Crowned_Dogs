@@ -51,6 +51,8 @@ struct Base {
     depth: JsValue,
     depth_ready: bool,
     home_stage: JsValue,
+    /// The oblast map while the region screen is open.
+    region_map: JsValue,
     home_ready: bool,
     home_motion: Option<(String, f64)>,
     load_attempted: bool,
@@ -115,6 +117,7 @@ impl Base {
         let was = std::mem::replace(&mut self.view, view.into());
         hidden(&self.home, view != "base");
         hidden(&self.fitting, !self.staged());
+        self.region_map(view == "region");
         toggle(&self.fitting, "cd-creating", view == "persona");
         if view != "persona" {
             // The first creation hides «Назад»; the fitting room needs it back.
@@ -723,30 +726,27 @@ impl Base {
         self.kits(false);
         focus(&query(&self.root, ".cd-kit-trigger"));
     }
-    /// Opens or closes the regions on the comms table.
-    fn regions(&self, open: bool) {
-        let options = query(&self.home, ".cd-region-options");
-        hidden(&options, !open);
-        attr(
-            &query(&self.home, ".cd-to-region"),
-            "aria-expanded",
-            &open.to_string(),
-        );
-        if !open {
+    /// Opens the oblast map from the comms table, or lets it go with its WebGL context.
+    fn region_map(&mut self, open: bool) {
+        let section = query(&self.root, ".cd-region");
+        if open == exists(&self.region_map) {
             return;
         }
-        for option in all(&options, "[data-region]") {
-            attr(
-                &option,
-                "aria-selected",
-                &(data(&option, "region") == self.region.id).to_string(),
-            );
+        if open {
+            hidden(&section, false);
+            match construct(&self.host, "RegionMap", &[section.clone()]) {
+                Ok(map) => self.region_map = map,
+                Err(err) => {
+                    call(&get(&global(), "console"), "error", &[js("crowned-dogs: the region map failed"), err]);
+                    hidden(&section, true);
+                }
+            }
+        } else {
+            call_optional(&self.region_map, "dispose", &[]);
+            self.region_map = JsValue::NULL;
+            fresh_canvas(&query(&section, ".cd-region-canvas"));
+            hidden(&section, true);
         }
-        call(&self.host, "liquidGlass", &[options.clone()]);
-        focus(&query(
-            &options,
-            &format!("[data-region=\"{}\"]", self.region.id),
-        ));
     }
     /// Names the base and puts its pictures and home rings in place.
     fn dress(&self) {
@@ -1011,6 +1011,12 @@ impl Base {
                 }
             }
         }
+        if self.view == "region" && exists(&self.region_map) {
+            // The map hands back the region once the player moved the base there.
+            if let Some(id) = invoke(&self.region_map, "frame", &[number(now)]).ok().and_then(|id| id.as_string()) {
+                completed = Some(format!("region:{id}"));
+            }
+        }
         for drift in &mut self.drifts {
             let w = num(&drift.home, "clientWidth");
             let h = num(&drift.home, "clientHeight");
@@ -1099,6 +1105,7 @@ impl Base {
         call_optional(&self.workshop, "dispose", &[]);
         self.home_motion = None;
         call_optional(&self.home_stage, "dispose", &[]);
+        call_optional(&self.region_map, "dispose", &[]);
         if get(&self.depth, "dispose").is_function() {
             call(&self.depth, "dispose", &[]);
         }
@@ -1144,16 +1151,11 @@ fn initial(host: &JsValue) -> String {
     for index in 0..platform::KITS {
         kits.push_str(&format!("<button class=\"glass\" type=\"button\" role=\"option\" data-kit=\"{index}\" aria-selected=\"false\"><strong>Набор {}</strong><small></small></button>", index + 1));
     }
-    let mut regions = String::new();
-    for region in &base_region::REGIONS {
-        regions.push_str(&format!("<button class=\"glass\" type=\"button\" role=\"option\" data-region=\"{}\" aria-selected=\"false\"><strong>{}</strong><small>База {}</small></button>", region.id, base_region::name(region.id), region.title()));
-    }
     let region = base_region::current();
     include_str!("base.html")
         .replace("{{HOME_PICTURE}}", region.home_picture)
         .replace("{{FITTING_PICTURE}}", region.fitting)
         .replace("{{BAY_PICTURE}}", region.bay.photo)
-        .replace("{{REGIONS}}", &regions)
         .replace("{{KIT}}", &(platform::active_kit() + 1).to_string())
         .replace("{{KITS}}", &kits)
         .replace("{{BASE}}", &text(&get(host, "baseUrl")))
@@ -1224,6 +1226,7 @@ impl BrowserBase {
             depth: JsValue::NULL,
             depth_ready: false,
             home_stage: JsValue::NULL,
+            region_map: JsValue::NULL,
             home_ready: false,
             home_motion: None,
             load_attempted: false,
@@ -1339,11 +1342,9 @@ fn bind(state: &Rc<RefCell<Base>>) {
         (picker.clone(), "click", "category"),
         (picker, "keydown", "keys"),
         (state.borrow().catalog.clone(), "click", "item"),
-        (query(&home, ".cd-to-region"), "click", "regions"),
-        (query(&home, ".cd-to-region"), "keydown", "regionKeys"),
-        (query(&home, ".cd-region-options"), "click", "region"),
-        (query(&home, ".cd-region-options"), "keydown", "regionKeys"),
-        (home, "click", "regionOutside"),
+        (query(&home, ".cd-to-region"), "click", "region"),
+        (query(&root, ".cd-region-back"), "click", "base"),
+        (query(&root, ".cd-region"), "keydown", "regionKeys"),
     ];
     for button in all(&root, ".cd-slot[data-slot]") {
         actions.push((button.clone(), "click", "slot"));
@@ -1388,13 +1389,6 @@ fn listen(state: &Rc<RefCell<Base>>, target: &JsValue, event: &str, action: &'st
             begin_home_transition(&state, action);
             return;
         }
-        if action == "region" {
-            let option = closest(&event, "[data-region]");
-            if exists(&option) {
-                pick_region(&state, &data(&option, "region"));
-            }
-            return;
-        }
         let Ok(mut s) = state.try_borrow_mut() else {
             return;
         };
@@ -1402,7 +1396,7 @@ fn listen(state: &Rc<RefCell<Base>>, target: &JsValue, event: &str, action: &'st
             return;
         }
         match action {
-            "base" | "fitting" | "persona" => s.navigate(action, weak.clone()),
+            "base" | "fitting" | "persona" | "region" => s.navigate(action, weak.clone()),
             "briefNext" => s.brief_next(),
             "briefSkip" => s.brief_skip(),
             "step" => {
@@ -1557,34 +1551,11 @@ fn listen(state: &Rc<RefCell<Base>>, target: &JsValue, event: &str, action: &'st
                     focus(&items[next]);
                 }
             }
-            "regions" => s.regions(boolean(&query(&s.home, ".cd-region-options"), "hidden")),
             "regionKeys" => {
-                let options = query(&s.home, ".cd-region-options");
-                let key = text(&get(&event, "key"));
-                let open = !boolean(&options, "hidden");
-                if key == "Escape" && open {
+                if text(&get(&event, "key")) == "Escape" {
                     call(&event, "preventDefault", &[]);
-                    call(&event, "stopPropagation", &[]);
-                    s.regions(false);
+                    s.navigate("base", weak.clone());
                     focus(&query(&s.home, ".cd-to-region"));
-                } else if open && (key == "ArrowDown" || key == "ArrowUp") {
-                    call(&event, "preventDefault", &[]);
-                    let items = all(&options, "[data-region]");
-                    let active = get(&document(), "activeElement");
-                    let at = items.iter().position(|item| *item == active).unwrap_or(0);
-                    let next = if key == "ArrowDown" {
-                        (at + 1) % items.len()
-                    } else {
-                        (at + items.len() - 1) % items.len()
-                    };
-                    focus(&items[next]);
-                }
-            }
-            "regionOutside" => {
-                if !boolean(&query(&s.home, ".cd-region-options"), "hidden")
-                    && !exists(&closest(&event, ".cd-to-region, .cd-region-options"))
-                {
-                    s.regions(false);
                 }
             }
             "kitOutside" => {
@@ -1645,13 +1616,6 @@ fn listen(state: &Rc<RefCell<Base>>, target: &JsValue, event: &str, action: &'st
             _ => {}
         }
     })
-}
-/// The region picked at the comms table: its first map is saved, and the base follows it.
-fn pick_region(state: &Rc<RefCell<Base>>, id: &str) {
-    base_region::choose(id);
-    state.borrow().regions(false);
-    sync_region(state);
-    focus(&query(&state.borrow().home, ".cd-to-region"));
 }
 /// Moves the screens to the base of the saved map's region, if a battle or the table changed it.
 fn sync_region(state: &Rc<RefCell<Base>>) {
@@ -1739,7 +1703,6 @@ fn begin_home_transition(state: &Rc<RefCell<Base>>, target: &str) {
         {
             return;
         }
-        s.regions(false);
         let reduce = boolean(
             &call(
                 &global(),
@@ -1777,7 +1740,13 @@ fn finish_home_transition(state: &Rc<RefCell<Base>>, target: &str) {
     if state.borrow().disposed {
         return;
     }
-    if target == "battle" {
+    if let Some(id) = target.strip_prefix("region:") {
+        // The map moved the base: back home, and the base follows the region's first map.
+        base_region::choose(id);
+        state.borrow_mut().navigate("base", Rc::downgrade(state));
+        sync_region(state);
+        focus(&query(&state.borrow().home, ".cd-to-region"));
+    } else if target == "battle" {
         enter_battle(state);
     } else {
         state.borrow_mut().navigate(target, Rc::downgrade(state));
