@@ -1,7 +1,7 @@
 //! Dynamic resolution of the battle's 3D picture.
 //!
 //! The arena canvas holds only the 3D frame; the HUD is DOM on top of it, so lowering the canvas'
-//! pixel ratio lowers the 3D picture and nothing else. The scale runs from 0.5 to 1.0 of the
+//! pixel ratio lowers the 3D picture and nothing else. The scale runs from 0.74 to 1.0 of the
 //! quality's own pixel ratio (pixels go with the square of it).
 //!
 //! The controller reads the 95th-percentile gap between drawn frames per window, not the average,
@@ -15,9 +15,10 @@
 //!
 //! Target: 30 fps on «Минимум» (its frame cap), 60 elsewhere. Only «Минимум» and «Низкое» are
 //! driven; higher presets stay at 1.0 (the ultra preset is not touched). `?res=0.7` pins the
-//! scale for A/B runs, `?res=1` switches the controller off.
+//! scale for A/B runs (0.5–1.0), `?res=1` switches the controller off.
 
-pub const MIN: f64 = 0.5;
+/// Art 2026-11-04: not below 74% — at half scale the picture went visibly blocky.
+pub const MIN: f64 = 0.74;
 pub const MAX: f64 = 1.0;
 const STEP: f64 = 0.05;
 const WINDOW_MS: f64 = 1000.;
@@ -92,7 +93,8 @@ impl DynRes {
         *self = Self { target, ..Self::default() };
         if let Some(scale) = pinned {
             self.target = 0.;
-            self.scale = quantize(scale);
+            // a pinned scale may go below the floor, down to 0.5, for A/B runs
+            self.scale = ((scale / STEP).round() / (1. / STEP)).clamp(0.5, MAX);
         }
     }
 
