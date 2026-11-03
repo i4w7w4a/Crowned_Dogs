@@ -377,7 +377,8 @@ class WebGLRenderer extends WEBGPU.WebGPURenderer {
   private probe: WebGL2RenderingContext | null | undefined;
   readonly three = THREE;
   constructor(parameters: ConstructorParameters<typeof WEBGPU.WebGPURenderer>[0]) {
-    super(parameters);
+    // ?perf=1: GPU time per frame from timestamp queries, where the adapter has them (fps_meter.rs reads it)
+    super({ ...parameters, trackTimestamp: new URLSearchParams(location.search).get("perf") === "1" });
     // Rust's lens writes finished, display-ready colour; the renderer adds nothing on the way out
     for (const [key, value] of [["outputColorSpace", WEBGPU.LinearSRGBColorSpace], ["toneMapping", WEBGPU.NoToneMapping]] as const) {
       Object.defineProperty(this, key, { get: () => value, set: () => {}, configurable: true });

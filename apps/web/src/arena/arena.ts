@@ -19,8 +19,9 @@ import { TextureTiers } from "./textures.ts";
 import { loadModel } from "./load-model.ts";
 import { Hand, gripOf, loadGuns } from "./weapons.ts";
 
-// ?gpu=1 draws the arena with WebGPU where the browser has it (see gpu.ts)
-const GPU = new URLSearchParams(location.search).has("gpu") && "gpu" in navigator ? await import("./gpu.ts") : null;
+// ?gpu=1 draws the arena with WebGPU where the browser has it (see gpu.ts); ?gpu=0 keeps WebGL 2
+const GPU_FLAG = new URLSearchParams(location.search).get("gpu");
+const GPU = GPU_FLAG !== null && GPU_FLAG !== "0" && "gpu" in navigator ? await import("./gpu.ts") : null;
 
 export type Who = "me" | "enemy";
 export type HitKind = "hit" | "blocked" | "grenade";

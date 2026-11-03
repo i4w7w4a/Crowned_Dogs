@@ -652,7 +652,9 @@ impl RustArena {
                     return;
                 }
                 super::fps_meter::frame(time);
+                super::fps_meter::gpu_begin();
                 s.tick(time);
+                super::fps_meter::gpu_end();
                 (s.on_frame.clone(), std::mem::take(&mut s.drawn))
             };
             for resolve in drawn {
@@ -1161,6 +1163,7 @@ impl ArenaState {
             return;
         }
         self.disposed = true;
+        super::fps_meter::battle_over(&self.renderer);
         self.running = false;
         self.ready = false;
         self.on_frame = JsValue::NULL;
@@ -1975,6 +1978,7 @@ impl ArenaState {
     }
     fn set_quality(&mut self, q: JsValue) {
         self.quality = q.clone();
+        super::fps_meter::battle(&self.renderer, &string(&get(&q, "id")));
         self.pace.follow(&q);
         call(&self.lens, "setQuality", &[q.clone()]);
         let shadows = p(&q, "shadow") > 0.;
