@@ -201,7 +201,6 @@ impl RustPersonaViewer {
             render(s);
             creation_loop(s);
         } else {
-            cancel_hover_timer(s);
             cancel_frame(s);
             set(s, "drag", &JsValue::NULL);
         }
@@ -328,7 +327,6 @@ impl RustPersonaViewer {
         if yes(s, "disposed") {
             return;
         }
-        cancel_hover_timer(s);
         set(s, "disposed", &flag(true));
         set(s, "active", &flag(false));
         cancel_frame(s);
@@ -1629,45 +1627,6 @@ fn hover(s: &JsValue, slot: &str) {
     );
     call(&get(s, "canvas"), "dispatchEvent", &[event]);
 }
-fn cancel_hover_timer(s: &JsValue) {
-    let timer = get(s, "hoverTimer");
-    if exists(&timer) {
-        call(&global(), "clearTimeout", &[timer]);
-        set(s, "hoverTimer", &JsValue::NULL);
-    }
-}
-/// Run the expensive hover raycast once the pointer has stopped, not on every movement event.
-fn schedule_hover(s: &JsValue, x: f64, y: f64) {
-    cancel_hover_timer(s);
-    set(s, "hoverQueuedAt", &num(now()));
-    let a = s.clone();
-    let timer = call(
-        &global(),
-        "setTimeout",
-        &[
-            function(move |_| {
-                set(&a, "hoverTimer", &JsValue::NULL);
-                if yes(&a, "disposed") || !yes(&a, "active") || exists(&get(&a, "drag")) {
-                    return;
-                }
-                if !game_motion::hover_idle(now(), number(&a, "hoverQueuedAt")) {
-                    return;
-                }
-                if yes(&a, "creating") {
-                    let part = pick_part(&a, x, y);
-                    let cursor = if part.is_empty() { "grab" } else { "pointer" };
-                    set(&get(&a, "canvas"), "style.cursor", &text(cursor));
-                } else {
-                    let slot = pick(&a, x, y);
-                    hover(&a, &slot);
-                }
-            }),
-            num(game_motion::HOVER_IDLE_MS),
-        ],
-    );
-    set(s, "hoverTimer", &timer);
-}
-
 fn clear_hold(s: &JsValue) {
     let timer = get(s, "holdTimer");
     if exists(&timer) {
@@ -1683,7 +1642,6 @@ fn input(s: &JsValue, event: &str, e: &JsValue) {
             if !yes(s, "active") || number(e, "button") != 0.0 || !yes(e, "isPrimary") {
                 return;
             }
-            cancel_hover_timer(s);
             let (x, y) = (number(e, "clientX"), number(e, "clientY"));
             set(
                 s,
@@ -1725,9 +1683,7 @@ fn input(s: &JsValue, event: &str, e: &JsValue) {
         "pointermove" => {
             let (x, y) = (number(e, "clientX"), number(e, "clientY"));
             if !exists(&get(s, "drag")) || get(s, "drag.id") != get(e, "pointerId") {
-                if mouse && yes(s, "active") {
-                    schedule_hover(s, x, y);
-                }
+                // Hover does no raycast: only explicit taps and holds may pick a model part.
                 return;
             }
             if yes(s, "drag.hold") {
@@ -1754,7 +1710,6 @@ fn input(s: &JsValue, event: &str, e: &JsValue) {
                 return;
             }
             clear_hold(s);
-            cancel_hover_timer(s);
             if !mouse {
                 hover(s, "");
             }
@@ -1782,7 +1737,6 @@ fn input(s: &JsValue, event: &str, e: &JsValue) {
             }
         }
         "pointerleave" => {
-            cancel_hover_timer(s);
             if mouse && !exists(&get(s, "drag")) {
                 hover(s, "");
             }
