@@ -1707,7 +1707,7 @@ fn input(s: &JsValue, event: &str, e: &JsValue) {
             rotate(s, (x - number(s, "drag.x")) * 0.009);
             set(s, "drag.x", &num(x));
             set(s, "drag.y", &num(y));
-            if mouse && !yes(s, "creating") {
+            if game_motion::hover_after_rotate(mouse, yes(s, "creating"), exists(&get(s, "drag"))) {
                 let slot = pick(s, x, y);
                 hover(s, &slot);
             }

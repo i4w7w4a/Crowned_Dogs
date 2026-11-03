@@ -127,7 +127,10 @@ impl RustItemViewer {
     pub fn set_active(&self, active: bool) {
         set(&self.state, "active", &flag(active));
         if active {
-            resize(&self.state);
+            let pending = refresh_quality(&self.state);
+            wasm_bindgen_futures::spawn_local(async move {
+                let _ = wait(pending.into()).await;
+            });
         } else {
             set(&self.state, "drag", &JsValue::NULL);
         }
@@ -201,24 +204,75 @@ fn init(s: &JsValue) -> Result<(), JsValue> {
     let quality = call(&h, "startQuality", &[call(&renderer, "getContext", &[])]);
     let quality = get(&get(&h, "QUALITY"), &string(&quality, "id"));
     set(s, "quality", &quality);
-    let pmrem = make(&h, "THREE.PMREMGenerator", &[renderer]);
-    let room = make(&h, "RoomEnvironment", &[]);
-    let env = call(&pmrem, "fromScene", &[room.clone(), num(0.06)]);
-    call(&room, "dispose", &[]);
-    call(&pmrem, "dispose", &[]);
-    set(s, "environment", &env);
+    update_environment(s);
+    Ok(())
+}
+
+fn update_environment(s: &JsValue) {
+    let quality = get(s, "quality");
+    let environment = get(s, "environment");
+    if yes(&quality, "env") && !exists(&environment) {
+        let h = get(s, "host");
+        let pmrem = make(&h, "THREE.PMREMGenerator", &[get(s, "renderer")]);
+        let room = make(&h, "RoomEnvironment", &[]);
+        let env = call(&pmrem, "fromScene", &[room.clone(), num(0.06)]);
+        call(&room, "dispose", &[]);
+        call(&pmrem, "dispose", &[]);
+        set(s, "environment", &env);
+    }
+    let texture = get(s, "environment.texture");
     set(
         &get(s, "scene"),
         "environment",
-        &if yes(&quality, "env") {
-            get(&env, "texture")
-        } else {
-            JsValue::NULL
-        },
+        &if yes(&quality, "env") { texture } else { JsValue::NULL },
     );
-    Ok(())
 }
+
+fn refresh_quality(s: &JsValue) -> Promise {
+    let renderer = get(s, "renderer");
+    if !exists(&renderer) {
+        return Promise::resolve(&JsValue::UNDEFINED);
+    }
+    let h = get(s, "host");
+    let selected = call(&h, "startQuality", &[call(&renderer, "getContext", &[])]);
+    let quality = get(&get(&h, "QUALITY"), &string(&selected, "id"));
+    set(s, "quality", &quality);
+    update_environment(s);
+    resize(s);
+
+    let a = s.clone();
+    let id = string(&quality, "id");
+    future_to_promise(async move {
+        let entries = js_sys::Object::values(&get(&a, "models").into());
+        for pending in entries.iter() {
+            if yes(&a, "disposed") || string(&a, "quality.id") != id {
+                return Ok(JsValue::UNDEFINED);
+            }
+            let entry = wait(pending).await?;
+            let tiers = get(&entry, "tiers");
+            if exists(&tiers) {
+                let anisotropy = number(&a, "quality.anisotropy").min(
+                    call(&get(&a, "renderer.capabilities"), "getMaxAnisotropy", &[])
+                        .as_f64()
+                        .unwrap_or(1.0),
+                );
+                let _ = wait(try_call(
+                    &tiers,
+                    "set",
+                    &[get(&a, "quality.textures"), num(anisotropy)],
+                )?)
+                .await?;
+            }
+            for material in materials(&get(&entry, "root")) {
+                call(&get(&a, "host"), "tune", &[material, get(&a, "quality")]);
+            }
+        }
+        Ok(JsValue::UNDEFINED)
+    })
+}
+
 fn release(entry: &JsValue) {
+    method_if(&get(entry, "tiers"), "dispose", &[]);
     dispose(
         &get(entry, "root"),
         &Array::from(&get(entry, "textures"))
@@ -249,6 +303,7 @@ fn model(s: &JsValue, url: String) -> Promise {
             if !yes(&state, "disposed") {
                 call(&h, "prepareVaryag", &[root.clone()]);
                 let tiers = make(&h, "TextureTiers", &[array(&[root.clone()]), text(&url)]);
+                set(&entry, "tiers", &tiers);
                 let anisotropy = number(&state, "quality.anisotropy").min(
                     call(
                         &get(&state, "renderer.capabilities"),

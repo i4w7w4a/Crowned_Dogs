@@ -62,6 +62,11 @@ fn held(i: usize) -> ([f64; 3], [f64; 3], [f64; 3]) {
         _ => ([0.07, 0.33, 0.22], [0.07, 0.27, 0.25], [0.05, 0.012, 0.1]),
     }
 }
+/// Fitting hover is useful with a free pointer, but must never run a model raycast per drag event.
+pub fn hover_after_rotate(mouse: bool, creating: bool, dragging: bool) -> bool {
+    mouse && !creating && !dragging
+}
+
 pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
     match method.strip_prefix("motion.").unwrap_or(method) {
         "timeline" => Ok(timeline::event(&args)),
@@ -73,5 +78,26 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             Ok(json!({"shadow":shaders::shadow(taps),"specular":shaders::SPECULAR_AA}))
         }
         _ => Err(format!("Unknown motion method: {method}")),
+    }
+}
+
+#[cfg(test)]
+mod performance_tests {
+    use super::hover_after_rotate;
+
+    #[test]
+    fn hover_after_rotate_is_always_off_during_a_drag() {
+        assert!(!hover_after_rotate(true, false, true));
+    }
+
+    #[test]
+    fn hover_after_rotate_keeps_ordinary_fitting_hover() {
+        assert!(hover_after_rotate(true, false, false));
+    }
+
+    #[test]
+    fn hover_after_rotate_does_not_use_fitting_hover_during_creation() {
+        assert!(!hover_after_rotate(true, true, false));
+        assert!(!hover_after_rotate(true, true, true));
     }
 }
