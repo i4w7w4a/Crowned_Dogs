@@ -9,5 +9,6 @@ export class DepthBackdrop {
     this.ready = this.controller.ready;
   }
   draw(x: number, y: number): void { if (!this.disposed) this.controller.draw(x, y); }
+  face(open: number, wide: number, round: number, shut: number): void { if (!this.disposed) this.controller.face(open, wide, round, shut); }
   dispose(): void { if (!this.disposed) { this.disposed = true; this.controller.dispose(); this.controller.free(); } }
 }

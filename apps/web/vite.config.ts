@@ -8,8 +8,14 @@ import { ktx2Copy } from "./scripts/ktx2-cache.ts";
 // The sound package keeps its files in packages/audio/assets. The game serves them
 // next to the page (sfx/, amb/, music/, voice/), in dev and in the build alike, so the built
 // folder is laid out like the arena artifact.
+// The effects and ambience are cut from the Sonniss bundle, whose licence keeps the files
+// out of a public repository: git ignores sfx/ and amb/. They live on Art's PC in
+// private-audio/ next to the clone (or wherever CD_PRIVATE_AUDIO points); without them the
+// game builds and plays silent.
 const AUDIO = fileURLToPath(new URL("../../packages/audio/assets", import.meta.url));
+const PRIVATE_AUDIO = process.env.CD_PRIVATE_AUDIO ?? fileURLToPath(new URL("../../../private-audio", import.meta.url));
 const AUDIO_DIRS = ["sfx", "amb", "music", "voice"];
+const audioRoot = (dir: string) => [AUDIO, PRIVATE_AUDIO].find((root) => existsSync(join(root, dir)));
 
 function audioAssets(): Plugin {
   return {
@@ -17,15 +23,20 @@ function audioAssets(): Plugin {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const path = decodeURIComponent((req.url ?? "").split("?")[0]!).replace(/^\/+/, "");
-        const file = normalize(join(AUDIO, path));
-        if (!AUDIO_DIRS.includes(path.split("/")[0]!) || !file.startsWith(AUDIO + sep) || !existsSync(file) || !statSync(file).isFile()) return next();
+        const root = AUDIO_DIRS.includes(path.split("/")[0]!) ? audioRoot(path.split("/")[0]!) : undefined;
+        const file = root && normalize(join(root, path));
+        if (!root || !file || !file.startsWith(normalize(root) + sep) || !existsSync(file) || !statSync(file).isFile()) return next();
         res.setHeader("Content-Type", "audio/mpeg");
         res.setHeader("Content-Length", statSync(file).size);
         createReadStream(file).pipe(res);
       });
     },
     writeBundle(opts) {
-      for (const d of AUDIO_DIRS) cpSync(join(AUDIO, d), join(opts.dir!, d), { recursive: true });
+      for (const d of AUDIO_DIRS) {
+        const root = audioRoot(d);
+        if (root) cpSync(join(root, d), join(opts.dir!, d), { recursive: true });
+        else console.warn(`crowned-dogs-audio: no ${d}/ in packages/audio/assets or ${PRIVATE_AUDIO}; the build has no ${d} sounds`);
+      }
     },
   };
 }
@@ -95,7 +106,10 @@ function assetVersions(): Plugin {
       const versions: Record<string, string> = {};
       if (command === "build") {
         for (const f of filesUnder(PUBLIC)) versions[f] = hash(join(PUBLIC, f));
-        for (const d of AUDIO_DIRS) for (const f of filesUnder(AUDIO, d)) versions[f] = hash(join(AUDIO, f));
+        for (const d of AUDIO_DIRS) {
+          const root = audioRoot(d);
+          if (root) for (const f of filesUnder(root, d)) versions[f] = hash(join(root, f));
+        }
         for (const f of glbs()) {
           versions[`models/${f.replace(/\.glb$/, ".json")}`] = hash(join(MODELS, f));
           const copy = compressed(f);

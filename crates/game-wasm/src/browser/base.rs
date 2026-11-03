@@ -1,6 +1,7 @@
 //! Base and fitting-room navigation, catalogue interaction and asynchronous viewer lifecycle.
 use super::{
     base_region::{self, Region},
+    briefing_portrait::Portrait,
     capsule, creation,
     dom_support::*,
     live, platform,
@@ -84,6 +85,8 @@ struct Base {
     brief: usize,
     step: usize,
     focus: String,
+    /// Sedoy's live video link on the live qualities, while the briefing runs.
+    portrait: Option<Portrait>,
     disposed: bool,
 }
 impl Base {
@@ -233,19 +236,27 @@ impl Base {
             self.render_briefing();
         } else {
             call_optional(&get(&self.host, "gameAudio"), "stopVoice", &[]);
+            self.portrait = None;
             attr(&query(&self.fitting, ".cd-create-options"), "data-step", "");
             let face = creation::STEPS[self.step].2;
             self.set_focus(if face { "face" } else { "body" });
             self.render_create();
         }
     }
-    fn render_briefing(&self) {
+    fn render_briefing(&mut self) {
         let (line, button) = creation::BRIEFING[self.brief];
         let tag = text(&get(&self.look, "tag"));
+        let line = line.replace("{tag}", &tag);
         html(
             &query(&self.fitting, ".cd-briefing-line"),
-            &creation::spoken(&line.replace("{tag}", &tag)),
+            &creation::spoken(&line),
         );
+        if live::on() && self.portrait.is_none() {
+            self.portrait = Portrait::new(&self.host, &self.fitting);
+        }
+        if let Some(portrait) = &mut self.portrait {
+            portrait.say(&line);
+        }
         // Sedoy reads the line aloud: voice.sedoy.1..6, see tools/audio/build_voice.py.
         call_optional(
             &get(&self.host, "gameAudio"),
@@ -1152,6 +1163,13 @@ impl Base {
                 call_optional(&self.viewer, "shift", &[number(tx * 0.6), number(ty * 0.6)]);
             }
         }
+        if let Some(portrait) = self.portrait.as_mut().filter(|_| self.view == "persona") {
+            let level = invoke(&get(&self.host, "gameAudio"), "voiceLevel", &[])
+                .ok()
+                .and_then(|level| level.as_f64())
+                .unwrap_or(-1.0);
+            portrait.frame(now, level);
+        }
         if metered {
             super::fps_meter::done();
         }
@@ -1180,6 +1198,7 @@ impl Base {
         if get(&self.depth, "dispose").is_function() {
             call(&self.depth, "dispose", &[]);
         }
+        self.portrait = None;
         self.listeners.clear();
         call(&self.root, "remove", &[]);
     }
@@ -1298,6 +1317,7 @@ impl BrowserBase {
             workshop: JsValue::NULL,
             depth: JsValue::NULL,
             depth_ready: false,
+            portrait: None,
             home_stage: JsValue::NULL,
             region_map: JsValue::NULL,
             home_ready: false,

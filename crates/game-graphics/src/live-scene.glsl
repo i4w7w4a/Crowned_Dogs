@@ -1,4 +1,4 @@
-// A still base photograph lives on the high and ultra qualities (game-wasm live.rs): lamps hum and now and
+// A still base photograph lives from the medium quality up (game-wasm live.rs): lamps hum and now and
 // then dip, screens refresh, radio lights blink, bubbles rise in the water column, steam leaves a
 // mug, drops ring the wet floor, the net stirs in the wind, water runs down the dam and clouds pass
 // over the sun. Spots are in the picture's own coordinates, u from the left and v from the top.

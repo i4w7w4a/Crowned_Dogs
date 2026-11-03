@@ -21,7 +21,7 @@ pub struct Region {
     pub fitting_depth: &'static str,
     pub fitting_alt: &'static str,
     pub bay: &'static bay::Bay,
-    /// What lives in the home picture and in the equipment room on high and ultra.
+    /// What lives in the home picture and in the equipment room from medium up.
     pub home_life: &'static Life,
     pub fitting_life: &'static Life,
 }

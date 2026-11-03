@@ -722,9 +722,10 @@ impl RustLens {
             let t = num(&call(&s.clock, "getElapsed", &[]));
             put(&s.compose, "cdWeatherTime", n(t));
             let flash = s.weather["flash"].as_f64().unwrap_or(0.) * lightning(t);
-            // a bolt close by lights the sky as the far ones do, without rolling more thunder
+            // a bolt close by lights the sky as the far ones do, without rolling more thunder,
+            // and softer than a full sky flash: the frame must not burn out around it
             let (at, _, bolt) = s.pulse.get();
-            let near = if bolt { flicker(t - at) } else { 0. };
+            let near = if bolt { 0.35 * flicker(t - at) } else { 0. };
             set(&uniform(&s.compose, "cdWeather"), "w", &n(flash.max(near)));
             let w2 = uniform(&s.compose, "cdWeather2");
             let surge = s.weather["surge"].as_f64().unwrap_or(0.) * dust_surge(t);

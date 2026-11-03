@@ -13,7 +13,7 @@ Read `HANDOFF.md` first: it has the state of every area, where the files are and
 ## Hard rules
 
 - Tripo: the website only (studio.tripo3d.ai, Pro plan). Never use or copy the Tripo API key.
-- Sonniss sounds (`packages/audio/assets`) may not be shared outside the game. Any page or build that holds them stays private.
+- Sonniss sounds (the effects `sfx/` and ambience `amb/`) may not be shared outside the game. The repository is public, so they are never committed: git ignores `packages/audio/assets/sfx` and `amb`, and on Art's PC they live in `private-audio/` next to the clone, where the build finds them. Any page or build that holds them stays private.
 - Visual style is «style 2» (Art, 2026-10-27): cold grey salt-factory near-photoreal, bodycam lens. Refs: `art/style-2/` in the project files. No cartoon look, no outlines, no fill or gradient over the arena picture, no water or drips in the salt hall.
 - Combat UI: Apple-style liquid glass buttons, black 60% tint, light 2px blur, white text and icons, no outlines. A picked choice anywhere in the game (fight, menus, base) is filled light with dark text, as on iOS (Art 2026-11-02); the colours are `--pick-*` in `apps/web/src/style.css` (details in `docs/memory/crowned-dogs-combat-ui.md`).
 - No kit, or the starter kit, must play exactly like the plain rules; a test checks this. Changing starter items breaks it on purpose.

@@ -152,7 +152,12 @@ impl Script {
                     );
                 }
                 if ours && weapon != "shotgun" {
-                    self.add("casing", t + 0.55, side, 0.0);
+                    // Indoors the casing rings on the steel deck; outside it lands on concrete.
+                    let casing = match text(&ctx["room"]) {
+                        "hall" => "casing.steel",
+                        _ => "casing",
+                    };
+                    self.add(casing, t + 0.55, side, 0.0);
                 }
                 let at = t + if ours { 0.06 } else { 0.02 };
                 if !truth(&a["hit"]) {

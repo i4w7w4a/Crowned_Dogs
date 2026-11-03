@@ -1,6 +1,6 @@
 //! Fixed-camera projection on independent world geometry, including backward overscan.
 //! Rust owns loading, render passes, state restoration and cancellation of GPU resources.
-use super::bridge::*;
+use super::{bridge::*, live};
 use js_sys::{Float32Array, Promise};
 use std::{
     cell::{Cell, RefCell},
@@ -77,6 +77,9 @@ struct StageState {
     frame: Cell<u32>,
     seen_view: JsValue,
     seen_projection: JsValue,
+    /// A hall that lives from medium up (live.rs): the shared uTime and uLive of its materials.
+    life: Option<(JsValue, JsValue)>,
+    clock: RefCell<live::Clock>,
 }
 
 #[wasm_bindgen]
@@ -171,6 +174,8 @@ impl RustProjectedStage {
                 frame: Cell::new(0),
                 seen_view,
                 seen_projection,
+                life: None,
+                clock: RefCell::default(),
             })),
         }
     }
@@ -320,6 +325,11 @@ impl RustProjectedStage {
         if !paint && !measure {
             return Ok(done());
         }
+        if let Some((time, alive)) = s.life.as_ref().filter(|_| paint && !s.still) {
+            let (level, seconds) = s.clock.borrow_mut().tick();
+            set(alive, "value", &n(level));
+            set(time, "value", &n(seconds));
+        }
         let r = &s.renderer;
         let target = call(r, "getRenderTarget", &[]);
         let clear = call(r, "getClearColor", &[make(&s.three, "Color", &[])]);
@@ -423,6 +433,7 @@ impl StageState {
         }
         set(&self.scene, "background", &JsValue::NULL);
         self.backdrop = JsValue::NULL;
+        self.life = None;
     }
     fn dispose(&mut self) {
         if self.disposed {
@@ -606,6 +617,17 @@ async fn load_assets(
         &[n(0.), n(-number("camHeight")), n(0.)],
     );
     call(&source, "multiply", &[translation]);
+    // «Соляной цех» lives; its night has its own lamps.
+    let life = url.contains("battle-stage/").then(|| {
+        let night = variant["textures"]["clean"].as_str().unwrap_or("").contains("/night/");
+        if night { &live::SALT_HALL_NIGHT } else { &live::SALT_HALL }
+    });
+    let shared = life.map(|life| {
+        live::uniforms(life, 941. / 1672., &|v| {
+            make(&three, "Vector4", &v.map(JsValue::from))
+        })
+    });
+    let fragment = format!("{}{FRAGMENT}", live::SCENE);
     let current = active(state, request)?;
     let mut s = current.borrow_mut();
     s.textures = textures.iter().filter(|t| present(t)).cloned().collect();
@@ -741,7 +763,7 @@ async fn load_assets(
         let material = shader(
             &three,
             "stage",
-            FRAGMENT,
+            &fragment,
             &[
                 ("sourceViewProjection", source.clone()),
                 ("useBakedUv", n(if baked_uv { 1. } else { 0. })),
@@ -818,6 +840,12 @@ async fn load_assets(
                 ),
             ],
         );
+        if let Some(shared) = &shared {
+            let held = get(&material, "uniforms");
+            for (key, value) in shared {
+                set(&held, key, value);
+            }
+        }
         let mesh = make(&three, "Mesh", &[geometry, material]);
         set(
             &mesh,
@@ -832,6 +860,10 @@ async fn load_assets(
     }
     s.backdrop = textures[0].clone();
     s.manifest = manifest_data;
+    s.life = shared.map(|values| {
+        let find = |name: &str| values.iter().find(|(key, _)| *key == name).unwrap().1.clone();
+        (find("uTime"), find("uLive"))
+    });
     s.ready = true;
     Ok(())
 }

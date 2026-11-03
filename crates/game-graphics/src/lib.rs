@@ -17,7 +17,7 @@ pub fn texture(kind: &str, size: u32) -> Result<Vec<u8>, String> {
     Ok(texture::generate(kind, size as usize))
 }
 
-/// Brings a still base photograph to life on high and ultra: lamps, screens, water and air. A
+/// Brings a still base photograph to life on medium and up: lamps, screens, water and air. A
 /// picture's fragment shader comes after it and calls `cdLiveWarp` and `cdLiveLight`.
 pub const LIVE_SCENE: &str = include_str!("live-scene.glsl");
 

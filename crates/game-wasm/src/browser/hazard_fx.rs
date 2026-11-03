@@ -8,7 +8,7 @@ use wasm_bindgen::prelude::*;
 
 const AMBER: u32 = 0xffb347;
 /// Ribbon quads of one bolt: the core and its halo over the main stroke and two forks.
-const BOLT_QUADS: usize = 256;
+const BOLT_QUADS: usize = 384;
 const G: f64 = 9.8;
 /// How long the warned stretch's lines are across the lane, in metres.
 const MARK_LENGTH: f64 = 2.4;
@@ -116,6 +116,8 @@ pub struct HazardFx {
     mark_k: f64,
     mark_on: bool,
     time: f64,
+    /// Where the lens is: nothing solid flies into it.
+    eye: [f64; 3],
     bolt: JsValue,
     bolt_mat: JsValue,
     bolt_pos: Float32Array,
@@ -142,7 +144,15 @@ impl HazardFx {
         let root = make(three, "Group", &[]);
         set(&root, "name", &"hazard".into());
         call(scene, "add", &[root.clone()]);
-        let additive = get(three, "AdditiveBlending");
+        // Glows add light without covering what is behind them: the lens composes
+        // premultiplied layers, so a glow that wrote alpha would hide the stage photo.
+        let additive = [
+            ("blending", get(three, "CustomBlending")),
+            ("blendSrc", get(three, "SrcAlphaFactor")),
+            ("blendDst", get(three, "OneFactor")),
+            ("blendSrcAlpha", get(three, "ZeroFactor")),
+            ("blendDstAlpha", get(three, "OneFactor")),
+        ];
         let fire_map = canvas_texture(three, 64, 64, |g| {
             blob(
                 g,
@@ -230,7 +240,7 @@ impl HazardFx {
                 ("fog", false.into()),
             ];
             if glowing {
-                fields.push(("blending", additive.clone()));
+                fields.extend(additive.iter().cloned());
             }
             let mat = make(three, "SpriteMaterial", &[object(&fields)]);
             (make(three, "Sprite", &[mat.clone()]), mat)
@@ -286,19 +296,16 @@ impl HazardFx {
         // The warned stretch: two dashed amber lines across the lane on the floor.
         let mark_geo = make(three, "PlaneGeometry", &[n(1.), n(1.)]);
         call(&mark_geo, "rotateX", &[n(-std::f64::consts::FRAC_PI_2)]);
-        let mark_mat = make(
-            three,
-            "MeshBasicMaterial",
-            &[object(&[
-                ("map", dash_map),
-                ("color", n(AMBER as f64)),
-                ("transparent", true.into()),
-                ("opacity", n(0.)),
-                ("blending", additive.clone()),
-                ("depthWrite", false.into()),
-                ("fog", false.into()),
-            ])],
-        );
+        let mut fields = vec![
+            ("map", dash_map),
+            ("color", n(AMBER as f64)),
+            ("transparent", true.into()),
+            ("opacity", n(0.)),
+            ("depthWrite", false.into()),
+            ("fog", false.into()),
+        ];
+        fields.extend(additive.iter().cloned());
+        let mark_mat = make(three, "MeshBasicMaterial", &[object(&fields)]);
         owned.extend([mark_geo.clone(), mark_mat.clone()]);
         let marks = [0, 1].map(|_| {
             let m = make(three, "Mesh", &[mark_geo.clone(), mark_mat.clone()]);
@@ -313,18 +320,15 @@ impl HazardFx {
         let col_attr = make(three, "BufferAttribute", &[bolt_col.clone().into(), n(3.)]);
         call(&bolt_geo, "setAttribute", &["position".into(), pos_attr.clone()]);
         call(&bolt_geo, "setAttribute", &["color".into(), col_attr.clone()]);
-        let bolt_mat = make(
-            three,
-            "MeshBasicMaterial",
-            &[object(&[
-                ("vertexColors", true.into()),
-                ("transparent", true.into()),
-                ("blending", additive.clone()),
-                ("depthWrite", false.into()),
-                ("side", get(three, "DoubleSide")),
-                ("fog", false.into()),
-            ])],
-        );
+        let mut fields = vec![
+            ("vertexColors", true.into()),
+            ("transparent", true.into()),
+            ("depthWrite", false.into()),
+            ("side", get(three, "DoubleSide")),
+            ("fog", false.into()),
+        ];
+        fields.extend(additive.iter().cloned());
+        let bolt_mat = make(three, "MeshBasicMaterial", &[object(&fields)]);
         let bolt = make(three, "Mesh", &[bolt_geo.clone(), bolt_mat.clone()]);
         set(&bolt, "frustumCulled", &false.into());
         add_obj(bolt.clone());
@@ -353,6 +357,7 @@ impl HazardFx {
             bolt_col,
             bolt_attr: [pos_attr, col_attr],
             bolt_age: 99.,
+            eye: [0.; 3],
             glow,
             glow_mat,
             light,
@@ -482,7 +487,21 @@ impl HazardFx {
 
     /// Lightning into the floor at `at`: the bolt with two forks, a white flash, sparks.
     pub fn bolt(&mut self, at: [f64; 3], camera: [f64; 3]) {
-        let top = add(at, [rand(-4., 4.), 28., rand(-6., -2.)], 1.);
+        let away = [at[0] - camera[0], 0., at[2] - camera[2]];
+        let near = length(away);
+        // Close by, the bolt comes down at a slant from further off, so it crosses the
+        // whole frame instead of a sliver of it.
+        let top = if near > 0.1 && near < 5. {
+            let away = unit(away);
+            let side = [-away[2], 0., away[0]];
+            add(
+                add(at, away, rand(10., 14.)),
+                add([0., 22., 0.], side, rand(-3., 3.)),
+                1.,
+            )
+        } else {
+            add(at, [rand(-4., 4.), 28., rand(-6., -2.)], 1.)
+        };
         let mut strokes = vec![(jag(top, at, 6, 0.2), 1.)];
         let main = strokes[0].0.clone();
         for _ in 0..2 {
@@ -493,19 +512,27 @@ impl HazardFx {
         }
         let mut pos = vec![];
         let mut col = vec![];
-        // the halo first, so the core is drawn over it
-        for (width, shade) in [(5., 0.12), (1., 1.)] {
+        // the halo first, so the core is drawn over it; the halo fades out to its edges,
+        // or close by it reads as a grey slab with hard sides
+        for (width, shade, across) in [
+            // it adds over the photo, so the core runs hot to stay white over a bright sky
+            (5., 0.3, &[(-0.5, 0.), (0., 1.), (0.5, 0.)][..]),
+            (1., 2.2, &[(-0.5, 1.), (0.5, 1.)][..]),
+        ] {
             for (points, weight) in &strokes {
                 for pair in points.windows(2) {
                     let (p, q) = (pair[0], pair[1]);
                     let w = (0.0035 * length(sub(camera, p))).max(0.035) * width * weight;
                     let side = unit(cross(sub(q, p), sub(camera, p)));
-                    let (a, b) = (add(p, side, -w / 2.), add(p, side, w / 2.));
-                    let (c, d) = (add(q, side, w / 2.), add(q, side, -w / 2.));
-                    for v in [a, b, c, a, c, d] {
-                        pos.extend(v.map(|x| x as f32));
-                        let k = (shade * weight) as f32;
-                        col.extend([0.86 * k, 0.9 * k, k]);
+                    for edge in across.windows(2) {
+                        let ((s0, l0), (s1, l1)) = (edge[0], edge[1]);
+                        let (a, b) = (add(p, side, s0 * w), add(p, side, s1 * w));
+                        let (c, d) = (add(q, side, s1 * w), add(q, side, s0 * w));
+                        for (v, lit) in [(a, l0), (b, l1), (c, l1), (a, l0), (c, l1), (d, l0)] {
+                            pos.extend(v.map(|x| x as f32));
+                            let k = (shade * weight * lit) as f32;
+                            col.extend([0.86 * k, 0.9 * k, k]);
+                        }
                     }
                 }
             }
@@ -523,8 +550,9 @@ impl HazardFx {
         );
         self.bolt_age = 0.;
         put3(&get(&self.glow, "position"), add(at, [0., 0.4, 0.], 1.));
-        self.light_up(add(at, [0., 2.5, 0.], 1.), 0xcfdcff, 120., true);
-        self.flashes.push(([0.7, 0.78, 0.95], true));
+        // The frame brightens but does not burn out: the bolt stays the brightest thing in it.
+        self.light_up(add(at, [0., 2.5, 0.], 1.), 0xcfdcff, 70., true);
+        self.flashes.push(([0.3, 0.34, 0.42], true));
         for _ in 0..16 {
             let b = self.spawn(Kind::Spark);
             b.pos = add(at, [0., 0.05, 0.], 1.);
@@ -550,7 +578,9 @@ impl HazardFx {
     /// `power` 1 is a mortar shell, less for the drone's grenade or a blast in my face.
     pub fn blast(&mut self, at: [f64; 3], power: f64) {
         let p = power;
-        self.light_up(add(at, [0., 0.9, 0.], 1.), 0xffa055, 70. * p, false);
+        // The light only reaches the 3D figures, not the stage photo around them: kept low and
+        // above head height, or a fighter beside the blast burns white against a dark floor.
+        self.light_up(add(at, [0., 1.4, 0.], 1.), 0xffa055, 25. * p, false);
         self.flashes.push(([0.55 * p, 0.34 * p, 0.16 * p], false));
         for _ in 0..5 {
             let b = self.spawn(Kind::Fire);
@@ -581,10 +611,17 @@ impl HazardFx {
             b.life = rand(0.4, 0.9);
             b.floor = at[1];
         }
+        // A blast by my feet throws its grit away from the lens, not into it.
+        let to_eye = [self.eye[0] - at[0], 0., self.eye[2] - at[2]];
+        let to_eye = if length(to_eye) < 5. { unit(to_eye) } else { [0.; 3] };
         for _ in 0..14 {
             let b = self.spawn(Kind::Grit);
             b.pos = add(at, [rand(-0.2, 0.2), 0.15, rand(-0.2, 0.2)], 1.);
             b.vel = [rand(-3.5, 3.5) * p, rand(3., 8.) * p, rand(-3.5, 3.5) * p];
+            let toward = b.vel[0] * to_eye[0] + b.vel[2] * to_eye[2];
+            if toward > 0. {
+                b.vel = add(b.vel, to_eye, -2. * toward);
+            }
             b.spin = [rand(-12., 12.), rand(-12., 12.), rand(-12., 12.)];
             b.shape = [rand(0.04, 0.13), rand(0.04, 0.1), rand(0.04, 0.13)];
             b.life = rand(1.6, 2.4);
@@ -650,8 +687,9 @@ impl HazardFx {
         std::mem::take(&mut self.flashes)
     }
 
-    pub fn update(&mut self, dt: f64) {
+    pub fn update(&mut self, dt: f64, eye: [f64; 3]) {
         self.time += dt;
+        self.eye = eye;
         let goal = if self.mark_on { 1. } else { 0. };
         self.mark_k += (goal - self.mark_k) * (1. - (-dt * 8.).exp());
         let lit = self.mark_k > 0.01;
@@ -667,11 +705,13 @@ impl HazardFx {
             self.bolt_age += dt;
             let k = super::lens::flicker(self.bolt_age);
             set(&self.bolt_mat, "opacity", &n(k));
-            set(&self.glow_mat, "opacity", &n(k));
+            // the hot foot of the bolt, not a sheet of light: a few steps off, a wider glow
+            // would cover the whole lens
+            set(&self.glow_mat, "opacity", &n(0.7 * k));
             call(
                 &get(&self.glow, "scale"),
                 "setScalar",
-                &[n(2.5 + 2. * k)],
+                &[n(1.2 + 1.3 * k)],
             );
             let on = self.bolt_age < 0.8;
             set(&self.bolt, "visible", &on.into());
@@ -770,6 +810,9 @@ impl HazardFx {
                         }
                     }
                     let k = ((1. - t) / 0.15).min(1.);
+                    // a piece close to the lens would fill the frame as a big box: it shrinks
+                    // away over the last couple of metres, as if already flown past
+                    let k = k * ((length(sub(b.pos, self.eye)) - 1.2) / 1.).clamp(0., 1.);
                     put3(&get(&b.obj, "scale"), b.shape.map(|s| s * k));
                     put3(&get(&b.obj, "rotation"), b.turn);
                 }

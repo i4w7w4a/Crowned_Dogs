@@ -6,6 +6,7 @@ pub mod audio_engine;
 pub mod base;
 pub mod base_region;
 pub mod bay;
+pub mod briefing_portrait;
 pub mod battle;
 pub mod bridge;
 pub mod capsule;

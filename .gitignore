@@ -14,3 +14,8 @@ output/beards/
 packages/runtime/wasm/
 apps/desktop/gen/
 .worktrees/
+# Sonniss effects and ambience: the licence keeps them out of a public repository.
+# They live in private-audio/ next to the clone (see packages/audio/README.md).
+packages/audio/assets/sfx/
+packages/audio/assets/amb/
+private-audio/

@@ -1,6 +1,6 @@
 //! One intact base photograph, a soft depth field and a bounded 5–7% approach.
 //! Combat projection and the fitting-room backdrop have independent renderers.
-//! On high and ultra the photograph lives (live.rs): the camera breathes and the base's lamps,
+//! From medium up the photograph lives (live.rs): the camera breathes and the base's lamps,
 //! screens, water and air move.
 use super::{base_region::REGIONS, bridge::*, live};
 use js_sys::Promise;
