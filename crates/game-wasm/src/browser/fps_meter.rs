@@ -363,7 +363,8 @@ fn show(w: &Stats, perf: bool) {
         (m.label.clone(), context, run)
     });
     // short lines: the label sits next to the score on a phone
-    let gpu = w.gpu.map_or(String::new(), |(gpu, _)| format!(" · ГП {gpu:.1}"));
+    // under ?perf=1 a missing GPU clock (no timer query on this device) shows as «ГП —»
+    let gpu = w.gpu.map_or(if perf { " · ГП —".into() } else { String::new() }, |(gpu, _)| format!(" · ГП {gpu:.1}"));
     let mut text = format!(
         "{:.0} к/с · p95 {:.0} · макс {:.0}\nЦП {:.1}{gpu} мс",
         w.fps, w.p95, w.worst, w.cpu
@@ -392,13 +393,7 @@ fn context(m: &Meter) -> (String, String, String) {
     };
     let canvas = get(r, "domElement");
     let size = format!("{}×{}", num(&get(&canvas, "width")), num(&get(&canvas, "height")));
-    let gpu = match (&m.timer.ext, m.timer.webgpu) {
-        (_, true) => "",
-        (Some(e), _) if present(e) => "",
-        (Some(_), _) => " · нет ГП-таймера",
-        _ => "",
-    };
-    (backend.into(), format!("{}{gpu}", m.quality), size)
+    (backend.into(), m.quality.clone(), size)
 }
 
 fn publish(w: &Stats, run: &Stats, backend: &str, quality: &str, size: &str) {
