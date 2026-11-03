@@ -118,6 +118,15 @@ button:disabled { cursor: default; }
 .glass:disabled::before { opacity: .5; }
 .glass.round { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; }
 .glass.round .ico { width: 18px; height: 18px; }
+/* «Минимум» and «Низкое» (Art 2026-11-03): no liquid glass, a plain 80% black fill instead: no blur, no lens,
+   no glow inside. platform.rs puts the level on <html data-quality>. A picked choice keeps its light fill. */
+:root:is([data-quality="minimal"], [data-quality="low"]) :is(.glass, .cd-create) {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+:root:is([data-quality="minimal"], [data-quality="low"]) .glass:not(.on, [aria-pressed="true"]:not(.srow, .cd-sound-toggle), [aria-selected="true"]),
+:root:is([data-quality="minimal"], [data-quality="low"]) .cd-create {
+  background: rgba(0,0,0,.8); box-shadow: 0 6px 18px rgba(0,0,0,.2);
+}
 
 /* ---------- attack reticles on the enemy ---------- */
 .ring {

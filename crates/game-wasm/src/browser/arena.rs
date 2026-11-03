@@ -1975,6 +1975,7 @@ impl ArenaState {
     }
     fn set_quality(&mut self, q: JsValue) {
         self.quality = q.clone();
+        super::platform::mark_page_quality(&string(&get(&q, "id")));
         self.pace.follow(&q);
         call(&self.lens, "setQuality", &[q.clone()]);
         let shadows = p(&q, "shadow") > 0.;
