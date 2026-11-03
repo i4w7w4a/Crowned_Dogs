@@ -185,24 +185,34 @@ fn device_facts(gl: &JsValue) -> JsValue {
 pub fn guess_quality(gl: JsValue) -> JsValue {
     rust("quality.guess", &[device_facts(&gl)])
 }
+/// The graphics level on <html data-quality>, so CSS can drop the liquid glass on weak levels.
+pub fn mark_page_quality(id: &str) {
+    let root = get(&document(), "documentElement");
+    if present(&root) {
+        set(&get(&root, "dataset"), "quality", &id.into());
+    }
+}
 #[wasm_bindgen]
 pub fn start_quality(gl: JsValue) -> JsValue {
     let params = construct(
         &get(&global(), "URLSearchParams"),
         &[get(&get(&global(), "location"), "search")],
     );
-    rust(
+    let started = rust(
         "quality.start",
         &[
             call(&params, "get", &["q".into()]),
             store_get("cd-quality"),
             device_facts(&gl),
         ],
-    )
+    );
+    mark_page_quality(&string(&get(&started, "id")));
+    started
 }
 #[wasm_bindgen]
 pub fn keep_quality(id: &str) {
     store_set("cd-quality", id);
+    mark_page_quality(id);
     super::live::mark(id);
 }
 thread_local! {
