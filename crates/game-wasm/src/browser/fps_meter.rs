@@ -47,6 +47,8 @@ struct Meter {
     /// The battle renderer and quality, for the GPU clock and the `?perf=1` line.
     renderer: JsValue,
     quality: String,
+    /// The 3D picture's dynamic-resolution scale.
+    scale: f64,
     timer: Timer,
     /// Kept alive for the page's life: `__cdPerf.reset` and the WebGPU resolve callback.
     reset: Option<Closure<dyn FnMut()>>,
@@ -110,6 +112,11 @@ pub fn battle(renderer: &JsValue, quality: &str) {
         }
         m.quality = quality.to_owned();
     });
+}
+
+/// The arena's dynamic-resolution scale, for the `?perf=1` line.
+pub fn scale(scale: f64) {
+    METER.with(|m| m.borrow_mut().scale = scale);
 }
 
 /// The arena is gone: menus are metered without a GPU clock again.
@@ -358,7 +365,8 @@ fn show(w: &Stats, perf: bool) {
             call(&get(&document, "body"), "append", &[label.clone()]);
             m.label = label;
         }
-        let context = perf.then(|| context(&m));
+        let scale = if m.scale > 0. { m.scale } else { 1. };
+        let context = perf.then(|| (context(&m), scale));
         let run = perf.then(|| stats(&m.run));
         (m.label.clone(), context, run)
     });
@@ -369,14 +377,14 @@ fn show(w: &Stats, perf: bool) {
         "{:.0} к/с · p95 {:.0} · макс {:.0}\nЦП {:.1}{gpu} мс",
         w.fps, w.p95, w.worst, w.cpu
     );
-    if let (Some((backend, quality, size)), Some(run)) = (context, run) {
-        text.push_str(&format!("\n{backend} · {quality} · {size}"));
+    if let (Some(((backend, quality, size), scale)), Some(run)) = (context, run) {
+        text.push_str(&format!("\n{backend} · {quality} · {scale:.2}× · {size}"));
         let gpu = w.gpu.map_or("—".into(), |(a, b)| format!("{a:.1}/{b:.1}"));
         log(&format!(
-            "[perf] {backend} {quality} {size} fps {:.1} p95 {:.1} worst {:.1} cpu {:.1}/{:.1} gpu {gpu} ms",
+            "[perf] {backend} {quality} x{scale:.2} {size} fps {:.1} p95 {:.1} worst {:.1} cpu {:.1}/{:.1} gpu {gpu} ms",
             w.fps, w.p95, w.worst, w.cpu, w.cpu95
         ));
-        publish(w, &run, &backend, &quality, &size);
+        publish(w, &run, &backend, &quality, &size, scale);
     }
     set(&label, "textContent", &text.into());
 }
@@ -396,7 +404,7 @@ fn context(m: &Meter) -> (String, String, String) {
     (backend.into(), m.quality.clone(), size)
 }
 
-fn publish(w: &Stats, run: &Stats, backend: &str, quality: &str, size: &str) {
+fn publish(w: &Stats, run: &Stats, backend: &str, quality: &str, size: &str, scale: f64) {
     let g = global();
     let mut target = get(&g, "__cdPerf");
     if !present(&target) {
@@ -421,6 +429,7 @@ fn publish(w: &Stats, run: &Stats, backend: &str, quality: &str, size: &str) {
     set(&target, "backend", &backend.into());
     set(&target, "quality", &quality.into());
     set(&target, "size", &size.into());
+    set(&target, "scale", &scale.into());
 }
 
 fn log(text: &str) {

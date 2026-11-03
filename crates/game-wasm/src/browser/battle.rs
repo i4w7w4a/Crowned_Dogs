@@ -1799,11 +1799,22 @@ fn install_speed_watch(s: &JsValue) {
             .iter()
             .position(|q| *q == word(s, "quality"))
             .unwrap_or(0);
-        if count * 1000. / duration < 24. && i > 0 {
+        // On «Минимум» and «Низкое» the 3D picture's own resolution goes down first (dyn_res);
+        // the preset steps down only when that scale is at its floor and frames are still slow.
+        let a = get(s, "arena");
+        let slow = if flag(&a, "resolutionDriven") {
+            flag(&a, "resolutionFloor")
+        } else {
+            count * 1000. / duration < 24.
+        };
+        if slow && i > 0 {
             set_quality(s, QUALITY_IDS[i - 1], false);
             let state = s.clone();
             let timeout = once(1500., move || watch_speed(&state));
             set(s, "speedDelay", &timeout);
+        } else if flag(&a, "resolutionDriven") && i > 0 {
+            // the scale needs a few seconds to reach its floor: keep watching
+            watch_speed(s);
         }
     })
     .into_js_value();

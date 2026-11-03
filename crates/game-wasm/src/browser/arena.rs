@@ -335,6 +335,9 @@ struct ArenaState {
     drawn: Vec<JsValue>,
     animation: Option<Closure<dyn FnMut(f64)>>,
     pace: FramePace,
+    /// Dynamic resolution of the 3D picture (game_graphics::dyn_res); `?res=` pins it.
+    res: game_graphics::dyn_res::DynRes,
+    res_pinned: Option<f64>,
     widen: Closure<dyn FnMut(JsValue)>,
     mirror_shader: Closure<dyn FnMut(JsValue)>,
     callbacks: Vec<Closure<dyn FnMut(JsValue)>>,
@@ -634,6 +637,8 @@ impl RustArena {
             drawn: vec![],
             animation: None,
             pace: FramePace::battle(),
+            res: game_graphics::dyn_res::DynRes::default(),
+            res_pinned: game_graphics::dyn_res::pinned(&string(&get(&get(&global(), "location"), "search"))),
             widen,
             mirror_shader,
             callbacks: vec![],
@@ -655,6 +660,10 @@ impl RustArena {
                 super::fps_meter::gpu_begin();
                 s.tick(time);
                 super::fps_meter::gpu_end();
+                if s.res.frame(time).is_some() && s.width > 0. {
+                    let (w, h, view) = (s.width, s.height, s.view.clone());
+                    s.resize(w, h, view);
+                }
                 (s.on_frame.clone(), std::mem::take(&mut s.drawn))
             };
             for resolve in drawn {
@@ -913,6 +922,16 @@ impl RustArena {
     }
     pub fn resize(&self, width: f64, height: f64, view: JsValue) {
         self.state.borrow_mut().resize(width, height, view);
+    }
+    /// The 3D picture is at its lowest scale and still over budget: the battle may lower the preset.
+    #[wasm_bindgen(getter, js_name = resolutionFloor)]
+    pub fn resolution_floor(&self) -> bool {
+        self.state.borrow().res.floor
+    }
+    /// True while the dynamic resolution drives this preset (minimal and low).
+    #[wasm_bindgen(getter, js_name = resolutionDriven)]
+    pub fn resolution_driven(&self) -> bool {
+        self.state.borrow().res.active()
     }
     pub fn arm(&self, who: String, gun: String, mods: JsValue) {
         let mut s = self.state.borrow_mut();
@@ -1981,6 +2000,7 @@ impl ArenaState {
         super::fps_meter::battle(&self.renderer, &string(&get(&q, "id")));
         super::platform::mark_page_quality(&string(&get(&q, "id")));
         self.pace.follow(&q);
+        self.res.follow(&string(&get(&q, "id")), self.res_pinned);
         call(&self.lens, "setQuality", &[q.clone()]);
         let shadows = p(&q, "shadow") > 0.;
         set(
@@ -2248,7 +2268,9 @@ impl ArenaState {
                 p(&self.quality, "maxPixels"),
             ],
         );
-        call(&self.renderer, "setPixelRatio", &[n(size[0])]);
+        // only the 3D canvas shrinks: the HUD is DOM above it and keeps the screen's resolution
+        call(&self.renderer, "setPixelRatio", &[n(size[0] * self.res.scale)]);
+        super::fps_meter::scale(self.res.scale);
         call(
             &self.renderer,
             "setSize",
