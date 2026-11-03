@@ -26,7 +26,7 @@ cd "$PROJECT_DIR"
 
 remote="$(git remote get-url origin)"
 case "$remote" in
-  'https://github.com/code-of-stalker/Crowned-Dogs.git'|'git@github.com:code-of-stalker/Crowned-Dogs.git') ;;
+  'https://github.com/code-of-stalker/Crowned-Dogs.git'|'git@github.com:code-of-stalker/Crowned-Dogs.git'|'https://github.com/i4w7w4a/Crowned_Dogs.git'|'git@github.com:i4w7w4a/Crowned_Dogs.git') ;;
   *) fail "неожиданный origin: $remote" ;;
 esac
 

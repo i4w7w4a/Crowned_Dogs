@@ -60,7 +60,7 @@ printf '%s %s\n' "$name" "$*" >> "$MOCK_LOG"
 if [[ "$name" == git ]]; then
   case "$*" in
     'remote get-url origin')
-      printf '%s\n' 'https://github.com/code-of-stalker/Crowned-Dogs.git'
+      printf '%s\n' "${MOCK_REMOTE:-https://github.com/code-of-stalker/Crowned-Dogs.git}"
       ;;
     'branch --show-current')
       printf '%s\n' 'main'
@@ -99,6 +99,11 @@ assert_contains "$log" 'npm run web:build'
 assert_contains "$log" 'systemctl restart crowned-dogs-bot.service'
 assert_contains "$log" 'docker restart crowned-dogs-web'
 assert_contains "$log" 'curl -fsSI https://app.4-i-7.ru/r2/'
+
+: > "$TMP/commands.log"
+run_deploy env MOCK_REMOTE='https://github.com/i4w7w4a/Crowned_Dogs.git'
+log="$(<"$TMP/commands.log")"
+assert_contains "$log" 'systemctl restart crowned-dogs-bot.service'
 
 : > "$TMP/commands.log"
 if run_deploy env MOCK_DIRTY=1; then
