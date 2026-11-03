@@ -13,3 +13,4 @@ release-local/
 output/beards/
 packages/runtime/wasm/
 apps/desktop/gen/
+.worktrees/

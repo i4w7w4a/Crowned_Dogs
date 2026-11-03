@@ -62,6 +62,12 @@ fn held(i: usize) -> ([f64; 3], [f64; 3], [f64; 3]) {
         _ => ([0.07, 0.33, 0.22], [0.07, 0.27, 0.25], [0.05, 0.012, 0.1]),
     }
 }
+pub const HOVER_IDLE_MS: f64 = 60.0;
+/// Only an idle pointer may pay for a full-model hover raycast.
+pub fn hover_idle(now: f64, last_move: f64) -> bool {
+    now - last_move >= HOVER_IDLE_MS
+}
+
 /// Fitting hover is useful with a free pointer, but must never run a model raycast per drag event.
 pub fn hover_after_rotate(mouse: bool, creating: bool, dragging: bool) -> bool {
     mouse && !creating && !dragging
@@ -83,7 +89,13 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
 
 #[cfg(test)]
 mod performance_tests {
-    use super::hover_after_rotate;
+    use super::{hover_after_rotate, hover_idle};
+
+    #[test]
+    fn hover_waits_for_the_pointer_to_stop() {
+        assert!(!hover_idle(1000.0, 999.0));
+        assert!(hover_idle(1060.0, 1000.0));
+    }
 
     #[test]
     fn hover_after_rotate_is_always_off_during_a_drag() {
