@@ -136,6 +136,13 @@ impl Base {
         hidden(&self.fitting, !self.staged());
         self.region_map(view == "region");
         toggle(&self.fitting, "cd-creating", view == "persona");
+        // Settings stay reachable while the Persona is made (Art, 4 Nov): the gear moves along.
+        let gear = query(&document(), ".cd-settings");
+        let header = query(&self.fitting, ".cd-fit-header");
+        let into = if view == "persona" { &header } else { &self.home };
+        if exists(&gear) && get(&gear, "parentElement") != *into {
+            call(into, "append", &[gear]);
+        }
         self.still();
         if view != "persona" {
             // The first creation hides «Назад»; the fitting room needs it back.

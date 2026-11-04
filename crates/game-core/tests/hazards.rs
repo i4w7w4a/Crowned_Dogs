@@ -155,3 +155,22 @@ fn roofs_change_the_weather_and_the_hour() {
     // Each map's own dust: the dry bed's salt storm is the worst.
     assert!(chance("dryBed", "dust", "morning", true) < chance("blocks", "dust", "morning", true));
 }
+
+#[test]
+fn after_a_hazard_the_map_stays_quiet_then_the_odds_come_back() {
+    let mut events = 0;
+    for i in 0..60 {
+        let mut last: Option<f64> = None;
+        for r in play(config("dam", "storm", "day", &format!("pace{i}"))) {
+            if r["hazard"]["kind"].is_string() {
+                let turn = r["turn"].as_f64().unwrap();
+                if let Some(t) = last {
+                    assert!(turn - t > 3.0, "three quiet turns after a hazard: {t} then {turn}");
+                }
+                last = Some(turn);
+                events += 1;
+            }
+        }
+    }
+    assert!(events > 10, "{events}");
+}

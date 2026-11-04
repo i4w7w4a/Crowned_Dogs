@@ -1844,6 +1844,21 @@ impl ArenaState {
                 self.me.as_ref().unwrap()
             };
             zone_world(target, "body", &self.aim, &self.tmp_b);
+            if self.fp && !is_me {
+                // My body is the lens in first person: a trace flying into it filled the frame with
+                // a white bar and the glow burned the whole picture out. It ends well before the lens, a little aside.
+                let c = xyz(&get(&self.camera, "position"));
+                zone_world(f, "body", &self.tmp_a, &self.tmp_b);
+                let e = xyz(&self.tmp_a);
+                let (dx, dy, dz) = (e[0] - c[0], e[1] - c[1], e[2] - c[2]);
+                let l = (dx * dx + dy * dy + dz * dz).sqrt().max(1e-6);
+                let (sx, sz) = (-dz / l, dx / l);
+                let k = (l * 0.45).max(2.5).min(l) / l;
+                vec_set(
+                    &self.aim,
+                    &[c[0] + dx * k + sx * 0.25, c[1] + dy * k - 0.1, c[2] + dz * k + sz * 0.25],
+                );
+            }
             let rounds = self.muzzle["rounds"][&kind].as_u64().unwrap_or(1) as u32;
             call(
                 &f.flash,
@@ -1915,7 +1930,12 @@ impl ArenaState {
                 );
             }
         }
-        set(&self.muzzle_light, "intensity", &n(9. * lit));
+        // my own muzzle is a hand's length from the lens: at full strength it bleached the gun and arms
+        let near = self.fp && self.flash_of == Some(true);
+        set(&self.muzzle_light, "intensity", &n(if near { 1.5 } else { 9. } * lit));
+        // the enemy's flash lights the hall, not my hands: through the near pass it burned them gold
+        let layers = get(&self.muzzle_light, "layers");
+        call(&layers, if self.flash_of == Some(false) { "disable" } else { "enable" }, &[n(NEAR)]);
         if self.spark_life > 0. {
             let q = math(
                 "spark",

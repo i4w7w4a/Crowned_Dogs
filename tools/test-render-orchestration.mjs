@@ -419,8 +419,9 @@ async function exerciseArena(useRust) {
   const still = o => o.type === "Group" && !o.visible;
   const snapshot = renderer.scene.children.filter(o => o.name !== "shield" && o.name !== "hazard").map(o => ({
     type: o.type, position: still(o) ? null : o.position.toArray(), rotation: still(o) ? null : o.rotation.toArray(), scale: o.scale.toArray(), visible: o.visible,
-    // The muzzle light burns at 9x the flash now, not the frozen arena's 6x.
-    intensity: !useRust && o.color?.getHex?.() === 0xffb36b ? o.intensity * 1.5 : o.intensity, color: o.color?.toArray(),
+    // The muzzle light burns at 9x the flash now, not the frozen arena's 6x; in first person my own shot,
+    // a hand's length from the lens, lights at 1.5x (stage 9: at 9x it bleached the gun and arms).
+    intensity: !useRust && o.color?.getHex?.() === 0xffb36b ? o.intensity * 0.25 : o.intensity, color: o.color?.toArray(),
   }));
   const projection = renderer.camera.projectionMatrix.toArray();
   arena.pause(); assert.equal(renderer.loop, null); assert.equal(callbackFrames, 12);

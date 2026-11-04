@@ -44,6 +44,8 @@ pub struct BrowserArenaAudio {
     mode: String,
     list: JsValue,
     spot: (f64, f64),
+    /// Persona creation: ambience and the instructor only, no music (Art, 4 Nov).
+    hushed: bool,
     ambience: JsValue,
     /// Reverb preset of the current fight map.
     room: String,
@@ -99,6 +101,7 @@ impl BrowserArenaAudio {
             mode: "menu".into(),
             list,
             spot: (-0.55, 0.0),
+            hushed: false,
             ambience: args(&[js("amb.base")]).into(),
             room: "hall".into(),
             levels: levels.into(),
@@ -190,6 +193,7 @@ impl BrowserArenaAudio {
         self.mode = "menu".into();
         // The sync tablet and the region map open over the base, so its music and radio keep playing.
         let base = matches!(view, "base" | "region" | "sync");
+        self.hushed = view == "persona";
         self.list = get(
             &self.host,
             if base {
@@ -365,7 +369,9 @@ impl BrowserArenaAudio {
             call(&music, "silence", &[]);
             return;
         }
-        if self.mode == "menu" {
+        if self.mode == "menu" && self.hushed {
+            call(&music, "silence", &[]);
+        } else if self.mode == "menu" {
             call(&music, "enterMenu", &[]);
         } else {
             call(&music, "enterFight", &[]);

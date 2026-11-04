@@ -58,6 +58,11 @@
       "name": "свет погас"
     }
   },
+  "HAZARD_PACE": {
+    "cooldown": 3,
+    "ramp": 3,
+    "botDodge": 0.5
+  },
   "KNIFE_GUARD": 0.5,
   "KNIFE_REACH": 2,
   "MAPS": {
@@ -174,7 +179,7 @@
       "weather": {
         "clear": {
           "hazards": {
-            "drone": 0.06
+            "drone": 0.03
           }
         },
         "dust": {
@@ -194,15 +199,15 @@
           },
           "turnLimit": 15,
           "hazards": {
-            "collapse": 0.15,
-            "blackout": 0.2,
-            "drone": 0.04
+            "collapse": 0.08,
+            "blackout": 0.1,
+            "drone": 0.02
           }
         },
         "fog": {
           "name": "дым",
           "hazards": {
-            "drone": 0.06
+            "drone": 0.03
           }
         }
       }
@@ -250,7 +255,7 @@
       "weather": {
         "clear": {
           "hazards": {
-            "drone": 0.06
+            "drone": 0.03
           }
         },
         "dust": {
@@ -270,14 +275,14 @@
             "far": 0.9
           },
           "hazards": {
-            "collapse": 0.12,
-            "drone": 0.04
+            "collapse": 0.06,
+            "drone": 0.02
           }
         },
         "fog": {
           "name": "туман с воды",
           "hazards": {
-            "drone": 0.06
+            "drone": 0.03
           }
         }
       }
@@ -304,7 +309,7 @@
       "weather": {
         "clear": {
           "hazards": {
-            "drone": 0.06
+            "drone": 0.03
           }
         },
         "dust": {
@@ -324,15 +329,15 @@
           },
           "turnLimit": 15,
           "hazards": {
-            "collapse": 0.12,
-            "blackout": 0.2,
-            "drone": 0.05
+            "collapse": 0.06,
+            "blackout": 0.1,
+            "drone": 0.025
           }
         },
         "fog": {
           "name": "дым",
           "hazards": {
-            "drone": 0.06
+            "drone": 0.03
           }
         }
       }
@@ -417,8 +422,8 @@
   "RUN_STEPS": 2,
   "SHRINK_AFTER_TURN": 6,
   "SHELLING": {
-    "chance": 0.05,
-    "underFire": 0.35
+    "chance": 0.03,
+    "underFire": 0.2
   },
   "STANCE_TURNS": 2,
   "START_DISTANCE": 7,
@@ -685,7 +690,7 @@
       "turnLimit": 15,
       "turnSeconds": 60,
       "hazards": {
-        "drone": 0.12
+        "drone": 0.06
       }
     },
     "dust": {
@@ -711,8 +716,8 @@
       "turnLimit": 10,
       "turnSeconds": 60,
       "hazards": {
-        "lightning": 0.35,
-        "drone": 0.06
+        "lightning": 0.16,
+        "drone": 0.03
       }
     },
     "fog": {
@@ -726,7 +731,7 @@
       "turnLimit": 15,
       "turnSeconds": 60,
       "hazards": {
-        "drone": 0.12
+        "drone": 0.06
       }
     }
   },

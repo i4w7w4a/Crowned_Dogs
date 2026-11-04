@@ -1434,10 +1434,18 @@ fn release_gpu(s: &JsValue) {
     set(s, "ready", &flag(false));
 }
 /// Fresnel rim drawn over the hovered equipment: cold light hugging the silhouette.
-const GLOW_VERTEX: &str = "varying vec3 vN; varying vec3 vV;
+// Skinned gear (the whole fitting figure since 1 Nov) bends with the bones, so the rim follows them.
+const GLOW_VERTEX: &str = "#include <common>
+#include <skinning_pars_vertex>
+varying vec3 vN; varying vec3 vV;
 void main() {
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  vN = normalize(normalMatrix * normal);
+  #include <beginnormal_vertex>
+  #include <skinbase_vertex>
+  #include <skinnormal_vertex>
+  #include <begin_vertex>
+  #include <skinning_vertex>
+  vec4 mv = modelViewMatrix * vec4(transformed, 1.0);
+  vN = normalize(normalMatrix * objectNormal);
   vV = normalize(-mv.xyz);
   gl_Position = projectionMatrix * mv;
 }";
@@ -1511,13 +1519,20 @@ fn highlight(s: &JsValue, slot: &str) {
         let h = get(s, "host");
         let material = glow_material(s);
         for n in nodes(&get(s, "stage.rotating"), true) {
-            if !yes(&n, "isMesh") || yes(&n, "isSkinnedMesh") || yes(&n, "userData.glow") {
+            if !yes(&n, "isMesh") || yes(&n, "userData.glow") {
                 continue;
             }
             if owner(&n) != slot {
                 continue;
             }
-            let overlay = make(&h, "THREE.Mesh", &[get(&n, "geometry"), material.clone()]);
+            let skinned = yes(&n, "isSkinnedMesh");
+            let kind = if skinned { "THREE.SkinnedMesh" } else { "THREE.Mesh" };
+            let overlay = make(&h, kind, &[get(&n, "geometry"), material.clone()]);
+            if skinned {
+                // same bones and bind pose; a child with no offset keeps the same world matrix
+                set(&overlay, "bindMode", &get(&n, "bindMode"));
+                call(&overlay, "bind", &[get(&n, "skeleton"), get(&n, "bindMatrix")]);
+            }
             set(&overlay, "userData.glow", &flag(true));
             set(&overlay, "renderOrder", &num(2.0));
             set(&overlay, "frustumCulled", &flag(false));

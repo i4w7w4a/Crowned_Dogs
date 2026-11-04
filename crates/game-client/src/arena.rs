@@ -323,7 +323,7 @@ pub fn compute(kind: &str, x: &[f64]) -> Result<Vec<f64>, String> {
             out
         }
         "arena.spark" => {
-            let life = (x[0] - x[3]).max(0.0);
+            let life = (x[0] - x[3].max(0.0)).max(0.0);
             let u = 1.0 - life / x[1];
             vec![
                 life,
@@ -362,7 +362,9 @@ pub fn compute(kind: &str, x: &[f64]) -> Result<Vec<f64>, String> {
             }
         }
         "arena.screen" => vec![(x[0] + 1.0) / 2.0, (1.0 - x[1]) / 2.0],
-        "arena.frame" => vec![x[0].min(0.05), 1.0 - 2.0 * x[1]],
+        // A frame never steps back: after a long load the first animation-frame stamp can be older
+        // than the timer reset, and a -8 s step left the foe in its bind pose for seconds (Art, 4 Nov).
+        "arena.frame" => vec![x[0].clamp(0.0, 0.05), 1.0 - 2.0 * x[1]],
         _ => unreachable!(),
     })
 }
@@ -370,6 +372,13 @@ pub fn compute(kind: &str, x: &[f64]) -> Result<Vec<f64>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_frame_never_steps_back_or_jumps() {
+        let dt = |d: f64| compute("arena.frame", &[d, 0.0]).unwrap()[0];
+        assert_eq!(dt(-8.0), 0.0);
+        assert_eq!(dt(0.016), 0.016);
+        assert_eq!(dt(3.0), 0.05);
+    }
     #[test]
     fn walk_is_continuous_and_stops_exactly() {
         for duration in [0.3, 0.8, 1.4, 3.0] {

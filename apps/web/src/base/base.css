@@ -117,6 +117,8 @@ body { margin: 0; }
 .cd-home { position: relative; }
 .cd-settings { position: absolute; z-index: 30; top: max(var(--cd-edge), env(safe-area-inset-top)); right: var(--cd-edge); width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
 .cd-settings[hidden] { display: none; }
+/* In Persona creation the gear sits in the header row, after «Лицо»/«Тело». */
+.cd-fit-header .cd-settings { position: relative; top: auto; right: auto; flex: 0 0 44px; margin-left: 6px; }
 .cd-set-ico { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
 .cd-dialog.sheet.glass.cd-sound { min-height: 0; height: fit-content; }
 .cd-sound-body { display: flex; flex-direction: column; gap: 12px; padding: 4px 16px 20px; }

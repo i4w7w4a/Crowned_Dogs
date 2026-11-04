@@ -290,8 +290,10 @@ impl RustBattle {
             layout(&s);
             arena(&s, "resume", &[]);
             let fight = number(&s, "fightNo");
-            settle(&get(&s, "arena"), "drawn", 5000.).await;
-            settle(&get(&s, "arena"), "drawn", 5000.).await;
+            // The turn clock waits for two drawn battle frames (Art's rule: no clock before the
+            // fight is on screen); a slow phone gets 20 s for each before the clock starts anyway.
+            settle(&get(&s, "arena"), "drawn", 20000.).await;
+            settle(&get(&s, "arena"), "drawn", 20000.).await;
             if present(&before_enter) {
                 JsFuture::from(Promise::resolve(&apply(
                     &before_enter,
@@ -1507,26 +1509,6 @@ fn render_menu(s: &JsValue) {
     text(&id("soundState"), if on { "Вкл" } else { "Выкл" });
     for kind in ["fx", "music", "fight"] {
         draw_volume(s, kind);
-    }
-    let tracks = id("trackList");
-    html(&tracks, "");
-    let station = get(&get(s, "audio"), "station");
-    for song in values(&get(&bindings, "playlist")) {
-        let now = song == station;
-        let title = word(&get(&get(&bindings, "tracks"), &string(&song)), "title");
-        let state = s.clone();
-        option(
-            &tracks,
-            &format!(
-                "{title}<small>{}</small>",
-                if now { "в эфире" } else { "&nbsp;" }
-            ),
-            now,
-            move |_| {
-                audio(&state, "tune", &[song.clone()]);
-                render_menu(&state);
-            },
-        );
     }
     let gfx = segment("gfxSeg", QUALITY_IDS.len());
     for q in QUALITY_IDS {
