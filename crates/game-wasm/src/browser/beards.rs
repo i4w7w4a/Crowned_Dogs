@@ -68,6 +68,10 @@ fn pieces(model: &JsValue, paint: &JsValue) -> Vec<(String, String)> {
 
 /// Starts downloading what the look needs and `model` lacks; the look is painted again when it is in.
 pub(super) fn want(model: &JsValue, paint: &JsValue) {
+    // my own figure in battle keeps only its arms: no hair or beard to download
+    if boolean(&get(&get(model, "userData"), "cdArmsOnly")) {
+        return;
+    }
     let base = get(&get(model, "userData"), "cdPackBase");
     let Some(base) = base.as_string() else { return };
     for (file, probe) in pieces(model, paint) {

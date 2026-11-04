@@ -765,6 +765,8 @@ impl RustArena {
             s.enemy = Some(s.make_figure(&foe, 0x77756f, 0.42, 0.4, 0, -1., false));
             s.me = Some(s.make_figure(&mine, 0x8a8780, 0.85, 0., 0x0a0908, 1., true));
             let me = s.me.as_ref().unwrap();
+            // the battle is first person only (Art, 4 Nov 2026): of my own figure only the arms stay
+            super::rigging::strip_to_arms(&get(&s.host, "THREE"), &me.model);
             super::look::first_person(me.model.clone(), s.fp, super::platform::current_look());
             super::look::apply(me.model.clone(), super::platform::current_look());
             set(&me.blob, "visible", &(!s.fp).into());

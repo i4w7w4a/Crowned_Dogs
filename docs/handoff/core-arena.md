@@ -37,7 +37,7 @@ gltf-transform 4.5.1 for model compression.
 ## What was done last (this thread)
 
 - v29: first person with bodycam grips (IK viewmodel), planted feet, softer stances.
-- v30: menu «Камера»: «Из-за плеча» / «От первого лица», remembered in localStorage `cd-camera` (Art 09:02).
+- v30: menu «Камера»: «Из-за плеча» / «От первого лица», remembered in localStorage `cd-camera` (Art 09:02). Removed 2026-11-04 (Art): the battle is first person only; our own Persona keeps only arms, sleeves, gloves and the gun (`rigging::strip_to_arms`), no hair or beard is loaded for it.
 - v31: armour kit A on both Personas (suit, «Плита-2», «Каска К-6»); body under the suit hidden; female hair
   swapped for the helmet cut; first person shows sleeves and gloves; 2K/4K armour maps for high/ultra.
 

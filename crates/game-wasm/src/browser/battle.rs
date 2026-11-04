@@ -208,13 +208,8 @@ impl RustBattle {
         host(&state, "liquidGlass", &[]);
         create_rings(&state);
         wire(&state);
-        let camera = if string(&store_get(&state, "cd-camera")) == "back"
-            && word(&get(&global(), "location"), "hash") != "#fp"
-        {
-            "back"
-        } else {
-            "fp"
-        };
+        // first person only (Art, 4 Nov 2026): the over-the-shoulder view is gone
+        let camera = "fp";
         set(&state, "camera", &camera.into());
         let ctor = get(&bindings, "Arena");
         if let Ok(a) = Reflect::construct(ctor.unchecked_ref::<Function>(), &array(&[id("gl")])) {
@@ -271,12 +266,7 @@ impl RustBattle {
         let s = self.state.clone();
         future_to_promise(async move {
             let selected = call(&global(), "structuredClone", &[kit]);
-            let camera = if string(&store_get(&s, "cd-camera")) == "back" {
-                "back"
-            } else {
-                "fp"
-            };
-            set_camera(&s, camera);
+            set_camera(&s, "fp");
             let q = string(&store_get(&s, "cd-quality"));
             if present(&get(&s, "arena"))
                 && QUALITY_IDS.contains(&q.as_str())
@@ -1538,16 +1528,6 @@ fn render_menu(s: &JsValue) {
             },
         );
     }
-    let cameras = segment("camSeg", 2);
-    for (view, name) in [("back", "Из-за плеча"), ("fp", "От первого лица")] {
-        let state = s.clone();
-        option(&cameras, name, word(s, "camera") == view, move |_| {
-            if word(&state, "camera") != view {
-                set_camera(&state, view);
-                render_menu(&state);
-            }
-        });
-    }
     let gfx = segment("gfxSeg", QUALITY_IDS.len());
     for q in QUALITY_IDS {
         let state = s.clone();
@@ -1839,7 +1819,6 @@ fn set_frame(s: &JsValue, frame: &JsValue) {
 }
 fn set_camera(s: &JsValue, view: &str) {
     set(s, "camera", &view.into());
-    store_set(s, "cd-camera", view);
     arena(s, "setFirstPerson", &[(view == "fp").into()]);
 }
 fn wire(s: &JsValue) {
@@ -1944,12 +1923,6 @@ fn wire(s: &JsValue) {
     }
     let state = s.clone();
     listen(&global(), "resize", move |_| layout(&state));
-    let state = s.clone();
-    listen(&global(), "hashchange", move |_| {
-        if word(&get(&global(), "location"), "hash") == "#fp" {
-            set_camera(&state, "fp");
-        }
-    });
     for kind in ["fx", "music", "fight"] {
         let state = s.clone();
         listen(&id(volume_id(kind)), "input", move |_| {
