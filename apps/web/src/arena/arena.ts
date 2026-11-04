@@ -1,6 +1,6 @@
 // Three.js and scene helpers cross this boundary as opaque SDK handles.
 // The Rust arena owns figures, quality, async loading and each animation frame.
-import { RustArena } from "../../../../packages/runtime/src/index.ts";
+import { RustArena, arena_backend } from "../../../../packages/runtime/src/index.ts";
 import * as THREE from "three";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { dress, KIT_A } from "./dress.ts";
@@ -20,9 +20,12 @@ import { loadModel } from "./load-model.ts";
 import { leanMatrices } from "./lean.ts";
 import { Hand, gripOf, loadGuns } from "./weapons.ts";
 
-// ?gpu=1 draws the arena with WebGPU where the browser has it (see gpu.ts); ?gpu=0 keeps WebGL 2
+// The arena draws with WebGPU (see gpu.ts) where a measurement on this device found it faster
+// than WebGL 2 (backend_trial.rs); ?gpu=1 forces WebGPU where the browser has it, ?gpu=0 WebGL 2
 const GPU_FLAG = new URLSearchParams(location.search).get("gpu");
-const GPU = GPU_FLAG !== null && GPU_FLAG !== "0" && "gpu" in navigator ? await import("./gpu.ts") : null;
+const HAS_GPU = "gpu" in navigator;
+const WANT_GPU = GPU_FLAG !== null ? GPU_FLAG !== "0" : arena_backend(HAS_GPU) === "webgpu";
+const GPU = WANT_GPU && HAS_GPU ? await import("./gpu.ts") : null;
 
 export type Who = "me" | "enemy";
 export type HitKind = "hit" | "blocked" | "grenade";

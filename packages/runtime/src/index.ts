@@ -12,6 +12,7 @@ export { RustMusicDirector, RustVariantPicker, RustShuffle, audio_pick_other, au
 export { RustLocalDuel, store_get, store_set, load_local_loadout, save_local_loadout, load_local_look, save_local_look, guess_quality, start_quality, keep_quality, litePictures } from "../wasm/game_wasm.js";
 export { sceneAuthoredWeaponFit } from "../wasm/game_wasm.js";
 export { sceneSetBeardFirstPerson } from "../wasm/game_wasm.js";
+export { arena_backend } from "../wasm/game_wasm.js";
 export { RustProjectedStage, RustHomeStage, RustRegionMap } from "../wasm/game_wasm.js";
 
 const wasmUrl = new URL("../wasm/game_wasm_bg.wasm", import.meta.url);

@@ -3,6 +3,7 @@ pub mod app;
 pub mod arena;
 pub mod arena_audio;
 pub mod audio_engine;
+pub mod backend_trial;
 pub mod base;
 pub mod base_region;
 pub mod bay;

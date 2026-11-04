@@ -13,6 +13,11 @@
 //!   one doubles (6 → 12 → … → 48 windows), so a frame that sits on the edge does not flicker;
 //! - the window right after a change is skipped (the resize itself costs a frame or two).
 //!
+//! FSR is the rung above 1.0 (`fsr`): at full scale, after the same run of in-budget windows, a
+//! probe draws the screen larger than the frame and lets the lens enlarge it with FSR1 EASU. It is
+//! undone like a scale probe, and over budget it is the first thing dropped, before the scale.
+//! Only where the arena allows it (`allow_fsr`: the screen has more pixels than the frame, no `?fsr=`).
+//!
 //! Target: 30 fps on «Минимум» (its frame cap), 60 elsewhere. Only «Минимум» and «Низкое» are
 //! driven; higher presets stay at 1.0 (the ultra preset is not touched). `?res=0.7` pins the
 //! scale for A/B runs (0.5–1.0), `?res=1` switches the controller off.
@@ -43,7 +48,13 @@ pub struct DynRes {
     /// In-budget windows needed before the next probe up, and whether a probe is on trial.
     probe_after: u32,
     trial: Option<(f64, u32)>,
+    /// The probe on trial is FSR's, not a scale step.
+    trial_fsr: bool,
     skip: bool,
+    /// The screen is drawn larger than the frame and enlarged with FSR1 EASU.
+    pub fsr: bool,
+    /// The arena lets the controller switch FSR on (kept across qualities).
+    fsr_ok: bool,
     /// Over budget at the lowest scale: the quality guard may step the preset down.
     pub floor: bool,
 }
@@ -60,7 +71,10 @@ impl Default for DynRes {
             fits: 0,
             probe_after: FIRST_PROBE,
             trial: None,
+            trial_fsr: false,
             skip: false,
+            fsr: false,
+            fsr_ok: false,
             floor: false,
         }
     }
@@ -90,12 +104,24 @@ impl DynRes {
             "low" => 1000. / 60.,
             _ => 0.,
         };
-        *self = Self { target, ..Self::default() };
+        *self = Self { target, fsr_ok: self.fsr_ok, ..Self::default() };
         if let Some(scale) = pinned {
             self.target = 0.;
             // a pinned scale may go below the floor, down to 0.5, for A/B runs
             self.scale = ((scale / STEP).round() / (1. / STEP)).clamp(0.5, MAX);
         }
+    }
+
+    /// Whether FSR may be probed; switching it off drops FSR at once (true = it changed).
+    pub fn allow_fsr(&mut self, ok: bool) -> bool {
+        self.fsr_ok = ok;
+        if !ok && self.fsr {
+            self.fsr = false;
+            self.trial = None;
+            self.trial_fsr = false;
+            return true;
+        }
+        false
     }
 
     pub fn active(&self) -> bool {
@@ -139,13 +165,24 @@ impl DynRes {
                 self.probe_after = (self.probe_after * 2).min(LAST_PROBE);
                 self.over = 0;
                 self.fits = 0;
+                if std::mem::take(&mut self.trial_fsr) {
+                    return self.set_fsr(false);
+                }
                 return self.set(before);
             }
             self.trial = (left > 1).then_some((before, left - 1));
+            if self.trial.is_none() {
+                self.trial_fsr = false;
+            }
         }
         if over {
             self.fits = 0;
             self.over += 1;
+            if self.over >= 2 && self.fsr {
+                // the cheapest thing to give back first
+                self.over = 0;
+                return self.set_fsr(false);
+            }
             if self.over >= 2 && self.scale > MIN {
                 self.over = 0;
                 let step = (self.target / p95).sqrt().clamp(0.75, 0.95);
@@ -161,10 +198,22 @@ impl DynRes {
                 self.trial = Some((self.scale, 2));
                 return self.set(quantize(self.scale + 0.1));
             }
+            if self.fits >= self.probe_after && self.fsr_ok && !self.fsr {
+                self.fits = 0;
+                self.trial = Some((self.scale, 2));
+                self.trial_fsr = true;
+                return self.set_fsr(true);
+            }
         } else {
             self.fits = 0;
         }
         None
+    }
+
+    fn set_fsr(&mut self, on: bool) -> Option<f64> {
+        self.fsr = on;
+        self.skip = true;
+        Some(self.scale)
     }
 
     fn set(&mut self, scale: f64) -> Option<f64> {
@@ -257,6 +306,50 @@ mod tests {
         let quiet = run(&mut d, &mut t, 16.7, 8.);
         assert!(quiet.is_empty(), "{quiet:?} {d:?}");
         assert_eq!(run(&mut d, &mut t, 16.7, 6.), vec![quantize(low + 0.1)]);
+    }
+
+    #[test]
+    fn fsr_is_the_rung_above_full_scale() {
+        let mut d = DynRes::new("minimal", None);
+        let mut t = 1.;
+        // not allowed: nothing happens at full scale
+        assert!(run(&mut d, &mut t, 33.3, 20.).is_empty());
+        assert!(!d.fsr);
+        d.allow_fsr(true);
+        run(&mut d, &mut t, 33.3, 8.);
+        assert!(d.fsr, "{d:?}");
+        assert_eq!(d.scale, 1.);
+        // it holds while frames fit
+        assert!(run(&mut d, &mut t, 33.3, 20.).is_empty());
+        assert!(d.fsr);
+        // slow: FSR goes first, then the scale
+        let back = run(&mut d, &mut t, 60., 3.5);
+        assert!(!d.fsr);
+        assert_eq!(back, vec![1.]);
+        run(&mut d, &mut t, 60., 4.);
+        assert!(d.scale < 1.);
+        // a quality change keeps the permission, not the state
+        d.follow("low", None);
+        assert!(!d.fsr && d.fsr_ok);
+        assert!(d.allow_fsr(false) == false);
+    }
+
+    #[test]
+    fn a_failed_fsr_probe_backs_off() {
+        let mut d = DynRes::new("minimal", None);
+        d.allow_fsr(true);
+        let mut t = 1.;
+        run(&mut d, &mut t, 33.3, 8.);
+        assert!(d.fsr);
+        // the probe makes frames slow: undone after the trial's first over-budget window
+        run(&mut d, &mut t, 60., 2.05);
+        assert!(!d.fsr);
+        assert_eq!(d.scale, 1.);
+        // the next probe waits twice as long
+        run(&mut d, &mut t, 33.3, 8.);
+        assert!(!d.fsr);
+        run(&mut d, &mut t, 33.3, 6.);
+        assert!(d.fsr);
     }
 
     #[test]

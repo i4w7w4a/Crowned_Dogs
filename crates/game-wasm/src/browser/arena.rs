@@ -25,16 +25,17 @@ fn create(host: &JsValue, key: &str, args: &[JsValue]) -> JsValue {
 fn policy(method: &str, args: serde_json::Value) -> serde_json::Value {
     game_client::dispatch(method, args).expect("arena policy")
 }
-/// `?fsr=<k>`: how many times larger than the 3D frame the screen may be drawn (1 = off).
-fn fsr_asked(search: &str) -> f64 {
+/// `?fsr=<k>`: the screen drawn `k` times larger than the 3D frame (1–4; `0` or `1` = off). Without
+/// it FSR is automatic: the dynamic-resolution controller switches it on when frames have room.
+fn fsr_asked(search: &str) -> Option<f64> {
     search
         .trim_start_matches('?')
         .split('&')
         .find_map(|pair| pair.strip_prefix("fsr="))
-        .and_then(|v| v.parse::<f64>().ok())
-        .filter(|v| v.is_finite())
-        .map_or(1., |v| v.clamp(1., 4.))
+        .map(|v| v.parse::<f64>().ok().filter(|v| v.is_finite()).map_or(1., |v| v.clamp(1., 4.)))
 }
+/// How much larger than the frame automatic FSR draws the screen (measured on PC and phone, 4 Nov 2026).
+const AUTO_UP: f64 = 2.;
 fn math(kind: &str, args: &[f64]) -> Vec<f64> {
     game_client::arena_compute(&format!("arena.{kind}"), args).expect("arena arithmetic")
 }
@@ -354,9 +355,9 @@ struct ArenaState {
     /// Dynamic resolution of the 3D picture (game_graphics::dyn_res); `?res=` pins it.
     res: game_graphics::dyn_res::DynRes,
     res_pinned: Option<f64>,
-    /// `?fsr=2`: the screen is drawn up to this many times larger than the 3D frame, which FSR1
-    /// enlarges in the lens pass (stage 7 experiment; off by default).
-    up_asked: f64,
+    /// `?fsr=<k>` pins how many times larger than the 3D frame the screen is drawn (FSR1 enlarges
+    /// it in the lens pass); None = automatic, `res.fsr` decides.
+    up_asked: Option<f64>,
     /// The enlargement in use, after the screen's own pixel limit.
     up: f64,
     widen: Closure<dyn FnMut(JsValue)>,
@@ -685,6 +686,7 @@ impl RustArena {
                 super::fps_meter::gpu_begin();
                 s.tick(time);
                 super::fps_meter::gpu_end();
+                super::backend_trial::frame(time, s.res.scale);
                 if s.res.frame(time).is_some() && s.width > 0. {
                     let (w, h, view) = (s.width, s.height, s.view.clone());
                     s.resize(w, h, view);
@@ -1208,6 +1210,7 @@ impl ArenaState {
         }
         self.disposed = true;
         super::fps_meter::battle_over(&self.renderer);
+        super::backend_trial::stop(&self.renderer);
         self.running = false;
         self.ready = false;
         self.on_frame = JsValue::NULL;
@@ -2030,6 +2033,7 @@ impl ArenaState {
     fn set_quality(&mut self, q: JsValue) {
         self.quality = q.clone();
         super::fps_meter::battle(&self.renderer, &string(&get(&q, "id")));
+        super::backend_trial::start(&self.renderer, &string(&get(&q, "id")));
         super::platform::mark_page_quality(&string(&get(&q, "id")));
         self.pace.follow(&q);
         self.res.follow(&string(&get(&q, "id")), self.res_pinned);
@@ -2304,9 +2308,11 @@ impl ArenaState {
         let frame = size[0] * self.res.scale;
         // with FSR the canvas grows back toward the screen's own pixels, the 3D frame does not
         let device = if ratio == 0. { 1. } else { ratio };
-        // the edge-aware upscale lives in the WebGL lens shader only; WebGPU keeps the plain frame
-        let webgpu = boolean(&get(&self.renderer, "isWebGPURenderer")) && !boolean(&get(&get(&self.renderer, "backend"), "isWebGLBackend"));
-        self.up = if webgpu { 1. } else { self.up_asked.min(device / frame).max(1.) };
+        // automatic FSR only where the screen has pixels to spare at full scale
+        let room = device / size[0] > 1.05;
+        self.res.allow_fsr(self.up_asked.is_none() && room);
+        let up = self.up_asked.unwrap_or(if self.res.fsr { AUTO_UP } else { 1. });
+        self.up = up.min(device / frame).max(1.);
         call(&self.renderer, "setPixelRatio", &[n(frame * self.up)]);
         super::fps_meter::scale(self.res.scale);
         call(

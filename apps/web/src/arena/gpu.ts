@@ -472,6 +472,50 @@ function tapColor(t: number): V3 {
   return vec3(r, g, b);
 }
 
+// FSR1 EASU (after AMD's ffx_fsr1.h, MIT), as the lens shader's easu(): 12 texels around the point,
+// a Lanczos-like kernel stretched along the local edge, clamped to the 4 nearest texels
+function easu(t: Sampler, at: V2, size: V2): V3 {
+  const pp0 = at.mul(size).sub(0.5), fp = floor(pp0) as V2, pp = pp0.sub(fp);
+  const texel = (x: number, y: number) => readLevel(t, fp.add(vec2(x + 0.5, y + 0.5)).div(size), 0).rgb;
+  const luma = (c: V3) => c.g.add(c.r.add(c.b).mul(0.5));
+  const b = texel(0, -1), c = texel(1, -1);
+  const e = texel(-1, 0), f = texel(0, 0), g = texel(1, 0), h = texel(2, 0);
+  const i = texel(-1, 1), j = texel(0, 1), k = texel(1, 1), l = texel(2, 1);
+  const n = texel(0, 2), o = texel(1, 2);
+  const [bL, cL, eL, fL, gL, hL, iL, jL, kL, lL, nL, oL] = [b, c, e, f, g, h, i, j, k, l, n, o].map(luma) as [F, F, F, F, F, F, F, F, F, F, F, F];
+  let dir: V2 = vec2(0), len: F = float(0);
+  const set = (w: F, lA: F, lB: F, lC: F, lD: F, lE: F) => {
+    const dirX = lD.sub(lB), dirY = lE.sub(lA);
+    const lenX = clamp(abs(dirX).div(max(max(abs(lD.sub(lC)), abs(lC.sub(lB))), 1e-5)), 0, 1) as F;
+    const lenY = clamp(abs(dirY).div(max(max(abs(lE.sub(lC)), abs(lC.sub(lA))), 1e-5)), 0, 1) as F;
+    dir = dir.add(vec2(dirX, dirY).mul(w));
+    len = len.add(lenX.mul(lenX).add(lenY.mul(lenY)).mul(w));
+  };
+  const ix = float(1).sub(pp.x), iy = float(1).sub(pp.y);
+  set(ix.mul(iy), bL, eL, fL, gL, jL);
+  set(pp.x.mul(iy), cL, fL, gL, hL, kL);
+  set(ix.mul(pp.y), fL, iL, jL, kL, nL);
+  set(pp.x.mul(pp.y), gL, jL, kL, lL, oL);
+  const dirR = dot(dir, dir);
+  const d = select(dirR.lessThan(1 / 32768), vec2(1, 0), dir.div(sqrt(max(dirR, 1e-12)))) as V2;
+  const half = len.mul(0.5), lenQ = half.mul(half);
+  const stretch = dot(d, d).div(max(abs(d.x), abs(d.y)));
+  const len2 = vec2(float(1).add(stretch.sub(1).mul(lenQ)), float(1).sub(lenQ.mul(0.5)));
+  const lob = float(0.5).add(lenQ.mul(0.21 - 0.5)), clp = float(1).div(lob);
+  let aC: V3 = vec3(0), aW: F = float(0);
+  const tap = (x: number, y: number, col: V3) => {
+    const off = vec2(x, y).sub(pp);
+    const v = vec2(dot(off, d), dot(off, vec2(d.y.negate(), d.x))).mul(len2);
+    const d2 = min(dot(v, v), clp);
+    const wB0 = d2.mul(0.4).sub(1), wA0 = lob.mul(d2).sub(1);
+    const w = wB0.mul(wB0).mul(1.5625).sub(0.5625).mul(wA0.mul(wA0));
+    aW = aW.add(w); aC = aC.add(col.mul(w));
+  };
+  tap(0, -1, b); tap(1, -1, c); tap(-1, 1, i); tap(0, 1, j); tap(0, 0, f); tap(-1, 0, e);
+  tap(1, 1, k); tap(2, 1, l); tap(2, 0, h); tap(1, 0, g); tap(1, 2, o); tap(0, 2, n);
+  return clamp(aC.div(aW), min(min(f, g), min(j, k)), max(max(f, g), max(j, k))) as V3;
+}
+
 /** The lens pass to the screen: the bend, the smear and glow at the edges (`taps` > 0), contrast, vignette and dither (no rays yet). */
 function lens(u: Shader["uniforms"], taps: number): V4 {
   const at = uv(), center = v2(u, "center");
@@ -485,7 +529,13 @@ function lens(u: Shader["uniforms"], taps: number): V4 {
   const near = (x: F, y: F) => read(comp, src.add(vec2(x, y)));
   const four = near(o.x.negate(), o.y.mul(-0.5)).add(near(o.x.mul(0.5), o.y.negate()))
     .add(near(o.x, o.y.mul(0.5))).add(near(o.x.mul(-0.5), o.y)).mul(0.25);
-  let c = select(num(u, "ssaa").lessThanEqual(1), read(comp, src), four) as V4;
+  const plain = select(num(u, "ssaa").lessThanEqual(1), read(comp, src), four) as V4;
+  // a screen larger than the frame (FSR): the frame is enlarged along its edges, not blurred
+  let c = Fn(() => {
+    const picked = plain.toVar();
+    If(num(u, "fsr").greaterThan(0.5), () => { picked.assign(vec4(easu(comp, src, v2(u, "compSize")), plain.a)); });
+    return picked;
+  })() as unknown as V4;
   let rgb: V3 = c.rgb;
   if (taps > 0) {
     // the taps read a blurred copy of the frame, as blurred as they are far apart, so they flow into one smear
