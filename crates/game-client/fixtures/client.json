@@ -85,10 +85,23 @@
       "files": [
         "sfx/casing-1.mp3",
         "sfx/casing-2.mp3",
-        "sfx/casing-3.mp3"
+        "sfx/casing-3.mp3",
+        "sfx/casing-4.mp3"
       ],
       "bus": "sfx",
-      "gainDb": -4,
+      "gainDb": -6,
+      "pitchJitter": 1.5,
+      "gainJitter": 2
+    },
+    "casing.steel": {
+      "files": [
+        "sfx/casing-steel-1.mp3",
+        "sfx/casing-steel-2.mp3",
+        "sfx/casing-steel-3.mp3",
+        "sfx/casing-steel-4.mp3"
+      ],
+      "bus": "sfx",
+      "gainDb": -6,
       "pitchJitter": 1.5,
       "gainJitter": 2
     },
@@ -159,10 +172,15 @@
       "files": [
         "sfx/shield-block-1.mp3",
         "sfx/shield-block-2.mp3",
-        "sfx/shield-block-3.mp3"
+        "sfx/shield-block-3.mp3",
+        "sfx/shield-block-4.mp3",
+        "sfx/shield-block-5.mp3",
+        "sfx/shield-block-6.mp3",
+        "sfx/shield-block-7.mp3",
+        "sfx/shield-block-8.mp3"
       ],
       "bus": "sfx",
-      "gainDb": -1,
+      "gainDb": 1,
       "pitchJitter": 0.7
     },
     "shield.break": {
@@ -478,6 +496,21 @@
       "pitchJitter": 1.5,
       "gainJitter": 2
     },
+    "artillery.incoming": {
+      "files": [
+        "sfx/artillery-incoming-1.mp3",
+        "sfx/artillery-incoming-2.mp3",
+        "sfx/artillery-incoming-3.mp3",
+        "sfx/artillery-incoming-4.mp3",
+        "sfx/artillery-incoming-5.mp3",
+        "sfx/artillery-incoming-6.mp3",
+        "sfx/artillery-incoming-7.mp3",
+        "sfx/artillery-incoming-8.mp3"
+      ],
+      "bus": "sfx",
+      "pitchJitter": 1,
+      "gainJitter": 1.5
+    },
     "amb.hall": {
       "files": [
         "amb/amb-hall.mp3"
@@ -512,6 +545,13 @@
     "amb.base": {
       "files": [
         "amb/amb-base.mp3"
+      ],
+      "bus": "amb",
+      "gainDb": -2
+    },
+    "amb.workshop": {
+      "files": [
+        "amb/amb-workshop.mp3"
       ],
       "bus": "amb"
     },

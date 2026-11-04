@@ -205,7 +205,8 @@ impl BrowserArenaAudio {
                 "FITTING_PLAYLIST"
             },
         );
-        self.ambience = args(&[js(if base { "amb.base" } else { "amb.hall" })]).into();
+        // Fitting and the weapon bench sound like the workshop: machines humming in the next room.
+        self.ambience = args(&[js(if base { "amb.base" } else { "amb.workshop" })]).into();
         self.spot = if base { (-0.55, 0.0) } else { (0.6, 1.0) };
         if !exists(&self.audio) {
             return;
@@ -227,6 +228,10 @@ impl BrowserArenaAudio {
         let sounds = call(&self.host, "fightSounds", &[guns(&m, 0), guns(&m, 1)]);
         for sound in Array::from(&sounds).iter() {
             preloads.push(&sound);
+        }
+        // fightSounds is checked against the old game; the steel-deck casings and the shell came later.
+        for extra in ["casing.steel", "artillery.incoming"] {
+            preloads.push(&js(extra));
         }
         self.preloads = preloads.into();
         self.set_place(m);
@@ -282,6 +287,7 @@ impl BrowserArenaAudio {
             "weapons",
             &args(&[get(&a, "weapon"), get(&b, "weapon")]),
         );
+        set(&options, "room", &js(&self.room));
         if ears.is_object() {
             set(&options, "pan", &ears);
         }
@@ -298,6 +304,17 @@ impl BrowserArenaAudio {
         } else {
             self.voice = Some(id.into());
         }
+    }
+    /// The instructor's loudness now, or -1 with no sound to hear (audio_engine.rs).
+    #[wasm_bindgen(js_name=voiceLevel)]
+    pub fn voice_level(&self) -> f64 {
+        if !exists(&self.audio) {
+            return -1.0;
+        }
+        invoke(&self.audio, "voiceLevel", &[])
+            .ok()
+            .and_then(|level| level.as_f64())
+            .unwrap_or(-1.0)
     }
     #[wasm_bindgen(js_name=stopVoice)]
     pub fn stop_voice(&mut self) {

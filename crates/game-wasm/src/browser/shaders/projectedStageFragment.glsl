@@ -24,6 +24,12 @@ void main() {
   }
   float sourceW = sourceClip.w < 0.0 ? min(sourceClip.w, -.00001) : max(sourceClip.w, .00001);
   vec2 uv = sourceClip.xy / sourceW * .5 + .5;
+  // From medium up a living hall moves (live-scene.glsl, above): drops ring the puddles.
+  bool alive = uLive > 0.0 && isSide < .5;
+  if (alive) {
+    vec2 life = cdLiveWarp(vec2(uv.x, 1.0 - uv.y), uTime) * uLive;
+    uv += vec2(life.x, -life.y);
+  }
   // Clamp to the clean plate at overscan edges, never reveal a transparent tear.
   vec3 color = isSide > .5 ? sideColor * sideTint * sideExposure : texture2D(photo, clamp(uv, vec2(.001), vec2(.999))).rgb;
   if (useRepair > .5) {
@@ -39,5 +45,7 @@ void main() {
       * smoothstep(0.0, .08, uv.x) * smoothstep(0.0, .08, 1.0 - uv.x) * step(0.0, sourceClip.w);
     color = mix(extension, color, photograph);
   }
+  // Its lights, clouds and wet glints.
+  if (alive) color = mix(color, cdLiveLight(color, vec2(uv.x, 1.0 - uv.y), 0.5, uTime), uLive);
   gl_FragColor = vec4(color, 1.0);
 }

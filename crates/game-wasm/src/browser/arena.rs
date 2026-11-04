@@ -1891,7 +1891,7 @@ impl ArenaState {
                     .place_mark(edges, [-dz / l, 0., dx / l], camera);
             }
         }
-        self.hazard.update(dt);
+        self.hazard.update(dt, xyz(&get(&self.camera, "position")));
         for (c, bolt) in self.hazard.take_flashes() {
             if get(&self.lens, "flash").is_function() {
                 call(
@@ -1975,6 +1975,7 @@ impl ArenaState {
     }
     fn set_quality(&mut self, q: JsValue) {
         self.quality = q.clone();
+        super::platform::mark_page_quality(&string(&get(&q, "id")));
         self.pace.follow(&q);
         call(&self.lens, "setQuality", &[q.clone()]);
         let shadows = p(&q, "shadow") > 0.;
@@ -2507,9 +2508,21 @@ impl ArenaState {
             }
         };
         let camera = xyz(&get(&self.camera, "position"));
-        let close = (spot[0] - camera[0]).hypot(spot[2] - camera[2]) < 3.;
+        let near = (spot[0] - camera[0]).hypot(spot[2] - camera[2]);
+        let close = near < 3.;
         match kind {
             "lightning" => {
+                // A bolt into my own feet would fall outside the lens: it lands a few steps
+                // ahead, where its foot and the whole stroke stay in sight. Straight under the
+                // lens it has no way of its own to go, so it goes toward the opponent.
+                let spot = if self.fp && near < 3.2 {
+                    let toward = if near > 0.1 { spot } else { self.lane_point(self.dist) };
+                    let (dx, dz) = (toward[0] - camera[0], toward[2] - camera[2]);
+                    let k = 3.2 / dx.hypot(dz).max(0.1);
+                    [camera[0] + dx * k, spot[1], camera[2] + dz * k]
+                } else {
+                    spot
+                };
                 self.hazard.bolt(spot, camera);
                 0.03
             }

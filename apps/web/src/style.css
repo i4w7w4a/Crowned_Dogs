@@ -118,6 +118,15 @@ button:disabled { cursor: default; }
 .glass:disabled::before { opacity: .5; }
 .glass.round { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; }
 .glass.round .ico { width: 18px; height: 18px; }
+/* «Минимум» and «Низкое» (Art 2026-11-03): no liquid glass, a plain 80% black fill instead: no blur, no lens,
+   no glow inside. platform.rs puts the level on <html data-quality>. A picked choice keeps its light fill. */
+:root:is([data-quality="minimal"], [data-quality="low"]) :is(.glass, .cd-create) {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+:root:is([data-quality="minimal"], [data-quality="low"]) .glass:not(.on, [aria-pressed="true"]:not(.srow, .cd-sound-toggle), [aria-selected="true"]),
+:root:is([data-quality="minimal"], [data-quality="low"]) .cd-create {
+  background: rgba(0,0,0,.8); box-shadow: 0 6px 18px rgba(0,0,0,.2);
+}
 
 /* ---------- attack reticles on the enemy ---------- */
 .ring {
@@ -263,9 +272,9 @@ button:disabled { cursor: default; }
 .ln.hz .a { grid-column: 2 / -1; color: var(--dim); }
 .ln.hz .ico { color: var(--muted); } .ln.hz.hurt .ico, .ln.hz.hurt .a { color: var(--amber); }
 .ticker .tx .hz { color: var(--amber); font-weight: 500; }
-.mv.stay { height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font: 500 14px/1 var(--body); color: var(--fg); white-space: nowrap; }
-.mv.stay.on { color: var(--pick-fg); font-weight: 600; }
-.mv.stay.on small { color: #8a5608; }
+/* the distance is plain text, picked or not (Art, 2026-11-02): no fill, it only turns bright and bold */
+.mv.stay { height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font: 500 14px/1 var(--body); color: rgba(255,255,255,.7); white-space: nowrap; text-shadow: 0 0 2px rgba(0,0,0,.9), 0 1px 5px rgba(0,0,0,.7); }
+.mv.stay.on, .mv.stay.risk.on { background: none; box-shadow: none; padding: 0; color: #fff; font-weight: 700; text-shadow: 0 0 2px rgba(0,0,0,.9), 0 1px 5px rgba(0,0,0,.7); }
 .mv.stay small { font: 500 11px/1 var(--body); color: var(--amber); }
 
 /* defence: four glass buttons, each with a small figure that lights its zone; a guarded zone is filled light.

@@ -9,6 +9,8 @@ export interface TurnSoundContext {
   weapons?: [WeaponId, WeaponId];
   /** Stereo place of each side as the arena camera sees it; fixed defaults without it. */
   pan?: [number, number];
+  /** "hall" rings the casings on the steel deck; open-air maps drop them on concrete. */
+  room?: "hall" | "blocks";
 }
 export const TIMING = callRust<{ TIMING: {
   move: number; ourAttack: number; enemyAttack: number; stepGap: number; dashStepGap: number;

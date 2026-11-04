@@ -1,4 +1,4 @@
-/* Live base screens on the high and ultra qualities (Art 2026-11-02): crates/game-wasm/src/browser/live.rs
+/* Live base screens from the medium quality up (Art 2026-11-02): crates/game-wasm/src/browser/live.rs
    marks the page with .cd-live and scatters the dust. Nearly everything moves by transform and opacity,
    so the compositor carries it; nothing here runs on the lower qualities or with reduced motion.
    Entrances use fill-mode backwards: the travel fade (.cd-travelling) keeps its own opacity after them. */
@@ -89,10 +89,13 @@
   :root.cd-live .cd-dialog[open] .cd-item-card:nth-child(n+7) { animation-delay: .24s; }
 
   /* The instructor's video link: an interference band rolls down, and the picture jumps once in a while. */
-  :root.cd-live .cd-briefing-portrait { overflow: hidden; }
+  :root.cd-live .cd-briefing-portrait { overflow: hidden; container-type: size; }
+  /* Sedoy himself lives (briefing_portrait.rs): a square picture placed like the <img> under it. */
+  .cd-briefing-face { position: absolute; width: max(100cqw, 100cqh); aspect-ratio: 1; left: calc((100cqw - max(100cqw, 100cqh)) / 2);
+    top: calc((100cqh - max(100cqw, 100cqh)) * .28); filter: saturate(.85) contrast(1.04); }
   :root.cd-live .cd-briefing-portrait::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 14%; z-index: 1; pointer-events: none;
     background: linear-gradient(180deg, transparent, rgba(220,235,238,.07) 45%, rgba(220,235,238,.12) 50%, transparent); animation: cd-band 5.5s linear infinite; }
-  :root.cd-live .cd-briefing-portrait img { animation: cd-jump 7s steps(1, end) infinite; }
+  :root.cd-live .cd-briefing-portrait :is(img, canvas) { animation: cd-jump 7s steps(1, end) infinite; }
   @keyframes cd-band { from { transform: translateY(-100%); } to { transform: translateY(720%); } }
   @keyframes cd-jump { 0%, 91%, 93.5%, 100% { translate: 0 0; opacity: 1; } 91.5% { translate: 4px 0; opacity: .82; } 92.5% { translate: -3px 1px; opacity: .9; } }
 

@@ -670,7 +670,8 @@ fn render(s: &JsValue) {
         let mv = word(&get(&b, "dataset"), "m").parse::<f64>().unwrap_or(0.);
         toggle(&b, "risk", !lock && risky.iter().any(|r| r.as_f64() == Some(mv)));
     }
-    hide(&id("hazardNote"), !present(&warning) || over(s));
+    // While the turn plays out the match already holds the next warning: it waits for the next turn.
+    hide(&id("hazardNote"), !present(&warning) || over(s) || flag(s, "busy"));
     if present(&warning) {
         let icon = match word(&warning, "kind").as_str() {
             "drone" => "i-drone",
@@ -947,8 +948,10 @@ fn play_turn(s: &JsValue, r: JsValue) {
         return;
     }
     if kind == "shell" {
-        // the far guns, then the shell's own whine comes down
+        // the far guns, then the shell's own whine comes down and ends in the blast
         sound(s, "artillery.far", 0.4, -2.);
+        let whine = HAZARD_AT + SHELL_FALL - SHELL_WHINE;
+        sound(s, "artillery.incoming", whine, -2.);
     }
     after(s, HAZARD_AT, move |s| {
         let impact = if get(&get(s, "arena"), "hazardStrike").is_function() {
@@ -958,10 +961,7 @@ fn play_turn(s: &JsValue, r: JsValue) {
         };
         match word(&get(&r, "hazard"), "kind").as_str() {
             "lightning" => sound(s, "thunder", impact, 3.),
-            "shell" => {
-                sound(s, "miss.near", (impact - 0.3).max(0.), -6.);
-                sound(s, "grenade.blast", impact, 2.);
-            }
+            "shell" => sound(s, "grenade.blast", impact, 2.),
             "drone" => {
                 sound(s, "dash.whoosh", (impact - 0.3).max(0.), 0.);
                 sound(s, "grenade.blast", impact, 0.);
@@ -981,6 +981,10 @@ fn play_turn(s: &JsValue, r: JsValue) {
 }
 /// When the warned hazard comes down, after both shots.
 const HAZARD_AT: f64 = 1.75;
+/// How long a shell falls once it is launched (`blast_in(0.5, ..)` in arena.rs `strike`).
+const SHELL_FALL: f64 = 0.5;
+/// Length of the artillery-incoming files: each ends where the shell lands.
+const SHELL_WHINE: f64 = 1.8;
 fn sound(s: &JsValue, id: &str, delay: f64, gain_db: f64) {
     audio(
         s,
@@ -1009,9 +1013,10 @@ fn hazard_lands(s: &JsValue, r: &JsValue) {
             .find(|hh| number(hh, "side") as usize == side);
         if let Some(hh) = &hit {
             let stun = if flag(hh, "stun") { " · оглушён" } else { "" };
+            // above the shots' numbers, which are still floating up
             floating(
                 x + if side == 1 { 36. } else { 0. },
-                y - 40.,
+                y - 90.,
                 "dmg",
                 &format!("−{}", number(hh, "damage")),
                 &format!("{}{stun}", word(&h, "name")),
@@ -1033,7 +1038,7 @@ fn hazard_lands(s: &JsValue, r: &JsValue) {
         if toxic > 0. {
             floating(
                 x + if side == 1 { 36. } else { 0. },
-                y + if hit.is_some() { 10. } else { -40. },
+                y + if hit.is_some() { -40. } else { -90. },
                 "dmg",
                 &format!("−{toxic}"),
                 "отрава",

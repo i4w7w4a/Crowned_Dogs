@@ -897,15 +897,28 @@ impl RustDepthBackdrop {
             ),
             ("uShift", uniform(make(&host, "Vector2", &[]))),
         ]);
-        // The room's life is found by its picture.
-        let life = super::base_region::REGIONS
-            .iter()
-            .find(|r| color.ends_with(r.fitting) || color.ends_with(r.fitting_sharp))
-            .map_or(&super::live::STILL, |r| r.fitting_life);
+        // The room's life is found by its picture; Sedoy's portrait also talks (briefing_portrait.rs).
+        let portrait = color.ends_with(super::briefing_portrait::PICTURE);
+        let life = if portrait {
+            &super::live::SEDOY
+        } else {
+            super::base_region::REGIONS
+                .iter()
+                .find(|r| color.ends_with(r.fitting) || color.ends_with(r.fitting_sharp))
+                .map_or(&super::live::STILL, |r| r.fitting_life)
+        };
         let vec4 = |v: [f64; 4]| make(&host, "Vector4", &v.map(JsValue::from));
         for (key, value) in super::live::uniforms(life, ratio, &vec4) {
             set(&uniforms, key, &value);
         }
+        let face = portrait.then_some(&super::briefing_portrait::FACE);
+        let rects = face.map_or([[0.0; 4]; 3], |f| [f.mouth, f.eyes, f.head]);
+        set(&uniforms, "uFace", &uniform(JsValue::NULL));
+        set(&uniforms, "uFaceMix", &uniform(vec4([0.0; 4])));
+        for (key, rect) in ["uMouthRect", "uEyesRect", "uHead"].into_iter().zip(rects) {
+            set(&uniforms, key, &uniform(vec4(rect)));
+        }
+        let shapes = face.map(|f| color.replace(super::briefing_portrait::PICTURE, f.shapes));
         let shader = compute(&host, "graphics.backdropShader", Object::new().into());
         let material = make(
             &host,
@@ -943,7 +956,7 @@ impl RustDepthBackdrop {
         let ready = future_to_promise(async move {
             let loader = make(&host, "TextureLoader", &[]);
             let tasks = Array::new();
-            for url in [color, depth] {
+            for url in [Some(color), Some(depth), shapes].into_iter().flatten() {
                 let host = host.clone();
                 let pending = call(&loader, "loadAsync", &[url.into()]);
                 tasks.push(&future_to_promise(async move {
@@ -988,6 +1001,9 @@ impl RustDepthBackdrop {
                 let mut s = target.borrow_mut();
                 put(&s.uniforms, "uColor", loaded[0].clone());
                 put(&s.uniforms, "uDepth", loaded[1].clone());
+                if let Some(shapes) = loaded.get(2) {
+                    put(&s.uniforms, "uFace", shapes.clone());
+                }
                 s.last.clear();
             }
             draw_backdrop(&target, 0., 0.);
@@ -1001,6 +1017,16 @@ impl RustDepthBackdrop {
     }
     pub fn draw(&self, x: f64, y: f64) {
         draw_backdrop(&self.state, x, y);
+    }
+    /// A talking portrait's face now: how far each mouth shape shows (slightly open, open,
+    /// rounded) and how shut the eyes are, 0–1.
+    pub fn face(&self, open: f64, wide: f64, round: f64, shut: f64) {
+        let s = self.state.borrow();
+        call(
+            &uv(&s.uniforms, "uFaceMix"),
+            "set",
+            &[open.into(), wide.into(), round.into(), shut.into()],
+        );
     }
     pub fn dispose(&self) {
         dispose_backdrop(&self.state);
@@ -1084,6 +1110,7 @@ fn dispose_backdrop(state: &Rc<RefCell<BackdropState>>) {
     let resources = [
         uv(&s.uniforms, "uColor"),
         uv(&s.uniforms, "uDepth"),
+        uv(&s.uniforms, "uFace"),
         s.material.clone(),
         s.geometry.clone(),
         s.renderer.clone(),

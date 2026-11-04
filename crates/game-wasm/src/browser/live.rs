@@ -1,4 +1,4 @@
-//! The base screens come alive on the high and ultra qualities: dust hangs in the lamp light,
+//! The base screens come alive on the medium, high and ultra qualities: dust hangs in the lamp light,
 //! the lamps dip now and then, the rings turn, panels slide in and the base's name settles like a
 //! radio readout. The motion lives in CSS (apps/web/src/base/live.css) under `:root.cd-live`;
 //! this module marks the page and scatters the dust, so the lower qualities pay nothing.
@@ -43,6 +43,50 @@ pub const STILL: Life = Life {
     window: NONE,
     sun: NONE,
     mist: NONE,
+};
+
+/// Sedoy's control room behind him in the briefing (img/base/instructor.webp): the monitors
+/// refresh, the ceiling tubes hum and the radio lights blink. He himself is moved by the
+/// portrait (briefing_portrait.rs).
+pub const SEDOY: Life = Life {
+    lamps: &[[0.79, 0.12, 0.1, 0.5], [0.13, 0.2, 0.08, 0.4], [0.89, 0.11, 0.08, 0.35]],
+    screens: &[[0.0, 0.46, 0.16, 0.56], [0.81, 0.42, 0.9, 0.52], [0.73, 0.36, 0.79, 0.44]],
+    leds: &[
+        [0.1, 0.335, 0.006, 1.7],
+        [0.1, 0.44, 0.006, 2.3],
+        [0.185, 0.39, 0.006, 3.1],
+        [0.95, 0.58, 0.008, 2.7],
+    ],
+    ..STILL
+};
+
+/// «Соляной цех» in battle (img/battle-stage, picture 941 x 1672): drops ring the puddles, clouds
+/// pass over the broken roof and the sunlit floor, and the machine's warning light blinks.
+pub const SALT_HALL: Life = Life {
+    leds: &[[0.937, 0.361, 0.007, 1.3]],
+    drips: &[
+        [0.33, 0.74, 4.9, 0.1],
+        [0.66, 0.76, 6.3, 0.5],
+        [0.22, 0.88, 5.7, 0.3],
+        [0.74, 0.93, 7.3, 0.8],
+    ],
+    wet: [0.0, 0.58, 1.0, 1.0],
+    window: [0.66, 0.1, 0.88, 0.33],
+    sun: [0.25, 0.48, 0.75, 0.62],
+    ..STILL
+};
+/// The same hall at night: no sun, and the work lamps hum and stutter (by day those spots are
+/// bright haze that must not flicker).
+pub const SALT_HALL_NIGHT: Life = Life {
+    lamps: &[
+        [0.62, 0.29, 0.025, 0.5],
+        [0.672, 0.339, 0.02, 0.35],
+        [0.726, 0.402, 0.02, 0.5],
+        [0.613, 0.444, 0.02, 0.4],
+        [0.69, 0.456, 0.02, 0.3],
+    ],
+    sun: NONE,
+    ..SALT_HALL
 };
 
 /// The live scene's uniforms for `life`, at rest. `vec4` makes a THREE.Vector4.
@@ -118,9 +162,9 @@ thread_local! {
     static LIVE: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Marks the page for its quality: `cd-live` on high and ultra.
+/// Marks the page for its quality: `cd-live` on medium, high and ultra.
 pub fn mark(id: &str) {
-    let live = matches!(id, "high" | "ultra");
+    let live = matches!(id, "medium" | "high" | "ultra");
     toggle(&get(&document(), "documentElement"), "cd-live", live);
     let still = boolean(
         &call(

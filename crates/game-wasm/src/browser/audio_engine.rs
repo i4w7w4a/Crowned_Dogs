@@ -259,6 +259,8 @@ struct Audio {
     /// line that is still decoding when a newer one was asked for.
     voice: JsValue,
     voice_turn: u32,
+    /// Listens to the voice so Sedoy's portrait moves its lips (voiceLevel).
+    listen: JsValue,
 }
 impl Audio {
     fn random(&self) -> f64 {
@@ -398,6 +400,15 @@ impl Audio {
             call(&source, "start", &[number(at)]);
             if voice {
                 s.cut_voice();
+                if !exists(&s.listen) {
+                    s.listen = invoke(&s.ctx, "createAnalyser", &[]).unwrap_or(JsValue::NULL);
+                    if exists(&s.listen) {
+                        set(&s.listen, "fftSize", &number(512.0));
+                    }
+                }
+                if exists(&s.listen) {
+                    call(&source, "connect", &[s.listen.clone()]);
+                }
                 s.voice = source;
             }
             let duck = num(&definition, "duckDb");
@@ -656,6 +667,7 @@ impl BrowserGameAudio {
             keep_alive: JsValue::NULL,
             voice: JsValue::NULL,
             voice_turn: 0,
+            listen: JsValue::NULL,
         }));
         let deck = Object::new();
         for method in ["play", "pause", "resume", "stop", "cue"] {
@@ -750,6 +762,19 @@ impl BrowserGameAudio {
     }
     pub fn play(&self, id: &str, options: JsValue) {
         Audio::play(&self.state, id, options);
+    }
+    /// How loud the instructor's line is right now (RMS of the last 512 samples), or -1 when no
+    /// line was heard yet or the sound sleeps; the portrait then moves its lips by the text.
+    #[wasm_bindgen(js_name=voiceLevel)]
+    pub fn voice_level(&self) -> f64 {
+        let s = self.state.borrow();
+        if !exists(&s.voice) || !exists(&s.listen) || text(&get(&s.ctx, "state")) != "running" {
+            return -1.0;
+        }
+        let samples = js_sys::Float32Array::new_with_length(512);
+        call(&s.listen, "getFloatTimeDomainData", &[samples.clone().into()]);
+        let sum: f64 = samples.to_vec().iter().map(|v| (v * v) as f64).sum();
+        (sum / 512.0).sqrt()
     }
     #[wasm_bindgen(js_name=stopVoice)]
     pub fn stop_voice(&self) {
