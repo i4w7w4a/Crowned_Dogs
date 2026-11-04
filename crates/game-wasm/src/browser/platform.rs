@@ -274,6 +274,21 @@ pub fn quality_id() -> String {
 pub fn sharp_pictures() -> bool {
     boolean(&get(&picked(), "sharpBackdrop"))
 }
+/// Whether this device takes the light WebP copies of the big painted backgrounds (Minimum, Low and
+/// Medium): about a sixth of the PNG's download, the same picture to the eye.
+#[wasm_bindgen(js_name = litePictures)]
+pub fn lite_pictures() -> bool {
+    boolean(&get(&picked(), "litePictures"))
+}
+/// A page-relative picture path, or its light copy when this quality takes one and the build ships it
+/// (asset-cache.ts answers through `cdLitePicture`).
+pub fn picture(path: &str) -> String {
+    let lite = get(&global(), "cdLitePicture");
+    if !lite_pictures() || !lite.is_function() {
+        return path.into();
+    }
+    invoke(&lite, &[path.into()]).as_string().unwrap_or_else(|| path.into())
+}
 /// Whether this device loads the figure models' copies with GPU-compressed maps.
 pub fn compressed_textures() -> bool {
     boolean(&get(&picked(), "compressedTextures"))

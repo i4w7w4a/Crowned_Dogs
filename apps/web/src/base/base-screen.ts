@@ -13,6 +13,7 @@ import { gameAudio } from "../audio/arena-audio.ts";
 import { backArrow } from "./navigation-icons.ts";
 import { ItemViewer, ITEM_MODELS } from "./item-viewer.ts";
 import { availableInFitting } from "./model-catalog.ts";
+import { prefetchBattle } from "../arena/load-model.ts";
 export type BaseView = "base" | "fitting" | "weapon" | "persona" | "region";
 export class BaseScreen extends BrowserBase {
   constructor(root: HTMLElement, onBattle: (loadout: Loadout) => Promise<void>) {
@@ -20,7 +21,7 @@ export class BaseScreen extends BrowserBase {
       baseUrl: import.meta.env.BASE_URL, ITEM_BY_ID, GEAR_SLOT_NAMES, GEAR_SLOTS,
       compileKit, loadLocalLoadout, saveLocalLoadout, equipmentIcon, equipmentItemIcon,
       PersonaViewer, DepthBackdrop, HomeStage, RegionMap, WeaponScreen, ItemViewer, ITEM_MODELS,
-      availableInFitting, liquidGlass, gameAudio, backArrow,
+      availableInFitting, liquidGlass, gameAudio, backArrow, prefetchBattle,
     });
   }
   override show(view: BaseView): void { super.show(view); }

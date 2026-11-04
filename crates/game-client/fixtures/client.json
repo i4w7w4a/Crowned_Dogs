@@ -684,6 +684,7 @@
   "QUALITY": {
     "minimal": {
       "id": "minimal",
+      "litePictures": true,
       "name": "Минимум",
       "maxDpr": 0.75,
       "maxPixels": 200000,
@@ -709,6 +710,7 @@
     },
     "low": {
       "id": "low",
+      "litePictures": true,
       "name": "Низкая",
       "maxDpr": 0.85,
       "maxPixels": 500000,
@@ -734,6 +736,7 @@
     },
     "medium": {
       "id": "medium",
+      "litePictures": true,
       "name": "Средняя",
       "maxDpr": 1.5,
       "maxPixels": 1100000,
@@ -759,6 +762,7 @@
     },
     "high": {
       "id": "high",
+      "litePictures": false,
       "name": "Высокая",
       "maxDpr": 3,
       "maxPixels": 3800000,
@@ -784,6 +788,7 @@
     },
     "ultra": {
       "id": "ultra",
+      "litePictures": false,
       "name": "Ультра",
       "maxDpr": 3,
       "maxPixels": 8000000,

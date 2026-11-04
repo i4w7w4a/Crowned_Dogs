@@ -129,6 +129,23 @@ async fn parse_bytes(host: &JsValue, bytes: JsValue, ktx2: Option<&JsValue>) -> 
     await_value(try_call(&loader, "parseAsync", &[bytes, "".into()])?).await
 }
 
+/// The files a battle downloads for its figures and guns, named the way this device's loader asks
+/// for them (compressed copy, binary). The base fetches them one by one while the player looks at the
+/// menu, so the fight starts from the device cache (load-model.ts prefetchBattle).
+#[wasm_bindgen(js_name = sceneBattleFiles)]
+pub fn battle_files(host: JsValue) -> Array {
+    let base = string(&get(&host, "baseUrl"));
+    let models = ["persona-female", "persona-male", "hair-female", "hair-male", "beards-male", "holster"];
+    let files = Array::new();
+    for name in models.iter().chain(GUN_MODELS.iter().chain(HELD_MODELS).map(|(_, m)| m)) {
+        let url = format!("{base}models/{name}.json");
+        let picked = compressed_copy(&host, &url).map(|(copy, _)| copy).unwrap_or(url);
+        let file = binary_copy(&host, &picked).unwrap_or(picked);
+        files.push(&file.into());
+    }
+    files
+}
+
 /// Real gun models by held class (pistol, shotgun, rifle, sniper); a class without one keeps its placeholder boxes.
 pub(super) const GUN_MODELS: &[(&str, &str)] = &[
     ("pistol", "pustelga"),

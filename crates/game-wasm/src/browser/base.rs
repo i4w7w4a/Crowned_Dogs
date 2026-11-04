@@ -122,6 +122,8 @@ impl Base {
         let was = std::mem::replace(&mut self.view, view.into());
         hidden(&self.home, view != "base");
         if view == "base" {
+            // the fight's models download quietly while the player looks round the base
+            let _ = super::bridge::try_call(&self.host, "prefetchBattle", &[]);
             live::scramble(&query(&self.home, ".cd-home-title h1"));
             live::scramble(&query(&self.home, ".cd-callsign"));
         }
@@ -1244,7 +1246,7 @@ fn initial(host: &JsValue) -> String {
     let region = base_region::current();
     include_str!("base.html")
         .replace("{{HOME_PICTURE}}", region.home_picture)
-        .replace("{{FITTING_PICTURE}}", region.fitting)
+        .replace("{{FITTING_PICTURE}}", &img_picture(region.fitting))
         .replace("{{BAY_PICTURE}}", region.bay.photo)
         .replace("{{KIT}}", &(platform::active_kit() + 1).to_string())
         .replace("{{KITS}}", &kits)
@@ -1951,6 +1953,11 @@ fn enter_battle(state: &Rc<RefCell<Base>>) {
         set(&button, "disabled", &flag(false));
     });
 }
+/// A picture under img/ (path relative to it), or its light copy on the qualities that take one.
+fn img_picture(path: &str) -> String {
+    let picked = platform::picture(&format!("img/{path}"));
+    picked.strip_prefix("img/").unwrap_or(path).to_string()
+}
 fn setup_depth(state: &Rc<RefCell<Base>>) {
     let fitting = state.borrow().fitting.clone();
     let canvas = query(&fitting, ".cd-backdrop-depth");
@@ -1959,9 +1966,9 @@ fn setup_depth(state: &Rc<RefCell<Base>>) {
     let base = text(&get(&host, "baseUrl"));
     let region = state.borrow().region;
     let picture = if platform::sharp_pictures() {
-        region.fitting_sharp
+        region.fitting_sharp.to_string()
     } else {
-        region.fitting
+        img_picture(region.fitting)
     };
     let result = construct(
         &host,

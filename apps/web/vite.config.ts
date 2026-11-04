@@ -118,15 +118,35 @@ function filesUnder(root: string, dir = ""): string[] {
     e.isDirectory() ? filesUnder(root, join(dir, e.name)) : [join(dir, e.name).split(sep).join("/")]);
 }
 const GZ = new Map<string, Buffer>();
+// Light copies of the big painted backgrounds: every PNG of 1 MB or more under public/img (stage
+// pictures and atlases, not depth or mask data) also ships as <name>.lite.webp at WebP quality 92,
+// about a sixth of the size. Minimum, Low and Medium load those (asset-cache.ts litePicture), High and
+// Ultra the PNG. Encoding takes minutes, so each copy is kept in apps/web/.lite by the PNG's hash.
+const LITE_CACHE = fileURLToPath(new URL("./.lite", import.meta.url));
+const LITE = new Map<string, string>();
+async function liteCopies(): Promise<void> {
+  const { default: sharp } = await import("sharp");
+  mkdirSync(LITE_CACHE, { recursive: true });
+  const pngs = filesUnder(PUBLIC, "img").filter((f) => f.endsWith(".png") && !/depth|mask|normal|orm/i.test(f)
+    && statSync(join(PUBLIC, f)).size >= 1024 * 1024);
+  for (const f of pngs) {
+    const copy = join(LITE_CACHE, `${hash(join(PUBLIC, f))}.webp`);
+    if (!existsSync(copy)) await sharp(join(PUBLIC, f)).webp({ quality: 92, effort: 6 }).toFile(copy);
+    LITE.set(f.replace(/\.png$/, ".lite.webp"), copy);
+  }
+}
 function assetVersions(): Plugin {
   return {
     name: "crowned-dogs-asset-versions",
     writeBundle(opts) {
       for (const [path, packed] of GZ) writeFileSync(join(opts.dir!, `${path}.gz`), packed);
+      for (const [path, copy] of LITE) cpSync(copy, join(opts.dir!, path));
     },
-    config(_, { command }) {
+    async config(_, { command }) {
       const versions: Record<string, string> = {};
       if (command === "build") {
+        await liteCopies();
+        for (const [path, copy] of LITE) versions[path] = hash(copy);
         const wrapped = new Set(previews().map((f) => `preview/${f}`));
         for (const f of filesUnder(PUBLIC)) {
           if (wrapped.has(f)) versions[f.replace(/\.json$/, ".glb")] = hash(join(PUBLIC, f));

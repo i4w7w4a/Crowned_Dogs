@@ -27,6 +27,17 @@ export function shipped(input: string): boolean {
   return path !== null && path in VERSIONS;
 }
 
+/**
+ * The light copy of a big painted background (<name>.png -> <name>.lite.webp, built by vite.config.ts)
+ * when the build ships one, else the same URL. The qualities that take it ask (litePictures in Rust).
+ */
+export function litePicture(url: string): string {
+  if (!base || !/\.png([?#]|$)/i.test(url)) return url;
+  const lite = url.replace(/\.png(?=[?#]|$)/i, ".lite.webp");
+  return shipped(lite) ? lite : url;
+}
+if (typeof globalThis !== "undefined") (globalThis as { cdLitePicture?: (url: string) => string }).cdLitePicture = litePicture;
+
 // The build ships a gzip copy (<file>.gz) of every big file that packs well (models, the engine,
 // manifests). The game downloads that copy and unpacks it itself, so the saving does not depend on
 // the host compressing. A host that already marks the copy as gzip hands over unpacked bytes, which

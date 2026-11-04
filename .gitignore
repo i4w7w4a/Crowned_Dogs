@@ -19,3 +19,4 @@ apps/desktop/gen/
 packages/audio/assets/sfx/
 packages/audio/assets/amb/
 private-audio/
+apps/web/.lite/
