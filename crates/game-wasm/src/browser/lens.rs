@@ -16,7 +16,7 @@ fn uniform(m: &JsValue, key: &str) -> JsValue {
     get(&get(&get(m, "uniforms"), key), "value")
 }
 fn put(m: &JsValue, key: &str, v: JsValue) {
-    set(&get(&get(m, "uniforms"), key), "value", &v);
+    super::packet::put_uniform(m, &cached_key(key), &v);
 }
 fn make(three: &JsValue, name: &str, args: &[JsValue]) -> JsValue {
     construct(&get(three, name), args)

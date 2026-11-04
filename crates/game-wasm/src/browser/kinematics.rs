@@ -73,7 +73,9 @@ pub(super) fn local_position(three: &JsValue, model: &JsValue, bone: &JsValue) -
 /// A bone's world matrix as Three last computed it: one copy, no walk up its parents and no
 /// new vector. The caller makes sure it is current (an `updateWorldMatrix` above it this frame).
 pub(super) fn world_matrix(bone: &JsValue) -> Vec<f64> {
-    elements(&get(bone, "matrixWorld"))
+    let mut out = vec![0.; 16];
+    super::packet::world_of(bone, &mut out);
+    out
 }
 /// A Three matrix's sixteen numbers in one typed-array copy.
 pub(super) fn elements(matrix: &JsValue) -> Vec<f64> {
@@ -121,13 +123,15 @@ pub(super) fn refresh(bone: &JsValue) {
     call(bone, "updateWorldMatrix", &[true.into(), false.into()]);
 }
 fn parent_rotation(bone: &JsValue) -> [f64; 4] {
-    matrix_rotation(&world_matrix(&get(bone, "parent")))
+    let mut m = [0.; 16];
+    super::packet::parent_world_of(bone, &mut m);
+    matrix_rotation(&m)
 }
 /// `rig_set_world_quat` for a bone whose parent's world matrix is current.
 pub(super) fn set_world_rotation(bone: &JsValue, rotation: &[f64]) {
     let mut input = parent_rotation(bone).to_vec();
     input.extend(rotation);
-    upload(&get(bone, "quaternion"), &math("worldQuat", &input));
+    super::packet::set_quat(bone, &math("worldQuat", &input));
     update(bone);
 }
 /// `rig_turn` for a bone whose world matrix and its parent's are current.
@@ -136,7 +140,7 @@ pub(super) fn turn(bone: &JsValue, from: &[f64], to: &[f64]) {
     input.extend(to);
     input.extend(matrix_rotation(&world_matrix(bone)));
     input.extend(parent_rotation(bone));
-    upload(&get(bone, "quaternion"), &math("turn", &input));
+    super::packet::set_quat(bone, &math("turn", &input));
     update(bone);
 }
 /// `rig_reach` for a chain whose world matrices are current: reads them instead of walking up.
@@ -156,8 +160,8 @@ pub(super) fn reach(a: &JsValue, b: &JsValue, c: &JsValue, target: &[f64], pole:
     if pose[0] == 0. {
         return;
     }
-    upload(&get(a, "quaternion"), &pose[1..5]);
-    upload(&get(b, "quaternion"), &pose[5..9]);
+    super::packet::set_quat(a, &pose[1..5]);
+    super::packet::set_quat(b, &pose[5..9]);
     update(a);
 }
 
@@ -165,7 +169,7 @@ pub(super) fn reach(a: &JsValue, b: &JsValue, c: &JsValue, target: &[f64], pole:
 pub fn rig_set_world_quat(three: &JsValue, bone: &JsValue, rotation: &JsValue) {
     let mut input = components(&world_quat(three, &get(bone, "parent")));
     input.extend(components(rotation));
-    upload(&get(bone, "quaternion"), &math("worldQuat", &input));
+    super::packet::set_quat(bone, &math("worldQuat", &input));
     update(bone);
 }
 #[wasm_bindgen]
@@ -174,7 +178,7 @@ pub fn rig_turn(three: &JsValue, bone: &JsValue, from: &JsValue, to: &JsValue) {
     input.extend(components(to));
     input.extend(components(&world_quat(three, bone)));
     input.extend(components(&world_quat(three, &get(bone, "parent"))));
-    upload(&get(bone, "quaternion"), &math("turn", &input));
+    super::packet::set_quat(bone, &math("turn", &input));
     update(bone);
 }
 #[wasm_bindgen]
@@ -199,8 +203,8 @@ pub fn rig_reach(
     if pose[0] == 0. {
         return;
     }
-    upload(&get(a, "quaternion"), &pose[1..5]);
-    upload(&get(b, "quaternion"), &pose[5..9]);
+    super::packet::set_quat(a, &pose[1..5]);
+    super::packet::set_quat(b, &pose[5..9]);
     update(a);
 }
 

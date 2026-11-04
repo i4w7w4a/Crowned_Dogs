@@ -74,7 +74,7 @@ pub fn hover_after_rotate(mouse: bool, creating: bool, dragging: bool) -> bool {
 
 pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
     match method.strip_prefix("motion.").unwrap_or(method) {
-        "timeline" => Ok(timeline::event(&args)),
+        "timeline" => Ok(timeline::event(args)),
         "dustShaders" => {
             Ok(json!({"vertex":shaders::DUST_VERTEX,"fragment":shaders::DUST_FRAGMENT}))
         }

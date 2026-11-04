@@ -32,7 +32,9 @@ fn arr(v: &[f64]) -> JsValue {
     Float64Array::from(v).into()
 }
 fn xyz(o: &JsValue) -> [f64; 3] {
-    [p(o, "x"), p(o, "y"), p(o, "z")]
+    let mut out = [0.; 3];
+    super::packet::xyz_of(o, &mut out);
+    out
 }
 fn vec_set(o: &JsValue, v: &[f64]) {
     call(o, "set", &v.iter().copied().map(n).collect::<Vec<_>>());
@@ -269,6 +271,8 @@ struct ArenaState {
     me_key: JsValue,
     back_light: JsValue,
     bounce: JsValue,
+    /// The lights `place` moves every frame, in its packet's order.
+    lights: std::cell::OnceCell<js_sys::Array>,
     spark: JsValue,
     /// The «Зонт» domes that show a blocked hit: the enemy's in the far pass, mine in the near one.
     enemy_shield: ShieldFx,
@@ -575,6 +579,7 @@ impl RustArena {
             me_key,
             back_light: back,
             bounce,
+            lights: Default::default(),
             spark,
             enemy_shield,
             my_shield,
@@ -1597,20 +1602,20 @@ impl ArenaState {
                 c[2],
             ],
         );
-        let positions = [
-            get(&enemy.group, "position"),
-            get(&me.group, "position"),
-            get(&self.rim, "position"),
-            get(&get(&self.rim, "target"), "position"),
-            get(&self.fill, "position"),
-            get(&get(&self.fill, "target"), "position"),
-            get(&self.me_key, "position"),
-            get(&get(&self.me_key, "target"), "position"),
-            get(&self.bounce, "position"),
-        ];
-        for (position, index) in positions.iter().zip([0, 4, 8, 11, 14, 17, 20, 23, 26]) {
-            vec_set(position, &q[index..index + 3]);
-        }
+        let lights = self.lights.get_or_init(|| {
+            [
+                self.rim.clone(),
+                get(&self.rim, "target"),
+                self.fill.clone(),
+                get(&self.fill, "target"),
+                self.me_key.clone(),
+                get(&self.me_key, "target"),
+                self.bounce.clone(),
+            ]
+            .into_iter()
+            .collect()
+        });
+        super::packet::place_frame(&enemy.group, &me.group, lights, &q);
         let authored_sun = get(&get(&self.frame, "look"), "sun");
         if js_sys::Array::is_array(&authored_sun) && values(&authored_sun).len() == 3 {
             let sun = xyz(&self.sun_dir);
@@ -1623,8 +1628,6 @@ impl ArenaState {
                 ],
             );
         }
-        set(&get(&enemy.group, "rotation"), "y", &n(q[3]));
-        set(&get(&me.group, "rotation"), "y", &n(q[7]));
     }
     fn hold_view(&mut self, dt: f64) {
         let me = self.me.as_ref().unwrap();
@@ -2690,11 +2693,10 @@ fn reactions(host: &JsValue, f: &mut Figure, dt: f64) {
         set(&get(&f.blob, "position"), "x", &n(q[15]));
     }
 }
-fn place_port(f: &Figure, a: &JsValue, b: &JsValue) {
-    call(&get(&f.bones, "head"), "getWorldPosition", &[a.clone()]);
-    call(&get(&f.bones, "top"), "getWorldPosition", &[b.clone()]);
-    let x = xyz(a);
-    let y = xyz(b);
+fn place_port(f: &Figure, _a: &JsValue, _b: &JsValue) {
+    let (mut x, mut y) = ([0.; 3], [0.; 3]);
+    super::packet::world_pos_of(&get(&f.bones, "head"), &mut x);
+    super::packet::world_pos_of(&get(&f.bones, "top"), &mut y);
     let q = math(
         "port",
         &[
@@ -2707,7 +2709,7 @@ fn place_port(f: &Figure, a: &JsValue, b: &JsValue) {
             p(&get(&f.group, "rotation"), "y"),
         ],
     );
-    call(&get(&f.port, "position"), "fromArray", &[arr(&q)]);
+    super::packet::set_pos(&f.port, &q);
     set(
         &f.port,
         "visible",

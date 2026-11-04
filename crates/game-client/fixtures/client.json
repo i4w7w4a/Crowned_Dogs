@@ -710,7 +710,7 @@
     "low": {
       "id": "low",
       "name": "Низкая",
-      "maxDpr": 1,
+      "maxDpr": 0.85,
       "maxPixels": 500000,
       "ssaa": 1,
       "msaa": 4,

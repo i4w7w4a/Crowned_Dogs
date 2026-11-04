@@ -25,6 +25,9 @@ pub struct RustViewmodel {
     placed: bool,
     trigger: Curl,
     pistol_right: Curl,
+    /// `stocked` walks every node of the gun: its answer is kept for the stance it was asked for
+    /// and asked again once a second, in case the gun in hand changed.
+    stock: (String, u32, bool),
 }
 #[wasm_bindgen]
 impl RustViewmodel {
@@ -79,6 +82,7 @@ impl RustViewmodel {
             placed: false,
             trigger,
             pistol_right,
+            stock: (String::new(), 0, false),
         }
     }
     pub fn shot(&mut self) {
@@ -94,7 +98,7 @@ impl RustViewmodel {
         camera: &JsValue,
         aim: &JsValue,
     ) {
-        let stocked = stance == "pistol" && on && self.stocked();
+        let stocked = stance == "pistol" && on && self.stocked_now(stance);
         let stance_index = if stocked {
             4.
         } else {
@@ -209,10 +213,18 @@ impl RustViewmodel {
     pub fn off(&mut self) {
         self.weight = 0.;
         self.placed = false;
+        self.stock.1 = 0;
         copy(&get(&get(&self.hand, "mount"), "position"), &self.base);
     }
 }
 impl RustViewmodel {
+    fn stocked_now(&mut self, stance: &str) -> bool {
+        if self.stock.0 != stance || self.stock.1 == 0 {
+            self.stock = (stance.to_owned(), 60, self.stocked());
+        }
+        self.stock.1 -= 1;
+        self.stock.2
+    }
     /// A pistol with a shoulder stock on (the polymer stock clamped under the grip heel) is held
     /// as its own stance: butt in the shoulder, gun at the eye, instead of out at arm's length.
     fn stocked(&self) -> bool {

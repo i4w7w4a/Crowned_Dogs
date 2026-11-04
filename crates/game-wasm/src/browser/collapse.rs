@@ -42,7 +42,7 @@ fn spin(three: &JsValue, bone: &JsValue, axis: &JsValue, angle: f64) {
     input.push(angle);
     input.extend(components(&world_quat(three, bone)));
     input.extend(components(&world_quat(three, &get(bone, "parent"))));
-    upload(&get(bone, "quaternion"), &math("spin", &input));
+    super::packet::set_quat(bone, &math("spin", &input));
     update(bone);
 }
 #[wasm_bindgen]

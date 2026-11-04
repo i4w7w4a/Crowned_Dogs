@@ -63,11 +63,19 @@ impl MotionState {
         if self.disposed {
             return vec![];
         }
+        // A frame's update with no shot, wait or re-arm under way changes nothing: skip the timeline.
+        if event == "update"
+            && ["rearm", "pending", "kind"]
+                .iter()
+                .all(|k| self.timeline[*k].is_null())
+        {
+            return vec![];
+        }
         let mut args = extra;
-        args["state"] = self.timeline.clone();
+        args["state"] = std::mem::take(&mut self.timeline);
         args["event"] = event.into();
-        let result = game_motion::dispatch("motion.timeline", args).expect("motion timeline");
-        self.timeline = result["state"].clone();
+        let mut result = game_motion::dispatch("motion.timeline", args).expect("motion timeline");
+        self.timeline = result["state"].take();
         let mut callbacks = vec![];
         for command in result["commands"].as_array().expect("timeline commands") {
             let op = command["op"].as_str().unwrap_or_default();
@@ -354,8 +362,9 @@ impl RustMotion {
         if !present(&s.pelvis) || !present(&s.spine) || s.disposed {
             return;
         }
-        let mut input = components(&get(&s.pelvis, "quaternion"));
-        input.extend(components(&get(&s.spine, "quaternion")));
+        let mut input = vec![0.; 8];
+        super::packet::quat_of(&s.pelvis, &mut input[..4]);
+        super::packet::quat_of(&s.spine, &mut input[4..]);
         for name in &s.order {
             let action = &s.layers[0][name];
             let weight = if boolean(&call(action, "isRunning", &[])) {
@@ -370,7 +379,7 @@ impl RustMotion {
                 }
             }
         }
-        upload(&get(&s.spine, "quaternion"), &math("settle", &input));
+        super::packet::set_quat(&s.spine, &math("settle", &input));
     }
     pub fn dispose(&self) {
         let mut s = self.state.borrow_mut();
