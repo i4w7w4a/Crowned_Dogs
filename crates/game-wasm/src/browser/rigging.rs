@@ -278,3 +278,27 @@ impl Drop for RustArmsOnly {
         self.dispose();
     }
 }
+
+/// The player's own figure in battle (first person only): every mesh that holds no arm triangle
+/// (head, face, hair, beard, legs, vest, helmet, rigid pieces) leaves the scene for good, so a later
+/// look or kit change cannot bring it back into the lens. The skeleton stays: the hands, the gun's
+/// grip and the dome around me read its bones. Returns how many meshes went.
+pub fn strip_to_arms(three: &JsValue, model: &JsValue) -> usize {
+    let keep: Vec<JsValue> = {
+        let probe = RustArmsOnly::new(three, model);
+        probe.swaps.iter().filter(|s| present(&s.arms)).map(|s| s.mesh.clone()).collect()
+    };
+    let mut gone = 0;
+    for mesh in descendants(model).into_iter().filter(|o| boolean(&get(o, "isMesh"))) {
+        if keep.iter().any(|k| js_sys::Object::is(k, &mesh)) {
+            continue;
+        }
+        let parent = get(&mesh, "parent");
+        if present(&parent) {
+            call(&parent, "remove", &[mesh]);
+            gone += 1;
+        }
+    }
+    set(&get(model, "userData"), "cdArmsOnly", &true.into());
+    gone
+}

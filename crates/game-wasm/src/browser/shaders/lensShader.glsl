@@ -4,6 +4,7 @@ uniform sampler2D tRays;
 uniform vec2 compSize;
 uniform vec2 outSize;
 uniform float ssaa;
+uniform float fsr; // 1: the screen is larger than the frame, which is enlarged by FSR1 EASU
 uniform float hasBg;
 uniform float rays;
 uniform float glowLod;
@@ -27,8 +28,86 @@ vec3 spectrum(float t) {
   return vec3(lo, 1.0, 1.0 - lo) * vec3(1.0 - w, w, 1.0 - w);
 }
 
+// AMD FidelityFX Super Resolution 1.0, EASU (edge-adaptive spatial upsampling), after ffx_fsr1.h
+// (MIT, Copyright (c) 2021 Advanced Micro Devices): 12 texels around the point, a Lanczos-like
+// kernel stretched along the local edge, clamped to the 4 nearest texels so edges do not ring.
+vec3 easuTexel(ivec2 p) { return texelFetch(tComp, clamp(p, ivec2(0), ivec2(compSize) - 1), 0).rgb; }
+float easuLuma(vec3 c) { return c.g + 0.5 * (c.r + c.b); }
+void easuSet(inout vec2 dir, inout float len, float w, float lA, float lB, float lC, float lD, float lE) {
+  float lenX = max(abs(lD - lC), abs(lC - lB));
+  float dirX = lD - lB;
+  dir.x += dirX * w;
+  lenX = clamp(abs(dirX) / max(lenX, 1e-5), 0.0, 1.0);
+  len += lenX * lenX * w;
+  float lenY = max(abs(lE - lC), abs(lC - lA));
+  float dirY = lE - lA;
+  dir.y += dirY * w;
+  lenY = clamp(abs(dirY) / max(lenY, 1e-5), 0.0, 1.0);
+  len += lenY * lenY * w;
+}
+void easuTap(inout vec3 aC, inout float aW, vec2 off, vec2 dir, vec2 len2, float lob, float clp, vec3 c) {
+  vec2 v = vec2(dot(off, dir), dot(off, vec2(-dir.y, dir.x))) * len2;
+  float d2 = min(dot(v, v), clp);
+  float wB = 0.4 * d2 - 1.0;
+  float wA = lob * d2 - 1.0;
+  wB *= wB;
+  wA *= wA;
+  wB = 1.5625 * wB - 0.5625;
+  float w = wB * wA;
+  aW += w;
+  aC += w * c;
+}
+vec3 easu(vec2 uv) {
+  vec2 pp = uv * compSize - 0.5;
+  vec2 fp = floor(pp);
+  pp -= fp;
+  ivec2 o = ivec2(fp);
+  //    b c
+  //  e f g h
+  //  i j k l
+  //    n o
+  vec3 b = easuTexel(o + ivec2(0, -1)), c = easuTexel(o + ivec2(1, -1));
+  vec3 e = easuTexel(o + ivec2(-1, 0)), f = easuTexel(o), g = easuTexel(o + ivec2(1, 0)), h = easuTexel(o + ivec2(2, 0));
+  vec3 i = easuTexel(o + ivec2(-1, 1)), j = easuTexel(o + ivec2(0, 1)), k = easuTexel(o + ivec2(1, 1)), l = easuTexel(o + ivec2(2, 1));
+  vec3 n = easuTexel(o + ivec2(0, 2)), oo = easuTexel(o + ivec2(1, 2));
+  float bL = easuLuma(b), cL = easuLuma(c), eL = easuLuma(e), fL = easuLuma(f), gL = easuLuma(g), hL = easuLuma(h);
+  float iL = easuLuma(i), jL = easuLuma(j), kL = easuLuma(k), lL = easuLuma(l), nL = easuLuma(n), oL = easuLuma(oo);
+  vec2 dir = vec2(0.0);
+  float len = 0.0;
+  easuSet(dir, len, (1.0 - pp.x) * (1.0 - pp.y), bL, eL, fL, gL, jL);
+  easuSet(dir, len, pp.x * (1.0 - pp.y), cL, fL, gL, hL, kL);
+  easuSet(dir, len, (1.0 - pp.x) * pp.y, fL, iL, jL, kL, nL);
+  easuSet(dir, len, pp.x * pp.y, gL, jL, kL, lL, oL);
+  float dirR = dot(dir, dir);
+  bool zro = dirR < 1.0 / 32768.0;
+  dir = zro ? vec2(1.0, 0.0) : dir * inversesqrt(dirR);
+  len = 0.5 * len;
+  len *= len;
+  float stretch = dot(dir, dir) / max(abs(dir.x), abs(dir.y));
+  vec2 len2 = vec2(1.0 + (stretch - 1.0) * len, 1.0 - 0.5 * len);
+  float lob = 0.5 + (0.21 - 0.5) * len;
+  float clp = 1.0 / lob;
+  vec3 aC = vec3(0.0);
+  float aW = 0.0;
+  easuTap(aC, aW, vec2(0.0, -1.0) - pp, dir, len2, lob, clp, b);
+  easuTap(aC, aW, vec2(1.0, -1.0) - pp, dir, len2, lob, clp, c);
+  easuTap(aC, aW, vec2(-1.0, 1.0) - pp, dir, len2, lob, clp, i);
+  easuTap(aC, aW, vec2(0.0, 1.0) - pp, dir, len2, lob, clp, j);
+  easuTap(aC, aW, vec2(0.0, 0.0) - pp, dir, len2, lob, clp, f);
+  easuTap(aC, aW, vec2(-1.0, 0.0) - pp, dir, len2, lob, clp, e);
+  easuTap(aC, aW, vec2(1.0, 1.0) - pp, dir, len2, lob, clp, k);
+  easuTap(aC, aW, vec2(2.0, 1.0) - pp, dir, len2, lob, clp, l);
+  easuTap(aC, aW, vec2(2.0, 0.0) - pp, dir, len2, lob, clp, h);
+  easuTap(aC, aW, vec2(1.0, 0.0) - pp, dir, len2, lob, clp, g);
+  easuTap(aC, aW, vec2(1.0, 2.0) - pp, dir, len2, lob, clp, oo);
+  easuTap(aC, aW, vec2(0.0, 2.0) - pp, dir, len2, lob, clp, n);
+  vec3 lo = min(min(f, g), min(j, k)), hi = max(max(f, g), max(j, k));
+  return clamp(aC / aW, lo, hi);
+}
+
 // the frame where the glass is clean: one read, or four when the frame is drawn larger than the screen
 vec4 clean(vec2 uv) {
+  if (fsr > 0.5) return vec4(easu(uv), texture(tComp, uv).a);
   if (ssaa <= 1.0) return texture(tComp, uv);
   vec2 o = 0.25 / outSize;
   return 0.25 * (texture(tComp, uv + vec2(-o.x, -o.y * 0.5)) + texture(tComp, uv + vec2(o.x * 0.5, -o.y))

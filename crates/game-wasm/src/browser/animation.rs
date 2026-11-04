@@ -63,11 +63,19 @@ impl MotionState {
         if self.disposed {
             return vec![];
         }
+        // A frame's update with no shot, wait or re-arm under way changes nothing: skip the timeline.
+        if event == "update"
+            && ["rearm", "pending", "kind"]
+                .iter()
+                .all(|k| self.timeline[*k].is_null())
+        {
+            return vec![];
+        }
         let mut args = extra;
-        args["state"] = self.timeline.clone();
+        args["state"] = std::mem::take(&mut self.timeline);
         args["event"] = event.into();
-        let result = game_motion::dispatch("motion.timeline", args).expect("motion timeline");
-        self.timeline = result["state"].clone();
+        let mut result = game_motion::dispatch("motion.timeline", args).expect("motion timeline");
+        self.timeline = result["state"].take();
         let mut callbacks = vec![];
         for command in result["commands"].as_array().expect("timeline commands") {
             let op = command["op"].as_str().unwrap_or_default();
@@ -354,8 +362,9 @@ impl RustMotion {
         if !present(&s.pelvis) || !present(&s.spine) || s.disposed {
             return;
         }
-        let mut input = components(&get(&s.pelvis, "quaternion"));
-        input.extend(components(&get(&s.spine, "quaternion")));
+        let mut input = vec![0.; 8];
+        super::packet::quat_of(&s.pelvis, &mut input[..4]);
+        super::packet::quat_of(&s.spine, &mut input[4..]);
         for name in &s.order {
             let action = &s.layers[0][name];
             let weight = if boolean(&call(action, "isRunning", &[])) {
@@ -370,7 +379,7 @@ impl RustMotion {
                 }
             }
         }
-        upload(&get(&s.spine, "quaternion"), &math("settle", &input));
+        super::packet::set_quat(&s.spine, &math("settle", &input));
     }
     pub fn dispose(&self) {
         let mut s = self.state.borrow_mut();
@@ -397,45 +406,29 @@ impl Drop for RustMotion {
 
 #[wasm_bindgen]
 pub struct RustPose {
-    // each bone's live position and quaternion, then the saved copies
-    bones: Vec<[JsValue; 4]>,
-    copy: JsValue,
+    /// The skeleton's bones; their positions and quaternions are saved as one packet.
+    bones: js_sys::Array,
+    saved: RefCell<Vec<f64>>,
 }
 #[wasm_bindgen]
 impl RustPose {
     #[wasm_bindgen(constructor)]
     pub fn new(model: &JsValue) -> Self {
-        let bones: Vec<[JsValue; 4]> = descendants(model)
+        let bones: js_sys::Array = descendants(model)
             .into_iter()
             .filter(|o| boolean(&get(o, "isBone")))
-            .map(|o| {
-                let p = get(&o, "position");
-                let q = get(&o, "quaternion");
-                let (sp, sq) = (clone_value(&p), clone_value(&q));
-                [p, q, sp, sq]
-            })
             .collect();
-        let copy = bones
-            .first()
-            .map(|b| get(&b[0], "copy"))
-            .unwrap_or(JsValue::UNDEFINED);
-        Self { bones, copy }
+        let mut saved = vec![0.; bones.length() as usize * 7];
+        super::packet::read_trs(&bones, &mut saved);
+        Self {
+            bones,
+            saved: RefCell::new(saved),
+        }
     }
     pub fn save(&self) {
-        for [p, q, sp, sq] in &self.bones {
-            self.copy_vec(sp, p);
-            copy(sq, q);
-        }
+        super::packet::read_trs(&self.bones, &mut self.saved.borrow_mut());
     }
     pub fn restore(&self) {
-        for [p, q, sp, sq] in &self.bones {
-            self.copy_vec(p, sp);
-            copy(q, sq);
-        }
-    }
-}
-impl RustPose {
-    fn copy_vec(&self, to: &JsValue, from: &JsValue) {
-        apply(&self.copy, to, std::slice::from_ref(from)).unwrap_throw();
+        super::packet::write_trs(&self.bones, &self.saved.borrow());
     }
 }

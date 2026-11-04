@@ -6,7 +6,7 @@ from pathlib import Path
 from mathutils import Vector,Matrix
 from mathutils.bvhtree import BVHTree
 ROOT=Path(__file__).resolve().parents[2]; OUT=ROOT/'output/beards'; OUT.mkdir(parents=True,exist_ok=True)
-PUBLIC=ROOT/'apps/web/models';PUBLIC.mkdir(parents=True,exist_ok=True)
+PUBLIC=ROOT/'apps/web/packs';PUBLIC.mkdir(parents=True,exist_ok=True)
 PILOT='--pilot' in sys.argv
 REPAIR_M4='--repair-m4' in sys.argv
 if PILOT and REPAIR_M4:raise RuntimeError('Choose pilot or repair-m4, not both')
@@ -44,6 +44,9 @@ FIT=Matrix(((S,0,0,-.00429309),(0,S,0,-.00425317),(0,0,S,.17305149),(0,0,0,1)))
 # FIT is authored transformation expressed in Blender axes: glTF(x,y,z)->Blender(x,-z,y).
 CONFIG={'m1':(1.608,1.562),'m2':(1.6167,1.5675),'m3':(1.614,1.565),'m4':(1.6092,1.554)}
 STYLES=['boxed','goatee','full','tapered','stubble']
+# Points along each strand card. Three (two segments) since 2026-11-04: a quarter fewer vertices and a third
+# fewer triangles than four, the same look up close; the seeds and roots do not depend on it.
+POINTS=3
 # Lip outline of each head, measured from the redness of its own skin texture: (x, upper border, lower border)
 # in mm from the centre and from `mouth`, out to the corner of the mouth. m2 and m4 are the bald Tripo heads of
 # 2026-11-02; m4's measured lower border dips into the chin shadow by the centre, so its middle rows are smoothed.
@@ -240,8 +243,8 @@ for face in (['m1'] if PILOT else ['m4'] if REPAIR_M4 else CONFIG):
    side=tangent.cross(n).normalized();width=rng.uniform(.0009,.0016) if style=='stubble' else rng.uniform(.0025,.0045)
    start=p+n*.00035
    path=[];curl=rng.uniform(-.0014,.0014)
-   for k in range(4):
-    t=k/3
+   for k in range(POINTS):
+    t=k/(POINTS-1)
     center=start+tangent*length*t+n*length*(.08*t+.45*t*t)+side*curl*math.sin(t*math.pi)
     nearest,nn,_,_=bvh.find_nearest(center)
     if nearest is not None and (center-nearest).dot(nn)<.0008:
@@ -253,9 +256,9 @@ for face in (['m1'] if PILOT else ['m4'] if REPAIR_M4 else CONFIG):
    guides.append(path)
    tile=rng.randrange(4);base=len(verts)
    for k,center in enumerate(path):
-    t=k/3;w=width*(1-.35*t)
+    t=k/(POINTS-1);w=width*(1-.35*t)
     verts.extend([center-side*w*.5,center+side*w*.5]);uvs.extend([((tile+.025)/4,t),((tile+.975)/4,t)])
-   for k in range(3):faces.append((base+k*2,base+k*2+1,base+k*2+3,base+k*2+2))
+   for k in range(POINTS-1):faces.append((base+k*2,base+k*2+1,base+k*2+3,base+k*2+2))
   m=bpy.data.meshes.new(f'Beard_{face}_{style}_cards');m.from_pydata(verts,[],faces);m.update();uv=m.uv_layers.new(name='UVMap')
   for poly in m.polygons:
    poly.use_smooth=True
@@ -265,7 +268,7 @@ for face in (['m1'] if PILOT else ['m4'] if REPAIR_M4 else CONFIG):
   # Editable native curves retain the exact four-point surface-fitted guides.
   cv=bpy.data.curves.new(f'Guides_{face}_{style}','CURVE');cv.dimensions='3D'
   for path in guides:
-   sp=cv.splines.new('POLY');sp.points.add(3)
+   sp=cv.splines.new('POLY');sp.points.add(POINTS-1)
    for point,co in zip(sp.points,path):point.co=(*co,1)
   go=bpy.data.objects.new(cv.name,cv);sc.collection.objects.link(go);go.hide_render=True;go.hide_viewport=True;guide_objects.append(go)
   print('BUILT',stats[-1],flush=True)

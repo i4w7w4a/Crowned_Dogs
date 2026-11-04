@@ -57,22 +57,6 @@ impl Settings {
         content(&query(&fps, "b"), if meter { "Вкл" } else { "Выкл" });
         attr(&fps, "aria-pressed", &meter.to_string());
         self.gpu();
-        let store = get(&self.host, "store");
-        let camera = call(&store, "get", &[js("cd-camera")]);
-        let camera = if text(&camera) == "back" {
-            "back"
-        } else {
-            "fp"
-        };
-        let cameras = [("fp", "От первого лица"), ("back", "Из-за плеча")];
-        self.segments(
-            "cam",
-            cameras
-                .into_iter()
-                .map(|(k, v)| (k.to_owned(), v.to_owned()))
-                .collect(),
-            camera,
-        );
         let quality = get(&self.host, "QUALITY");
         let ids = Array::from(&get(&self.host, "QUALITY_IDS"));
         let choices = ids
@@ -86,7 +70,7 @@ impl Settings {
         self.segments(
             "gfx",
             choices,
-            &text(&call(&store, "get", &[js("cd-quality")])),
+            &text(&call(&get(&self.host, "store"), "get", &[js("cd-quality")])),
         );
         let restart = query(&self.dialog, ".cd-restart");
         set(&get(&restart, "dataset"), "armed", &js(""));
@@ -158,7 +142,7 @@ pub fn mount_sound_settings(host: JsValue) {
                     "toggle"=>{call(&audio,"toggle",&[]);state.draw();},"restart"=>state.restart(),"fps"=>{super::fps_meter::set_on(!super::fps_meter::on());state.draw();},
                     "close"=>{call(&state.dialog,"close",&[]);},
                     "volume"=>{let input=closest(&event,"input[data-k]");if exists(&input){call(&audio,"unlock",&[]);call(&audio,"setVolume",&[js(&data(&input,"k")),number(text(&get(&input,"value")).parse::<f64>().unwrap_or(0.0)/100.0)]);state.draw();}},
-                    "click"=>{if get(&event,"target")==state.dialog{call(&state.dialog,"close",&[]);return;}let choice=closest(&event,"[data-choice]");if !exists(&choice){return;}let group=call(&choice,"closest",&[js("[data-g]")]);let id=js(&data(&choice,"choice"));if data(&group,"g")=="cam"{call(&get(&state.host,"store"),"set",&[js("cd-camera"),id]);}else{call(&state.host,"keepQuality",&[id]);}state.draw();},_=>{}
+                    "click"=>{if get(&event,"target")==state.dialog{call(&state.dialog,"close",&[]);return;}let choice=closest(&event,"[data-choice]");if !exists(&choice){return;}let id=js(&data(&choice,"choice"));call(&state.host,"keepQuality",&[id]);state.draw();},_=>{}
                 }
             });state.borrow_mut().listeners.push(listener);
         }
@@ -173,7 +157,8 @@ pub fn show_sound_settings(on: bool) {
     }
     hidden(&button, !on);
     let home = query(&document(), ".cd-home");
-    if on && exists(&home) && get(&button, "parentElement") != home {
+    // first show only: later the base moves it between home and creation (base.rs show)
+    if on && exists(&home) && get(&button, "parentElement") == get(&document(), "body") {
         call(&home, "append", &[button]);
     }
 }

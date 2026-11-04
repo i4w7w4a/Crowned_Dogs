@@ -904,7 +904,10 @@ impl RustDepthBackdrop {
         } else {
             super::base_region::REGIONS
                 .iter()
-                .find(|r| color.ends_with(r.fitting) || color.ends_with(r.fitting_sharp))
+                .find(|r| {
+                    let lite = r.fitting.replace(".png", ".lite.webp");
+                    color.ends_with(r.fitting) || color.ends_with(&lite) || color.ends_with(r.fitting_sharp)
+                })
                 .map_or(&super::live::STILL, |r| r.fitting_life)
         };
         let vec4 = |v: [f64; 4]| make(&host, "Vector4", &v.map(JsValue::from));

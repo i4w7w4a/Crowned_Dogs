@@ -25,6 +25,17 @@ fn create(host: &JsValue, key: &str, args: &[JsValue]) -> JsValue {
 fn policy(method: &str, args: serde_json::Value) -> serde_json::Value {
     game_client::dispatch(method, args).expect("arena policy")
 }
+/// `?fsr=<k>`: the screen drawn `k` times larger than the 3D frame (1–4; `0` or `1` = off). Without
+/// it FSR is automatic: the dynamic-resolution controller switches it on when frames have room.
+fn fsr_asked(search: &str) -> Option<f64> {
+    search
+        .trim_start_matches('?')
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("fsr="))
+        .map(|v| v.parse::<f64>().ok().filter(|v| v.is_finite()).map_or(1., |v| v.clamp(1., 4.)))
+}
+/// How much larger than the frame automatic FSR draws the screen (measured on PC and phone, 4 Nov 2026).
+const AUTO_UP: f64 = 2.;
 fn math(kind: &str, args: &[f64]) -> Vec<f64> {
     game_client::arena_compute(&format!("arena.{kind}"), args).expect("arena arithmetic")
 }
@@ -32,7 +43,9 @@ fn arr(v: &[f64]) -> JsValue {
     Float64Array::from(v).into()
 }
 fn xyz(o: &JsValue) -> [f64; 3] {
-    [p(o, "x"), p(o, "y"), p(o, "z")]
+    let mut out = [0.; 3];
+    super::packet::xyz_of(o, &mut out);
+    out
 }
 fn vec_set(o: &JsValue, v: &[f64]) {
     call(o, "set", &v.iter().copied().map(n).collect::<Vec<_>>());
@@ -256,6 +269,8 @@ impl Calibration {
 }
 struct ArenaState {
     disposed: bool,
+    /// Frames until the scene's objects are handed the lean matrix update again (new guns, gear).
+    lean_in: u32,
     host: JsValue,
     renderer: JsValue,
     scene: JsValue,
@@ -267,6 +282,8 @@ struct ArenaState {
     me_key: JsValue,
     back_light: JsValue,
     bounce: JsValue,
+    /// The lights `place` moves every frame, in its packet's order.
+    lights: std::cell::OnceCell<js_sys::Array>,
     spark: JsValue,
     /// The «Зонт» domes that show a blocked hit: the enemy's in the far pass, mine in the near one.
     enemy_shield: ShieldFx,
@@ -335,6 +352,14 @@ struct ArenaState {
     drawn: Vec<JsValue>,
     animation: Option<Closure<dyn FnMut(f64)>>,
     pace: FramePace,
+    /// Dynamic resolution of the 3D picture (game_graphics::dyn_res); `?res=` pins it.
+    res: game_graphics::dyn_res::DynRes,
+    res_pinned: Option<f64>,
+    /// `?fsr=<k>` pins how many times larger than the 3D frame the screen is drawn (FSR1 enlarges
+    /// it in the lens pass); None = automatic, `res.fsr` decides.
+    up_asked: Option<f64>,
+    /// The enlargement in use, after the screen's own pixel limit.
+    up: f64,
     widen: Closure<dyn FnMut(JsValue)>,
     mirror_shader: Closure<dyn FnMut(JsValue)>,
     callbacks: Vec<Closure<dyn FnMut(JsValue)>>,
@@ -570,10 +595,12 @@ impl RustArena {
             me_key,
             back_light: back,
             bounce,
+            lights: Default::default(),
             spark,
             enemy_shield,
             my_shield,
             hazard,
+            lean_in: 0,
             warned: None,
             muzzle_light,
             catcher,
@@ -634,6 +661,10 @@ impl RustArena {
             drawn: vec![],
             animation: None,
             pace: FramePace::battle(),
+            res: game_graphics::dyn_res::DynRes::default(),
+            res_pinned: game_graphics::dyn_res::pinned(&string(&get(&get(&global(), "location"), "search"))),
+            up_asked: fsr_asked(&string(&get(&get(&global(), "location"), "search"))),
+            up: 1.,
             widen,
             mirror_shader,
             callbacks: vec![],
@@ -652,7 +683,14 @@ impl RustArena {
                     return;
                 }
                 super::fps_meter::frame(time);
+                super::fps_meter::gpu_begin();
                 s.tick(time);
+                super::fps_meter::gpu_end();
+                super::backend_trial::frame(time, s.res.scale);
+                if s.res.frame(time).is_some() && s.width > 0. {
+                    let (w, h, view) = (s.width, s.height, s.view.clone());
+                    s.resize(w, h, view);
+                }
                 (s.on_frame.clone(), std::mem::take(&mut s.drawn))
             };
             for resolve in drawn {
@@ -727,6 +765,8 @@ impl RustArena {
             s.enemy = Some(s.make_figure(&foe, 0x77756f, 0.42, 0.4, 0, -1., false));
             s.me = Some(s.make_figure(&mine, 0x8a8780, 0.85, 0., 0x0a0908, 1., true));
             let me = s.me.as_ref().unwrap();
+            // the battle is first person only (Art, 4 Nov 2026): of my own figure only the arms stay
+            super::rigging::strip_to_arms(&get(&s.host, "THREE"), &me.model);
             super::look::first_person(me.model.clone(), s.fp, super::platform::current_look());
             super::look::apply(me.model.clone(), super::platform::current_look());
             set(&me.blob, "visible", &(!s.fp).into());
@@ -911,6 +951,16 @@ impl RustArena {
     }
     pub fn resize(&self, width: f64, height: f64, view: JsValue) {
         self.state.borrow_mut().resize(width, height, view);
+    }
+    /// The 3D picture is at its lowest scale and still over budget: the battle may lower the preset.
+    #[wasm_bindgen(getter, js_name = resolutionFloor)]
+    pub fn resolution_floor(&self) -> bool {
+        self.state.borrow().res.floor
+    }
+    /// True while the dynamic resolution drives this preset (minimal and low).
+    #[wasm_bindgen(getter, js_name = resolutionDriven)]
+    pub fn resolution_driven(&self) -> bool {
+        self.state.borrow().res.active()
     }
     pub fn arm(&self, who: String, gun: String, mods: JsValue) {
         let mut s = self.state.borrow_mut();
@@ -1161,6 +1211,8 @@ impl ArenaState {
             return;
         }
         self.disposed = true;
+        super::fps_meter::battle_over(&self.renderer);
+        super::backend_trial::stop(&self.renderer);
         self.running = false;
         self.ready = false;
         self.on_frame = JsValue::NULL;
@@ -1572,20 +1624,20 @@ impl ArenaState {
                 c[2],
             ],
         );
-        let positions = [
-            get(&enemy.group, "position"),
-            get(&me.group, "position"),
-            get(&self.rim, "position"),
-            get(&get(&self.rim, "target"), "position"),
-            get(&self.fill, "position"),
-            get(&get(&self.fill, "target"), "position"),
-            get(&self.me_key, "position"),
-            get(&get(&self.me_key, "target"), "position"),
-            get(&self.bounce, "position"),
-        ];
-        for (position, index) in positions.iter().zip([0, 4, 8, 11, 14, 17, 20, 23, 26]) {
-            vec_set(position, &q[index..index + 3]);
-        }
+        let lights = self.lights.get_or_init(|| {
+            [
+                self.rim.clone(),
+                get(&self.rim, "target"),
+                self.fill.clone(),
+                get(&self.fill, "target"),
+                self.me_key.clone(),
+                get(&self.me_key, "target"),
+                self.bounce.clone(),
+            ]
+            .into_iter()
+            .collect()
+        });
+        super::packet::place_frame(&enemy.group, &me.group, lights, &q);
         let authored_sun = get(&get(&self.frame, "look"), "sun");
         if js_sys::Array::is_array(&authored_sun) && values(&authored_sun).len() == 3 {
             let sun = xyz(&self.sun_dir);
@@ -1598,8 +1650,6 @@ impl ArenaState {
                 ],
             );
         }
-        set(&get(&enemy.group, "rotation"), "y", &n(q[3]));
-        set(&get(&me.group, "rotation"), "y", &n(q[7]));
     }
     fn hold_view(&mut self, dt: f64) {
         let me = self.me.as_ref().unwrap();
@@ -1664,6 +1714,15 @@ impl ArenaState {
         vec_set(&get(&me.tilt, "position"), &[q[2], q[3], 0.]);
     }
     fn tick(&mut self, time: f64) {
+        // Hidden branches (guns not in hand, gear not worn, the reflection) skip the world-matrix walk;
+        // the pass is repeated now and then for what has been loaded or swapped in since.
+        if self.lean_in == 0 {
+            if get(&self.host, "leanMatrices").is_function() {
+                sdk(&self.host, "leanMatrices", &[self.scene.clone()]);
+            }
+            self.lean_in = 60;
+        }
+        self.lean_in -= 1;
         call(&self.timer, "update", &[n(time)]);
         let frame = math(
             "frame",
@@ -1785,6 +1844,21 @@ impl ArenaState {
                 self.me.as_ref().unwrap()
             };
             zone_world(target, "body", &self.aim, &self.tmp_b);
+            if self.fp && !is_me {
+                // My body is the lens in first person: a trace flying into it filled the frame with
+                // a white bar and the glow burned the whole picture out. It ends well before the lens, a little aside.
+                let c = xyz(&get(&self.camera, "position"));
+                zone_world(f, "body", &self.tmp_a, &self.tmp_b);
+                let e = xyz(&self.tmp_a);
+                let (dx, dy, dz) = (e[0] - c[0], e[1] - c[1], e[2] - c[2]);
+                let l = (dx * dx + dy * dy + dz * dz).sqrt().max(1e-6);
+                let (sx, sz) = (-dz / l, dx / l);
+                let k = (l * 0.45).max(2.5).min(l) / l;
+                vec_set(
+                    &self.aim,
+                    &[c[0] + dx * k + sx * 0.25, c[1] + dy * k - 0.1, c[2] + dz * k + sz * 0.25],
+                );
+            }
             let rounds = self.muzzle["rounds"][&kind].as_u64().unwrap_or(1) as u32;
             call(
                 &f.flash,
@@ -1856,7 +1930,12 @@ impl ArenaState {
                 );
             }
         }
-        set(&self.muzzle_light, "intensity", &n(9. * lit));
+        // my own muzzle is a hand's length from the lens: at full strength it bleached the gun and arms
+        let near = self.fp && self.flash_of == Some(true);
+        set(&self.muzzle_light, "intensity", &n(if near { 1.5 } else { 9. } * lit));
+        // the enemy's flash lights the hall, not my hands: through the near pass it burned them gold
+        let layers = get(&self.muzzle_light, "layers");
+        call(&layers, if self.flash_of == Some(false) { "disable" } else { "enable" }, &[n(NEAR)]);
         if self.spark_life > 0. {
             let q = math(
                 "spark",
@@ -1914,7 +1993,7 @@ impl ArenaState {
                     &[self.tmp_size.clone()],
                 ),
                 "y",
-            );
+            ) / self.up;
             call(
                 &self.dust,
                 "update",
@@ -1977,6 +2056,7 @@ impl ArenaState {
         self.quality = q.clone();
         super::platform::mark_page_quality(&string(&get(&q, "id")));
         self.pace.follow(&q);
+        self.res.follow(&string(&get(&q, "id")), self.res_pinned);
         call(&self.lens, "setQuality", &[q.clone()]);
         let shadows = p(&q, "shadow") > 0.;
         set(
@@ -2244,7 +2324,17 @@ impl ArenaState {
                 p(&self.quality, "maxPixels"),
             ],
         );
-        call(&self.renderer, "setPixelRatio", &[n(size[0])]);
+        // only the 3D canvas shrinks: the HUD is DOM above it and keeps the screen's resolution
+        let frame = size[0] * self.res.scale;
+        // with FSR the canvas grows back toward the screen's own pixels, the 3D frame does not
+        let device = if ratio == 0. { 1. } else { ratio };
+        // automatic FSR only where the screen has pixels to spare at full scale
+        let room = device / size[0] > 1.05;
+        self.res.allow_fsr(self.up_asked.is_none() && room);
+        let up = self.up_asked.unwrap_or(if self.res.fsr { AUTO_UP } else { 1. });
+        self.up = up.min(device / frame).max(1.);
+        call(&self.renderer, "setPixelRatio", &[n(frame * self.up)]);
+        super::fps_meter::scale(self.res.scale);
         call(
             &self.renderer,
             "setSize",
@@ -2264,6 +2354,7 @@ impl ArenaState {
                 n(width),
                 n(height),
                 self.view.clone(),
+                n(self.up),
             ],
         );
     }
@@ -2652,11 +2743,10 @@ fn reactions(host: &JsValue, f: &mut Figure, dt: f64) {
         set(&get(&f.blob, "position"), "x", &n(q[15]));
     }
 }
-fn place_port(f: &Figure, a: &JsValue, b: &JsValue) {
-    call(&get(&f.bones, "head"), "getWorldPosition", &[a.clone()]);
-    call(&get(&f.bones, "top"), "getWorldPosition", &[b.clone()]);
-    let x = xyz(a);
-    let y = xyz(b);
+fn place_port(f: &Figure, _a: &JsValue, _b: &JsValue) {
+    let (mut x, mut y) = ([0.; 3], [0.; 3]);
+    super::packet::world_pos_of(&get(&f.bones, "head"), &mut x);
+    super::packet::world_pos_of(&get(&f.bones, "top"), &mut y);
     let q = math(
         "port",
         &[
@@ -2669,7 +2759,7 @@ fn place_port(f: &Figure, a: &JsValue, b: &JsValue) {
             p(&get(&f.group, "rotation"), "y"),
         ],
     );
-    call(&get(&f.port, "position"), "fromArray", &[arr(&q)]);
+    super::packet::set_pos(&f.port, &q);
     set(
         &f.port,
         "visible",

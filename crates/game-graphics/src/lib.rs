@@ -1,4 +1,6 @@
 //! Platform-independent procedural graphics. Three.js only uploads these results.
+pub mod backend;
+pub mod dyn_res;
 mod carry;
 mod stage;
 mod surface;

@@ -112,3 +112,12 @@ fn look_turns_the_face_to_the_target_across_neck_and_head() {
     let capped = compute("look", &input).unwrap();
     assert!((DQuat::from_slice(&capped[4..8]).to_axis_angle().1 - 0.6 * 0.2).abs() < 1e-9);
 }
+
+#[test]
+fn a_spent_flash_stays_dark_when_time_steps_back() {
+    let f = compute("flash", &[0.0, -8.0, 0.1]).unwrap();
+    assert_eq!(f[0], 0.0);
+    assert_eq!(f[1], 0.0);
+    let lit = compute("flash", &[0.07, 0.0, 0.1]).unwrap();
+    assert!((lit[1] - 1.0).abs() < 1e-9);
+}

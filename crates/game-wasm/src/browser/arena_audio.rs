@@ -44,6 +44,8 @@ pub struct BrowserArenaAudio {
     mode: String,
     list: JsValue,
     spot: (f64, f64),
+    /// Persona creation: ambience and the instructor only, no music (Art, 4 Nov).
+    hushed: bool,
     ambience: JsValue,
     /// Reverb preset of the current fight map.
     room: String,
@@ -99,6 +101,7 @@ impl BrowserArenaAudio {
             mode: "menu".into(),
             list,
             spot: (-0.55, 0.0),
+            hushed: false,
             ambience: args(&[js("amb.base")]).into(),
             room: "hall".into(),
             levels: levels.into(),
@@ -153,20 +156,11 @@ impl BrowserArenaAudio {
             "placeRadio",
             &[number(self.spot.0), number(self.spot.1)],
         );
-        call(&self.audio, "setAmbience", &[self.ambience.clone()]);
         call(&self.audio, "setRoom", &[js(&self.room)]);
-        quiet(call(&self.audio, "preload", &[self.preloads.clone()]));
         if let Some(id) = self.voice.take() {
             call(&self.audio, "play", &[js(&id), JsValue::UNDEFINED]);
         }
-        if self.mode == "menu" {
-            call(&music, "enterMenu", &[]);
-        } else {
-            call(&music, "enterFight", &[]);
-            if self.mode == "paused" {
-                call(&music, "openMenu", &[]);
-            }
-        }
+        self.music_scene();
     }
     #[wasm_bindgen(js_name=setPlace)]
     pub fn set_place(&mut self, m: JsValue) {
@@ -191,12 +185,15 @@ impl BrowserArenaAudio {
             ids.push(&js(layer));
         }
         self.ambience = ids.into();
-        call_optional(&self.audio, "setAmbience", &[self.ambience.clone()]);
+        if exists(&self.audio) {
+            self.sound_beds();
+        }
     }
     pub fn screen(&mut self, view: &str) {
         self.mode = "menu".into();
         // The sync tablet and the region map open over the base, so its music and radio keep playing.
         let base = matches!(view, "base" | "region" | "sync");
+        self.hushed = view == "persona";
         self.list = get(
             &self.host,
             if base {
@@ -216,11 +213,9 @@ impl BrowserArenaAudio {
             "placeRadio",
             &[number(self.spot.0), number(self.spot.1)],
         );
-        call(&self.audio, "setAmbience", &[self.ambience.clone()]);
         self.amb_level();
-        let music = get(&self.audio, "music");
-        call(&music, "enterMenu", &[]);
-        call(&music, "playlist", &[self.list.clone()]);
+        call(&get(&self.audio, "music"), "playlist", &[self.list.clone()]);
+        self.music_scene();
     }
     #[wasm_bindgen(js_name=newFight)]
     pub fn new_fight(&mut self, m: JsValue) {
@@ -239,8 +234,7 @@ impl BrowserArenaAudio {
         if !exists(&self.audio) {
             return;
         }
-        quiet(call(&self.audio, "preload", &[self.preloads.clone()]));
-        call(&get(&self.audio, "music"), "enterFight", &[]);
+        self.music_scene();
         self.amb_level();
     }
     pub fn sheet(&mut self, open: bool) {
@@ -264,7 +258,9 @@ impl BrowserArenaAudio {
         }
         self.mode = "menu".into();
         self.radio_list();
-        call_optional(&get(&self.audio, "music"), "enterMenu", &[]);
+        if exists(&self.audio) {
+            self.music_scene();
+        }
         self.amb_level();
     }
     /// `ears` is the arena's [our pan, enemy pan] seen from the camera, or undefined before it loads.
@@ -334,6 +330,9 @@ impl BrowserArenaAudio {
             "setVolume",
             &[js("master"), number(if self.enabled { 1.0 } else { 0.0 })],
         );
+        if exists(&self.audio) {
+            self.music_scene();
+        }
     }
     #[wasm_bindgen(js_name=setVolume)]
     pub fn set_volume(&mut self, kind: &str, value: f64) {
@@ -361,6 +360,33 @@ impl BrowserArenaAudio {
     }
 }
 impl BrowserArenaAudio {
+    /// With the sound off nothing plays, so no track, ambience or effect is downloaded either;
+    /// turning it on starts the music of the screen the player is on.
+    fn music_scene(&self) {
+        let music = get(&self.audio, "music");
+        self.sound_beds();
+        if !self.enabled {
+            call(&music, "silence", &[]);
+            return;
+        }
+        if self.mode == "menu" && self.hushed {
+            call(&music, "silence", &[]);
+        } else if self.mode == "menu" {
+            call(&music, "enterMenu", &[]);
+        } else {
+            call(&music, "enterFight", &[]);
+            if self.mode == "paused" {
+                call(&music, "openMenu", &[]);
+            }
+        }
+    }
+    fn sound_beds(&self) {
+        let none = Array::new().into();
+        call(&self.audio, "setAmbience", &[if self.enabled { self.ambience.clone() } else { none }]);
+        if self.enabled {
+            quiet(call(&self.audio, "preload", &[self.preloads.clone()]));
+        }
+    }
     fn amb_level(&self) {
         call_optional(
             &self.audio,

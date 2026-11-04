@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { cpSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { gzipSync } from "node:zlib";
+import { cpSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
@@ -41,13 +42,19 @@ function audioAssets(): Plugin {
   };
 }
 
-// Figure models live in models/ as .glb. Artifact pages do not serve .glb, so the game
-// loads each one as models/<name>.json with the .glb inside as base64, in dev and in
-// the build alike. A model whose GPU-compressed copy is made (npm run models:ktx2) also
-// ships as models/<name>.k.json, for the phone qualities; a stale copy is left out.
+// Figure models live in models/ as .glb. The game names each one models/<name>.json (the old
+// artifact pages did not serve .glb, so that was the .glb inside as base64), but the build ships
+// the plain models/<name>.glb and the loader takes it first: a third less to download and no base64
+// decode on the phone. The previews in public/preview/ are base64 .json in git and ship as .glb too.
+// A model whose GPU-compressed copy is made (npm run models:ktx2) also ships as models/<name>.k.glb,
+// for the phone qualities; a stale copy is left out. The dev server still answers both names.
 const MODELS = fileURLToPath(new URL("./models", import.meta.url));
 const wrap = (file: string) => JSON.stringify({ data: readFileSync(file).toString("base64") });
-const wrapModel = (glb: string) => wrap(join(MODELS, glb));
+const unwrap = (file: string) => Buffer.from(JSON.parse(readFileSync(file, "utf8")).data, "base64");
+const PUBLIC = fileURLToPath(new URL("./public", import.meta.url));
+// The base64-wrapped models among the previews (every preview/*.json starting with {"data":).
+const previews = () => readdirSync(join(PUBLIC, "preview")).filter((f) => f.endsWith(".json")
+  && readFileSync(join(PUBLIC, "preview", f)).subarray(0, 9).toString() === '{"data":"');
 const glbs = () => readdirSync(MODELS).filter((f) => f.endsWith(".glb"));
 const compressed = (glb: string): string | null => {
   const copy = ktx2Copy(join(MODELS, glb));
@@ -69,20 +76,32 @@ function figureModels(): Plugin {
           res.end(readFileSync(join(BASIS, basis[1]!)));
           return;
         }
-        const m = /^\/models\/([\w-]+)(\.k)?\.json$/.exec(path);
+        const preview = /^\/preview\/([\w-]+)\.glb$/.exec(path);
+        if (preview && existsSync(join(PUBLIC, "preview", preview[1] + ".json"))) {
+          res.setHeader("Content-Type", "model/gltf-binary");
+          res.end(unwrap(join(PUBLIC, "preview", preview[1] + ".json")));
+          return;
+        }
+        const m = /^\/models\/([\w-]+)(\.k)?\.(json|glb)$/.exec(path);
         if (!m || !glbs().includes(m[1] + ".glb")) return next();
         const copy = m[2] ? compressed(m[1] + ".glb") : null;
         if (m[2] && !copy) return next();
-        res.setHeader("Content-Type", "application/json");
-        res.end(copy ? wrap(copy) : wrapModel(m[1] + ".glb"));
+        const file = copy ?? join(MODELS, m[1] + ".glb");
+        res.setHeader("Content-Type", m[3] === "glb" ? "model/gltf-binary" : "application/json");
+        res.end(m[3] === "glb" ? readFileSync(file) : wrap(file));
       });
     },
     writeBundle(opts) {
       mkdirSync(join(opts.dir!, "models"), { recursive: true });
       for (const f of glbs()) {
-        writeFileSync(join(opts.dir!, "models", f.replace(/\.glb$/, ".json")), wrapModel(f));
+        cpSync(join(MODELS, f), join(opts.dir!, "models", f));
         const copy = compressed(f);
-        if (copy) writeFileSync(join(opts.dir!, "models", f.replace(/\.glb$/, ".k.json")), wrap(copy));
+        if (copy) cpSync(copy, join(opts.dir!, "models", f.replace(/\.glb$/, ".k.glb")));
+      }
+      for (const f of previews()) {
+        const out = join(opts.dir!, "preview", f);
+        writeFileSync(out.replace(/\.json$/, ".glb"), unwrap(out));
+        rmSync(out);
       }
       mkdirSync(join(opts.dir!, "basis"), { recursive: true });
       for (const f of BASIS_FILES) cpSync(join(BASIS, f), join(opts.dir!, "basis", f));
@@ -92,31 +111,77 @@ function figureModels(): Plugin {
 
 // The build tells packages/runtime/src/asset-cache.ts a content hash for every big file it serves, so the
 // browser keeps each file until that file changes. The dev server gets none and caches nothing.
-const PUBLIC = fileURLToPath(new URL("./public", import.meta.url));
 const WASM = fileURLToPath(new URL("../../packages/runtime/wasm/game_wasm_bg.wasm", import.meta.url));
 const hash = (file: string) => createHash("sha1").update(readFileSync(file)).digest("hex").slice(0, 12);
 function filesUnder(root: string, dir = ""): string[] {
   return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) =>
     e.isDirectory() ? filesUnder(root, join(dir, e.name)) : [join(dir, e.name).split(sep).join("/")]);
 }
+const GZ = new Map<string, Buffer>();
+// Light copies of the big painted backgrounds: every PNG of 1 MB or more under public/img (stage
+// pictures and atlases, not depth or mask data) also ships as <name>.lite.webp at WebP quality 92,
+// about a sixth of the size. Minimum, Low and Medium load those (asset-cache.ts litePicture), High and
+// Ultra the PNG. Encoding takes minutes, so each copy is kept in apps/web/.lite by the PNG's hash.
+const LITE_CACHE = fileURLToPath(new URL("./.lite", import.meta.url));
+const LITE = new Map<string, string>();
+async function liteCopies(): Promise<void> {
+  const { default: sharp } = await import("sharp");
+  mkdirSync(LITE_CACHE, { recursive: true });
+  const pngs = filesUnder(PUBLIC, "img").filter((f) => f.endsWith(".png") && !/depth|mask|normal|orm/i.test(f)
+    && statSync(join(PUBLIC, f)).size >= 1024 * 1024);
+  for (const f of pngs) {
+    const copy = join(LITE_CACHE, `${hash(join(PUBLIC, f))}.webp`);
+    if (!existsSync(copy)) await sharp(join(PUBLIC, f)).webp({ quality: 92, effort: 6 }).toFile(copy);
+    LITE.set(f.replace(/\.png$/, ".lite.webp"), copy);
+  }
+}
 function assetVersions(): Plugin {
   return {
     name: "crowned-dogs-asset-versions",
-    config(_, { command }) {
+    writeBundle(opts) {
+      for (const [path, packed] of GZ) writeFileSync(join(opts.dir!, `${path}.gz`), packed);
+      for (const [path, copy] of LITE) cpSync(copy, join(opts.dir!, path));
+    },
+    async config(_, { command }) {
       const versions: Record<string, string> = {};
       if (command === "build") {
-        for (const f of filesUnder(PUBLIC)) versions[f] = hash(join(PUBLIC, f));
+        await liteCopies();
+        for (const [path, copy] of LITE) versions[path] = hash(copy);
+        const wrapped = new Set(previews().map((f) => `preview/${f}`));
+        for (const f of filesUnder(PUBLIC)) {
+          if (wrapped.has(f)) versions[f.replace(/\.json$/, ".glb")] = hash(join(PUBLIC, f));
+          else versions[f] = hash(join(PUBLIC, f));
+        }
         for (const d of AUDIO_DIRS) {
           const root = audioRoot(d);
           if (root) for (const f of filesUnder(root, d)) versions[f] = hash(join(root, f));
         }
         for (const f of glbs()) {
-          versions[`models/${f.replace(/\.glb$/, ".json")}`] = hash(join(MODELS, f));
+          versions[`models/${f}`] = hash(join(MODELS, f));
           const copy = compressed(f);
-          if (copy) versions[`models/${f.replace(/\.glb$/, ".k.json")}`] = hash(copy);
+          if (copy) versions[`models/${f.replace(/\.glb$/, ".k.glb")}`] = hash(copy);
         }
         for (const f of BASIS_FILES) versions[`basis/${f}`] = hash(join(BASIS, f));
         versions["assets/game_wasm_bg.wasm"] = hash(WASM);
+        // gzip copies of the big files that pack by a tenth or more (asset-cache.ts takes them first)
+        const source = (path: string): Buffer => {
+          if (path === "assets/game_wasm_bg.wasm") return readFileSync(WASM);
+          if (path.startsWith("basis/")) return readFileSync(join(BASIS, path.slice(6)));
+          const model = /^models\/([\w-]+?)(\.k)?\.glb$/.exec(path);
+          if (model) return readFileSync(model[2] ? compressed(`${model[1]}.glb`)! : join(MODELS, `${model[1]}.glb`));
+          if (path.startsWith("preview/") && path.endsWith(".glb")) return unwrap(join(PUBLIC, path.replace(/\.glb$/, ".json")));
+          return readFileSync(join(PUBLIC, path));
+        };
+        for (const path of Object.keys(versions)) {
+          if (!/\.(glb|wasm|json)$/.test(path)) continue;
+          let raw: Buffer;
+          try { raw = source(path); } catch { continue; }
+          if (raw.length < 64 * 1024) continue;
+          const packed = gzipSync(raw, { level: 9 });
+          if (packed.length > raw.length * 0.9) continue;
+          GZ.set(path, packed);
+          versions[`${path}.gz`] = versions[path]!;
+        }
       }
       return { define: { __CD_ASSET_VERSIONS__: JSON.stringify(versions) } };
     },

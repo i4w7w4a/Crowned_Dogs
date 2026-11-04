@@ -58,6 +58,8 @@ struct Base {
     home_motion: Option<(String, f64)>,
     load_attempted: bool,
     model_ready: bool,
+    /// The 3D Persona has been loading for 3 s: the stand shows its rendered still meanwhile.
+    still_due: bool,
     scroll: BrowserScroll,
     /// The creation options' own glass scroll.
     create_scroll: BrowserScroll,
@@ -122,6 +124,8 @@ impl Base {
         let was = std::mem::replace(&mut self.view, view.into());
         hidden(&self.home, view != "base");
         if view == "base" {
+            // the fight's models download quietly while the player looks round the base
+            let _ = super::bridge::try_call(&self.host, "prefetchBattle", &[]);
             live::scramble(&query(&self.home, ".cd-home-title h1"));
             live::scramble(&query(&self.home, ".cd-callsign"));
         }
@@ -132,6 +136,14 @@ impl Base {
         hidden(&self.fitting, !self.staged());
         self.region_map(view == "region");
         toggle(&self.fitting, "cd-creating", view == "persona");
+        // Settings stay reachable while the Persona is made (Art, 4 Nov): the gear moves along.
+        let gear = query(&document(), ".cd-settings");
+        let header = query(&self.fitting, ".cd-fit-header");
+        let into = if view == "persona" { &header } else { &self.home };
+        if exists(&gear) && get(&gear, "parentElement") != *into {
+            call(into, "append", &[gear]);
+        }
+        self.still();
         if view != "persona" {
             // The first creation hides «Назад»; the fitting room needs it back.
             toggle(&self.fitting, "cd-first", false);
@@ -378,6 +390,37 @@ impl Base {
         self.look = creation::pick(&self.look, key, value);
         self.render_create();
         call_optional(&self.viewer, "setLook", &[self.look.clone()]);
+        self.still();
+    }
+    /// Shows the rendered Persona of the look's sex while the 3D one is late (creation only).
+    fn still(&self) {
+        let img = query(&self.fitting, ".cd-model-still");
+        if !exists(&img) {
+            return;
+        }
+        // The picture starts downloading at once (ahead of the models), but shows only after 3 s.
+        let still = self.region.bay.still.filter(|_| !self.model_ready && self.view == "persona");
+        if let Some(still) = still {
+            let sex = if text(&get(&self.look, "sex")) == "female" { "female" } else { "male" };
+            let base = text(&get(&self.host, "baseUrl"));
+            let src = format!("{base}img/{still}-{sex}.webp");
+            if text(&call(&img, "getAttribute", &[js("src")])) != src {
+                // a half-loaded or other-sex picture stays hidden until the new one is in
+                call(&img, "setAttribute", &[js("data-wait"), js("")]);
+                let target = img.clone();
+                let loaded = Closure::once_into_js(move || {
+                    call(&target, "removeAttribute", &[js("data-wait")]);
+                });
+                set(&img, "onload", &loaded);
+                call(&img, "setAttribute", &[js("src"), js(&src)]);
+                // warm the other sex too, so switching never shows the old picture
+                let other = if sex == "female" { "male" } else { "female" };
+                if let Ok(warm) = super::bridge::try_call(&super::bridge::document(), "createElement", &[js("img")]) {
+                    set(&warm, "src", &js(&format!("{base}img/{still}-{other}.webp")));
+                }
+            }
+        }
+        hidden(&img, still.is_none() || !self.still_due);
     }
     fn create_next(&mut self, weak: Weak<RefCell<Self>>) {
         if exists(&self.saved) || self.step + 1 >= creation::STEPS.len() {
@@ -469,6 +512,17 @@ impl Base {
                 invoke(&self.viewer, "load", &[])
             });
         let viewer = self.viewer.clone();
+        // A slow connection keeps the figure downloading: after 3 s a picture of it stands in.
+        let due = weak.clone();
+        let fire = Closure::once_into_js(move || {
+            let Some(state) = due.upgrade() else { return; };
+            let Ok(mut s) = state.try_borrow_mut() else { return; };
+            if !s.disposed {
+                s.still_due = true;
+                s.still();
+            }
+        });
+        call(&global(), "setTimeout", &[fire, number(3000.0)]);
         match result {
             Ok(promise) => spawn_local(async move {
                 let result = JsFuture::from(Promise::resolve(&promise)).await;
@@ -482,6 +536,7 @@ impl Base {
                 }
                 if result.is_ok() {
                     state.model_ready = true;
+                    state.still();
                     hidden(&state.status, true);
                     state.refresh();
                     state.resize();
@@ -830,7 +885,7 @@ impl Base {
         for (image, picture, alt) in [
             (query(&self.home, "img.cd-backdrop"), region.home_picture.to_string(), region.home_alt),
             (query(&self.root, ".cd-sync img.cd-backdrop"), region.home_picture.to_string(), ""),
-            (query(&self.fitting, "img.cd-backdrop:not(.cd-create-backdrop)"), region.fitting.to_string(), region.fitting_alt),
+            (query(&self.fitting, "img.cd-backdrop:not(.cd-create-backdrop)"), img_picture(region.fitting), region.fitting_alt),
             (query(&self.fitting, ".cd-create-backdrop"), format!("{}.webp", region.bay.photo), ""),
         ] {
             let url = format!("{base}img/{picture}");
@@ -861,6 +916,8 @@ impl Base {
         self.viewer = JsValue::NULL;
         self.load_attempted = false;
         self.model_ready = false;
+        self.still_due = false;
+        self.still();
         self.show_tip("");
         for canvas in [
             query(&self.home, ".cd-home-projection"),
@@ -1244,7 +1301,7 @@ fn initial(host: &JsValue) -> String {
     let region = base_region::current();
     include_str!("base.html")
         .replace("{{HOME_PICTURE}}", region.home_picture)
-        .replace("{{FITTING_PICTURE}}", region.fitting)
+        .replace("{{FITTING_PICTURE}}", &img_picture(region.fitting))
         .replace("{{BAY_PICTURE}}", region.bay.photo)
         .replace("{{KIT}}", &(platform::active_kit() + 1).to_string())
         .replace("{{KITS}}", &kits)
@@ -1324,6 +1381,7 @@ impl BrowserBase {
             home_motion: None,
             load_attempted: false,
             model_ready: false,
+            still_due: false,
             scroll,
             create_scroll,
             observer: JsValue::NULL,
@@ -1951,6 +2009,11 @@ fn enter_battle(state: &Rc<RefCell<Base>>) {
         set(&button, "disabled", &flag(false));
     });
 }
+/// A picture under img/ (path relative to it), or its light copy on the qualities that take one.
+fn img_picture(path: &str) -> String {
+    let picked = platform::picture(&format!("img/{path}"));
+    picked.strip_prefix("img/").unwrap_or(path).to_string()
+}
 fn setup_depth(state: &Rc<RefCell<Base>>) {
     let fitting = state.borrow().fitting.clone();
     let canvas = query(&fitting, ".cd-backdrop-depth");
@@ -1959,9 +2022,9 @@ fn setup_depth(state: &Rc<RefCell<Base>>) {
     let base = text(&get(&host, "baseUrl"));
     let region = state.borrow().region;
     let picture = if platform::sharp_pictures() {
-        region.fitting_sharp
+        region.fitting_sharp.to_string()
     } else {
-        region.fitting
+        img_picture(region.fitting)
     };
     let result = construct(
         &host,

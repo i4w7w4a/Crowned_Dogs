@@ -414,7 +414,8 @@ pub fn compute(kind: &str, v: &[f64]) -> Result<Vec<f64>, String> {
             out
         }
         "flash" => {
-            let life = (v[0] - v[1]).max(0.0);
+            // a step back in time must not relight a spent flash (it once grew over the whole screen)
+            let life = (v[0] - v[1].max(0.0)).max(0.0);
             let k = life / 0.07;
             vec![life, k, v[2] * (0.7 + 0.5 * k)]
         }

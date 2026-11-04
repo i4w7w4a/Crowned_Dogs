@@ -84,13 +84,27 @@ fn compressed_copy(host: &JsValue, url: &str) -> Option<(String, JsValue)> {
     if !super::platform::compressed_textures() || !has.is_function() || !ktx2.is_function() {
         return None;
     }
-    if !boolean(&invoke(&has, &[copy.clone().into()])) {
+    let binary = format!("{}.glb", copy.strip_suffix(".json")?);
+    if !boolean(&invoke(&has, &[copy.clone().into()])) && !boolean(&invoke(&has, &[binary.into()])) {
         return None;
     }
     let ktx2 = invoke(&ktx2, &[]);
     present(&ktx2).then_some((copy, ktx2))
 }
+/// The plain `.glb` the build ships next to a model's base64 `.json` (a third smaller, no decode).
+fn binary_copy(host: &JsValue, url: &str) -> Option<String> {
+    let glb = format!("{}.glb", url.strip_suffix(".json")?);
+    let has = get(host, "hasFile");
+    (has.is_function() && boolean(&invoke(&has, &[glb.clone().into()]))).then_some(glb)
+}
 async fn parse_model(host: &JsValue, url: &str, ktx2: Option<&JsValue>) -> Result<JsValue, JsValue> {
+    if let Some(glb) = binary_copy(host, url) {
+        let response = await_value(try_call(&global(), "fetch", &[glb.as_str().into()])?).await;
+        if let Some(response) = response.ok().filter(|r| boolean(&get(r, "ok"))) {
+            let bytes = await_value(try_call(&response, "arrayBuffer", &[])?).await?;
+            return parse_bytes(host, bytes, ktx2).await;
+        }
+    }
     let response = await_value(try_call(&global(), "fetch", &[url.into()])?).await?;
     if !boolean(&get(&response, "ok")) {
         return Err(js_sys::Error::new(&format!("model: {}", num(&get(&response, "status")))).into());
@@ -104,12 +118,32 @@ async fn parse_model(host: &JsValue, url: &str, ktx2: Option<&JsValue>) -> Resul
     } else {
         await_value(try_call(&response, "arrayBuffer", &[])?).await?
     };
+    parse_bytes(host, bytes, ktx2).await
+}
+async fn parse_bytes(host: &JsValue, bytes: JsValue, ktx2: Option<&JsValue>) -> Result<JsValue, JsValue> {
     let loader = construct(&get(host, "GLTFLoader"), &[]);
     call(&loader, "setMeshoptDecoder", &[get(host, "MeshoptDecoder")]);
     if let Some(ktx2) = ktx2 {
         call(&loader, "setKTX2Loader", &[ktx2.clone()]);
     }
     await_value(try_call(&loader, "parseAsync", &[bytes, "".into()])?).await
+}
+
+/// The files a battle downloads for its figures and guns, named the way this device's loader asks
+/// for them (compressed copy, binary). The base fetches them one by one while the player looks at the
+/// menu, so the fight starts from the device cache (load-model.ts prefetchBattle).
+#[wasm_bindgen(js_name = sceneBattleFiles)]
+pub fn battle_files(host: JsValue) -> Array {
+    let base = string(&get(&host, "baseUrl"));
+    let models = ["persona-female", "persona-male", "holster"];
+    let files = Array::new();
+    for name in models.iter().chain(GUN_MODELS.iter().chain(HELD_MODELS).map(|(_, m)| m)) {
+        let url = format!("{base}models/{name}.json");
+        let picked = compressed_copy(&host, &url).map(|(copy, _)| copy).unwrap_or(url);
+        let file = binary_copy(&host, &picked).unwrap_or(picked);
+        files.push(&file.into());
+    }
+    files
 }
 
 /// Real gun models by held class (pistol, shotgun, rifle, sniper); a class without one keeps its placeholder boxes.

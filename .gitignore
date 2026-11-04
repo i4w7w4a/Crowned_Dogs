@@ -19,3 +19,6 @@ apps/desktop/gen/
 packages/audio/assets/sfx/
 packages/audio/assets/amb/
 private-audio/
+apps/web/.lite/
+# the static preview's beard export, only for tools/beards/validate-assets.mjs
+apps/web/packs/beards-authored.glb

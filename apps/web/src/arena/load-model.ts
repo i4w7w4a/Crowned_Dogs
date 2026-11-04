@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
-import { callRust, sceneLoadModel, shipped } from "../../../../packages/runtime/src/index.ts";
+import { callRust, litePicture, litePictures, sceneBattleFiles, sceneLoadModel, shipped } from "../../../../packages/runtime/src/index.ts";
 export const PERSONA_MODEL: string = import.meta.env?.VITE_MODEL ?? "models/persona-male.json";
 const baseUrl = import.meta.env?.BASE_URL ?? "/";
 
@@ -26,8 +26,28 @@ function ktx2(): KTX2Loader | null {
   return transcoder;
 }
 
+// Every three.js texture load passes here: Minimum, Low and Medium take the light WebP copies of
+// the big PNG backgrounds (stage pictures, atlases), High and Ultra the originals.
+THREE.DefaultLoadingManager.setURLModifier((url) => (litePictures() ? litePicture(url) : url));
+
 const host = {
   THREE, GLTFLoader, MeshoptDecoder, callRust, baseUrl, ktx2,
   hasFile: (url: string) => import.meta.env?.DEV === true || shipped(url),
 };
 export function loadModel(url: string): Promise<GLTF> { return sceneLoadModel(host, url); }
+
+// While the player is in the base, the figures and guns of a fight are downloaded one at a time into
+// the device cache (asset-cache.ts), so pressing «В бой» does not wait for the network. Only where
+// that cache exists (https, localhost) and the player has not asked the browser to save data.
+let prefetching = false;
+export function prefetchBattle(): void {
+  const connection = (navigator as { connection?: { saveData?: boolean } }).connection;
+  if (prefetching || typeof caches === "undefined" || connection?.saveData) return;
+  prefetching = true;
+  setTimeout(async () => {
+    for (const file of sceneBattleFiles(host) as string[]) {
+      try { await (await fetch(file)).arrayBuffer(); } catch { /* the fight downloads it itself */ }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  }, 5000);
+}

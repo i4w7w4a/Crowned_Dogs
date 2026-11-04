@@ -15,14 +15,16 @@
 - Цвет корней — тон подложки причёсок (3/4 цвета прядей), у щетины альфа 0.6. Выбор цвета волос при создании ставит такой же цвет бороды (списки цветов общие), свой цвет бороды можно выбрать после.
 - Пакет вырос с 6,9 до 10,1 МБ (пряди на новых участках).
 
+**Пряди из трёх точек (4 ноября 2026).** Каждая прядь теперь из трёх точек, а не из четырёх (`POINTS` в `build.py`): у карточек на четверть меньше вершин и на треть меньше треугольников, пакет 10,1 → 7,7 МБ, полная борода 0,71 → 0,56 МБ. Seed и корни от этого не зависят, поэтому пряди стоят на тех же местах. Рендеры всех 20 посадок вблизи (спереди и в три четверти, одинаковый свет) отличаются в среднем на 1 из 255, ни один пиксель не отличается больше чем на 40. Сборка с `POINTS=4` байт в байт повторяет прежний пакет.
+
 ## Исходники и результат
 
 - Вход: `apps/web/models/persona-male.glb`. Геометрия готовилась по `main` 5f336c1, затем проверялась повторно после включения новой экипировки и поз из a21b1ef. Точные хэши всех входов записывает валидатор.
 - `prepare.py` сохраняет головы в REST, применив скиннинг. Исходный GLB не меняется.
 - `build.py` создаёт поверхность корней, воспроизводимый атлас волокон 512×1024 и пряди на направляющих. Случайные числа имеют фиксированные seed. Существующие текстуры головы не редактируются.
 - Для построения и рендера: Blender 5.2. Внешние Python-библиотеки не нужны.
-- Выход: `apps/web/models/beards-male.glb`, `beards-authored.glb`. Их упаковывает существующая сборка игры в JSON-модели.
-- Редактируемый мастер: `output/beards/CrownedDogs-Beards-Master.blend`. Внутри настоящие головы, отдельные меши, редактируемые четырёхточечные направляющие Curve/POLY для каждой пряди и упакованные текстуры. Направляющие скрыты из рендера, доступны в Outliner. Это не новый скелет.
+- Выход: `apps/web/packs/beards-male.glb` (и `beards-authored.glb` только для валидатора, в git не идёт). В игру идут нарезанные бороды `models/beard-m<лицо>-<вид>.glb`: после сборки `npm run models:packs -w @crowned-dogs/web`, затем `npm run models:ktx2 -w @crowned-dogs/web`. Игра качает только бороду выбранного лица и вида.
+- Редактируемый мастер: `output/beards/CrownedDogs-Beards-Master.blend`. Внутри настоящие головы, отдельные меши, редактируемые направляющие из `POINTS` точек Curve/POLY для каждой пряди и упакованные текстуры. Направляющие скрыты из рендера, доступны в Outliner. Это не новый скелет.
 - Проверочные рендеры: `output/beards/renders/<face>-<style>-front.png` и `-profile.png`, всего 40. Головы m2/m4 со 2 ноября 2026 новые, без запечённых бород.
 
 ## Привязка и материалы
@@ -48,10 +50,10 @@ $beardBlender = 'C:/Program Files/Blender Foundation/Blender 5.2/blender.exe'
 & $beardBlender -b --factory-startup --python-exit-code 1 -P tools/beards/render.py
 
 New-Item -ItemType Directory output/beards/raw -Force | Out-Null
-Copy-Item apps/web/models/beards-male.glb output/beards/raw/beards-male.glb
-Copy-Item apps/web/models/beards-authored.glb output/beards/raw/beards-authored.glb
-gltf-transform meshopt output/beards/raw/beards-male.glb apps/web/models/beards-male.glb --quantize-position 16 --quantize-normal 12 --quantize-texcoord 14
-gltf-transform meshopt output/beards/raw/beards-authored.glb apps/web/models/beards-authored.glb --quantize-position 16 --quantize-normal 12 --quantize-texcoord 14
+Copy-Item apps/web/packs/beards-male.glb output/beards/raw/beards-male.glb
+Copy-Item apps/web/packs/beards-authored.glb output/beards/raw/beards-authored.glb
+gltf-transform meshopt output/beards/raw/beards-male.glb apps/web/packs/beards-male.glb --quantize-position 16 --quantize-normal 12 --quantize-texcoord 14
+gltf-transform meshopt output/beards/raw/beards-authored.glb apps/web/packs/beards-authored.glb --quantize-position 16 --quantize-normal 12 --quantize-texcoord 14
 node tools/beards/validate-assets.mjs
 ```
 

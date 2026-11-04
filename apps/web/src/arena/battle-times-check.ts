@@ -44,6 +44,7 @@ console.error = reviewError;
 window.addEventListener("unhandledrejection", event => fail(event.reason), eventOptions);
 
 const arena = new Arena(canvas);
+Object.assign(globalThis, { __arena: arena }); // for headless checks
 // Lets a review script play any clip, e.g. reviewArena.attack("enemy", "knife", 0).
 Object.assign(window, { reviewArena: arena });
 let match: Match;

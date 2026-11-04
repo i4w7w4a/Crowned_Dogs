@@ -208,13 +208,8 @@ impl RustBattle {
         host(&state, "liquidGlass", &[]);
         create_rings(&state);
         wire(&state);
-        let camera = if string(&store_get(&state, "cd-camera")) == "back"
-            && word(&get(&global(), "location"), "hash") != "#fp"
-        {
-            "back"
-        } else {
-            "fp"
-        };
+        // first person only (Art, 4 Nov 2026): the over-the-shoulder view is gone
+        let camera = "fp";
         set(&state, "camera", &camera.into());
         let ctor = get(&bindings, "Arena");
         if let Ok(a) = Reflect::construct(ctor.unchecked_ref::<Function>(), &array(&[id("gl")])) {
@@ -271,12 +266,7 @@ impl RustBattle {
         let s = self.state.clone();
         future_to_promise(async move {
             let selected = call(&global(), "structuredClone", &[kit]);
-            let camera = if string(&store_get(&s, "cd-camera")) == "back" {
-                "back"
-            } else {
-                "fp"
-            };
-            set_camera(&s, camera);
+            set_camera(&s, "fp");
             let q = string(&store_get(&s, "cd-quality"));
             if present(&get(&s, "arena"))
                 && QUALITY_IDS.contains(&q.as_str())
@@ -300,8 +290,10 @@ impl RustBattle {
             layout(&s);
             arena(&s, "resume", &[]);
             let fight = number(&s, "fightNo");
-            settle(&get(&s, "arena"), "drawn", 5000.).await;
-            settle(&get(&s, "arena"), "drawn", 5000.).await;
+            // The turn clock waits for two drawn battle frames (Art's rule: no clock before the
+            // fight is on screen); a slow phone gets 20 s for each before the clock starts anyway.
+            settle(&get(&s, "arena"), "drawn", 20000.).await;
+            settle(&get(&s, "arena"), "drawn", 20000.).await;
             if present(&before_enter) {
                 JsFuture::from(Promise::resolve(&apply(
                     &before_enter,
@@ -1518,36 +1510,6 @@ fn render_menu(s: &JsValue) {
     for kind in ["fx", "music", "fight"] {
         draw_volume(s, kind);
     }
-    let tracks = id("trackList");
-    html(&tracks, "");
-    let station = get(&get(s, "audio"), "station");
-    for song in values(&get(&bindings, "playlist")) {
-        let now = song == station;
-        let title = word(&get(&get(&bindings, "tracks"), &string(&song)), "title");
-        let state = s.clone();
-        option(
-            &tracks,
-            &format!(
-                "{title}<small>{}</small>",
-                if now { "в эфире" } else { "&nbsp;" }
-            ),
-            now,
-            move |_| {
-                audio(&state, "tune", &[song.clone()]);
-                render_menu(&state);
-            },
-        );
-    }
-    let cameras = segment("camSeg", 2);
-    for (view, name) in [("back", "Из-за плеча"), ("fp", "От первого лица")] {
-        let state = s.clone();
-        option(&cameras, name, word(s, "camera") == view, move |_| {
-            if word(&state, "camera") != view {
-                set_camera(&state, view);
-                render_menu(&state);
-            }
-        });
-    }
     let gfx = segment("gfxSeg", QUALITY_IDS.len());
     for q in QUALITY_IDS {
         let state = s.clone();
@@ -1799,11 +1761,22 @@ fn install_speed_watch(s: &JsValue) {
             .iter()
             .position(|q| *q == word(s, "quality"))
             .unwrap_or(0);
-        if count * 1000. / duration < 24. && i > 0 {
+        // On «Минимум» and «Низкое» the 3D picture's own resolution goes down first (dyn_res);
+        // the preset steps down only when that scale is at its floor and frames are still slow.
+        let a = get(s, "arena");
+        let slow = if flag(&a, "resolutionDriven") {
+            flag(&a, "resolutionFloor")
+        } else {
+            count * 1000. / duration < 24.
+        };
+        if slow && i > 0 {
             set_quality(s, QUALITY_IDS[i - 1], false);
             let state = s.clone();
             let timeout = once(1500., move || watch_speed(&state));
             set(s, "speedDelay", &timeout);
+        } else if flag(&a, "resolutionDriven") && i > 0 {
+            // the scale needs a few seconds to reach its floor: keep watching
+            watch_speed(s);
         }
     })
     .into_js_value();
@@ -1828,7 +1801,6 @@ fn set_frame(s: &JsValue, frame: &JsValue) {
 }
 fn set_camera(s: &JsValue, view: &str) {
     set(s, "camera", &view.into());
-    store_set(s, "cd-camera", view);
     arena(s, "setFirstPerson", &[(view == "fp").into()]);
 }
 fn wire(s: &JsValue) {
@@ -1933,12 +1905,6 @@ fn wire(s: &JsValue) {
     }
     let state = s.clone();
     listen(&global(), "resize", move |_| layout(&state));
-    let state = s.clone();
-    listen(&global(), "hashchange", move |_| {
-        if word(&get(&global(), "location"), "hash") == "#fp" {
-            set_camera(&state, "fp");
-        }
-    });
     for kind in ["fx", "music", "fight"] {
         let state = s.clone();
         listen(&id(volume_id(kind)), "input", move |_| {

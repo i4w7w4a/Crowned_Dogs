@@ -90,11 +90,37 @@ pub fn inside(h: &Value, x: f64) -> bool {
     !h["at"].is_null() && (x - n(&h["at"])).abs() < n(&h["radius"]) + 0.5
 }
 
+/// The turn the last hazard struck, if any did in this match.
+fn last_strike(m: &Value) -> Option<f64> {
+    m["history"]
+        .as_array()?
+        .iter()
+        .rev()
+        .find(|r| r["hazard"]["kind"].is_string())
+        .map(|r| n(&r["turn"]))
+}
+
+/// How much of the usual odds the next turn gets: none for `cooldown` turns after a hazard,
+/// then a third, two thirds, full over `ramp` turns (Art, 4 Nov: «почти каждый второй ход»).
+pub fn pace(m: &Value, turn: f64) -> f64 {
+    let rules = &constants()["HAZARD_PACE"];
+    let Some(last) = last_strike(m) else {
+        return 1.0;
+    };
+    let quiet = turn - last - n(&rules["cooldown"]);
+    if quiet <= 0.0 {
+        return 0.0;
+    }
+    (quiet / n(&rules["ramp"]).max(1.0)).min(1.0)
+}
+
 /// The warning for next turn, or null. At most one hazard a turn; shelling comes on top of the
-/// weather's own odds and is far likelier while the map is under fire.
+/// weather's own odds and is far likelier while the map is under fire. After a hazard the map
+/// stays quiet a few turns and the odds come back slowly (`pace`).
 pub fn warn(m: &Value) -> Value {
     let turn = n(&m["turn"]) + 1.0;
     let mut rng = rng_for(m, turn, "warn");
+    let pace = pace(m, turn);
     let mut odds: Vec<(String, f64)> = weather(m)["hazards"]
         .as_object()
         .map(|o| o.iter().map(|(k, v)| (k.clone(), n(v))).collect())
@@ -110,6 +136,9 @@ pub fn warn(m: &Value) -> Value {
     match odds.iter_mut().find(|(k, _)| k == shell) {
         Some(o) => o.1 += fire,
         None => odds.push((shell.to_string(), fire)),
+    }
+    for o in odds.iter_mut() {
+        o.1 *= pace;
     }
     let mut r = rng::next(&mut rng);
     let Some(kind) = odds.iter().find_map(|(k, p)| {
@@ -203,11 +232,13 @@ pub fn strike(m: &mut Value, moves: [f64; 2]) -> Value {
     report
 }
 
-/// A bot that sees the warning steps out of it more often than not: it keeps its shot when a
+/// A bot that sees the warning steps out of it half the time (`HAZARD_PACE.botDodge`; it was
+/// three in four, and a player took three times the bot's hits): it keeps its shot when a
 /// step is enough and gives the shot up for a run only for lightning or the heart of a shell.
 pub fn dodge(m: &Value, side: usize, action: &Value, rng: &mut State) -> Value {
     let h = &m["hazard"];
-    if !on(m) || n(&h["turn"]) != n(&m["turn"]) || rng::next(rng) >= 0.75 {
+    let odds = n(&constants()["HAZARD_PACE"]["botDodge"]);
+    if !on(m) || n(&h["turn"]) != n(&m["turn"]) || rng::next(rng) >= odds {
         return action.clone();
     }
     let kind = s(&h["kind"]);

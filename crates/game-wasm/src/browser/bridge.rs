@@ -1,12 +1,28 @@
 //! Small foreign-object boundary. State, scheduling and decisions stay in Rust.
 use js_sys::{Array, Function, Object, Reflect};
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, hash::BuildHasherDefault};
 use wasm_bindgen::{JsCast, JsValue, UnwrapThrowExt};
+
+/// FxHash: the property names are short and ours, so the default SipHash's flood guard only cost
+/// time on every get and set.
+#[derive(Default)]
+struct Fx(u64);
+impl std::hash::Hasher for Fx {
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.0 = (self.0.rotate_left(5) ^ u64::from(b)).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+        }
+    }
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+type Keys = HashMap<String, JsValue, BuildHasherDefault<Fx>>;
 
 thread_local! {
     // Property names cross into JavaScript once: decoding the same short strings every frame
     // was a seventh of the battle's CPU time.
-    static KEYS: RefCell<HashMap<String, JsValue>> = RefCell::new(HashMap::with_capacity(1024));
+    static KEYS: RefCell<Keys> = RefCell::new(Keys::with_capacity_and_hasher(1024, Default::default()));
 }
 /// The JavaScript string for a property name, cached; generated names stop being cached at 8k.
 pub fn cached_key(name: &str) -> JsValue {

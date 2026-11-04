@@ -8,6 +8,8 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 const repo = resolve(import.meta.dirname, '../..');
 const models = join(repo, 'apps/web/models');
+// The beard packs are the sources the game's per-beard files are cut from (apps/web/scripts/split-packs.ts).
+const packs = join(repo, 'apps/web/packs');
 const output = process.argv[2] ? resolve(process.argv[2]) : join(repo, 'output/beards/assets-validation.json');
 await MeshoptDecoder.ready;
 const widths = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
@@ -75,7 +77,9 @@ function open(name, file = join(models, `${name}.glb`)) {
   }
   return { name, data, accessor, world, points, sha256: createHash('sha256').update(bytes).digest('hex') };
 }
-const game = open('persona-male'), male = open('beards-male'), authored = open('beards-authored');
+const game = open('persona-male'), male = open('beards-male', join(packs, 'beards-male.glb'));
+// The static preview's export is no longer shipped; tools/beards/build.py still writes it next to the pack for this check.
+const authored = existsSync(join(packs, 'beards-authored.glb')) ? open('beards-authored', join(packs, 'beards-authored.glb')) : null;
 // The clean head companion is switched off in the game (Art, 2026-11-01); check it only when present.
 const skin = existsSync(join(models, 'beards-skin.glb')) ? open('beards-skin') : null;
 const authoredGame = open('persona-authored', join(repo, 'apps/web/public/preview/persona-authored.json'));
@@ -143,7 +147,7 @@ for (const source of [game, authoredGame]) for (const id of ['m2', 'm4']) {
   report.repairs.push({ source: source.name, head: id, vertices: repaired.length, maxMatchErrorM, maxDeclaredDeltaM, maxAppliedDeltaM });
 }
 }
-for (const pack of [male, authored]) {
+for (const pack of [male, authored].filter(Boolean)) {
   assert.equal(pack.data.skins?.length || 0, 0, `${pack.name} must use the existing head transform`);
   assert.equal(pack.data.animations?.length || 0, 0);
   assert.ok(!pack.data.nodes.some(n => n.name === 'head' || n.name === 'Armature'));
@@ -169,6 +173,7 @@ for (let face = 1; face <= 4; face++) {
     assert.ok(selected.length >= 2, `${prefix} needs roots and cards`);
     const all = [], paired = [];
     for (const { n, i } of selected) {
+      if (!authored) { all.push(...male.points(i).map(p => p.applyMatrix4(head))); continue; }
       const other = authored.data.nodes.findIndex(o => o.name === n.name && o.mesh !== undefined);
       assert.ok(other >= 0, `${n.name}: matching authored export`);
       const a = male.points(i).map(p => p.applyMatrix4(head)), b = authored.points(other);

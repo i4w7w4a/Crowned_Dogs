@@ -98,8 +98,8 @@ fn done(state: &mut Value, commands: &mut Vec<Value>) {
     // The gun comes back once the hands are near its grip; at once it swung one-handed through the blend.
     state["rearm"] = json!(0.25);
 }
-pub fn event(args: &Value) -> Value {
-    let mut state = args["state"].clone();
+pub fn event(mut args: Value) -> Value {
+    let mut state = args["state"].take();
     let event = s(&args["event"]);
     let mut commands = vec![];
     if event == "create" {

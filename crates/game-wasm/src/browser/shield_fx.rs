@@ -34,7 +34,7 @@ fn uniforms(values: &[(&str, JsValue)]) -> JsValue {
     out
 }
 fn put(material: &JsValue, key: &str, value: JsValue) {
-    set(&get(&get(material, "uniforms"), key), "value", &value);
+    super::packet::put_uniform(material, &cached_key(key), &value);
 }
 fn uniform(material: &JsValue, key: &str) -> JsValue {
     get(&get(&get(material, "uniforms"), key), "value")

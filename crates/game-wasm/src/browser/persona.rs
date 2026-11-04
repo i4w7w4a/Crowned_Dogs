@@ -534,6 +534,8 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
         }
     }
     call(&get(s, "stage.rotating"), "add", &[figure.clone()]);
+    // a beard or hairstyle that downloads later finds the stand through its figure (beards.rs)
+    set(&figure, "cdViewer", s);
     pose(s);
     set(s, "originalTextures", &array(&textures(&figure)));
     set(
@@ -776,6 +778,22 @@ fn anisotropy(s: &JsValue) -> f64 {
     } else {
         1.0
     })
+}
+/// A beard or hairstyle hung on the stand's figure after it was set up: the same mesh flags and
+/// material tuning the figure got, then a fresh frame.
+pub(super) fn piece_arrived(s: &JsValue, piece: &JsValue) {
+    if yes(s, "disposed") {
+        return;
+    }
+    for n in nodes(piece, false) {
+        if yes(&n, "isMesh") {
+            set(&n, "receiveShadow", &flag(true));
+        }
+    }
+    tune(s, piece);
+    // the face close-up aims under the crown, which a hairstyle raises (setLook measures again too)
+    set(s, "head", &JsValue::NULL);
+    render(s);
 }
 fn tune(s: &JsValue, root: &JsValue) {
     let value = anisotropy(s);
@@ -1416,10 +1434,18 @@ fn release_gpu(s: &JsValue) {
     set(s, "ready", &flag(false));
 }
 /// Fresnel rim drawn over the hovered equipment: cold light hugging the silhouette.
-const GLOW_VERTEX: &str = "varying vec3 vN; varying vec3 vV;
+// Skinned gear (the whole fitting figure since 1 Nov) bends with the bones, so the rim follows them.
+const GLOW_VERTEX: &str = "#include <common>
+#include <skinning_pars_vertex>
+varying vec3 vN; varying vec3 vV;
 void main() {
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  vN = normalize(normalMatrix * normal);
+  #include <beginnormal_vertex>
+  #include <skinbase_vertex>
+  #include <skinnormal_vertex>
+  #include <begin_vertex>
+  #include <skinning_vertex>
+  vec4 mv = modelViewMatrix * vec4(transformed, 1.0);
+  vN = normalize(normalMatrix * objectNormal);
   vV = normalize(-mv.xyz);
   gl_Position = projectionMatrix * mv;
 }";
@@ -1493,13 +1519,20 @@ fn highlight(s: &JsValue, slot: &str) {
         let h = get(s, "host");
         let material = glow_material(s);
         for n in nodes(&get(s, "stage.rotating"), true) {
-            if !yes(&n, "isMesh") || yes(&n, "isSkinnedMesh") || yes(&n, "userData.glow") {
+            if !yes(&n, "isMesh") || yes(&n, "userData.glow") {
                 continue;
             }
             if owner(&n) != slot {
                 continue;
             }
-            let overlay = make(&h, "THREE.Mesh", &[get(&n, "geometry"), material.clone()]);
+            let skinned = yes(&n, "isSkinnedMesh");
+            let kind = if skinned { "THREE.SkinnedMesh" } else { "THREE.Mesh" };
+            let overlay = make(&h, kind, &[get(&n, "geometry"), material.clone()]);
+            if skinned {
+                // same bones and bind pose; a child with no offset keeps the same world matrix
+                set(&overlay, "bindMode", &get(&n, "bindMode"));
+                call(&overlay, "bind", &[get(&n, "skeleton"), get(&n, "bindMatrix")]);
+            }
             set(&overlay, "userData.glow", &flag(true));
             set(&overlay, "renderOrder", &num(2.0));
             set(&overlay, "frustumCulled", &flag(false));

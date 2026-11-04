@@ -379,10 +379,6 @@ button:disabled { cursor: default; }
 #mapSeg button small.shut { color: #e9ac3f; }
 #mapSeg button[aria-pressed="true"] small { color: var(--pick-dim); }
 .sheet .gfx-note { margin-top: -6px; font-size: 12px; line-height: 1.4; color: var(--muted); }
-.tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.tracks button { text-align: left; padding: 10px 12px; font: 500 14px/1.2 var(--body); color: rgba(236,232,223,.85); }
-.tracks button small { display: block; margin-top: 3px; font: 400 12px/1.2 var(--body); color: rgba(236,232,223,.55); }
-.tracks button[aria-pressed="true"] small { color: var(--pick-dim); }
 .sheet .acts2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
 .sheet .home { width: 100%; margin-top: 8px; }
 .ghost { height: 52px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 500 16px/1 var(--body); color: var(--fg); }
