@@ -256,6 +256,8 @@ impl Calibration {
 }
 struct ArenaState {
     disposed: bool,
+    /// Frames until the scene's objects are handed the lean matrix update again (new guns, gear).
+    lean_in: u32,
     host: JsValue,
     renderer: JsValue,
     scene: JsValue,
@@ -577,6 +579,7 @@ impl RustArena {
             enemy_shield,
             my_shield,
             hazard,
+            lean_in: 0,
             warned: None,
             muzzle_light,
             catcher,
@@ -1686,6 +1689,15 @@ impl ArenaState {
         vec_set(&get(&me.tilt, "position"), &[q[2], q[3], 0.]);
     }
     fn tick(&mut self, time: f64) {
+        // Hidden branches (guns not in hand, gear not worn, the reflection) skip the world-matrix walk;
+        // the pass is repeated now and then for what has been loaded or swapped in since.
+        if self.lean_in == 0 {
+            if get(&self.host, "leanMatrices").is_function() {
+                sdk(&self.host, "leanMatrices", &[self.scene.clone()]);
+            }
+            self.lean_in = 60;
+        }
+        self.lean_in -= 1;
         call(&self.timer, "update", &[n(time)]);
         let frame = math(
             "frame",

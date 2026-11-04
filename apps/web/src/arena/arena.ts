@@ -17,6 +17,7 @@ import { Feet, gaitOf } from "./ik.ts";
 import { Viewmodel } from "./viewmodel.ts";
 import { TextureTiers } from "./textures.ts";
 import { loadModel } from "./load-model.ts";
+import { leanMatrices } from "./lean.ts";
 import { Hand, gripOf, loadGuns } from "./weapons.ts";
 
 // ?gpu=1 draws the arena with WebGPU where the browser has it (see gpu.ts); ?gpu=0 keeps WebGL 2
@@ -33,7 +34,7 @@ export class Arena extends RustArena {
     super({
       THREE: GPU?.THREE ?? THREE, clone, dress, KIT_A, Dust: GPU?.Dust ?? Dust, Lens, ProjectedStage, tune: GPU?.tune ?? tune, Motion, Pose,
       armsOnly, findBones, pitch, Collapse, FALL_TIME, Flash, HoldOut,
-      Feet, gaitOf, Viewmodel, TextureTiers, loadModel, Hand, gripOf, loadGuns,
+      Feet, gaitOf, Viewmodel, TextureTiers, loadModel, Hand, gripOf, loadGuns, leanMatrices,
       quality: QUALITY.medium,
     }, canvas, {
       fpview: query.get("fpview")?.split(",").map(Number),
