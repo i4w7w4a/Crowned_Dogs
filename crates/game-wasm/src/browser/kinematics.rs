@@ -19,8 +19,14 @@ pub(super) fn quaternion(three: &JsValue) -> JsValue {
     make(three, "Quaternion", &[])
 }
 pub(super) fn components(value: &JsValue) -> Vec<f64> {
-    // one typed-array copy instead of a host call per number
-    Float64Array::new(&call(value, "toArray", &[])).to_vec()
+    // one host call that writes straight into our memory
+    let mut out = vec![0.; 16];
+    let len = super::packet::fill(value, &mut out) as usize;
+    if len > out.len() {
+        return Float64Array::new(value).to_vec();
+    }
+    out.truncate(len);
+    out
 }
 pub(super) fn numbers(value: &JsValue) -> Vec<f64> {
     values(value).iter().map(num).collect()
@@ -71,7 +77,9 @@ pub(super) fn world_matrix(bone: &JsValue) -> Vec<f64> {
 }
 /// A Three matrix's sixteen numbers in one typed-array copy.
 pub(super) fn elements(matrix: &JsValue) -> Vec<f64> {
-    Float64Array::new(&get(matrix, "elements")).to_vec()
+    let mut out = vec![0.; 16];
+    super::packet::matrix(matrix, &mut out);
+    out
 }
 pub(super) fn matrix_position(m: &[f64]) -> [f64; 3] {
     [m[12], m[13], m[14]]
@@ -221,13 +229,18 @@ pub(super) fn curl_of(curl: &JsValue) -> Curl {
 #[wasm_bindgen]
 pub struct RustGrip {
     joints: Vec<Joint>,
+    /// The joints' quaternions in order, read and written as one packet.
+    quats: js_sys::Array,
 }
 #[wasm_bindgen]
 impl RustGrip {
     #[wasm_bindgen(constructor)]
     pub fn new(three: &JsValue, model: &JsValue, side: &str) -> Self {
         let bone = |name: &str| find(model, &[&format!("{name}_{side}")]);
-        let mut result = Self { joints: vec![] };
+        let mut result = Self {
+            joints: vec![],
+            quats: js_sys::Array::new(),
+        };
         let hand = bone("hand");
         let mid = bone("middle_01");
         let index = bone("index_01");
@@ -285,6 +298,7 @@ impl RustGrip {
                 });
             }
         }
+        result.quats = result.joints.iter().map(|j| j.quaternion.clone()).collect();
         result
     }
     pub fn close(&self, curl: &JsValue, weight: f64) {
@@ -294,22 +308,28 @@ impl RustGrip {
 impl RustGrip {
     /// Closes the fingers by `curl`; only each joint's current rotation crosses to Three and back.
     pub(super) fn close_curl(&self, curl: &Curl, weight: f64) {
-        let joints = self
-            .joints
-            .iter()
-            .filter_map(|j| curl[j.finger][j.n - 1].map(|angle| (j, angle)))
-            .collect::<Vec<_>>();
-        let mut input = Vec::with_capacity(joints.len() * 13);
-        for (j, angle) in &joints {
-            input.extend(components(&j.quaternion));
+        if self.joints.is_empty() {
+            return;
+        }
+        let mut now = vec![0.; self.joints.len() * 4];
+        super::packet::read_quats(&self.quats, &mut now);
+        let mut at = Vec::with_capacity(self.joints.len());
+        let mut input = Vec::with_capacity(self.joints.len() * 13);
+        for (i, j) in self.joints.iter().enumerate() {
+            let Some(angle) = curl[j.finger][j.n - 1] else {
+                continue;
+            };
+            at.push(i as u32);
+            input.extend_from_slice(&now[i * 4..i * 4 + 4]);
             input.extend(j.rest);
             input.extend(j.axis);
-            input.extend([*angle, weight]);
+            input.extend([angle, weight]);
+        }
+        if at.is_empty() {
+            return;
         }
         let output = math("grip", &input);
-        for (i, (j, _)) in joints.iter().enumerate() {
-            upload(&j.quaternion, &output[i * 4..i * 4 + 4]);
-        }
+        super::packet::write_quats_at(&self.quats, &at, &output);
     }
 }
 

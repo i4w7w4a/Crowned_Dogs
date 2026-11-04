@@ -27,6 +27,7 @@ pub mod creation;
 pub mod look;
 pub mod maw;
 pub mod music;
+pub mod packet;
 pub mod particles;
 pub mod persona;
 pub mod persona_hd;

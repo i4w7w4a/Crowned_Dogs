@@ -397,45 +397,29 @@ impl Drop for RustMotion {
 
 #[wasm_bindgen]
 pub struct RustPose {
-    // each bone's live position and quaternion, then the saved copies
-    bones: Vec<[JsValue; 4]>,
-    copy: JsValue,
+    /// The skeleton's bones; their positions and quaternions are saved as one packet.
+    bones: js_sys::Array,
+    saved: RefCell<Vec<f64>>,
 }
 #[wasm_bindgen]
 impl RustPose {
     #[wasm_bindgen(constructor)]
     pub fn new(model: &JsValue) -> Self {
-        let bones: Vec<[JsValue; 4]> = descendants(model)
+        let bones: js_sys::Array = descendants(model)
             .into_iter()
             .filter(|o| boolean(&get(o, "isBone")))
-            .map(|o| {
-                let p = get(&o, "position");
-                let q = get(&o, "quaternion");
-                let (sp, sq) = (clone_value(&p), clone_value(&q));
-                [p, q, sp, sq]
-            })
             .collect();
-        let copy = bones
-            .first()
-            .map(|b| get(&b[0], "copy"))
-            .unwrap_or(JsValue::UNDEFINED);
-        Self { bones, copy }
+        let mut saved = vec![0.; bones.length() as usize * 7];
+        super::packet::read_trs(&bones, &mut saved);
+        Self {
+            bones,
+            saved: RefCell::new(saved),
+        }
     }
     pub fn save(&self) {
-        for [p, q, sp, sq] in &self.bones {
-            self.copy_vec(sp, p);
-            copy(sq, q);
-        }
+        super::packet::read_trs(&self.bones, &mut self.saved.borrow_mut());
     }
     pub fn restore(&self) {
-        for [p, q, sp, sq] in &self.bones {
-            self.copy_vec(p, sp);
-            copy(q, sq);
-        }
-    }
-}
-impl RustPose {
-    fn copy_vec(&self, to: &JsValue, from: &JsValue) {
-        apply(&self.copy, to, std::slice::from_ref(from)).unwrap_throw();
+        super::packet::write_trs(&self.bones, &self.saved.borrow());
     }
 }
