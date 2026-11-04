@@ -534,6 +534,8 @@ async fn install_figure(s: &JsValue, sex: &str) -> Result<bool, JsValue> {
         }
     }
     call(&get(s, "stage.rotating"), "add", &[figure.clone()]);
+    // a beard or hairstyle that downloads later finds the stand through its figure (beards.rs)
+    set(&figure, "cdViewer", s);
     pose(s);
     set(s, "originalTextures", &array(&textures(&figure)));
     set(
@@ -776,6 +778,22 @@ fn anisotropy(s: &JsValue) -> f64 {
     } else {
         1.0
     })
+}
+/// A beard or hairstyle hung on the stand's figure after it was set up: the same mesh flags and
+/// material tuning the figure got, then a fresh frame.
+pub(super) fn piece_arrived(s: &JsValue, piece: &JsValue) {
+    if yes(s, "disposed") {
+        return;
+    }
+    for n in nodes(piece, false) {
+        if yes(&n, "isMesh") {
+            set(&n, "receiveShadow", &flag(true));
+        }
+    }
+    tune(s, piece);
+    // the face close-up aims under the crown, which a hairstyle raises (setLook measures again too)
+    set(s, "head", &JsValue::NULL);
+    render(s);
 }
 fn tune(s: &JsValue, root: &JsValue) {
     let value = anisotropy(s);

@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "assets": "node scripts/fetch-assets.ts",
-    "models:ktx2": "node scripts/compress-models.ts"
+    "models:ktx2": "node scripts/compress-models.ts",
+    "models:packs": "node scripts/split-packs.ts"
   },
   "dependencies": {
     "@crowned-dogs/audio": "*",

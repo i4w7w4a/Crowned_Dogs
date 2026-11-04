@@ -135,7 +135,7 @@ async fn parse_bytes(host: &JsValue, bytes: JsValue, ktx2: Option<&JsValue>) -> 
 #[wasm_bindgen(js_name = sceneBattleFiles)]
 pub fn battle_files(host: JsValue) -> Array {
     let base = string(&get(&host, "baseUrl"));
-    let models = ["persona-female", "persona-male", "hair-female", "hair-male", "beards-male", "holster"];
+    let models = ["persona-female", "persona-male", "holster"];
     let files = Array::new();
     for name in models.iter().chain(GUN_MODELS.iter().chain(HELD_MODELS).map(|(_, m)| m)) {
         let url = format!("{base}models/{name}.json");

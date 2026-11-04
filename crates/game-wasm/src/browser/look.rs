@@ -366,6 +366,8 @@ pub fn apply(model: JsValue, look: JsValue) {
     let paint = paint(&look);
     // dress() repaints the worn pieces with this look when the kit's colours change
     set(&get(&model, "userData"), "cdLook", &look);
+    // a beard or hairstyle this Persona has not got yet downloads now and paints in when it is in
+    super::beards::want(&model, &paint);
     let gear = super::dom_support::rust(
         "client.look.gearTints",
         &[look.clone(), get(&get(&model, "userData"), "cdColors")],

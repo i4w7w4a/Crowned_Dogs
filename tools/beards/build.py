@@ -6,7 +6,7 @@ from pathlib import Path
 from mathutils import Vector,Matrix
 from mathutils.bvhtree import BVHTree
 ROOT=Path(__file__).resolve().parents[2]; OUT=ROOT/'output/beards'; OUT.mkdir(parents=True,exist_ok=True)
-PUBLIC=ROOT/'apps/web/models';PUBLIC.mkdir(parents=True,exist_ok=True)
+PUBLIC=ROOT/'apps/web/packs';PUBLIC.mkdir(parents=True,exist_ok=True)
 PILOT='--pilot' in sys.argv
 REPAIR_M4='--repair-m4' in sys.argv
 if PILOT and REPAIR_M4:raise RuntimeError('Choose pilot or repair-m4, not both')

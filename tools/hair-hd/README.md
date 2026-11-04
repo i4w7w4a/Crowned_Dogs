@@ -71,7 +71,7 @@
   на лбу перед линией, она возвращается к коже лица. Нарисованные волосы матовые (блик кожи на них гасится),
   иначе тёмно-коричневое светилось серым пятном.
 
-## Игровые версии (`apps/web/models/hair-female.glb`, `hair-male.glb`)
+## Игровые версии (`apps/web/packs/hair-female.glb`, `hair-male.glb`; в игру идут нарезанные по причёскам `models/hair-<пол>-<причёска>.glb` из `npm run models:packs -w @crowned-dogs/web`)
 
 Каждая причёска: пряди-полоски `Hair_<id>_cards` (коса ещё `Hair_braid_plait` и резинка `Hair_braid_tie`)
 и тёмная подложка `Hair_<id>_cap`. Пакет висит на кости `head`, как бороды; показ, цвет, скрытие от первого
@@ -96,7 +96,7 @@ B="/c/Program Files/Blender Foundation/Blender 5.2/blender.exe"
 for s in pixie bob braid; do "$B" -b 3d/hair-hd/$s.blend --python tools/hair-hd/game_cards.py -- $s <tmp>/game_$s.blend x; done
 "$B" -b --factory-startup --python tools/hair-hd/pack.py -- <tmp> <полный путь>/tools/hair-hd/hair-strands.png
 python -I tools/hair-hd/finish.py output/hair-hd/raw/hair-female.glb
-npx @gltf-transform/cli@4.5.1 meshopt output/hair-hd/raw/hair-female.glb apps/web/models/hair-female.glb --quantize-position 16 --quantize-normal 12 --quantize-texcoord 14
+npx @gltf-transform/cli@4.5.1 meshopt output/hair-hd/raw/hair-female.glb apps/web/packs/hair-female.glb --quantize-position 16 --quantize-normal 12 --quantize-texcoord 14
 ```
 
 Мужские: то же с `male_short.blend → crop`, `male_slick.blend → slick`, `male_medium.blend → medium`,
@@ -107,7 +107,7 @@ npx @gltf-transform/cli@4.5.1 meshopt output/hair-hd/raw/hair-female.glb apps/we
 "$B" -b --factory-startup --python tools/hair-hd/scalp_mask.py -- "$PWD/apps/web/models/persona-male.glb" "$PWD/tools/hair-hd/scalp-male.png" slick=<tmp>/game_slick_roots.npz ponytail=<tmp>/game_ponytail_roots.npz
 "$B" -b --factory-startup --python tools/hair-hd/pack.py -- <tmp> <полный путь>/tools/hair-hd/hair-strands.png male
 python -I tools/hair-hd/finish.py output/hair-hd/raw/hair-male.glb
-npx @gltf-transform/cli@4.5.1 meshopt output/hair-hd/raw/hair-male.glb apps/web/models/hair-male.glb --quantize-position 16 --quantize-normal 12 --quantize-texcoord 14
+npx @gltf-transform/cli@4.5.1 meshopt output/hair-hd/raw/hair-male.glb apps/web/packs/hair-male.glb --quantize-position 16 --quantize-normal 12 --quantize-texcoord 14
 ```
 
 Маски пересобирать после замены голов и после новых полосок зачёса или хвоста (корни меняются).

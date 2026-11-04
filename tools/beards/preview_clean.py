@@ -27,7 +27,7 @@ args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
-protected = [MASTER, ROOT / 'apps/web/models/beards-male.glb', ROOT / 'apps/web/models/beards-authored.glb', ROOT / 'apps/web/models/persona-male.glb']
+protected = [MASTER, ROOT / 'apps/web/packs/beards-male.glb', ROOT / 'apps/web/packs/beards-authored.glb', ROOT / 'apps/web/models/persona-male.glb']
 before = {str(p.relative_to(ROOT)): digest(p) for p in protected}
 report = {'sourceSha256': {**before, str(SKIN.relative_to(ROOT)): digest(SKIN)}, 'heads': {}, 'renders': []}
 bpy.ops.wm.open_mainfile(filepath=str(MASTER))

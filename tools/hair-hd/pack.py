@@ -1,4 +1,4 @@
-"""Pack the game hairstyles into apps/web/models/hair-<sex>.glb, children of the head bone.
+"""Pack the game hairstyles into apps/web/packs/hair-<sex>.glb (cut per style by apps/web/scripts/split-packs.ts), children of the head bone.
 
 usage: blender -b --factory-startup --python pack.py -- GAME_DIR TEXTURE.png [female|male]
 GAME_DIR holds game_<style>.blend from game_cards.py (rest-space meshes). Like the beards, every

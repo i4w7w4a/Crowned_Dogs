@@ -3,7 +3,9 @@ import struct,json,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 for file in ['beards-male.glb','beards-authored.glb']:
- p=ROOT/'apps/web/models'/file;b=p.read_bytes();size,typ=struct.unpack_from('<II',b,12);j=json.loads(b[20:20+size]);tail=b[20+size:]
+ p=ROOT/'apps/web/packs'/file
+ if not p.exists():continue
+ b=p.read_bytes();size,typ=struct.unpack_from('<II',b,12);j=json.loads(b[20:20+size]);tail=b[20+size:]
  for m in j['materials']:
   m['doubleSided']=True
   if m['name'].startswith('M_Beard_Cards'):m['alphaMode']='MASK';m['alphaCutoff']=.2
