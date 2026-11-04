@@ -11,43 +11,65 @@ const VERSIONS: Record<string, string> = typeof __CD_ASSET_VERSIONS__ === "objec
 const CACHE = "cd-assets-v1";
 const base = typeof document === "undefined" ? null : new URL(".", document.baseURI);
 
-function versioned(base: URL, input: RequestInfo | URL): string | null {
+/** The build-relative path of a request for one of this page's files, or null. */
+function local(base: URL, input: RequestInfo | URL): string | null {
   const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   const url = new URL(href, document.baseURI);
   if (url.origin !== base.origin || !url.pathname.startsWith(base.pathname)) return null;
-  const path = decodeURIComponent(url.pathname.slice(base.pathname.length));
-  const v = VERSIONS[path];
-  return v ? `${url.origin}${url.pathname}?cdv=${v}` : null;
+  return decodeURIComponent(url.pathname.slice(base.pathname.length));
 }
+const key = (base: URL, path: string) => `${base.origin}${base.pathname}${encodeURI(path)}?cdv=${VERSIONS[path]}`;
 
 /** Whether the build ships this file next to the page (always no in dev, which has no list). */
 export function shipped(input: string): boolean {
   if (!base) return false;
-  const url = new URL(input, document.baseURI);
-  return url.origin === base.origin && url.pathname.startsWith(base.pathname)
-    && decodeURIComponent(url.pathname.slice(base.pathname.length)) in VERSIONS;
+  const path = local(base, input);
+  return path !== null && path in VERSIONS;
+}
+
+// The build ships a gzip copy (<file>.gz) of every big file that packs well (models, the engine,
+// manifests). The game downloads that copy and unpacks it itself, so the saving does not depend on
+// the host compressing. A host that already marks the copy as gzip hands over unpacked bytes, which
+// pass through as they are.
+const TYPES: Record<string, string> = { wasm: "application/wasm", json: "application/json", glb: "model/gltf-binary" };
+async function unpacked(network: typeof fetch, path: string, init?: RequestInit): Promise<Response | null> {
+  if (!base || !VERSIONS[`${path}.gz`] || typeof DecompressionStream === "undefined") return null;
+  try {
+    const response = await network(new URL(encodeURI(`${path}.gz`), base).href, init);
+    if (!response.ok || !response.body) return null;
+    const packed = new Uint8Array(await response.arrayBuffer());
+    const body = packed[0] === 0x1f && packed[1] === 0x8b
+      ? await new Response(new Blob([packed]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer()
+      : packed.buffer;
+    const type = TYPES[path.split(".").pop()!] ?? "application/octet-stream";
+    return new Response(body, { status: 200, headers: { "Content-Type": type, "Content-Length": String(body.byteLength) } });
+  } catch {
+    return null;
+  }
 }
 
 function install(base: URL | null): void {
-  if (!base || !Object.keys(VERSIONS).length || typeof caches === "undefined") return;
+  if (!base || !Object.keys(VERSIONS).length) return;
   const network = window.fetch.bind(window);
   let open: Promise<Cache | null> | null = null;
-  const cache = () => (open ??= caches.open(CACHE).catch(() => null));
+  // Cache Storage exists only on https and localhost; a phone on the home network still gets the gzip copies.
+  const cache = () => (open ??= typeof caches === "undefined" ? Promise.resolve(null) : caches.open(CACHE).catch(() => null));
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const key = (init?.method ?? (input instanceof Request ? input.method : "GET")) === "GET" ? versioned(base, input) : null;
-    const store = key ? await cache() : null;
-    if (!key || !store) return network(input, init);
-    const hit = await store.match(key).catch(() => undefined);
+    const get = (init?.method ?? (input instanceof Request ? input.method : "GET")) === "GET";
+    const path = get ? local(base, input) : null;
+    if (path === null || !VERSIONS[path]) return network(input, init);
+    const store = await cache();
+    const hit = store ? await store.match(key(base, path)).catch(() => undefined) : undefined;
     if (hit) return hit;
-    const response = await network(input, init);
-    if (response.ok && response.status === 200) store.put(key, response.clone()).catch(() => {});
+    const response = (await unpacked(network, path, init)) ?? (await network(input, init));
+    if (store && response.ok && response.status === 200) store.put(key(base, path), response.clone()).catch(() => {});
     return response;
   };
   // Old versions of changed files are dropped once the game has settled.
   setTimeout(async () => {
     const store = await cache();
     if (!store) return;
-    const live = new Set(Object.keys(VERSIONS).map((path) => `${base.origin}${base.pathname}${encodeURI(path)}?cdv=${VERSIONS[path]}`));
+    const live = new Set(Object.keys(VERSIONS).map((path) => key(base, path)));
     for (const request of await store.keys().catch(() => [] as readonly Request[])) {
       if (!live.has(request.url)) store.delete(request).catch(() => {});
     }
