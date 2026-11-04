@@ -92,6 +92,8 @@ struct LensState {
     /// A quad behind the gun and the hands that marks their pixels (alpha one half) for the compose.
     mark: Option<(JsValue, JsValue)>,
     px: [f64; 2],
+    /// How many times larger the screen is than the 3D frame (`?fsr=`): FSR1 enlarges it in the lens pass.
+    up: f64,
     css: [f64; 2],
     view: [f64; 4],
 }
@@ -227,6 +229,7 @@ impl RustLens {
                 ("compSize", vector(1., 1.)),
                 ("outSize", vector(1., 1.)),
                 ("ssaa", n(1.)),
+                ("fsr", n(0.)),
                 ("hasBg", n(0.)),
                 ("rays", n(0.)),
                 ("glowLod", n(0.)),
@@ -287,6 +290,7 @@ impl RustLens {
                 minimal: false,
                 mark: None,
                 px: [1., 1.],
+                up: 1.,
                 css: [1., 1.],
                 view: [0., 0., 1., 1.],
             })),
@@ -633,9 +637,14 @@ impl RustLens {
         css_width: f64,
         css_height: f64,
         view: JsValue,
+        up: Option<f64>,
     ) {
         let mut s = self.state.borrow_mut();
-        s.px = [width, height];
+        // the targets keep the 3D frame's size; only the lens pass draws the larger screen
+        let up = up.filter(|u| u.is_finite() && *u > 1.).unwrap_or(1.);
+        s.up = up;
+        s.px = [(width / up).round().max(1.), (height / up).round().max(1.)];
+        put(&s.lens, "fsr", n(if up > 1. { 1. } else { 0. }));
         s.css = [css_width, css_height];
         s.view = [
             prop(&view, "x"),

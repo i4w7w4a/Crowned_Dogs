@@ -25,6 +25,16 @@ fn create(host: &JsValue, key: &str, args: &[JsValue]) -> JsValue {
 fn policy(method: &str, args: serde_json::Value) -> serde_json::Value {
     game_client::dispatch(method, args).expect("arena policy")
 }
+/// `?fsr=<k>`: how many times larger than the 3D frame the screen may be drawn (1 = off).
+fn fsr_asked(search: &str) -> f64 {
+    search
+        .trim_start_matches('?')
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("fsr="))
+        .and_then(|v| v.parse::<f64>().ok())
+        .filter(|v| v.is_finite())
+        .map_or(1., |v| v.clamp(1., 4.))
+}
 fn math(kind: &str, args: &[f64]) -> Vec<f64> {
     game_client::arena_compute(&format!("arena.{kind}"), args).expect("arena arithmetic")
 }
@@ -344,6 +354,11 @@ struct ArenaState {
     /// Dynamic resolution of the 3D picture (game_graphics::dyn_res); `?res=` pins it.
     res: game_graphics::dyn_res::DynRes,
     res_pinned: Option<f64>,
+    /// `?fsr=2`: the screen is drawn up to this many times larger than the 3D frame, which FSR1
+    /// enlarges in the lens pass (stage 7 experiment; off by default).
+    up_asked: f64,
+    /// The enlargement in use, after the screen's own pixel limit.
+    up: f64,
     widen: Closure<dyn FnMut(JsValue)>,
     mirror_shader: Closure<dyn FnMut(JsValue)>,
     callbacks: Vec<Closure<dyn FnMut(JsValue)>>,
@@ -647,6 +662,8 @@ impl RustArena {
             pace: FramePace::battle(),
             res: game_graphics::dyn_res::DynRes::default(),
             res_pinned: game_graphics::dyn_res::pinned(&string(&get(&get(&global(), "location"), "search"))),
+            up_asked: fsr_asked(&string(&get(&get(&global(), "location"), "search"))),
+            up: 1.,
             widen,
             mirror_shader,
             callbacks: vec![],
@@ -1951,7 +1968,7 @@ impl ArenaState {
                     &[self.tmp_size.clone()],
                 ),
                 "y",
-            );
+            ) / self.up;
             call(
                 &self.dust,
                 "update",
@@ -2284,7 +2301,13 @@ impl ArenaState {
             ],
         );
         // only the 3D canvas shrinks: the HUD is DOM above it and keeps the screen's resolution
-        call(&self.renderer, "setPixelRatio", &[n(size[0] * self.res.scale)]);
+        let frame = size[0] * self.res.scale;
+        // with FSR the canvas grows back toward the screen's own pixels, the 3D frame does not
+        let device = if ratio == 0. { 1. } else { ratio };
+        // the edge-aware upscale lives in the WebGL lens shader only; WebGPU keeps the plain frame
+        let webgpu = boolean(&get(&self.renderer, "isWebGPURenderer")) && !boolean(&get(&get(&self.renderer, "backend"), "isWebGLBackend"));
+        self.up = if webgpu { 1. } else { self.up_asked.min(device / frame).max(1.) };
+        call(&self.renderer, "setPixelRatio", &[n(frame * self.up)]);
         super::fps_meter::scale(self.res.scale);
         call(
             &self.renderer,
@@ -2305,6 +2328,7 @@ impl ArenaState {
                 n(width),
                 n(height),
                 self.view.clone(),
+                n(self.up),
             ],
         );
     }
