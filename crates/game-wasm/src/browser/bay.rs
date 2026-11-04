@@ -81,18 +81,23 @@ pub struct Bay {
     pub photo: &'static str,
     /// The nearer shot for the face; without one the wide picture stays as the camera closes in.
     pub close: Option<&'static str>,
+    /// Rendered stills of the default Persona on this stand (`<still>-male.webp`, `-female.webp`),
+    /// shown while the 3D figure is still downloading on a slow connection.
+    pub still: Option<&'static str>,
     hall: &'static [([f64; 3], [f64; 3])],
     lamps: &'static [(f64, f64, usize, f64, f64, u32)],
 }
 pub const SALT: Bay = Bay {
     photo: "base/persona-bay",
     close: Some("base/persona-bay-close"),
+    still: Some("base/persona-bay"),
     hall: &HALL,
     lamps: &LAMPS,
 };
 pub const SLUICE: Bay = Bay {
     photo: "base-kaskad/persona-bay",
     close: None,
+    still: None,
     hall: &PIT,
     lamps: &PIT_LAMPS,
 };
