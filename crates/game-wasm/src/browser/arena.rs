@@ -2054,8 +2054,6 @@ impl ArenaState {
     }
     fn set_quality(&mut self, q: JsValue) {
         self.quality = q.clone();
-        super::fps_meter::battle(&self.renderer, &string(&get(&q, "id")));
-        super::backend_trial::start(&self.renderer, &string(&get(&q, "id")));
         super::platform::mark_page_quality(&string(&get(&q, "id")));
         self.pace.follow(&q);
         self.res.follow(&string(&get(&q, "id")), self.res_pinned);
