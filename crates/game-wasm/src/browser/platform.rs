@@ -3,6 +3,16 @@ use super::{bridge::*, dom_support::{rust, try_rust}};
 use wasm_bindgen::prelude::*;
 
 const LOADOUT_KEY: &str = "crowned-dogs:loadout:v1";
+pub fn online() -> JsValue { get(&global(),"__cdOnline") }
+pub fn account_field(key: &str) -> JsValue {
+    let value=get(&get(&online(),"account"),key);
+    if present(&value) { call(&global(),"structuredClone",&[value]) } else { JsValue::NULL }
+}
+pub fn online_save(method: &str, value: JsValue) {
+    let promise=call(&online(),method,&[value]);
+    let ignore=Closure::<dyn FnMut(JsValue)>::new(|_|{}).into_js_value();
+    call(&promise,"catch",&[ignore]);
+}
 fn storage() -> JsValue {
     js_sys::Reflect::get(&global(), &"localStorage".into()).unwrap_or(JsValue::NULL)
 }
@@ -16,6 +26,7 @@ pub fn store_set(key: &str, value: &str) {
 }
 #[wasm_bindgen]
 pub fn load_local_loadout(supplied: JsValue) -> JsValue {
+    if supplied.is_undefined() && present(&online()) { return account_field("loadout"); }
     let storage = if supplied.is_undefined() {
         storage()
     } else {
@@ -26,6 +37,9 @@ pub fn load_local_loadout(supplied: JsValue) -> JsValue {
 }
 #[wasm_bindgen]
 pub fn save_local_loadout(loadout: JsValue, supplied: JsValue) -> bool {
+    if supplied.is_undefined() && present(&online()) {
+        online_save("saveLoadout",loadout); return false;
+    }
     let saved = rust("client.save", &[loadout]);
     let mirror = supplied.is_undefined();
     let storage = if mirror { storage() } else { supplied };
@@ -46,10 +60,12 @@ const LOOK_KEY: &str = "crowned-dogs:persona:v1";
 /// The created Persona, or null before the player has made one.
 #[wasm_bindgen]
 pub fn load_local_look() -> JsValue {
+    if present(&online()) { return account_field("appearance"); }
     rust("client.look.load", &[store_get(LOOK_KEY)])
 }
 #[wasm_bindgen]
 pub fn save_local_look(look: JsValue) -> bool {
+    if present(&online()) { online_save("saveAppearance",look); return false; }
     let saved = rust("client.look.save", &[look]);
     let Some(raw) = present(&saved)
         .then(|| js_sys::JSON::stringify(&saved).ok().and_then(|raw| raw.as_string()))
@@ -76,6 +92,7 @@ fn kit_key(index: usize) -> String {
     format!("{LOADOUT_KEY}:kit{index}")
 }
 pub fn active_kit() -> usize {
+    if present(&online()) { return 0; }
     store_get(ACTIVE_KIT_KEY)
         .as_string()
         .and_then(|raw| raw.parse::<usize>().ok())
@@ -84,6 +101,7 @@ pub fn active_kit() -> usize {
 }
 /// The loadout stored in one kit; an untouched kit starts as the starter loadout.
 pub fn kit_loadout(index: usize) -> JsValue {
+    if present(&online()) { return account_field("loadout"); }
     if index == active_kit() {
         return load_local_loadout(JsValue::UNDEFINED);
     }
@@ -91,6 +109,7 @@ pub fn kit_loadout(index: usize) -> JsValue {
 }
 /// Makes another kit active and returns its loadout.
 pub fn switch_kit(index: usize) -> JsValue {
+    if present(&online()) { return account_field("loadout"); }
     let index = index.min(KITS - 1);
     let current = active_kit();
     if index == current {
@@ -107,6 +126,7 @@ pub fn switch_kit(index: usize) -> JsValue {
 /// Each gun keeps its fitted mods per kit, so swapping guns and back restores them.
 const GUN_MODS_KEY: &str = "crowned-dogs:gunmods:v1";
 pub fn swap_gun(prev: &JsValue, next: JsValue) -> JsValue {
+    if present(&online()) { return next; }
     let old = string(&get(&get(prev, "weapon1"), "item"));
     let new = string(&get(&get(&next, "weapon1"), "item"));
     if old.is_empty() || old == new {

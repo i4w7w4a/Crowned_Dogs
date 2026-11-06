@@ -111,7 +111,7 @@ fn load_with_parent(launch: JsValue, view: JsValue, parent: JsValue) -> Promise 
                     Ok(_) => return Ok(true.into()),
                     Err(error) => error,
                 };
-                if boolean(&get(&pending.signal, "aborted")) {
+                if boolean(&get(&pending.signal, "aborted")) || string(&get(&error,"name"))=="AbortError" {
                     return Ok(false.into());
                 }
                 call(&get(&global(), "console"), "error", &["crowned-dogs: the arena failed to load".into(), error.clone()]);
@@ -281,7 +281,7 @@ impl RustApplication {
             }
         }));
         let search = string(&get(&get(&global(), "location"), "search"));
-        if js_sys::RegExp::new("[?&]cal\\b", "").test(&search) {
+        if boolean(&get(&host,"resumeOnline")) || js_sys::RegExp::new("[?&]cal\\b", "").test(&search) {
             let _ = enter_battle(state.clone(), invoke(&get(&host, "loadLocalLoadout"), &[]));
         }
         Self { state, listeners }

@@ -13,6 +13,10 @@ fn core(method: &str, args: Value) -> Value {
     game_core::dispatch(method, args).unwrap_or(Value::Null)
 }
 pub fn load() -> Value {
+    if super::bridge::present(&platform::online()) {
+        return js_sys::JSON::stringify(&platform::account_field("profile")).ok()
+            .and_then(|v|v.as_string()).and_then(|v|serde_json::from_str(&v).ok()).unwrap_or(Value::Null);
+    }
     let saved = platform::store_get(KEY)
         .as_string()
         .and_then(|raw| serde_json::from_str(&raw).ok())
@@ -21,6 +25,10 @@ pub fn load() -> Value {
 }
 /// One free point into `stat`; the profile as it was before, when the point was spent.
 pub fn spend(stat: &str) -> Option<Value> {
+    if super::bridge::present(&platform::online()) {
+        platform::online_save("profile",super::bridge::object(&[("type","spend".into()),("stat",stat.into())]));
+        return None;
+    }
     let before = load();
     let after = core("syncSpend", json!([before, stat]));
     if after == before {
