@@ -15,6 +15,8 @@
     "check": "npm run typecheck && npm test && npm run test:render",
     "test:render": "node tools/test-render-orchestration.mjs && node tools/test-motion-orchestration.mjs && node tools/test-scene-orchestration.mjs",
     "bot": "node --env-file-if-exists=.env apps/server/src/main.ts",
+    "online": "node --env-file-if-exists=.env apps/server/src/online/main.ts",
+    "online:migrate": "node --env-file-if-exists=.env apps/server/src/online/migrate.ts",
     "balance": "node packages/core/scripts/balance.ts",
     "web": "npm run dev -w @crowned-dogs/web",
     "web:build": "npm run build -w @crowned-dogs/web",
@@ -30,6 +32,8 @@
     "pretest": "npm run rust:build",
     "pretypecheck": "npm run rust:build",
     "prebot": "npm run rust:build",
+    "preonline": "npm run rust:build",
+    "preonline:migrate": "npm run rust:build",
     "prebalance": "npm run rust:build",
     "prekits": "npm run rust:build"
   },
