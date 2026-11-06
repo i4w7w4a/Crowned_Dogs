@@ -4,7 +4,7 @@ import { TelegramOutboxWorker, type TelegramDelivery, type TelegramOutboxPort } 
 import { TelegramFailure } from "../src/online/telegram-transport.ts";
 
 const delivery = (): TelegramDelivery => ({
-  leaseId: "lease-1", kind: "publish", attempts: 1, chatId: "-1001", messageId: null,
+  leaseId: "lease-1", kind: "publish", attempts: 1, chatId: "-1001", threadId: 566, messageId: null,
   card: { token: "same_token", status: "open", expiresAt: 1000000,
     host: { telegram: { firstName: "Имя", lastName: null, username: null }, level: 1, tag: "K-001-001" } },
 });
@@ -23,6 +23,7 @@ test("claim отправляется и только успешный Telegram �
   const worker = new TelegramOutboxWorker({ outbox: q.outbox, transport: { async deliver(...args) { sent.push(args); return 91; } }, botUsername: "test_bot", now: () => 1000 });
   assert.equal(await worker.runOnce(), true); assert.equal(await worker.runOnce(), false);
   assert.equal(sent.length, 1); assert.match(JSON.stringify(sent), /duel_same_token/);
+  assert.equal((sent[0] as unknown[])[3], 566, "worker keeps the configured topic on every send");
   assert.deepEqual(q.completed, [["lease-1", 91]]); assert.deepEqual(q.failed, []);
 });
 
@@ -76,7 +77,7 @@ test("shutdown во время claim запрещает send и следующи
 test("shutdown прерывает транспорт и оставляет lease для восстановления", async () => {
   const q = queue(delivery()); let entered!: () => void;
   const ready = new Promise<void>(resolve => { entered = resolve; });
-  const worker = new TelegramOutboxWorker({ outbox: q.outbox, transport: { async deliver(_chat, _id, _card, signal) {
+  const worker = new TelegramOutboxWorker({ outbox: q.outbox, transport: { async deliver(_chat, _id, _card, _threadId, signal) {
     entered(); await new Promise<void>((_resolve, reject) => signal!.addEventListener("abort", () => reject(new Error("aborted")), { once: true })); return 91;
   } }, botUsername: "test_bot" });
   const running = worker.runOnce(); await ready; await worker.stop(); await running;
