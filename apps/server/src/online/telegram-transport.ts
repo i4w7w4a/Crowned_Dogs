@@ -1,6 +1,6 @@
 import type { TelegramCard } from "./telegram-cards.ts";
 
-export type TelegramFailureCode = "chat_not_allowed" | "bot_forbidden" | "telegram_rate_limited" | "telegram_unavailable" | "telegram_bad_request";
+export type TelegramFailureCode = "chat_not_allowed" | "bot_forbidden" | "telegram_rate_limited" | "telegram_unavailable" | "telegram_bad_request" | "telegram_topic_unavailable";
 export class TelegramFailure extends Error {
   code: TelegramFailureCode;
   retryAfterMs: number | null;
@@ -43,6 +43,7 @@ export class TelegramTransport {
       }
       if (code >= 500) throw new TelegramFailure("telegram_unavailable", 1000);
       if (code === 401 || code === 403) throw new TelegramFailure("bot_forbidden");
+      if (code === 400 && typeof data.description === "string" && /TOPIC_CLOSED|TOPIC_DELETED|TOPIC_ID_INVALID|message thread not found/i.test(data.description)) throw new TelegramFailure("telegram_topic_unavailable");
       if (code === 400 && method === "editMessageText" && typeof data.description === "string" && data.description.startsWith("Bad Request: message is not modified")) return { message_id: body.message_id };
       throw new TelegramFailure("telegram_bad_request");
     } catch (error) {
@@ -51,18 +52,20 @@ export class TelegramTransport {
     }
   }
 
-  async deliver(chatId: string, messageId: number | null, card: TelegramCard, signal?: AbortSignal): Promise<number> {
+  async deliver(chatId: string, messageId: number | null, card: TelegramCard, threadId: number, signal?: AbortSignal): Promise<number> {
     if (!this.#allowed.has(chatId)) throw new TelegramFailure("chat_not_allowed");
+    if (!Number.isSafeInteger(threadId) || threadId < 1) throw new TelegramFailure("telegram_bad_request");
     if (messageId !== null && (!Number.isSafeInteger(messageId) || messageId < 1)) throw new TelegramFailure("telegram_bad_request");
     const chat = await this.#call("getChat", { chat_id: chatId }, signal);
     if (!chat || String(chat.id) !== chatId || !["group", "supergroup"].includes(chat.type)) throw new TelegramFailure("bot_forbidden");
+    if (chat.is_forum !== true) throw new TelegramFailure("telegram_topic_unavailable");
     const member = await this.#call("getChatMember", { chat_id: chatId, user_id: this.#botId }, signal);
     const canSend = member?.status === "creator" || member?.status === "administrator" ||
       (member?.status === "member" && chat.permissions?.can_send_messages === true) ||
       (member?.status === "restricted" && member.is_member === true && member.can_send_messages === true);
     if (!canSend) throw new TelegramFailure("bot_forbidden");
     const result = await this.#call(messageId === null ? "sendMessage" : "editMessageText", {
-      chat_id: chatId, ...(messageId === null ? {} : { message_id: messageId }), ...card,
+      chat_id: chatId, ...(messageId === null ? { message_thread_id: threadId } : { message_id: messageId }), ...card,
       link_preview_options: { is_disabled: true },
     }, signal);
     if (!Number.isSafeInteger(result?.message_id) || result.message_id < 1 || (messageId !== null && result.message_id !== messageId)) throw new TelegramFailure("telegram_unavailable", 1000);

@@ -7,6 +7,7 @@ export interface TelegramDelivery {
   kind: "publish" | "update";
   attempts: number;
   chatId: string;
+  threadId: number;
   messageId: number | null;
   card: InvitationCard;
 }
@@ -35,14 +36,14 @@ export class TelegramOutboxWorker {
     const delivery = await outbox.claimDue(now(), 60_000);
     if (!delivery) return false;
     if (this.#abort.signal.aborted) return true;
-    const { leaseId, card, chatId, messageId } = delivery;
+    const { leaseId, card, chatId, threadId, messageId } = delivery;
     if (messageId === null && (card.status === "cancelled" || card.status === "expired")) {
       await outbox.complete(leaseId, null);
       return true;
     }
     let sentId: number;
     try {
-      sentId = await transport.deliver(chatId, messageId, invitationCard(card, botUsername), this.#abort.signal);
+      sentId = await transport.deliver(chatId, messageId, invitationCard(card, botUsername), threadId, this.#abort.signal);
     } catch (error) {
       if (this.#abort.signal.aborted) return true;
       const failure = error instanceof TelegramFailure ? error : new TelegramFailure("telegram_unavailable", 1000);
