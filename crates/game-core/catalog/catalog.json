@@ -2051,7 +2051,7 @@
   "SYNC": {
     "start": 3,
     "perLevel": 3,
-    "maxLevel": 30,
+    "maxLevel": 4,
     "half": 6,
     "levelXp": {
       "base": 100,

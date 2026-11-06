@@ -3,8 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "online": "node src/online/main.ts",
+    "online:migrate": "node src/online/migrate.ts"
+  },
   "dependencies": {
     "@crowned-dogs/core": "*",
-    "grammy": "1.46.0"
+    "grammy": "1.46.0",
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "@types/pg": "8.15.6"
   }
 }
