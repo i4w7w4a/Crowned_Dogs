@@ -31,26 +31,54 @@ function setup() {
     show(view:string){shows.push(view);} setActive(on:boolean){activity.push(on);} dispose(){disposed++;}
   }
   class Loader {
-    back:()=>void=()=>{}; hidden=0; disposed=false;
+    back:()=>void=()=>{}; hidden=0; shown=0; disposed=false;
     constructor(){loader=this;}
-    show(back:()=>void){this.back=back;} ready(){return Promise.resolve();}
+    show(back:()=>void){this.shown++;this.back=back;} ready(){return Promise.resolve();}
     failed(){return Promise.resolve("back");} hide(){this.hidden++;} dispose(){this.disposed=true;}
   }
   const imported = deferred<object>();
-  const host = { BaseScreen:Base,MawLoader:Loader,
+  const host = { BaseScreen:Base,MawLoader:Loader,selectBattle:undefined as undefined|((signal:AbortSignal)=>Promise<unknown>),
     gameAudio:{unlock(){unlocked++;}}, mountSoundSettings(){},showSoundSettings(on:boolean){settings.push(on);},
     loadBattle:()=>imported.promise,loadLocalLoadout:()=>({}) };
   const f = {
     app: undefined as RustApplication|undefined,
     globals:{document,location,history,addEventListener:window.addEventListener.bind(window),removeEventListener:window.removeEventListener.bind(window)},
     mount(){this.app=new RustApplication(host);return this.app;},
+    selectBattle(select:(signal:AbortSignal)=>Promise<unknown>){host.selectBattle=select;},
     mountOwned(){mount_application(host);},
     get base(){return base!;},get loader(){return loader!;}, get unlocked(){return unlocked;},get disposed(){return disposed;},get starts(){return starts;},
     window,document,get root(){return root;},location,shows,activity,settings,
-    finishImport(){imported.resolve({async startBattle(_loadout:unknown,_back:unknown,before:()=>Promise<void>,signal:AbortSignal){signal.throwIfAborted();await before();starts++;}});},
+    finishImport(checkRemote?:(remote:unknown)=>void){imported.resolve({async startBattle(_loadout:unknown,_back:unknown,before:()=>Promise<void>,signal:AbortSignal,remote:unknown){signal.throwIfAborted();checkRemote?.(remote);await before();starts++;}});},
   };
   return f;
 }
+test("online lobby stays interactive until selection finishes, before the modal arena loader opens",async()=>fixture(async f=>{
+  const selection=deferred<object>();const remote={id:"selected-server-match"};
+  f.selectBattle(()=>selection.promise);f.mount();
+  const pending=f.base.enter({});await settle();
+  assert.equal(f.loader.shown,0,"a modal arena loader must not make the interactive lobby inert");
+  f.finishImport(value=>assert.equal(value,remote));selection.resolve(remote);await pending;
+  assert.equal(f.loader.shown,1);assert.equal(f.starts,1);
+}));
+test("leaving the online lobby returns to base without opening the arena loader",async()=>fixture(async f=>{
+  f.selectBattle(async()=>{throw new DOMException("Back to base","AbortError");});f.mount();
+  const pending=f.base.enter({});await settle();
+  assert.equal(f.loader.shown,0);await pending;
+  assert.equal(f.loader.shown,0);assert.equal(f.starts,0);assert.equal(f.location.hash,"#base");
+  assert.equal(f.activity.at(-1),true);
+}));
+test("disposing during lobby selection cannot activate a late selected match",async()=>fixture(async f=>{
+  const selection=deferred<object>();f.selectBattle(()=>selection.promise);
+  const app=f.mount(),pending=f.base.enter({});await settle();app.dispose();
+  selection.resolve({id:"late-server-match"});await pending;
+  assert.equal(f.loader.shown,0);assert.equal(f.starts,0);assert.equal(f.location.hash,"#fitting");
+}));
+test("unexpected lobby failure restores the base and sound settings",async()=>fixture(async f=>{
+  f.selectBattle(async()=>{throw Error("selection failed");});f.mount();
+  await assert.rejects(f.base.enter({}),/selection failed/);
+  assert.equal(f.loader.shown,0);assert.equal(f.location.hash,"#base");
+  assert.equal(f.activity.at(-1),true);assert.equal(f.settings.at(-1),true);
+}));
 test("Rust app routes, visibility and gesture listeners dispose cleanly", async()=>fixture(async f=>{
   const app=f.mount(); assert.deepEqual(f.shows,["fitting"]);
   f.location.hash="#weapon";f.window.dispatchEvent(new Event("hashchange"));assert.deepEqual(f.shows,["fitting","weapon"]);

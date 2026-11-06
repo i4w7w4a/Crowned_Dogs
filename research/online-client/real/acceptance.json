@@ -1,0 +1,338 @@
+{
+  "phase2": {
+    "startedAt": "2026-11-06T19:01:52.758Z",
+    "buildSha": "4977124b08d8c34843b0305bf9eac300b15b0a85",
+    "kind": "real-api-two-browser-contexts",
+    "status": "passed",
+    "steps": [
+      {
+        "at": "2026-11-06T19:01:56.656Z",
+        "name": "Два настоящих API-входа и изолированные cookie jar подтверждены"
+      },
+      {
+        "at": "2026-11-06T19:01:56.67Z",
+        "name": "Продолжение после исправления lobby: прежние профили прочитаны из PostgreSQL"
+      },
+      {
+        "at": "2026-11-06T19:02:00.496Z",
+        "name": "Вызов принят UI-кнопкой; первый snapshot loading без боевого срока",
+        "matchId": "5b4955ae-3fc1-45fd-83d6-2b609d51d323"
+      },
+      {
+        "at": "2026-11-06T19:02:21.041Z",
+        "name": "Оба ready подтверждены настоящим API, перспективы и снимки проверены"
+      },
+      {
+        "at": "2026-11-06T19:02:26.368Z",
+        "name": "Первый приказ сохранён; ожидаем restart API с той же PostgreSQL schema",
+        "matchId": "5b4955ae-3fc1-45fd-83d6-2b609d51d323",
+        "eventCursor": 0,
+        "deadline": 1793991800217
+      },
+      {
+        "at": "2026-11-06T19:02:28.204Z",
+        "name": "Restart сохранил первый приказ, deadline и сессию"
+      },
+      {
+        "at": "2026-11-06T19:02:30.416Z",
+        "name": "Два UI-приказа дали один одинаковый серверный отчёт",
+        "battle": {
+          "id": "5b4955ae-3fc1-45fd-83d6-2b609d51d323",
+          "version": 11,
+          "phase": "active",
+          "side": 0,
+          "ready": [
+            true,
+            true
+          ],
+          "turn": 2,
+          "eventCursor": 1,
+          "result": null
+        }
+      },
+      {
+        "at": "2026-11-06T19:02:41.572Z",
+        "name": "Reload восстановил бой; UI-сдача завершила его одним итогом",
+        "result": {
+          "winner": 1,
+          "reason": "surrender"
+        }
+      },
+      {
+        "at": "2026-11-06T19:03:02.722Z",
+        "name": "Профили и жетоны сохранены; повтор финала не начислил награду"
+      }
+    ],
+    "network": [
+      {
+        "actor": 1,
+        "method": "POST",
+        "path": "/r2/api/online/auth/telegram",
+        "status": 200
+      },
+      {
+        "actor": 0,
+        "method": "POST",
+        "path": "/r2/api/online/invites",
+        "status": 200
+      },
+      {
+        "actor": 1,
+        "method": "POST",
+        "path": "/r2/api/online/auth/telegram",
+        "status": 200
+      },
+      {
+        "actor": 1,
+        "method": "POST",
+        "path": "/r2/api/online/invites/:id/accept",
+        "status": 200
+      },
+      {
+        "actor": 1,
+        "method": "POST",
+        "path": "/r2/api/online/matches/:id/commands",
+        "status": 200,
+        "action": "ready"
+      },
+      {
+        "actor": 0,
+        "method": "POST",
+        "path": "/r2/api/online/matches/:id/commands",
+        "status": 409,
+        "action": "ready"
+      },
+      {
+        "actor": 0,
+        "method": "POST",
+        "path": "/r2/api/online/matches/:id/commands",
+        "status": 200,
+        "action": "ready"
+      },
+      {
+        "actor": 0,
+        "method": "POST",
+        "path": "/r2/api/online/matches/:id/commands",
+        "status": 200,
+        "action": "press"
+      },
+      {
+        "actor": 0,
+        "method": "POST",
+        "path": "/r2/api/online/matches/:id/commands",
+        "status": 200,
+        "action": "press"
+      },
+      {
+        "actor": 0,
+        "method": "POST",
+        "path": "/r2/api/online/matches/:id/commands",
+        "status": 200,
+        "action": "press"
+      },
+      {
+        "actor": 1,
+        "method": "POST",
+        "path": "/r2/api/online/matches/:id/commands",
+        "status": 200,
+        "action": "press"
+      },
+      {
+        "actor": 1,
+        "method": "POST",
+        "path": "/r2/api/online/matches/:id/commands",
+        "status": 200,
+        "action": "press"
+      },
+      {
+        "actor": 1,
+        "method": "POST",
+        "path": "/r2/api/online/matches/:id/commands",
+        "status": 200,
+        "action": "press"
+      },
+      {
+        "actor": 0,
+        "method": "POST",
+        "path": "/r2/api/online/matches/:id/commands",
+        "status": 200,
+        "action": "submit"
+      },
+      {
+        "actor": 1,
+        "method": "POST",
+        "path": "/r2/api/online/matches/:id/commands",
+        "status": 200,
+        "action": "submit"
+      },
+      {
+        "actor": 0,
+        "method": "POST",
+        "path": "/r2/api/online/matches/:id/commands",
+        "status": 200,
+        "action": "surrender"
+      },
+      {
+        "actor": 1,
+        "method": "POST",
+        "path": "/r2/api/online/auth/telegram",
+        "status": 200
+      }
+    ],
+    "screenshots": [
+      "side0-result.png",
+      "side1-result.png",
+      "actor0-profile.png",
+      "actor1-profile.png"
+    ],
+    "pageErrors": [],
+    "accounts": [
+      {
+        "actor": 0,
+        "id": "93bbc95d-0da8-4083-a5e5-f7e6bc70ed18",
+        "tag": "K-001-001",
+        "auth": "signed-api-cookie"
+      },
+      {
+        "actor": 1,
+        "id": "319aa252-6030-4567-8d32-5bc21eb8a10a",
+        "tag": "K-001-002",
+        "auth": "official-telegram-sdk"
+      }
+    ],
+    "profiles": [
+      {
+        "actor": 0,
+        "id": "93bbc95d-0da8-4083-a5e5-f7e6bc70ed18",
+        "tag": "K-001-001",
+        "version": 4,
+        "profile": {
+          "xp": 40,
+          "free": 2,
+          "level": 1,
+          "stats": {
+            "power": 1,
+            "cooling": 0,
+            "instinct": 0,
+            "reflexes": 0
+          },
+          "mastery": {
+            "rifle": 74,
+            "pistol": 74,
+            "sniper": 74,
+            "shotgun": 74
+          }
+        }
+      },
+      {
+        "actor": 1,
+        "id": "319aa252-6030-4567-8d32-5bc21eb8a10a",
+        "tag": "K-001-002",
+        "version": 3,
+        "profile": {
+          "xp": 0,
+          "free": 6,
+          "level": 2,
+          "stats": {
+            "power": 0,
+            "cooling": 0,
+            "instinct": 0,
+            "reflexes": 0
+          },
+          "mastery": {
+            "rifle": 74,
+            "pistol": 74.5,
+            "sniper": 74,
+            "shotgun": 74
+          }
+        }
+      }
+    ],
+    "finishedAt": "2026-11-06T19:03:02.723Z"
+  },
+  "restart": {
+    "elapsedMs": 1413,
+    "sameSchema": true,
+    "clockOffsetMs": 0
+  },
+  "schemaVersion": 1,
+  "profileVisual": {
+    "status": "passed",
+    "proof": [
+      {
+        "actor": 0,
+        "tag": "K-001-001",
+        "level": 1,
+        "xp": 40,
+        "free": 2,
+        "unchanged": true
+      },
+      {
+        "actor": 1,
+        "tag": "K-001-002",
+        "level": 2,
+        "xp": 0,
+        "free": 6,
+        "unchanged": true
+      }
+    ]
+  },
+  "limits": [
+    "Synthetic signed Telegram users, not human Telegram accounts",
+    "Live Telegram delivery and browser bot confirmation were not exercised",
+    "Initial ready screenshots captured poll transition and are not used as settled visual evidence"
+  ],
+  "phase1": {
+    "blocker": "Modal arena loader intercepted lobby pointer events; fixed by bfc90fb",
+    "completedSteps": [
+      {
+        "at": "2026-11-06T18:50:53.164Z",
+        "name": "Два настоящих API-входа и изолированные cookie jar подтверждены"
+      },
+      {
+        "at": "2026-11-06T18:50:54.265Z",
+        "name": "Mini App после TTL: signed auth401, тот же профиль восстановлен через действующую cookie"
+      },
+      {
+        "at": "2026-11-06T18:51:17.116Z",
+        "name": "Внешность обоих игроков и очко A сохранены через UI и пережили reload"
+      }
+    ],
+    "network": [
+      {
+        "actor": 1,
+        "method": "POST",
+        "path": "/r2/api/online/auth/telegram",
+        "status": 200
+      },
+      {
+        "actor": 1,
+        "method": "POST",
+        "path": "/r2/api/online/auth/telegram",
+        "status": 401
+      },
+      {
+        "actor": 0,
+        "method": "POST",
+        "path": "/r2/api/online/profile/commands",
+        "status": 200,
+        "action": "appearance"
+      },
+      {
+        "actor": 1,
+        "method": "POST",
+        "path": "/r2/api/online/profile/commands",
+        "status": 200,
+        "action": "appearance"
+      },
+      {
+        "actor": 0,
+        "method": "POST",
+        "path": "/r2/api/online/profile/commands",
+        "status": 200,
+        "action": "spend"
+      }
+    ],
+    "buildSha": "964be3b8de1ca1cf3f8f0c6a39c36fd18aefba1d"
+  }
+}

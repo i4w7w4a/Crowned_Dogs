@@ -829,6 +829,26 @@ impl RustArena {
         s.arms_only = sdk(&s.host, "armsOnly", &[model]);
         invoke(&s.arms_only, &[s.fp.into()]);
     }
+    /// Immutable match appearances; both sides may use the same source model.
+    #[wasm_bindgen(js_name=applyLooks)]
+    pub fn apply_looks(&self, mine: JsValue, theirs: JsValue) {
+        let mut s = self.state.borrow_mut();
+        if let Some(me) = s.me.as_ref() {
+            let model=me.model.clone();
+            if get(&s.arms_only,"dispose").is_function() { let _=try_call(&s.arms_only,"dispose",&[]); }
+            super::look::first_person(model.clone(),s.fp,mine.clone());
+            super::look::apply(model.clone(),mine);
+            s.arms_only=sdk(&s.host,"armsOnly",&[model]);
+            invoke(&s.arms_only,&[s.fp.into()]);
+        }
+        if let Some(enemy)=s.enemy.as_ref() { super::look::apply(enemy.model.clone(),theirs.clone()); }
+        if let Some(mirror)=s.mirror.as_ref() {
+            super::look::apply(mirror.model.clone(),theirs);
+            *mirror.mats.borrow_mut()=meshes(&mirror.model).iter().map(|mesh|get(mesh,"material")).collect();
+        }
+        let quality=s.quality.clone();
+        s.set_quality(quality);
+    }
     /// Compiles every shader of the scene ahead of the first frame.
     pub fn warm(&self) -> Promise {
         let s = self.state.borrow();
@@ -1266,6 +1286,7 @@ impl ArenaState {
     ) -> Figure {
         let h = &self.host;
         let model = sdk(h, "clone", &[get(gltf, "scene")]);
+        super::look::isolate_materials(&model);
         sdk(h, "dress", &[model.clone(), get(h, "KIT_A")]);
         if near {
             // The first-person cut swaps index buffers: keep them apart from the foe's clone.

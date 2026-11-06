@@ -111,7 +111,7 @@ fn load_with_parent(launch: JsValue, view: JsValue, parent: JsValue) -> Promise 
                     Ok(_) => return Ok(true.into()),
                     Err(error) => error,
                 };
-                if boolean(&get(&pending.signal, "aborted")) {
+                if boolean(&get(&pending.signal, "aborted")) || string(&get(&error,"name"))=="AbortError" {
                     return Ok(false.into());
                 }
                 call(&get(&global(), "console"), "error", &["crowned-dogs: the arena failed to load".into(), error.clone()]);
@@ -163,19 +163,12 @@ fn return_base(s: &JsValue) {
         call(&button, "focus", &[]);
     }
 }
-fn enter_battle(s: JsValue, loadout: JsValue) -> Promise {
-    if !available(&s) {
-        return Promise::resolve(&JsValue::UNDEFINED);
-    }
-    set(&s, "loading", &true.into());
-    let controller = construct(&get(&global(), "AbortController"), &[]);
-    set(&s, "controller", &controller);
-    call(&get(&s, "base"), "setActive", &[false.into()]);
-    invoke(&get(&get(&s, "host"), "showSoundSettings"), &[false.into()]);
+fn load_selected_battle(s: &JsValue, loadout: JsValue, controller: &JsValue, remote: JsValue) -> Promise {
     let state = s.clone();
     let launch = Closure::<dyn FnMut(JsValue, JsValue) -> JsValue>::new(move |before, signal| {
         let state = state.clone();
         let loadout = loadout.clone();
+        let remote = remote.clone();
         future_to_promise(async move {
             abort_check(&signal)?;
             let battle = JsFuture::from(Promise::resolve(&apply(
@@ -189,19 +182,47 @@ fn enter_battle(s: JsValue, loadout: JsValue) -> Promise {
             JsFuture::from(Promise::resolve(&try_call(
                 &battle,
                 "startBattle",
-                &[loadout, on_exit, before, signal],
+                &[loadout, on_exit, before, signal, remote],
             )?))
             .await
         })
         .into()
     })
     .into_js_value();
-    let loading = load_with_parent(launch, get(&s, "loader"), get(&controller, "signal"));
+    load_with_parent(launch, get(s, "loader"), get(controller, "signal"))
+}
+fn enter_battle(s: JsValue, loadout: JsValue) -> Promise {
+    if !available(&s) {
+        return Promise::resolve(&JsValue::UNDEFINED);
+    }
+    set(&s, "loading", &true.into());
+    let controller = construct(&get(&global(), "AbortController"), &[]);
+    set(&s, "controller", &controller);
+    call(&get(&s, "base"), "setActive", &[false.into()]);
+    invoke(&get(&get(&s, "host"), "showSoundSettings"), &[false.into()]);
+    let select = get(&get(&s, "host"), "selectBattle");
+    let loading = if select.is_function() {
+        let state = s.clone();
+        future_to_promise(async move {
+            let signal = get(&controller, "signal");
+            abort_check(&signal)?;
+            // The lobby needs input. Do not put the modal 3D loader above it.
+            let remote = JsFuture::from(Promise::resolve(&apply(&select, &JsValue::UNDEFINED, &[signal.clone()])?)).await?;
+            abort_check(&signal)?;
+            JsFuture::from(load_selected_battle(&state, loadout, &controller, remote)).await
+        })
+    } else {
+        load_selected_battle(&s, loadout, &controller, JsValue::UNDEFINED)
+    };
     future_to_promise(async move {
         let outcome = JsFuture::from(loading).await;
         set(&s, "loading", &false.into());
         set(&s, "controller", &JsValue::NULL);
-        let entered = outcome?;
+        let entered = match outcome {
+            Ok(value) => value,
+            Err(error) if string(&get(&error,"name")) == "AbortError" => false.into(),
+            Err(error) => { return_base(&s); return Err(error); }
+        };
         if !boolean(&get(&s, "disposed")) {
             if boolean(&entered) {
                 set(&s, "inBattle", &true.into());
@@ -281,7 +302,7 @@ impl RustApplication {
             }
         }));
         let search = string(&get(&get(&global(), "location"), "search"));
-        if js_sys::RegExp::new("[?&]cal\\b", "").test(&search) {
+        if boolean(&get(&host,"resumeOnline")) || js_sys::RegExp::new("[?&]cal\\b", "").test(&search) {
             let _ = enter_battle(state.clone(), invoke(&get(&host, "loadLocalLoadout"), &[]));
         }
         Self { state, listeners }

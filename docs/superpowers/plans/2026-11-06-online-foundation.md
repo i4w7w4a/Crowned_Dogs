@@ -1,0 +1,30 @@
+# Online foundation implementation plan
+
+Spec: `docs/online-pvp.md`. Scope: milestone 1 only. The complete playable PvP release still requires milestones 2–5 in the spec.
+
+## Global Constraints
+
+- User decisions: public Telegram access, existing 3D Mini App/site, fresh server progress, maximum level 4.
+- Preserve Rust ownership of gameplay formulas, profile defaults, spending, tag format and progression. Node handles transport, cryptographic verification and SQL; no duplicate game formulas.
+- No production deployment, live Telegram messages, migrations against existing operator data, shared-branch push or merge in this task.
+- Work only in the managed `codex/online-foundation` worktree. Never modify the original checkout, its private assets, or existing user drafts.
+- Do not expose BOT_TOKEN, DATABASE_URL, initData or session tokens in logs, errors or documentation. Test credentials are synthetic.
+- Source and tests must be committed together; use TDD for new behavior. Existing project checks and web build must pass before delivery.
+- Do not claim the 3D game is online after this milestone; document the remaining integration.
+
+### Task 1: Persistent Telegram accounts and profile API
+
+Build one cohesive, independently runnable foundation:
+
+1. Set the existing catalogue maximum level to **4**, keeping other numbers/formulas unchanged. Write a meaningful regression test first: large earned XP never raises level above 4, and reaching the cap preserves a valid point budget. Test the real Rust core.
+2. Add a small `apps/server/src/online/` implementation with PostgreSQL migrations, a pg adapter, storage, Telegram initData verification and Node HTTP API. Expose a separate `npm run online` entry point and migration command; preserve the existing bot entry point for now. No new rendering/UI.
+3. PostgreSQL schema only for this milestone: operators/profiles (may share one table), unique Telegram ID and dog tag, transactional tag allocation, persistent sessions storing SHA-256 token hashes, and versioned migrations. A new verified account receives a UUID, fresh Rust profile, permanent Rust-generated tag and safe initial appearance/loadout fields. Identity updates refresh Telegram names without resetting ID/tag/progress. Do not accept client level, stats, tag or XP.
+4. Use existing `core.nextTag` and `core.syncFresh` through WASM, and a row lock for tag allocation. Registration/re-registration plus session creation commit atomically. Concurrent same-user logins must return one account; different users must not get duplicate tags. Preserve format/capacity; explicit tag exhaustion rolls back. Node may allocate UUIDs and store JSON but must not reimplement game arithmetic.
+5. Validate Telegram HMAC against raw initData: strict duplicate-field rejection, required hash/auth_date/user, correctly sorted decoded data-check-string, timing-safe signature comparison, safe positive Telegram ID, malformed JSON rejection, expired input rejection (5 minute window) and bounded future skew (30 seconds). Hash verification excludes hash; follow official HMAC protocol for all other fields. Do not trust initDataUnsafe or request identity fields. Synthetic independently signed fixtures must prove tampering, expiry, wrong token, duplicates and malformed input are rejected.
+6. Routes under `/api/online` by default: `POST /auth/telegram` (only initData), `GET /me`, `POST /auth/logout`, `GET /health`. Make the route mount configurable as `API_BASE_PATH` so the existing site's `/r2/api/online` can be served unchanged through its project Caddy; cookie Path follows the configured mount. Reject malformed mounts and test one non-default mount. Return server-owned account/profile and cap 4. Use random 256-bit sessions, HttpOnly cookie, SameSite protection, production Secure, explicit cookie path, 8 hour expiry and revocation. Mutation routes enforce configured same Origin; no wildcard credentialed CORS. Strict bounded JSON body (16 KiB), safe status/error responses, request timeouts and modest in-process rate limiting. Bind loopback by default. Do not invent a guest login when Telegram data is absent. Health checks database readiness without returning configuration.
+7. Prefer `pg` in production. Use real PostgreSQL semantics in tests via local embedded PGlite if no local PostgreSQL is available; it is a test dependency only. Its single-connection concurrency limits must be documented, not disguised as proof of multi-worker PostgreSQL races. Add an opt-in native PostgreSQL integration test path if feasible without infrastructure changes. The real pg adapter must use one checked-out connection per transaction, rollback on errors and always release it.
+8. Integration tests must exercise real SQL and real HTTP (ephemeral loopback ports) for repeated registration, unique tags, identity refresh without progression reset, reopen persistence, migration idempotence, expired/revoked sessions, unauthorized reads, malformed/oversized bodies, bad origin and refusal of injected client progress. Parameterize SQL. Tests use isolated temporary databases/directories with verified cleanup boundaries; never production credentials.
+9. Add concise Russian operations/setup documentation including DB env variable names only, commands, pending production migration/import/backup requirements, security assumptions, and clear status that current UI and Telegram battle still use old paths. Update relevant HANDOFF items with accurate partial completion, preserving remaining work. Update `.env.example` without secrets. Pin dependency versions and update lockfile.
+10. Run targeted RED then GREEN, typecheck, Node/WASM project tests, relevant Rust test, render tests and web build. Never start the real bot. Self-review, commit and report full evidence/limitations.
+
+Expected touched areas: new online source/tests/migration files; `apps/server/package.json`, root scripts/lockfile, `.env.example`, catalogue and relevant sync test, `HANDOFF.md`, `docs/online-pvp.md` implementation status and a small online setup document. Avoid unrelated changes.
