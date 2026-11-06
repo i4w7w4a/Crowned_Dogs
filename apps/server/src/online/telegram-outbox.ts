@@ -37,7 +37,7 @@ export class TelegramOutboxWorker {
     if (!delivery) return false;
     if (this.#abort.signal.aborted) return true;
     const { leaseId, card, chatId, threadId, messageId } = delivery;
-    if (messageId === null && (card.status === "cancelled" || card.status === "expired")) {
+    if (messageId === null && card.status !== "open") {
       await outbox.complete(leaseId, null);
       return true;
     }

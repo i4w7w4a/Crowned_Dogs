@@ -40,6 +40,15 @@ test("повтор edit сохраняет message id; closed до первой 
   await worker.runOnce(); assert.equal(edited, 41); assert.deepEqual(q.completed, [["lease-1", 41]]);
 });
 
+test("принятый до первой публикации вызов завершает outbox без отправки", async () => {
+  const item = delivery(); item.card.status = "accepted";
+  const q = queue(item); let sends = 0;
+  const worker = new TelegramOutboxWorker({ outbox: q.outbox, transport: { async deliver() { sends++; return 91; } }, botUsername: "test_bot" });
+  assert.equal(await worker.runOnce(), true);
+  assert.equal(sends, 0, "accepted unpublished invitation must not create a Telegram post");
+  assert.deepEqual(q.completed, [["lease-1", null]]); assert.deepEqual(q.failed, []);
+});
+
 test("временная ошибка и 429 назначают retry; постоянный запрет требует ручного действия", async () => {
   for (const [error, retryAt] of [[new TelegramFailure("telegram_rate_limited", 19000), 20000], [new TelegramFailure("telegram_unavailable", 1000), 2000], [new TelegramFailure("bot_forbidden"), null]] as const) {
     const q = queue(delivery());
