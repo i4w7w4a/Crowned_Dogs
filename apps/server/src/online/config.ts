@@ -1,3 +1,4 @@
+import { proxyPeers } from "./peer-ip.ts";
 export function required(env: NodeJS.ProcessEnv, name: string): string {
     const value = env[name]?.trim();
     if (!value)
@@ -27,5 +28,6 @@ export function onlineRuntimeConfig(env: NodeJS.ProcessEnv) {
     const web = new URL(webAppUrl);
     if (web.origin !== base.origin || web.username || web.password || web.search || web.hash)
         throw new Error("Invalid Web App URL");
-    return { ...base, botUsername, chatId, threadId: Number(thread), webAppUrl };
+    const trustedProxyIps = [...proxyPeers((env.ONLINE_TRUSTED_PROXY_IPS ?? "").split(",").map(ip => ip.trim()).filter(Boolean))];
+    return { ...base, botUsername, chatId, threadId: Number(thread), webAppUrl, trustedProxyIps };
 }

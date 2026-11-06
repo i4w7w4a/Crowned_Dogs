@@ -4,6 +4,7 @@ import { maxLevel, OnlineStore, SESSION_MS, TagExhausted } from "./storage.ts";
 import { verifyTelegram } from "./telegram.ts";
 import { GameFailure, type OnlineGameService } from "./game-service.ts";
 import { BROWSER_LOGIN_MS, type BrowserLoginService } from "./browser-login.ts";
+import { normalizeIp, proxyPeers } from "./peer-ip.ts";
 export interface OnlineOptions {
     store: OnlineStore;
     game?: OnlineGameService;
@@ -13,10 +14,12 @@ export interface OnlineOptions {
     basePath?: string;
     production?: boolean;
     now?: () => number;
+    trustedProxyIps?: readonly string[];
     rateLimit?: {
         max: number;
         authMax: number;
         windowMs: number;
+        playerMax?: number;
     };
 }
 const COOKIE = "cd_online_session";
@@ -111,7 +114,9 @@ export function createOnlineServer(options: OnlineOptions) {
         throw new Error("Bot token required");
     const now = options.now ?? Date.now;
     const limit = options.rateLimit ?? { max: 1000, authMax: 20, windowMs: 60000 };
-    if (![limit.max, limit.authMax, limit.windowMs].every(n => Number.isSafeInteger(n) && n > 0))
+    const playerMax = limit.playerMax ?? 240;
+    const trustedPeers = proxyPeers(options.trustedProxyIps ?? []);
+    if (![limit.max, limit.authMax, limit.windowMs, playerMax].every(n => Number.isSafeInteger(n) && n > 0))
         throw new Error("Invalid rate limit");
     const buckets = new Map<string, {
         until: number;
@@ -128,25 +133,34 @@ export function createOnlineServer(options: OnlineOptions) {
         try {
             const at = now();
             const path = (request.url ?? "").startsWith(basePath + "/") ? (request.url ?? "").slice(basePath.length) : "";
-            // Trust the socket, not a client supplied X-Forwarded-For. Proxy setup is documented.
-            const key = request.socket.remoteAddress ?? "unknown";
-            for (const [ip, bucket] of buckets)
-                if (bucket.until <= at)
-                    buckets.delete(ip);
-            let bucket = buckets.get(key);
-            if (!bucket) {
-                if (buckets.size >= 10000)
+            const peer = normalizeIp(request.socket.remoteAddress ?? "") ?? "unknown";
+            const supplied = request.headers["x-crowned-client-ip"];
+            // Only an exact trusted peer may replace the transport address. XFF is never read.
+            const clientIp = trustedPeers.has(peer) && typeof supplied === "string" ? normalizeIp(supplied) : null;
+            const key = clientIp ?? peer;
+            const consumeIp = () => {
+                for (const [ip, bucket] of buckets)
+                    if (bucket.until <= at)
+                        buckets.delete(ip);
+                let bucket = buckets.get(key);
+                if (!bucket) {
+                    if (buckets.size >= 10000)
+                        throw new HttpFailure(429, "rate_limited");
+                    bucket = { until: at + limit.windowMs, requests: 0, auth: 0 };
+                    buckets.set(key, bucket);
+                }
+                bucket.requests++;
+                if (["/auth/telegram", "/auth/browser/start", "/auth/browser/consume"].includes(path))
+                    bucket.auth++;
+                if (bucket.requests > limit.max || bucket.auth > limit.authMax) {
+                    response.setHeader("Retry-After", String(Math.ceil((bucket.until - at) / 1000)));
                     throw new HttpFailure(429, "rate_limited");
-                bucket = { until: at + limit.windowMs, requests: 0, auth: 0 };
-                buckets.set(key, bucket);
-            }
-            bucket.requests++;
-            if (["/auth/telegram", "/auth/browser/start", "/auth/browser/consume"].includes(path))
-                bucket.auth++;
-            if (bucket.requests > limit.max || bucket.auth > limit.authMax) {
-                response.setHeader("Retry-After", String(Math.ceil((bucket.until - at) / 1000)));
-                throw new HttpFailure(429, "rate_limited");
-            }
+                }
+            };
+            const accountRoute = path === "/me" || path === "/auth/logout" || Boolean(options.game && gameMethod(path));
+            // Successful authenticated polling has no shared IP quota.
+            if (!accountRoute)
+                consumeIp();
             const routes: Record<string, string> = {
                 [basePath + "/health"]: "GET", [basePath + "/me"]: "GET",
                 [basePath + "/auth/telegram"]: "POST", [basePath + "/auth/logout"]: "POST",
@@ -209,11 +223,12 @@ export function createOnlineServer(options: OnlineOptions) {
                 }
             }
             else {
-                const body = method === "POST" ? await readBody(request, true) : {};
                 const token = cookieValue(request);
                 const account = await store.authenticate(token, at);
-                if (!account)
+                if (!account) {
+                    consumeIp();
                     throw new HttpFailure(401, "unauthorized");
+                }
                 for (const [id, b] of players)
                     if (b.until <= at)
                         players.delete(id);
@@ -221,11 +236,14 @@ export function createOnlineServer(options: OnlineOptions) {
                 if (!player) {
                     if (players.size >= 10000)
                         throw new HttpFailure(429, "rate_limited");
-                    player = { until: at + 60000, requests: 0 };
+                    player = { until: at + limit.windowMs, requests: 0 };
                     players.set(account.id, player);
                 }
-                if (++player.requests > 240)
+                if (++player.requests > playerMax) {
+                    response.setHeader("Retry-After", String(Math.ceil((player.until - at) / 1000)));
                     throw new HttpFailure(429, "rate_limited");
+                }
+                const body = method === "POST" ? await readBody(request, true) : {};
                 if (path === "/auth/logout") {
                     if (Object.keys(body).length)
                         throw new HttpFailure(400, "invalid_body");
