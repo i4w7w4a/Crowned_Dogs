@@ -8,6 +8,20 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: crowned_dogs_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d crowned_dogs_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,7 +34,11 @@ jobs:
       - run: npm run rust:build
       - run: cargo test --locked --release -p game-core -p game-client -p game-motion -p game-graphics -p game-ui
       - run: npm run typecheck
-      - run: npm test
+      - name: Тесты игры и транзакций PostgreSQL
+        run: npm test
+        env:
+          # Disposable service container only; never a production connection.
+          ONLINE_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/crowned_dogs_test
       - run: npm run test:render
       - run: npm run web:build
 
