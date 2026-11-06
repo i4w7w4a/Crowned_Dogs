@@ -5,17 +5,15 @@ import { Pool } from "pg";
 import { PgDatabase } from "../src/online/database.ts";
 import { migrate, OnlineStore } from "../src/online/storage.ts";
 import { clock } from "./online-fixtures.ts";
+import { nativePoolConfigs } from "./online-native-config.ts";
 
 // Never falls back to ONLINE_DATABASE_URL or .env. Only an explicitly isolated local test DB.
 const connectionString = process.env.ONLINE_TEST_DATABASE_URL;
 test("native PostgreSQL pins transactions, releases after rollback and serializes concurrent registrations", { skip: !connectionString, timeout: 30_000 }, async t => {
-  const url = new URL(connectionString!);
-  assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(url.hostname), "Native tests require a loopback database");
-  assert.match(url.pathname, /^\/crowned_dogs_test(?:_[a-z0-9_]+)?$/i, "Native tests require a dedicated crowned_dogs_test database");
   const schema = "online_test_" + randomUUID().replaceAll("-", "");
-  assert.match(schema, /^online_test_[a-f0-9]{32}$/);
-  const admin = new Pool({ connectionString, max: 1 });
-  const pool = new Pool({ connectionString, max: 4, options: `-c search_path=${schema}`, connectionTimeoutMillis: 5000 });
+  const config = nativePoolConfigs(connectionString!, schema);
+  const admin = new Pool(config.admin);
+  const pool = new Pool(config.application);
   t.after(async () => {
     await pool.end();
     // Identifier is generated above and validated; never derived from environment input.
