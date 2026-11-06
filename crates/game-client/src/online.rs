@@ -28,7 +28,197 @@ fn player(p: &Value) -> Value {
     let callsign = text(&p["appearance"]["callsign"]);
     json!({"id":p["id"],"tag":p["tag"],"name":if callsign.is_empty(){text(&p["telegram"]["firstName"])}else{callsign},
         "telegram":pick(&p["telegram"],&["firstName","lastName","username"]),"level":p["profile"]["level"],
-        "appearance":crate::look::normalize(&p["appearance"]),"loadout":p["loadout"]})
+        "appearance":crate::look::normalize(&p["appearance"]),"loadout":public_loadout(&p["loadout"])})
+}
+fn list(v: &Value, f: fn(&Value) -> Value) -> Value {
+    json!(v
+        .as_array()
+        .map(|a| a.iter().map(f).collect::<Vec<_>>())
+        .unwrap_or_default())
+}
+fn public_loadout(v: &Value) -> Value {
+    let mut out = pick(v, &["head", "body", "suit", "boots", "knife", "grenade"]);
+    for key in ["weapon1", "weapon2"] {
+        out[key] = if v[key].is_null() {
+            Value::Null
+        } else {
+            let mut w = pick(&v[key], &["item", "skin"]);
+            if v[key]["mods"].is_object() {
+                w["mods"] = pick(
+                    &v[key]["mods"],
+                    &["optic", "muzzle", "rail", "mag", "stock"],
+                );
+            }
+            w
+        };
+    }
+    if let Some(colors) = v["colors"].as_object() {
+        out["colors"] = json!({});
+        for (key, color) in colors {
+            if crate::look::gear_color(text(color)) {
+                out["colors"][key] = color.clone();
+            }
+        }
+    }
+    out
+}
+fn public_weapon(v: &Value) -> Value {
+    if v.is_null() {
+        return Value::Null;
+    }
+    pick(
+        v,
+        &[
+            "id",
+            "name",
+            "hands",
+            "power",
+            "flatPen",
+            "crit",
+            "critBonus",
+            "accuracy",
+            "falloff",
+            "needsStance",
+            "splash",
+            "doubleShot",
+            "nightAcc",
+            "tracking",
+            "stanceTurns",
+            "noStancePenalty",
+            "guardBonus",
+            "suppressor",
+        ],
+    )
+}
+fn public_kit(v: &Value) -> Value {
+    if v.is_null() {
+        return Value::Null;
+    }
+    let mut out = pick(
+        v,
+        &[
+            "nvg",
+            "thermal",
+            "heatProof",
+            "grenades",
+            "dodge",
+            "dashEvade",
+            "antiPen",
+            "heatResist",
+            "regen",
+        ],
+    );
+    for k in ["weapon", "sidearm", "knife"] {
+        out[k] = public_weapon(&v[k]);
+    }
+    out["armor"] = pick(&v["armor"], &["head", "body", "groin", "legs"]);
+    out["camo"] = pick(&v["camo"], &["near", "mid", "far"]);
+    out["grenade"] = pick(
+        &v["grenade"],
+        &[
+            "type",
+            "base",
+            "armorPen",
+            "minDistance",
+            "maxDistance",
+            "perFight",
+            "turns",
+        ],
+    );
+    out
+}
+fn public_setup(v: &Value) -> Value {
+    let mut out = pick(v, &["id", "name", "weapon"]);
+    out["kit"] = public_kit(&v["kit"]);
+    out
+}
+fn public_fighter(v: &Value) -> Value {
+    let mut out = pick(
+        v,
+        &[
+            "id",
+            "name",
+            "weapon",
+            "hp",
+            "maxHp",
+            "still",
+            "grenades",
+            "lastDefend",
+            "afkStreak",
+            "flash",
+            "winded",
+            "facesSun",
+            "shieldOff",
+            "smoke",
+            "sidearm",
+            "stunned",
+        ],
+    );
+    out["armor"] = pick(&v["armor"], &["head", "body", "groin", "legs"]);
+    out["gear"] = pick(&v["gear"], &["nvg", "thermal", "heatProof"]);
+    out
+}
+fn public_action(v: &Value) -> Value {
+    pick(v, &["type", "move", "zone"])
+}
+fn public_attack(v: &Value) -> Value {
+    if v.is_null() {
+        return Value::Null;
+    }
+    let mut out = pick(
+        v,
+        &[
+            "weapon",
+            "zone",
+            "chance",
+            "hit",
+            "damage",
+            "crit",
+            "blocked",
+            "shieldBroken",
+            "effect",
+            "double",
+        ],
+    );
+    if v["splash"].is_array() {
+        out["splash"] = list(&v["splash"], |x| pick(x, &["zone", "damage", "blocked"]));
+    }
+    out
+}
+fn public_hazard(v: &Value) -> Value {
+    if v.is_null() {
+        return Value::Null;
+    }
+    let mut out = pick(v, &["kind", "name", "turn", "at", "radius", "hpBefore"]);
+    if v["hits"].is_array() {
+        out["hits"] = list(&v["hits"], |x| {
+            pick(x, &["side", "damage", "shieldOff", "stunned"])
+        });
+    }
+    out
+}
+fn public_report(v: &Value) -> Value {
+    let mut out = pick(
+        v,
+        &[
+            "turn",
+            "distanceBefore",
+            "distanceAfter",
+            "limit",
+            "defend",
+            "moves",
+            "hp",
+            "afk",
+            "lane",
+            "stunned",
+        ],
+    );
+    out["actions"] = list(&v["actions"], public_action);
+    out["attacks"] = list(&v["attacks"], public_attack);
+    if v.get("hazard").is_some() {
+        out["hazard"] = public_hazard(&v["hazard"]);
+    }
+    out
 }
 fn create(opts: &Value) -> Result<Value, String> {
     if opts["players"].as_array().is_none_or(|p| p.len() != 2)
@@ -207,6 +397,16 @@ fn project(s: &Value, id: &str) -> Result<Value, String> {
         &s["match"]["config"],
         &["mapId", "weather", "time", "events", "shelled", "fighters"],
     );
+    m["config"]["fighters"] = list(&s["match"]["config"]["fighters"], public_setup);
+    m["map"] = pick(&s["match"]["map"], &["id", "name", "region", "maxDistance"]);
+    m["fighters"] = list(&s["match"]["fighters"], public_fighter);
+    m["history"] = list(&s["match"]["history"], public_report);
+    if s["match"].get("hazard").is_some() {
+        m["hazard"] = public_hazard(&s["match"]["hazard"]);
+    }
+    if !m["result"].is_null() {
+        m["result"] = pick(&m["result"], &["winner", "reason"]);
+    }
     let mut out = pick(
         s,
         &[
@@ -321,6 +521,12 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             check(&args[0])?;
             if args[0]["phase"] != "finished" || args[0]["match"]["result"].is_null() {
                 return Err("not_finished".into());
+            }
+            if args[0]["match"]["history"]
+                .as_array()
+                .is_none_or(Vec::is_empty)
+            {
+                return Ok(json!((0..2).map(|i|json!({"profile":args[0]["players"][i]["profile"],"xp":0,"levels":0,"lines":[]})).collect::<Vec<_>>()));
             }
             Ok(json!([
                 core(

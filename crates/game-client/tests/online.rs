@@ -74,6 +74,9 @@ fn projection_hides_entropy_and_opponent_intent_even_for_future_fields() {
     s["internalSecret"] = json!("hidden");
     s["match"]["futurePrivate"] = json!("hidden");
     s["match"]["config"]["futurePrivate"] = json!("hidden");
+    s["match"]["fighters"][0]["futurePrivate"] = json!("hidden");
+    s["match"]["config"]["fighters"][0]["kit"]["weapon"]["futurePrivate"] = json!("hidden");
+    s["match"]["history"] = json!([{"turn":0,"attacks":[{"futurePrivate":"hidden","damage":1}]}]);
     let view = call("project", json!([s, "a"]));
     let wire = serde_json::to_string(&view).unwrap();
     assert!(!wire.contains("private-seed"));
@@ -135,7 +138,13 @@ fn legal_groin_target_and_integer_wire_turn_work_after_timeout() {
 fn surrender_finishes_and_rewards_are_derived_only_for_finished_battles() {
     let s = active();
     assert!(dispatch("server.online.rewards", json!([s])).is_err());
-    let s = act(&s, "a", 1300, json!({"type":"surrender"}));
+    let early = act(&s, "a", 1300, json!({"type":"surrender"}));
+    let early_rewards = call("rewards", json!([early]));
+    assert_eq!(early_rewards[0]["xp"], 0);
+    assert_eq!(early_rewards[1]["xp"], 0);
+    assert_eq!(early_rewards[0]["profile"], s["players"][0]["profile"]);
+    let s = call("timeout", json!([s, 100000]));
+    let s = act(&s, "a", 100001, json!({"type":"surrender"}));
     assert_eq!(s["phase"], "finished");
     assert_eq!(s["match"]["result"]["winner"], 1);
     let rewards = call("rewards", json!([s]));
