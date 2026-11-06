@@ -656,6 +656,32 @@ async function testTeardown() {
   assert.equal(b.renderers[0].loop, null); assert.equal(b.renderers[0].disposals, 1);
 }
 
+async function testBackendTrialIntegration() {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const values = new Map();
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+  } });
+  const h = arenaHost(), arena = new RustArena(h, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+  try {
+    arena.setFrame(frame); arena.setFirstPerson(true); arena.resume();
+    await arena.load("same.glb", "same.glb", 7);
+    arena.setQuality(quality.low);
+    const tick = h.renderers[0].loop;
+    for (let i = 0; i < 600; i++) tick(1000 + i * 50);
+    const saved = values.get("cd-backend-low");
+    assert.ok(saved, "setting battle quality must start and finish a real backend measurement");
+    const record = JSON.parse(saved);
+    assert.equal(record.gl.length, 1, "the WebGL battle must save one measured score");
+    assert.equal(record.gpu.length, 0, "a WebGPU trial must not be invented");
+  } finally {
+    arena.free();
+    if (previous) Object.defineProperty(globalThis, "localStorage", previous);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  }
+}
+
 async function benchmarkArena(useRust) {
   const h = arenaHost();
   const Old = useRust ? null : (await original("arena.ts", { ...h, callRust, motionCompute, SkeletonUtils: { clone: h.clone }, QUALITY: quality })).Arena;
@@ -680,6 +706,7 @@ try {
   await testBattleOptics();
   await testTimePresentation();
   await testProjectedSideLighting();
+  await testBackendTrialIntegration();
   console.log("PASS Rust lens: identical shaders, quality targets, passes, uniforms, projection, async backdrop cancellation");
   console.log("PASS Rust texture tiers: shared maps, shrink, stale completion, failed tier fallback, atomic restoration");
   console.log("PASS Rust arena: lifecycle, quality, first-person framing, walking, firing, hit/fall, reflection, callback reentry");

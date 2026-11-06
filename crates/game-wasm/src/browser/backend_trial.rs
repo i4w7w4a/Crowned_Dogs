@@ -47,7 +47,14 @@ fn record(quality: &str) -> backend::Record {
 /// "webgpu" or "webgl": what this page load should draw the battle with.
 #[wasm_bindgen]
 pub fn arena_backend(has_webgpu: bool) -> String {
-    let quality = param("q").unwrap_or_else(|| string(&store_get("cd-quality")));
+    let quality = param("q").unwrap_or_else(|| {
+        let stored = string(&store_get("cd-quality"));
+        if stored.is_empty() {
+            super::platform::quality_id()
+        } else {
+            stored
+        }
+    });
     backend::choose(&record(&quality), &quality, has_webgpu).to_owned()
 }
 
