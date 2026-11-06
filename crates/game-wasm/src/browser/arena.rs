@@ -2155,6 +2155,8 @@ impl ArenaState {
         // A missing optional high-resolution map must not reject the game's quality change.
         self.textures_done = Promise::all_settled(&array(&pending));
         self.resize(self.width, self.height, self.view.clone());
+        super::backend_trial::start(&self.renderer, &id);
+        super::fps_meter::battle(&self.renderer, &id);
     }
     fn set_frame(&mut self, f: JsValue) {
         let changed = string(&get(&self.frame, "id")) != string(&get(&f, "id"));

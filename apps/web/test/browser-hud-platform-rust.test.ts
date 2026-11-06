@@ -276,3 +276,29 @@ test("Rust quality selection retains GPU, mobile, preference and URL behavior", 
   assert.deepEqual(start_quality(null), reference.startQuality(null));
   assert.deepEqual(start_quality(null), { id: "medium", picked: true });
 }));
+
+test("Backend selection uses the quality detected on a new device", async () => globals({
+  location: { search: "" },
+  navigator: { userAgent: "Android mobile", deviceMemory: 8, hardwareConcurrency: 8 },
+  matchMedia: () => ({ matches: true }),
+}, async () => {
+  // Two WebGL measurements are already stored. A measured device must try WebGPU next even
+  // when its low preset came from auto-detection rather than ?q= or cd-quality.
+  const record = JSON.stringify({ v: 1, gl: [
+    { fps: 24, p95: 50, scale: 0.8 }, { fps: 22, p95: 55, scale: 0.8 },
+  ], gpu: [], tries: 0, broken: false });
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
+    getItem: (key: string) => key === "cd-backend-low" ? record : null,
+    setItem: () => { throw new Error("selection must not write during this check"); },
+  } });
+  const gl = {
+    RENDERER: 1,
+    getExtension: () => null,
+    getParameter: (key: number) => { assert.equal(key, 1); return "Mali-G52"; },
+  };
+  Object.defineProperty(globalThis, "document", { configurable: true, value: {
+    createElement: () => ({ getContext: () => gl }),
+  } });
+  const { arena_backend } = await import("../../../packages/runtime/src/index.ts");
+  assert.equal(arena_backend(true), "webgpu");
+}));
