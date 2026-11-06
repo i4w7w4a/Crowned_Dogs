@@ -3,7 +3,7 @@
 use super::bridge::*;
 use js_sys::{Function, Promise, Reflect};
 use wasm_bindgen::{prelude::*, JsCast, UnwrapThrowExt};
-use wasm_bindgen_futures::{future_to_promise, JsFuture};
+use wasm_bindgen_futures::{future_to_promise, spawn_local, JsFuture};
 
 const ZONES: [&str; 4] = ["head", "body", "groin", "legs"];
 const QUALITY_IDS: [&str; 5] = ["minimal", "low", "medium", "high", "ultra"];
@@ -95,6 +95,88 @@ fn after(s: &JsValue, seconds: f64, action: impl FnOnce(&JsValue) + 'static) {
 }
 fn duel(s: &JsValue) -> JsValue {
     get(s, "duel")
+}
+fn online(s: &JsValue) -> bool { flag(&duel(s), "online") }
+fn online_locked(s: &JsValue) -> bool {
+    online(s) && (flag(s,"netBusy") || flag(s,"offline") || word(&get(&duel(s),"snapshot"),"phase")!="active"
+        || flag(&get(&get(&duel(s),"snapshot"),"own"),"submitted"))
+}
+fn online_status(s: &JsValue) {
+    if !online(s) { return; }
+    let b=get(&duel(s),"snapshot");
+    let message=if flag(s,"authExpired") { "Сессия истекла. Обновите страницу и войдите через Telegram." }
+        else if flag(s,"offline") { "Связь потеряна. Восстанавливаем бой…" }
+        else if flag(s,"netBusy") { "Отправляем…" }
+        else if word(&b,"phase")=="loading" { "Арена готова. Ждём второго игрока…" }
+        else if word(&b,"phase")=="cancelled" { "Бой отменён: второй игрок не загрузился. Награды не начислены." }
+        else if flag(&get(&b,"own"),"submitted") { "Приказ принят. Ждём соперника…" } else { "" };
+    text(&id("status"),message); hide(&id("status"),message.is_empty());
+}
+fn online_sync(s: &JsValue, resume: bool) {
+    let b=get(&duel(s),"snapshot");
+    let mode=string(&core("client.online.advance",&[get(s,"onlineSnapshot"),b.clone(),(resume || flag(s,"forceSnap")).into()]));
+    set(s,"forceSnap",&false.into());
+    if mode=="ignore" { return; }
+    set(s,"onlineSnapshot",&b);
+    set(s,"offline",&false.into());
+    online_status(s);
+    if mode=="play" {
+        let history=values(&get(&match_(s),"history"));
+        if let Some(report)=history.last() { play_turn(s,report.clone()); return; }
+    }
+    if mode=="snap" {
+        set(s,"fightNo",&(number(s,"fightNo")+1.).into());
+        set(s,"busy",&false.into());
+        let m=match_(s); let f=get(&m,"fighters");
+        set(s,"hp",&array(&[get(&at(&f,0),"hp"),get(&at(&f,1),"hp")]).into());
+        set(s,"turn",&get(&m,"turn"));
+        arm_both(s); arena(s,"reset",&[get(&m,"distance")]);
+        call(&get(s,"log"),"reset",&["Соединение восстановлено".into()]);
+        for report in values(&get(&m,"history")) { log_turn(s,report); }
+    }
+    render(s); draw_header(s);
+    if over(s) {
+        if word(&b,"phase")=="finished" { finish(s); }
+        else { text(&id("goText"),"На базу"); set(&id("goBtn"),"disabled",&false.into()); }
+    } else if word(&b,"phase")=="loading" && flag(&get(s,"arena"),"ready")
+        && !boolean(&at(&get(&b,"ready"),number(&b,"side") as usize)) {
+        remote_call(s,"ready",vec![],false);
+    }
+}
+fn remote_call(s: &JsValue, method: &str, args: Vec<JsValue>, resume: bool) {
+    if flag(s,"netBusy") || !flag(s,"active") { return; }
+    let polling=method=="refresh";
+    if polling && flag(s,"pollBusy") { return; }
+    let busy_key=if polling {"pollBusy"} else {"netBusy"};
+    set(s,busy_key,&true.into());
+    if !polling { render(s); }
+    let state=s.clone(); let method=method.to_string(); let generation=get(s,"fightNo");
+    spawn_local(async move {
+        let result=match try_call(&duel(&state),&method,&args) {
+            Ok(p)=>JsFuture::from(Promise::resolve(&p)).await,
+            Err(e)=>Err(e)
+        };
+        set(&state,busy_key,&false.into());
+        if !flag(&state,"active") || get(&state,"fightNo")!=generation { return; }
+        if polling && (flag(&state,"netBusy") || flag(&state,"busy")) { return; }
+        match result {
+            Ok(value)=>{
+                if polling {call(&duel(&state),"accept",&[value]);}
+                online_sync(&state,resume);
+            },
+            Err(error)=>{
+                set(&state,"offline",&true.into());
+                if number(&error,"status")==401. {set(&state,"authExpired",&true.into());}
+                if method!="refresh" { call(&get(&state,"log"),"note",&[get(&error,"message")]); }
+                render(&state);
+            }
+        }
+    });
+}
+fn poll_online(s: &JsValue) {
+    if !flag(s,"active") || !online(s) || flag(s,"authExpired") { return; }
+    if !flag(s,"busy") { remote_call(s,"refresh",vec![],false); }
+    let state=s.clone(); let timer=once(2000.,move ||poll_online(&state)); set(s,"onlinePoll",&timer);
 }
 fn match_(s: &JsValue) -> JsValue {
     get(&duel(s), "match")
@@ -265,6 +347,8 @@ impl RustBattle {
     ) -> Promise {
         let s = self.state.clone();
         future_to_promise(async move {
+            let remote=get(&get(&s,"host"),"remote");
+            if present(&remote) { set(&s,"duel",&remote); }
             let selected = call(&global(), "structuredClone", &[kit]);
             set_camera(&s, "fp");
             let q = string(&store_get(&s, "cd-quality"));
@@ -292,8 +376,12 @@ impl RustBattle {
             let fight = number(&s, "fightNo");
             // The turn clock waits for two drawn battle frames (Art's rule: no clock before the
             // fight is on screen); a slow phone gets 20 s for each before the clock starts anyway.
-            settle(&get(&s, "arena"), "drawn", 20000.).await;
-            settle(&get(&s, "arena"), "drawn", 20000.).await;
+            if online(&s) {
+                for _ in 0..2 { JsFuture::from(Promise::resolve(&try_call(&get(&s,"arena"),"drawn",&[])?)).await?; abort_check(&signal).inspect_err(|_|undo_enter(&s))?; }
+            } else {
+                settle(&get(&s, "arena"), "drawn", 20000.).await;
+                settle(&get(&s, "arena"), "drawn", 20000.).await;
+            }
             if present(&before_enter) {
                 JsFuture::from(Promise::resolve(&apply(
                     &before_enter,
@@ -306,6 +394,14 @@ impl RustBattle {
             abort_check(&signal).inspect_err(|_| undo_enter(&s))?;
             if flag(&s, "active") && number(&s, "fightNo") == fight {
                 start_timer(&s);
+            }
+            if online(&s) {
+                let b=get(&duel(&s),"snapshot");
+                set(&s,"onlineSnapshot",&b);
+                if word(&b,"phase")=="loading" && !boolean(&at(&get(&b,"ready"),number(&b,"side") as usize)) {
+                    remote_call(&s,"ready",vec![],false);
+                } else { online_sync(&s,true); }
+                poll_online(&s);
             }
             audio(&s, "unlock", &[]);
             let state = s.clone();
@@ -356,6 +452,8 @@ fn sync_profile(s: &JsValue) -> JsValue {
     core("syncClean", &[saved])
 }
 fn new_duel(s: &JsValue) -> JsValue {
+    let remote=get(&get(s,"host"),"remote");
+    if present(&remote) { return remote; }
     let ids = get(&get(s, "host"), "weaponIds");
     let foe = at(
         &ids,
@@ -551,7 +649,7 @@ fn layout(s: &JsValue) {
     place_rings(s);
 }
 fn can_tap(s: &JsValue) -> bool {
-    flag(s, "active") && !flag(s, "busy") && !over(s)
+    flag(s, "active") && !flag(s, "busy") && !over(s) && !online_locked(s)
 }
 fn press(s: &JsValue, kind: &str, zone: Option<&str>) {
     if !can_tap(s) {
@@ -561,6 +659,7 @@ fn press(s: &JsValue, kind: &str, zone: Option<&str>) {
     if let Some(z) = zone {
         set(&command, "zone", &z.into());
     }
+    if online(s) { remote_call(s,"press",vec![command],false); return; }
     let err = call(&duel(s), "press", &[command]);
     tap_result(s, &err);
 }
@@ -574,6 +673,7 @@ fn move_to(s: &JsValue, distance: f64) {
     if !can_tap(s) {
         return;
     }
+    if online(s) { remote_call(s,"setMove",vec![distance.into()],false); return; }
     let mut err = call(&duel(s), "setMove", &[distance.into()]);
     if present(&err) && word(&draft(s), "kind") == "knife" {
         call(&duel(s), "press", &[object(&[("type", "knife".into())])]);
@@ -593,7 +693,8 @@ fn render(s: &JsValue) {
     let m = match_(s);
     let d = draft(s);
     let me = at(&get(&m, "fighters"), 0);
-    let controls = core("ui.battleControls", &[m.clone(), d.clone(), get(s, "busy")]);
+    let controls = core("ui.battleControls", &[m.clone(), d.clone(), (flag(s,"busy") || online_locked(s)).into()]);
+    online_status(s);
     let lock = flag(&controls, "lock");
     let aimed = flag(&controls, "aimed");
     let busy = flag(s, "busy");
@@ -734,7 +835,7 @@ fn render(s: &JsValue) {
         );
     }
     let message = get(&controls, "message");
-    set(&id("goBtn"), "disabled", &(present(&message) && !stunned).into());
+    set(&id("goBtn"), "disabled", &((present(&message) && !stunned) || online_locked(s) || flag(s,"busy")).into());
     text(
         &id("goText"),
         &if stunned {
@@ -812,6 +913,7 @@ fn install_clock(s: &JsValue) {
     let state = s.clone();
     let callback = Closure::<dyn FnMut()>::new(move || {
         let s = &state;
+        if online(s) { set(s,"seconds",&get(&duel(s),"seconds")); draw_timer(s); return; }
         if flag(s, "busy") || over(s) || !flag(&id("infoVeil"), "hidden") {
             return;
         }
@@ -841,7 +943,7 @@ fn start_timer(s: &JsValue) {
     if !flag(s, "active") {
         return;
     }
-    set(s, "seconds", &core("turnSeconds", &[match_(s)]));
+    set(s, "seconds", &if online(s) {get(&duel(s),"seconds")} else {core("turnSeconds", &[match_(s)])});
     draw_timer(s);
     set(
         s,
@@ -854,9 +956,11 @@ fn start_timer(s: &JsValue) {
     );
 }
 fn end_turn(s: &JsValue) {
+    if online(s) && word(&get(&duel(s),"snapshot"),"phase")=="cancelled" { leave(s); return; }
     if !can_tap(s) {
         return;
     }
+    if online(s) { remote_call(s,"submit",vec![],false); return; }
     // Stunned by lightning: the turn plays without an order, which is not going missing.
     if num(&get(&at(&get(&match_(s), "fighters"), 0), "stunned")) > 0. {
         play_turn(s, call(&duel(s), "timeout", &[]));
@@ -870,7 +974,7 @@ fn end_turn(s: &JsValue) {
     }
 }
 fn play_turn(s: &JsValue, r: JsValue) {
-    stop_timer(s);
+    if !online(s) { stop_timer(s); }
     set(s, "busy", &true.into());
     audio(s, "play", &["ui.confirm".into()]);
     // Where each fighter stands for the ear; an arena without it keeps the fixed stereo places.
@@ -1058,6 +1162,7 @@ fn next_turn(s: &JsValue) {
         render(s);
         start_timer(s);
     }
+    if online(s) { remote_call(s,"refresh",vec![],false); }
 }
 fn log_turn(s: &JsValue, r: JsValue) {
     let fighters = get(&match_(s), "fighters");
@@ -1251,6 +1356,12 @@ fn strike(s: &JsValue, r: &JsValue, side: usize) {
 }
 
 fn finish(s: &JsValue) {
+    if online(s) {
+        let b=get(&duel(s),"snapshot");
+        let key=format!("{}:{}",word(&b,"id"),number(&b,"version"));
+        if word(s,"finishedId")==key { return; }
+        set(s,"finishedId",&key.into());
+    }
     stop_timer(s);
     render(s);
     let m = match_(s);
@@ -1274,17 +1385,21 @@ fn finish(s: &JsValue) {
     ] {
         text(&id(el), &word(&words, key));
     }
+    if online(s) && word(&result,"reason")=="surrender" {
+        text(&id("endTitle"),if lost {"Вы сдались"} else {"Соперник сдался"});
+        text(&id("endText"),"Бой завершён сервером.");
+    }
     html(
         &id("endStats"),
         &string(&core("ui.finishStats", &[history])),
     );
     // Experience and mastery go to the capsule's synchronisation.
-    let gained = core("syncGain", &[sync_profile(s), m.clone(), 0.into()]);
+    let gained = if online(s) {get(&get(&duel(s),"snapshot"),"reward")} else {core("syncGain", &[sync_profile(s), m.clone(), 0.into()])};
     if let Some(raw) = js_sys::JSON::stringify(&get(&gained, "profile"))
         .ok()
         .and_then(|v| v.as_string())
     {
-        store_set(s, "cd-sync", &raw);
+        if !online(s) { store_set(s, "cd-sync", &raw); }
     }
     html(
         &id("endSync"),
@@ -1301,8 +1416,9 @@ fn finish(s: &JsValue) {
             &[if lost { "i-signal" } else { "i-shot" }.into()],
         )),
     );
-    hide(&id("baseEndBtn"), lost);
-    set(s, "againHome", &lost.into());
+    hide(&id("baseEndBtn"), lost || online(s));
+    set(s, "againHome", &(lost || online(s)).into());
+    if online(s) { text(&id("againBtn"),"На базу"); }
     hide(&id("endVeil"), false);
     call(&id("againBtn"), "focus", &[]);
     let winner = get(&result, "winner");
@@ -1317,9 +1433,10 @@ fn finish(s: &JsValue) {
     );
 }
 fn restart(s: &JsValue, keep_sheet: bool) {
+    set(s,"finishedId",&JsValue::NULL);
     set(s, "fightNo", &(number(s, "fightNo") + 1.).into());
     // A new fight starts at the map's current hour and weather.
-    let live = live_frame(s, Some(&word(&get(s, "frame"), "mapId")));
+    let live = if online(s) {JsValue::NULL} else {live_frame(s, Some(&word(&get(s, "frame"), "mapId")))};
     if present(&live) {
         set(s, "frame", &live);
     }
@@ -1354,7 +1471,7 @@ fn restart(s: &JsValue, keep_sheet: bool) {
     call(
         &get(s, "log"),
         "reset",
-        &[format!("Запись идёт · Искра {with}, {distance} {}", steps(distance)).into()],
+        &[format!("Запись идёт · {} {with}, {distance} {}",word(&at(&get(&duel(s),"fighters"),1),"name"),steps(distance)).into()],
     );
     draw_header(s);
     render(s);
@@ -1450,6 +1567,7 @@ fn thunder(s: &JsValue) {
     );
 }
 fn choose_map(s: &JsValue, map: &str) {
+    if online(s) { return; }
     let frame = live_frame(s, Some(map));
     if !present(&frame) {
         return;
@@ -1691,6 +1809,16 @@ fn render_menu(s: &JsValue) {
         &string(&core("client.conditions.description", &[match_(s)])),
     );
     host(s, "liquidGlass", &[id("infoVeil")]);
+    if online(s) {
+        for name in ["weaponSeg","regionSeg","mapSeg","timeSeg","weatherSeg"] {
+            for button in values(&call(&id(name),"querySelectorAll",&["button".into()])) {set(&button,"disabled",&true.into());}
+        }
+        hide(&id("vetBtn"),true);
+        text(&id("restartBtn"),"Сдаться");
+        set(&id("restartBtn"),"disabled",&(word(&get(&duel(s),"snapshot"),"phase")!="active").into());
+        text(&id("baseInfoBtn"),"Уйти на базу (бой продолжается)");
+        text(&id("clockNote"),"Время боя идёт на сервере, даже когда меню открыто.");
+    }
 }
 fn volume_id(kind: &str) -> &'static str {
     match kind {
@@ -1830,7 +1958,11 @@ fn wire(s: &JsValue) {
             restart(s, false)
         }
     });
-    button(s, "restartBtn", |s| restart(s, false));
+    button(s, "restartBtn", |s| {
+        if online(s) {
+            if boolean(&call(&global(),"confirm",&["Сдаться? Сервер завершит бой поражением.".into()])) { remote_call(s,"surrender",vec![],false); }
+        } else { restart(s, false); }
+    });
     button(s, "moreBtn", |s| set_sheet(s, true));
     button(s, "closeInfo", |s| set_sheet(s, false));
     button(s, "closeX", |s| set_sheet(s, false));
@@ -1845,6 +1977,7 @@ fn wire(s: &JsValue) {
         render_menu(s);
     });
     button(s, "vetBtn", |s| {
+        if online(s) { return; }
         let on = present(&get(s, "fitted")) || !flag(s, "veteran");
         set(s, "veteran", &on.into());
         store_set(s, "cd-veteran", if on { "on" } else { "off" });
@@ -1867,6 +2000,15 @@ fn wire(s: &JsValue) {
             set_sheet(&state, false);
         } else if flag(&get(&state, "log"), "open") {
             call(&get(&state, "log"), "setOpen", &[false.into()]);
+        }
+    });
+    let state=s.clone();
+    listen(&document(),"visibilitychange",move |_| {
+        if online(&state) && flag(&state,"active") && !flag(&document(),"hidden") {
+            set(&state,"forceSnap",&true.into());
+            set(&state,"fightNo",&(number(&state,"fightNo")+1.).into());
+            set(&state,"busy",&false.into());
+            remote_call(&state,"refresh",vec![],true);
         }
     });
     button(s, "baseInfoBtn", leave);
@@ -1922,24 +2064,34 @@ fn wire(s: &JsValue) {
     });
 }
 fn prepare_arena(s: &JsValue) -> Promise {
-    let a = get(s, "arena");
+    let mut a = get(s, "arena");
     if !present(&a) {
         return Promise::reject(&js_sys::Error::new("3D не запустилось на этом устройстве"));
     }
-    let sex = string(&get(&super::platform::current_look(), "sex"));
+    let looks=get(&duel(s),"fighters");
+    let mine=if online(s) {get(&at(&looks,0),"appearance")} else {super::platform::current_look()};
+    let theirs=if online(s) {get(&at(&looks,1),"appearance")} else {JsValue::NULL};
+    let sex=word(&mine,"sex");
+    let foe_sex=if online(s) {word(&theirs,"sex")} else {if sex=="male" {"female"} else {"male"}.to_string()};
+    let pair=format!("{sex}:{foe_sex}");
     if flag(&a, "ready") {
         let loaded = string(&get(s, "arenaSex"));
-        if !loaded.is_empty() && loaded != sex {
-            // The loaded figures belong to the other sex; a fresh page loads the right pair.
-            call(&get(&global(), "location"), "reload", &[]);
-            return Promise::new(&mut |_, _| {});
+        if !loaded.is_empty() && loaded != pair {
+            call(&a,"dispose",&[]);
+            a=construct(&get(&get(s,"host"),"Arena"),&[id("gl")]); set(s,"arena",&a);
+            let state=s.clone();
+            set(&a,"onFrame",&Closure::<dyn FnMut()>::new(move ||{place_rings(&state);thunder(&state);}).into_js_value());
+            arena(s,"setFirstPerson",&[true.into()]);
+            arena(s,"setQuality",&[quality(s,&word(s,"quality"))]);
+            set_frame(s,&get(s,"frame"));
+            set(s,"arenaLoading",&JsValue::NULL);
+        } else {
+            if online(s) {call(&a,"applyLooks",&[mine,theirs]);}
+            else if get(&a, "applyLook").is_function() { call(&a, "applyLook", &[]); }
+            return Promise::resolve(&JsValue::UNDEFINED);
         }
-        if get(&a, "applyLook").is_function() {
-            call(&a, "applyLook", &[]);
-        }
-        return Promise::resolve(&JsValue::UNDEFINED);
     }
-    set(s, "arenaSex", &sex.clone().into());
+    set(s, "arenaSex", &pair.into());
     let existing = get(s, "arenaLoading");
     if present(&existing) {
         return existing.unchecked_into();
@@ -1948,18 +2100,15 @@ fn prepare_arena(s: &JsValue) -> Promise {
     let promise = future_to_promise(async move {
         let s = &state;
         let bindings = get(s, "host");
-        // The foe is always the other sex, so the two figures never share materials.
-        let (mine, theirs) = if sex == "female" {
-            (get(&bindings, "foeModel"), get(&bindings, "myModel"))
-        } else {
-            (get(&bindings, "myModel"), get(&bindings, "foeModel"))
-        };
+        let mine_url=get(&bindings,if sex=="female" {"foeModel"} else {"myModel"});
+        let foe_url=get(&bindings,if foe_sex=="female" {"foeModel"} else {"myModel"});
         let result = async {
-            let loading = try_call(&a, "load", &[mine, theirs, get(&match_(s), "distance")])?;
+            let loading = try_call(&a, "load", &[mine_url, foe_url, get(&match_(s), "distance")])?;
             JsFuture::from(Promise::resolve(&loading)).await?;
             if !flag(&a, "ready") {
                 return Err(js_sys::Error::new("Арена ещё не готова").into());
             }
+            if online(s) {call(&a,"applyLooks",&[mine,theirs]);}
             arm_both(s);
             arena(s, "reset", &[get(&match_(s), "distance")]);
             let decode = try_call(&id("bg"), "decode", &[]).unwrap_or(JsValue::UNDEFINED);
@@ -1988,6 +2137,7 @@ fn prepare_arena(s: &JsValue) -> Promise {
     promise
 }
 fn leave(s: &JsValue) {
+    call(&global(),"clearTimeout",&[get(s,"onlinePoll")]);
     set(s, "active", &false.into());
     set(s, "fightNo", &(number(s, "fightNo") + 1.).into());
     stop_timer(s);

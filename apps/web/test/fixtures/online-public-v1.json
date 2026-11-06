@@ -1,0 +1,1478 @@
+{
+  "loading": {
+    "schemaVersion": 1,
+    "ruleset": "online-v1",
+    "id": "10000000-0000-4000-8000-000000000001",
+    "version": 1,
+    "phase": "loading",
+    "ready": [
+      false,
+      false
+    ],
+    "loadingDeadline": 1793966700000.0,
+    "deadline": null,
+    "cancelReason": null,
+    "side": 1,
+    "players": [
+      {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "tag": "K-001-001",
+        "name": "Искра",
+        "telegram": {
+          "firstName": "Искра",
+          "lastName": null,
+          "username": null
+        },
+        "level": 1,
+        "appearance": {
+          "sex": "male",
+          "callsign": "Искра",
+          "tag": "",
+          "face": "m1",
+          "skin": "light",
+          "eyes": "grey",
+          "hair": "buzz",
+          "hairColor": "brown",
+          "beard": "stubble",
+          "beardColor": "brown",
+          "suit": "graphite"
+        },
+        "loadout": {
+          "head": "head-cap",
+          "body": "body-plita2",
+          "suit": "suit-field",
+          "boots": "boots-bertsy",
+          "knife": "knife-std",
+          "grenade": "grenade-rg1",
+          "weapon1": {
+            "item": "pistol-pustelga"
+          },
+          "weapon2": null
+        }
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "tag": "K-001-002",
+        "name": "Соль",
+        "telegram": {
+          "firstName": "Соль",
+          "lastName": null,
+          "username": null
+        },
+        "level": 1,
+        "appearance": {
+          "sex": "male",
+          "callsign": "Соль",
+          "tag": "",
+          "face": "m1",
+          "skin": "light",
+          "eyes": "grey",
+          "hair": "buzz",
+          "hairColor": "brown",
+          "beard": "stubble",
+          "beardColor": "brown",
+          "suit": "graphite"
+        },
+        "loadout": {
+          "head": "head-cap",
+          "body": "body-plita2",
+          "suit": "suit-field",
+          "boots": "boots-bertsy",
+          "knife": "knife-std",
+          "grenade": "grenade-rg1",
+          "weapon1": {
+            "item": "pistol-pustelga"
+          },
+          "weapon2": null
+        }
+      }
+    ],
+    "eventCursor": 0,
+    "result": null,
+    "match": {
+      "version": 1,
+      "map": {
+        "id": "saltHall",
+        "name": "Соляной цех",
+        "region": "Белый Яр",
+        "maxDistance": 11
+      },
+      "turn": 1,
+      "distance": 7.0,
+      "fighters": [
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "name": "Искра",
+          "weapon": "pistol",
+          "hp": 100.0,
+          "maxHp": 100.0,
+          "still": 1,
+          "grenades": 1.0,
+          "lastDefend": [],
+          "afkStreak": 0,
+          "flash": false,
+          "winded": false,
+          "facesSun": false,
+          "shieldOff": 0,
+          "smoke": 0,
+          "sidearm": false,
+          "armor": {
+            "head": 0.0,
+            "body": 20.0,
+            "groin": 0.0,
+            "legs": 10.0
+          },
+          "gear": {
+            "nvg": false,
+            "thermal": false,
+            "heatProof": false
+          }
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "name": "Соль",
+          "weapon": "pistol",
+          "hp": 100.0,
+          "maxHp": 100.0,
+          "still": 1,
+          "grenades": 1.0,
+          "lastDefend": [],
+          "afkStreak": 0,
+          "flash": false,
+          "winded": false,
+          "facesSun": false,
+          "shieldOff": 0,
+          "smoke": 0,
+          "sidearm": false,
+          "armor": {
+            "head": 0.0,
+            "body": 20.0,
+            "groin": 0.0,
+            "legs": 10.0
+          },
+          "gear": {
+            "nvg": false,
+            "thermal": false,
+            "heatProof": false
+          }
+        }
+      ],
+      "result": null,
+      "history": [],
+      "lane": [
+        0.0,
+        7.0
+      ],
+      "hazard": null,
+      "config": {
+        "mapId": "saltHall",
+        "weather": "clear",
+        "time": "day",
+        "events": true,
+        "fighters": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "name": "Искра",
+            "weapon": "pistol",
+            "kit": {
+              "nvg": false,
+              "thermal": false,
+              "heatProof": false,
+              "grenades": 1.0,
+              "dodge": 0.0,
+              "dashEvade": 0.0,
+              "weapon": {
+                "id": "pistol",
+                "name": "Пистолет",
+                "hands": 1,
+                "power": 12.0,
+                "flatPen": 6.0,
+                "crit": 0.15,
+                "critBonus": 0.0,
+                "accuracy": [
+                  0.9,
+                  0.9,
+                  0.85,
+                  0.85,
+                  0.7,
+                  0.6,
+                  0.42,
+                  0.42,
+                  0.28,
+                  0.28,
+                  0.18,
+                  0.18,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1
+                ],
+                "falloff": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "needsStance": false,
+                "doubleShot": 0.0,
+                "nightAcc": 0.0,
+                "tracking": 0.0,
+                "stanceTurns": 2,
+                "noStancePenalty": 0.5,
+                "guardBonus": 0.0,
+                "suppressor": false
+              },
+              "sidearm": null,
+              "knife": {
+                "id": "knife",
+                "name": "Нож",
+                "hands": 1,
+                "power": 8.0,
+                "flatPen": 4.0,
+                "crit": 0.0,
+                "critBonus": 0.0,
+                "accuracy": [
+                  0.95,
+                  0.95,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "falloff": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "needsStance": false,
+                "doubleShot": 0.0,
+                "nightAcc": 0.0,
+                "tracking": 0.0,
+                "stanceTurns": 2,
+                "noStancePenalty": 0.5,
+                "guardBonus": 0.0,
+                "suppressor": false
+              },
+              "armor": {
+                "head": 0.0,
+                "body": 20.0,
+                "groin": 0.0,
+                "legs": 10.0
+              },
+              "camo": {
+                "near": 0.0,
+                "mid": 0.0,
+                "far": 0.0
+              },
+              "grenade": {
+                "type": "frag",
+                "base": 35,
+                "armorPen": 0.24,
+                "minDistance": 2,
+                "maxDistance": 8
+              }
+            }
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "name": "Соль",
+            "weapon": "pistol",
+            "kit": {
+              "nvg": false,
+              "thermal": false,
+              "heatProof": false,
+              "grenades": 1.0,
+              "dodge": 0.0,
+              "dashEvade": 0.0,
+              "weapon": {
+                "id": "pistol",
+                "name": "Пистолет",
+                "hands": 1,
+                "power": 12.0,
+                "flatPen": 6.0,
+                "crit": 0.15,
+                "critBonus": 0.0,
+                "accuracy": [
+                  0.9,
+                  0.9,
+                  0.85,
+                  0.85,
+                  0.7,
+                  0.6,
+                  0.42,
+                  0.42,
+                  0.28,
+                  0.28,
+                  0.18,
+                  0.18,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1
+                ],
+                "falloff": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "needsStance": false,
+                "doubleShot": 0.0,
+                "nightAcc": 0.0,
+                "tracking": 0.0,
+                "stanceTurns": 2,
+                "noStancePenalty": 0.5,
+                "guardBonus": 0.0,
+                "suppressor": false
+              },
+              "sidearm": null,
+              "knife": {
+                "id": "knife",
+                "name": "Нож",
+                "hands": 1,
+                "power": 8.0,
+                "flatPen": 4.0,
+                "crit": 0.0,
+                "critBonus": 0.0,
+                "accuracy": [
+                  0.95,
+                  0.95,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "falloff": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "needsStance": false,
+                "doubleShot": 0.0,
+                "nightAcc": 0.0,
+                "tracking": 0.0,
+                "stanceTurns": 2,
+                "noStancePenalty": 0.5,
+                "guardBonus": 0.0,
+                "suppressor": false
+              },
+              "armor": {
+                "head": 0.0,
+                "body": 20.0,
+                "groin": 0.0,
+                "legs": 10.0
+              },
+              "camo": {
+                "near": 0.0,
+                "mid": 0.0,
+                "far": 0.0
+              },
+              "grenade": {
+                "type": "frag",
+                "base": 35,
+                "armorPen": 0.24,
+                "minDistance": 2,
+                "maxDistance": 8
+              }
+            }
+          }
+        ]
+      }
+    },
+    "own": {
+      "draft": {
+        "kind": "shoot",
+        "move": 0,
+        "zone": null,
+        "defend": []
+      },
+      "order": null,
+      "submitted": false
+    },
+    "submitted": [
+      false,
+      false
+    ],
+    "reward": null,
+    "serverNow": 1793966400000
+  },
+  "active": {
+    "schemaVersion": 1,
+    "ruleset": "online-v1",
+    "id": "10000000-0000-4000-8000-000000000001",
+    "version": 3,
+    "phase": "active",
+    "ready": [
+      true,
+      true
+    ],
+    "loadingDeadline": 1793966700000.0,
+    "deadline": 1793966461000.0,
+    "cancelReason": null,
+    "side": 1,
+    "players": [
+      {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "tag": "K-001-001",
+        "name": "Искра",
+        "telegram": {
+          "firstName": "Искра",
+          "lastName": null,
+          "username": null
+        },
+        "level": 1,
+        "appearance": {
+          "sex": "male",
+          "callsign": "Искра",
+          "tag": "",
+          "face": "m1",
+          "skin": "light",
+          "eyes": "grey",
+          "hair": "buzz",
+          "hairColor": "brown",
+          "beard": "stubble",
+          "beardColor": "brown",
+          "suit": "graphite"
+        },
+        "loadout": {
+          "head": "head-cap",
+          "body": "body-plita2",
+          "suit": "suit-field",
+          "boots": "boots-bertsy",
+          "knife": "knife-std",
+          "grenade": "grenade-rg1",
+          "weapon1": {
+            "item": "pistol-pustelga"
+          },
+          "weapon2": null
+        }
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "tag": "K-001-002",
+        "name": "Соль",
+        "telegram": {
+          "firstName": "Соль",
+          "lastName": null,
+          "username": null
+        },
+        "level": 1,
+        "appearance": {
+          "sex": "male",
+          "callsign": "Соль",
+          "tag": "",
+          "face": "m1",
+          "skin": "light",
+          "eyes": "grey",
+          "hair": "buzz",
+          "hairColor": "brown",
+          "beard": "stubble",
+          "beardColor": "brown",
+          "suit": "graphite"
+        },
+        "loadout": {
+          "head": "head-cap",
+          "body": "body-plita2",
+          "suit": "suit-field",
+          "boots": "boots-bertsy",
+          "knife": "knife-std",
+          "grenade": "grenade-rg1",
+          "weapon1": {
+            "item": "pistol-pustelga"
+          },
+          "weapon2": null
+        }
+      }
+    ],
+    "eventCursor": 0,
+    "result": null,
+    "match": {
+      "version": 1,
+      "map": {
+        "id": "saltHall",
+        "name": "Соляной цех",
+        "region": "Белый Яр",
+        "maxDistance": 11
+      },
+      "turn": 1,
+      "distance": 7.0,
+      "fighters": [
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "name": "Искра",
+          "weapon": "pistol",
+          "hp": 100.0,
+          "maxHp": 100.0,
+          "still": 1,
+          "grenades": 1.0,
+          "lastDefend": [],
+          "afkStreak": 0,
+          "flash": false,
+          "winded": false,
+          "facesSun": false,
+          "shieldOff": 0,
+          "smoke": 0,
+          "sidearm": false,
+          "armor": {
+            "head": 0.0,
+            "body": 20.0,
+            "groin": 0.0,
+            "legs": 10.0
+          },
+          "gear": {
+            "nvg": false,
+            "thermal": false,
+            "heatProof": false
+          }
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "name": "Соль",
+          "weapon": "pistol",
+          "hp": 100.0,
+          "maxHp": 100.0,
+          "still": 1,
+          "grenades": 1.0,
+          "lastDefend": [],
+          "afkStreak": 0,
+          "flash": false,
+          "winded": false,
+          "facesSun": false,
+          "shieldOff": 0,
+          "smoke": 0,
+          "sidearm": false,
+          "armor": {
+            "head": 0.0,
+            "body": 20.0,
+            "groin": 0.0,
+            "legs": 10.0
+          },
+          "gear": {
+            "nvg": false,
+            "thermal": false,
+            "heatProof": false
+          }
+        }
+      ],
+      "result": null,
+      "history": [],
+      "lane": [
+        0.0,
+        7.0
+      ],
+      "hazard": null,
+      "config": {
+        "mapId": "saltHall",
+        "weather": "clear",
+        "time": "day",
+        "events": true,
+        "fighters": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "name": "Искра",
+            "weapon": "pistol",
+            "kit": {
+              "nvg": false,
+              "thermal": false,
+              "heatProof": false,
+              "grenades": 1.0,
+              "dodge": 0.0,
+              "dashEvade": 0.0,
+              "weapon": {
+                "id": "pistol",
+                "name": "Пистолет",
+                "hands": 1,
+                "power": 12.0,
+                "flatPen": 6.0,
+                "crit": 0.15,
+                "critBonus": 0.0,
+                "accuracy": [
+                  0.9,
+                  0.9,
+                  0.85,
+                  0.85,
+                  0.7,
+                  0.6,
+                  0.42,
+                  0.42,
+                  0.28,
+                  0.28,
+                  0.18,
+                  0.18,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1
+                ],
+                "falloff": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "needsStance": false,
+                "doubleShot": 0.0,
+                "nightAcc": 0.0,
+                "tracking": 0.0,
+                "stanceTurns": 2,
+                "noStancePenalty": 0.5,
+                "guardBonus": 0.0,
+                "suppressor": false
+              },
+              "sidearm": null,
+              "knife": {
+                "id": "knife",
+                "name": "Нож",
+                "hands": 1,
+                "power": 8.0,
+                "flatPen": 4.0,
+                "crit": 0.0,
+                "critBonus": 0.0,
+                "accuracy": [
+                  0.95,
+                  0.95,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "falloff": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "needsStance": false,
+                "doubleShot": 0.0,
+                "nightAcc": 0.0,
+                "tracking": 0.0,
+                "stanceTurns": 2,
+                "noStancePenalty": 0.5,
+                "guardBonus": 0.0,
+                "suppressor": false
+              },
+              "armor": {
+                "head": 0.0,
+                "body": 20.0,
+                "groin": 0.0,
+                "legs": 10.0
+              },
+              "camo": {
+                "near": 0.0,
+                "mid": 0.0,
+                "far": 0.0
+              },
+              "grenade": {
+                "type": "frag",
+                "base": 35,
+                "armorPen": 0.24,
+                "minDistance": 2,
+                "maxDistance": 8
+              }
+            }
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "name": "Соль",
+            "weapon": "pistol",
+            "kit": {
+              "nvg": false,
+              "thermal": false,
+              "heatProof": false,
+              "grenades": 1.0,
+              "dodge": 0.0,
+              "dashEvade": 0.0,
+              "weapon": {
+                "id": "pistol",
+                "name": "Пистолет",
+                "hands": 1,
+                "power": 12.0,
+                "flatPen": 6.0,
+                "crit": 0.15,
+                "critBonus": 0.0,
+                "accuracy": [
+                  0.9,
+                  0.9,
+                  0.85,
+                  0.85,
+                  0.7,
+                  0.6,
+                  0.42,
+                  0.42,
+                  0.28,
+                  0.28,
+                  0.18,
+                  0.18,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1
+                ],
+                "falloff": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "needsStance": false,
+                "doubleShot": 0.0,
+                "nightAcc": 0.0,
+                "tracking": 0.0,
+                "stanceTurns": 2,
+                "noStancePenalty": 0.5,
+                "guardBonus": 0.0,
+                "suppressor": false
+              },
+              "sidearm": null,
+              "knife": {
+                "id": "knife",
+                "name": "Нож",
+                "hands": 1,
+                "power": 8.0,
+                "flatPen": 4.0,
+                "crit": 0.0,
+                "critBonus": 0.0,
+                "accuracy": [
+                  0.95,
+                  0.95,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "falloff": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "needsStance": false,
+                "doubleShot": 0.0,
+                "nightAcc": 0.0,
+                "tracking": 0.0,
+                "stanceTurns": 2,
+                "noStancePenalty": 0.5,
+                "guardBonus": 0.0,
+                "suppressor": false
+              },
+              "armor": {
+                "head": 0.0,
+                "body": 20.0,
+                "groin": 0.0,
+                "legs": 10.0
+              },
+              "camo": {
+                "near": 0.0,
+                "mid": 0.0,
+                "far": 0.0
+              },
+              "grenade": {
+                "type": "frag",
+                "base": 35,
+                "armorPen": 0.24,
+                "minDistance": 2,
+                "maxDistance": 8
+              }
+            }
+          }
+        ]
+      }
+    },
+    "own": {
+      "draft": {
+        "kind": "shoot",
+        "move": 0,
+        "zone": null,
+        "defend": []
+      },
+      "order": null,
+      "submitted": false
+    },
+    "submitted": [
+      false,
+      false
+    ],
+    "reward": null,
+    "serverNow": 1793966401000
+  },
+  "finished": {
+    "schemaVersion": 1,
+    "ruleset": "online-v1",
+    "id": "10000000-0000-4000-8000-000000000001",
+    "version": 5,
+    "phase": "finished",
+    "ready": [
+      true,
+      true
+    ],
+    "loadingDeadline": 1793966700000.0,
+    "deadline": null,
+    "cancelReason": null,
+    "side": 1,
+    "players": [
+      {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "tag": "K-001-001",
+        "name": "Искра",
+        "telegram": {
+          "firstName": "Искра",
+          "lastName": null,
+          "username": null
+        },
+        "level": 1,
+        "appearance": {
+          "sex": "male",
+          "callsign": "Искра",
+          "tag": "",
+          "face": "m1",
+          "skin": "light",
+          "eyes": "grey",
+          "hair": "buzz",
+          "hairColor": "brown",
+          "beard": "stubble",
+          "beardColor": "brown",
+          "suit": "graphite"
+        },
+        "loadout": {
+          "head": "head-cap",
+          "body": "body-plita2",
+          "suit": "suit-field",
+          "boots": "boots-bertsy",
+          "knife": "knife-std",
+          "grenade": "grenade-rg1",
+          "weapon1": {
+            "item": "pistol-pustelga"
+          },
+          "weapon2": null
+        }
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "tag": "K-001-002",
+        "name": "Соль",
+        "telegram": {
+          "firstName": "Соль",
+          "lastName": null,
+          "username": null
+        },
+        "level": 1,
+        "appearance": {
+          "sex": "male",
+          "callsign": "Соль",
+          "tag": "",
+          "face": "m1",
+          "skin": "light",
+          "eyes": "grey",
+          "hair": "buzz",
+          "hairColor": "brown",
+          "beard": "stubble",
+          "beardColor": "brown",
+          "suit": "graphite"
+        },
+        "loadout": {
+          "head": "head-cap",
+          "body": "body-plita2",
+          "suit": "suit-field",
+          "boots": "boots-bertsy",
+          "knife": "knife-std",
+          "grenade": "grenade-rg1",
+          "weapon1": {
+            "item": "pistol-pustelga"
+          },
+          "weapon2": null
+        }
+      }
+    ],
+    "eventCursor": 1,
+    "result": {
+      "winner": 1,
+      "reason": "surrender"
+    },
+    "match": {
+      "version": 1,
+      "map": {
+        "id": "saltHall",
+        "name": "Соляной цех",
+        "region": "Белый Яр",
+        "maxDistance": 11
+      },
+      "turn": 2.0,
+      "distance": 7.0,
+      "fighters": [
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "name": "Искра",
+          "weapon": "pistol",
+          "hp": 100.0,
+          "maxHp": 100.0,
+          "still": 2.0,
+          "grenades": 1.0,
+          "lastDefend": [],
+          "afkStreak": 1.0,
+          "flash": false,
+          "winded": false,
+          "facesSun": false,
+          "shieldOff": 0.0,
+          "smoke": 0.0,
+          "sidearm": false,
+          "armor": {
+            "head": 0.0,
+            "body": 20.0,
+            "groin": 0.0,
+            "legs": 10.0
+          },
+          "gear": {
+            "nvg": false,
+            "thermal": false,
+            "heatProof": false
+          }
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "name": "Соль",
+          "weapon": "pistol",
+          "hp": 100.0,
+          "maxHp": 100.0,
+          "still": 2.0,
+          "grenades": 1.0,
+          "lastDefend": [],
+          "afkStreak": 1.0,
+          "flash": false,
+          "winded": false,
+          "facesSun": false,
+          "shieldOff": 0.0,
+          "smoke": 0.0,
+          "sidearm": false,
+          "armor": {
+            "head": 0.0,
+            "body": 20.0,
+            "groin": 0.0,
+            "legs": 10.0
+          },
+          "gear": {
+            "nvg": false,
+            "thermal": false,
+            "heatProof": false
+          }
+        }
+      ],
+      "result": {
+        "winner": 1,
+        "reason": "surrender"
+      },
+      "history": [
+        {
+          "turn": 1,
+          "distanceBefore": 7.0,
+          "distanceAfter": 7.0,
+          "limit": 11.0,
+          "defend": [
+            [],
+            []
+          ],
+          "moves": [
+            0.0,
+            0.0
+          ],
+          "hp": [
+            100.0,
+            100.0
+          ],
+          "afk": [
+            true,
+            true
+          ],
+          "lane": [
+            0.0,
+            7.0
+          ],
+          "stunned": [
+            false,
+            false
+          ],
+          "actions": [
+            {
+              "type": "wait"
+            },
+            {
+              "type": "wait"
+            }
+          ],
+          "attacks": [
+            null,
+            null
+          ],
+          "hazard": null
+        }
+      ],
+      "lane": [
+        0.0,
+        7.0
+      ],
+      "hazard": null,
+      "config": {
+        "mapId": "saltHall",
+        "weather": "clear",
+        "time": "day",
+        "events": true,
+        "fighters": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "name": "Искра",
+            "weapon": "pistol",
+            "kit": {
+              "nvg": false,
+              "thermal": false,
+              "heatProof": false,
+              "grenades": 1.0,
+              "dodge": 0.0,
+              "dashEvade": 0.0,
+              "weapon": {
+                "id": "pistol",
+                "name": "Пистолет",
+                "hands": 1,
+                "power": 12.0,
+                "flatPen": 6.0,
+                "crit": 0.15,
+                "critBonus": 0.0,
+                "accuracy": [
+                  0.9,
+                  0.9,
+                  0.85,
+                  0.85,
+                  0.7,
+                  0.6,
+                  0.42,
+                  0.42,
+                  0.28,
+                  0.28,
+                  0.18,
+                  0.18,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1
+                ],
+                "falloff": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "needsStance": false,
+                "doubleShot": 0.0,
+                "nightAcc": 0.0,
+                "tracking": 0.0,
+                "stanceTurns": 2,
+                "noStancePenalty": 0.5,
+                "guardBonus": 0.0,
+                "suppressor": false
+              },
+              "sidearm": null,
+              "knife": {
+                "id": "knife",
+                "name": "Нож",
+                "hands": 1,
+                "power": 8.0,
+                "flatPen": 4.0,
+                "crit": 0.0,
+                "critBonus": 0.0,
+                "accuracy": [
+                  0.95,
+                  0.95,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "falloff": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "needsStance": false,
+                "doubleShot": 0.0,
+                "nightAcc": 0.0,
+                "tracking": 0.0,
+                "stanceTurns": 2,
+                "noStancePenalty": 0.5,
+                "guardBonus": 0.0,
+                "suppressor": false
+              },
+              "armor": {
+                "head": 0.0,
+                "body": 20.0,
+                "groin": 0.0,
+                "legs": 10.0
+              },
+              "camo": {
+                "near": 0.0,
+                "mid": 0.0,
+                "far": 0.0
+              },
+              "grenade": {
+                "type": "frag",
+                "base": 35,
+                "armorPen": 0.24,
+                "minDistance": 2,
+                "maxDistance": 8
+              }
+            }
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "name": "Соль",
+            "weapon": "pistol",
+            "kit": {
+              "nvg": false,
+              "thermal": false,
+              "heatProof": false,
+              "grenades": 1.0,
+              "dodge": 0.0,
+              "dashEvade": 0.0,
+              "weapon": {
+                "id": "pistol",
+                "name": "Пистолет",
+                "hands": 1,
+                "power": 12.0,
+                "flatPen": 6.0,
+                "crit": 0.15,
+                "critBonus": 0.0,
+                "accuracy": [
+                  0.9,
+                  0.9,
+                  0.85,
+                  0.85,
+                  0.7,
+                  0.6,
+                  0.42,
+                  0.42,
+                  0.28,
+                  0.28,
+                  0.18,
+                  0.18,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1
+                ],
+                "falloff": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "needsStance": false,
+                "doubleShot": 0.0,
+                "nightAcc": 0.0,
+                "tracking": 0.0,
+                "stanceTurns": 2,
+                "noStancePenalty": 0.5,
+                "guardBonus": 0.0,
+                "suppressor": false
+              },
+              "sidearm": null,
+              "knife": {
+                "id": "knife",
+                "name": "Нож",
+                "hands": 1,
+                "power": 8.0,
+                "flatPen": 4.0,
+                "crit": 0.0,
+                "critBonus": 0.0,
+                "accuracy": [
+                  0.95,
+                  0.95,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "falloff": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "needsStance": false,
+                "doubleShot": 0.0,
+                "nightAcc": 0.0,
+                "tracking": 0.0,
+                "stanceTurns": 2,
+                "noStancePenalty": 0.5,
+                "guardBonus": 0.0,
+                "suppressor": false
+              },
+              "armor": {
+                "head": 0.0,
+                "body": 20.0,
+                "groin": 0.0,
+                "legs": 10.0
+              },
+              "camo": {
+                "near": 0.0,
+                "mid": 0.0,
+                "far": 0.0
+              },
+              "grenade": {
+                "type": "frag",
+                "base": 35,
+                "armorPen": 0.24,
+                "minDistance": 2,
+                "maxDistance": 8
+              }
+            }
+          }
+        ]
+      }
+    },
+    "own": {
+      "draft": {
+        "kind": "shoot",
+        "move": 0,
+        "zone": null,
+        "defend": []
+      },
+      "order": null,
+      "submitted": false
+    },
+    "submitted": [
+      false,
+      false
+    ],
+    "reward": {
+      "profile": {
+        "level": 2.0,
+        "xp": 0.0,
+        "free": 6.0,
+        "stats": {
+          "power": 0.0,
+          "cooling": 0.0,
+          "instinct": 0.0,
+          "reflexes": 0.0
+        },
+        "mastery": {
+          "pistol": 74.5,
+          "shotgun": 74.0,
+          "rifle": 74.0,
+          "sniper": 74.0
+        }
+      },
+      "xp": 100.0,
+      "levels": 1.0,
+      "lines": [
+        "+100 опыта",
+        "Уровень 2: +3 очка в капсуле",
+        "Пистолет: 74% → 74,5%"
+      ]
+    },
+    "serverNow": 1793966500001
+  }
+}

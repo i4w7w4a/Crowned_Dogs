@@ -444,6 +444,25 @@ impl Base {
             return;
         }
         set(&self.look, "callsign", &get(&name, "callsign"));
+        if exists(&platform::online()) {
+            let promise=call(&platform::online(),"saveAppearance",&[self.look.clone()]);
+            let weak=weak.clone();
+            spawn_local(async move {
+                let result=JsFuture::from(Promise::resolve(&promise)).await;
+                if let Some(state)=weak.upgrade() {
+                    let mut s=state.borrow_mut();
+                    if s.disposed { return; }
+                    if result.is_ok() {
+                        s.saved=platform::load_local_look(); s.look=s.saved.clone();
+                        s.refresh_operator(); s.navigate("base",weak.clone());
+                    } else {
+                        let error=query(&s.fitting,".cd-create-error");
+                        content(&error,"Персона не сохранена. Проверьте соединение и повторите."); hidden(&error,false);
+                    }
+                }
+            });
+            return;
+        }
         if !platform::save_local_look(self.look.clone()) {
             let error = query(&self.fitting, ".cd-create-error");
             content(&error, "Не удалось сохранить Персону на этом устройстве.");
@@ -456,9 +475,13 @@ impl Base {
         self.navigate("base", weak);
     }
     fn refresh_operator(&self) {
+        let callsign=text(&get(&self.saved,"callsign"));
+        let name=if callsign.is_empty() && exists(&platform::online()) {
+            text(&get(&platform::account_field("telegram"),"firstName"))
+        } else {callsign};
         content(
             &query(&self.home, ".cd-callsign"),
-            &text(&get(&self.saved, "callsign")),
+            &name,
         );
         content(&query(&self.home, ".cd-tag"), &text(&get(&self.saved, "tag")));
     }
@@ -1407,6 +1430,21 @@ impl BrowserBase {
         }));
         state.borrow().dress();
         bind(&state);
+        if exists(&platform::online()) {
+            let weak=Rc::downgrade(&state);
+            let listener=Listener::new(&global(),"cd-online-profile",move |_| {
+                if let Some(state)=weak.upgrade() {
+                    if let Ok(mut s)=state.try_borrow_mut() {
+                        if s.disposed { return; }
+                        s.loadout=platform::account_field("loadout");
+                        s.saved=platform::load_local_look();
+                        s.refresh_operator(); s.refresh(); s.render_sync(None);
+                        hidden(&query(&s.root,".cd-save-status"),true);
+                    }
+                }
+            });
+            state.borrow_mut().listeners.push(listener);
+        }
         bind_canvas(&state);
         setup_workshop(&state)?;
         setup_drift(&state, &home, 1882.0 / 3344.0, true);

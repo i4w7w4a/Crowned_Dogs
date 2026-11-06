@@ -11,6 +11,7 @@ mod lens;
 mod loadout;
 mod look;
 mod online;
+mod online_view;
 mod server;
 mod server_view;
 mod words;
@@ -68,6 +69,7 @@ pub fn dispatch(method: &str, args: Value) -> Result<Value, String> {
             duel::dispatch(method, args)
         }
         _ if method.starts_with("client.look.") => look::dispatch(method, args),
+        _ if method.starts_with("client.online.") => online_view::dispatch(method, args),
         _ if method.starts_with("client.") => loadout::dispatch(method, args),
         _ if method.starts_with("audio.") => audio::dispatch(method, args),
         _ if method.starts_with("words.") => words::dispatch(method, args),

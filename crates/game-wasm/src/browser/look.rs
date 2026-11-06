@@ -8,6 +8,40 @@ use wasm_bindgen::prelude::*;
 thread_local! {
     /// Head and hair materials with a shader of their own; `scene_assets::tune` chains it in.
     static HOOKS: WeakMap = WeakMap::new();
+    // Keep ownership outside userData: SkeletonUtils clones userData into the next Persona.
+    static MATERIALS: WeakMap = WeakMap::new();
+}
+
+/// Skeleton cloning shares materials. Isolate mutable colours/uniforms, sharing texture images.
+#[wasm_bindgen(js_name=sceneOwnMaterials)]
+pub fn isolate_materials(model: &JsValue) {
+    let copies = MATERIALS.with(|owners| {
+        let found = owners.get(model.unchecked_ref());
+        if present(&found) { return found.unchecked_into::<WeakMap>(); }
+        let copies = WeakMap::new();
+        owners.set(model.unchecked_ref(), copies.as_ref());
+        copies
+    });
+    let own = |material: JsValue| -> JsValue {
+        if !material.is_object() { return material; }
+        let known = copies.get(material.unchecked_ref());
+        if present(&known) { return known; }
+        let copy = call(&material, "clone", &[]);
+        // A cloned material does not carry its Rust shader hook. Rebuild uniforms with that hook.
+        let data=get(&copy,"userData");
+        let _=js_sys::Reflect::delete_property(data.unchecked_ref::<js_sys::Object>(), &"cdLook".into());
+        copies.set(material.unchecked_ref(), &copy);
+        copies.set(copy.unchecked_ref(), &copy);
+        copy
+    };
+    for node in nodes(model) {
+        if !boolean(&get(&node, "isMesh")) { continue; }
+        let material = get(&node, "material");
+        let material = if js_sys::Array::is_array(&material) {
+            array(&values(&material).into_iter().map(&own).collect::<Vec<_>>()).into()
+        } else { own(material) };
+        set(&node, "material", &material);
+    }
 }
 /// Every face is a head mesh of its own; only the chosen one shows.
 const HEAD: &str = "M_Head_";
