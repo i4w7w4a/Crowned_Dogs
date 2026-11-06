@@ -2,6 +2,7 @@ import { callRust } from "../../../../packages/runtime/src/index.ts";
 import { OnlineError, OnlineTransport } from "./transport.ts";
 import { RemoteDuel } from "./remote-duel.ts";
 import { isLoginExpired, onlineErrorMessage as message } from "./errors.ts";
+import { telegramSession } from "./telegram-session.ts";
 
 const inviteKey="cd:online:invite";
 const matchKey="cd:online:match";
@@ -23,8 +24,10 @@ export class OnlineSession {
   activity: any;
   saving=false;
   private status: HTMLElement;
+  private telegramKey: string;
   constructor(base: string) {
     this.api=new OnlineTransport(base,fetch.bind(globalThis),sessionStorage);
+    this.telegramKey=`cd:online:telegram:${base.replace(/\/$/,"")}`;
     this.status=document.createElement("p"); this.status.className="cd-online-save"; this.status.setAttribute("role","status"); this.status.hidden=true; document.body.append(this.status);
   }
   private setAccount(account:any): void { this.account=account; window.dispatchEvent(new Event("cd-online-profile")); }
@@ -42,7 +45,7 @@ export class OnlineSession {
       words(el,"Crowned Dogs","Входим в общий профиль…");
       try {
         let data;
-        try { data=tg?.initData?await this.api.post("/auth/telegram",{initData:tg.initData}):await this.api.get("/me"); }
+        try { data=tg?.initData?await telegramSession(this.api,tg.initData,sessionStorage,this.telegramKey):await this.api.get("/me"); }
         catch (e) {
           if (!(e instanceof OnlineError) || e.status!==401) throw e;
           if (tg?.initData) throw e;
@@ -73,6 +76,10 @@ export class OnlineSession {
         el.remove(); tg?.ready?.(); return;
       } catch(e) {
         words(el,"Не удалось войти",message(e));
+        if(e instanceof OnlineError && e.message==="mini_app_reopen") {
+          button(el,"Закрыть Mini App",()=>tg?.close?.());
+          await new Promise<void>(()=>{});
+        }
         // Keep inviteKey: the next iteration includes the same invite in the new challenge.
         await new Promise<void>(r=>button(el,isLoginExpired(e)?"Начать вход заново":"Повторить",r));
         restartBrowserLogin=isLoginExpired(e);

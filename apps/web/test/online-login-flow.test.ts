@@ -21,6 +21,25 @@ async function until(predicate:()=>boolean, ms=7000):Promise<void> {
   while(!predicate()) { if(Date.now()>end)assert.fail("Expected login-flow state was not reached"); await new Promise(r=>setTimeout(r,10)); }
 }
 
+test("expired Mini App launch offers reopening instead of repeating the same rejected credentials",async(t)=>{
+  const world=globalThis as any, keys=["document","window","location","sessionStorage","fetch"];
+  const previous=keys.map(key=>[key,Object.getOwnPropertyDescriptor(world,key)] as const);
+  t.after(()=>{for(const [key,descriptor] of previous){if(descriptor)Object.defineProperty(world,key,descriptor);else delete world[key];}});
+  const body=new Element("body"),values=new Map<string,string>();let requests=0,closed=0;
+  world.document={body,createElement:(tag:string)=>new Element(tag)};
+  world.window=Object.assign(new EventTarget(),{Telegram:{WebApp:{initData:"expired-launch",close:()=>closed++}}});
+  world.location={search:""};
+  world.sessionStorage={getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>values.set(k,v),removeItem:(k:string)=>values.delete(k)};
+  world.fetch=async()=>{requests++;return Response.json({error:"invalid_credentials"},{status:401});};
+  const session=new OnlineSession("/api/online");void session.login();
+  await until(()=>body.all().some(el=>el.tag==="button"));
+  const close=body.all().find(el=>el.tag==="button" && el.textContent==="Закрыть Mini App");
+  assert.ok(close,"expired credentials require a fresh Telegram launch");
+  assert.ok(!body.all().some(el=>el.textContent==="Повторить"));
+  close.onclick!();assert.equal(closed,1);assert.equal(requests,1);
+  assert.equal(session.account,undefined);
+});
+
 test("confirmed then consume410 restarts real login with the same invitation",{timeout:20000},async(t)=>{
   const world=globalThis as any;
   const keys=["document","window","location","sessionStorage","fetch"];
