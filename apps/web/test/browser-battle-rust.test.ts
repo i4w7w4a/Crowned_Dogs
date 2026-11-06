@@ -3,6 +3,9 @@ import test from "node:test";
 import { RustBattle, callRust } from "../../../packages/runtime/src/index.ts";
 import { starterLoadout, VETERAN_KITS, WEAPONS, WEAPON_IDS, type TurnReport } from "@crowned-dogs/core";
 import { LocalDuel, type LocalDuelOptions } from "../src/game/local-duel.ts";
+import { readFileSync } from "node:fs";
+import { RemoteDuel } from "../src/online/remote-duel.ts";
+import { OnlineTransport } from "../src/online/transport.ts";
 
 type Task = { at: number; interval: number; run: () => void };
 class Clock {
@@ -53,7 +56,7 @@ function deferred() {
 }
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 
-type HarnessOptions = { search?: string; time?: string; map?: string; now?: number };
+type HarnessOptions = { search?: string; time?: string; map?: string; now?: number; remote?: RemoteDuel };
 async function harness(run: (h: ReturnType<typeof createHarness>) => Promise<void>, options: HarnessOptions = {}) {
   const h = createHarness(options);
   const before = Object.fromEntries(Object.keys(h.globals).map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
@@ -86,6 +89,8 @@ function createHarness(options: HarnessOptions = {}) {
     ready = false; gl = {}; onFrame?: () => void; texturesDone = textures.promise;
     constructor() { arena = this; }
     async load() { record("arena.load"); await loading(); this.ready = true; }
+    drawn() { return Promise.resolve(); }
+    applyLooks() {}
     setFirstPerson(...args: unknown[]) { record("arena.camera", args); }
     setQuality(...args: unknown[]) { record("arena.quality", args); }
     setFrame(...args: unknown[]) { record("arena.frame", args); }
@@ -117,7 +122,7 @@ function createHarness(options: HarnessOptions = {}) {
   const stored = new Map<string, string>();
   if (options.time) stored.set("cd-time", options.time);
   if (options.map) stored.set("cd-map", options.map);
-  const bindings = { Arena: FakeArena, LocalDuel: SeededDuel, FightLog, gameAudio: audio, liquidGlass: () => {}, icon: () => "<svg/>",
+  const bindings = { Arena: FakeArena, LocalDuel: SeededDuel, FightLog, gameAudio: audio, liquidGlass: () => {}, icon: () => "<svg/>", remote:options.remote,
     store: { get: (key: string) => stored.get(key) ?? null, set: (key: string, value: string) => stored.set(key, value) },
     startQuality: () => ({ id: "low", picked: true }),
     frames: [...["day", "morning", "evening", "night"].map(time => ({
@@ -148,6 +153,35 @@ function createHarness(options: HarnessOptions = {}) {
     ready: async () => { load.resolve(); textures.resolve(); await settle(); },
   };
 }
+
+test("finished online result has one visible return action in the overlay",async()=>{
+  const finished=JSON.parse(readFileSync(new URL("./fixtures/online-public-v1.json",import.meta.url),"utf8")).finished;
+  for(const side of [0,1]) {
+    const snapshot={...finished,side};
+    const api=new OnlineTransport("/api/online",async()=>Response.json({battle:snapshot,serverNow:snapshot.serverNow}),{getItem:()=>null,setItem:()=>{},removeItem:()=>{}});
+    await harness(async h=>{
+      const start=h.battle!.start(starterLoadout("pistol"),()=>{},async()=>{},undefined);
+      await h.ready();await start;await settle();h.clock.advance(3000);await settle();
+      assert.equal(h.element("endVeil").hidden,false);
+      assert.equal(h.element("againBtn").textContent,"На базу");
+      assert.equal(h.element("baseEndBtn").hidden,true,"the second local-game action is hidden in online mode");
+      assert.equal(h.element("goBtn").disabled,true,"controls behind the result cannot submit another turn");
+    },{remote:new RemoteDuel(api,snapshot)});
+  }
+});
+
+test("normal online ready conflict reaches the actual HUD as a human message",async()=>{
+  const loading=JSON.parse(readFileSync(new URL("./fixtures/online-public-v1.json",import.meta.url),"utf8")).loading;
+  const api=new OnlineTransport("/api/online",async(_url,init)=>init?.method==="POST"
+    ?Response.json({error:"stale_version"},{status:409}):Response.json({battle:loading,serverNow:loading.serverNow}),
+    {getItem:()=>null,setItem:()=>{},removeItem:()=>{}});
+  await harness(async h=>{
+    const start=h.battle!.start(starterLoadout("pistol"),()=>{},async()=>{},undefined);
+    await h.ready();await start;await settle();
+    assert.ok(h.calls.some(c=>c.name==="log.note" && c.args[0]==="Согласуем готовность игроков…"));
+    assert.ok(!h.calls.some(c=>c.name==="log.note" && c.args[0]==="stale_version"));
+  },{remote:new RemoteDuel(api,loading)});
+});
 
 test("Rust battle never activates after cancellation during arena load or overlay exit", async () => {
   await harness(async h => {

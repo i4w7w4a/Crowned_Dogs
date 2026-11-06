@@ -1,5 +1,6 @@
 import { callRust } from "../../../../packages/runtime/src/index.ts";
-import { OnlineTransport } from "./transport.ts";
+import { OnlineError, OnlineTransport } from "./transport.ts";
+import { onlineErrorMessage } from "./errors.ts";
 
 /** Public projection only. The transport never receives or reconstructs a reducer snapshot. */
 export class RemoteDuel {
@@ -30,7 +31,14 @@ export class RemoteDuel {
   }
   async command(action: object): Promise<void> {
     const b=this.snapshot;
-    const result=await this.api.command(`/matches/${encodeURIComponent(b.id)}/commands`,{expectedVersion:b.version,turn:b.match.turn,action});
+    let result;
+    try { result=await this.api.command(`/matches/${encodeURIComponent(b.id)}/commands`,{expectedVersion:b.version,turn:b.match.turn,action}); }
+    catch(error) {
+      const status=error instanceof OnlineError?error.status:undefined;
+      const message=status===409 && (action as {type?:string}).type==="ready"
+        ? "Согласуем готовность игроков…" : onlineErrorMessage(error);
+      throw Object.assign(new Error(message,{cause:error}),{status});
+    }
     this.accept({...result.battle,serverNow:result.serverNow??result.battle.serverNow});
   }
   press(command: object): Promise<void> { return this.command({type:"press",command}); }

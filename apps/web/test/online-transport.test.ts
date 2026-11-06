@@ -1,10 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { OnlineTransport, OnlineError } from "../src/online/transport.ts";
+import { RemoteDuel } from "../src/online/remote-duel.ts";
 const storage = () => {
   const data = new Map<string,string>();
   return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string,v: string) => { data.set(k,v); }, removeItem: (k: string) => { data.delete(k); } };
 };
+
+test("battle command failures expose human messages while preserving status and original error",async()=>{
+  const fixture=JSON.parse(readFileSync(new URL("./fixtures/online-public-v1.json",import.meta.url),"utf8")).loading;
+  for(const [status,code,action,want] of [
+    [409,"stale_version",{type:"ready"},/Согласуем готовность игроков/],
+    [409,"stale_version",{type:"press",command:{type:"zone",zone:"head"}},/Состояние уже изменилось/],
+    [401,"unauthorized",{type:"submit"},/Сессия истекла/],
+  ] as const) {
+    const api=new OnlineTransport("/api/online",async()=>Response.json({error:code},{status}),storage());
+    const duel=new RemoteDuel(api,fixture);
+    await assert.rejects(duel.command(action),(error:any)=>{
+      assert.match(error.message,want);assert.equal(error.status,status);
+      assert.ok(error.cause instanceof OnlineError);assert.equal(error.cause.message,code);return true;
+    });
+    assert.equal(api.hasPending,false,"definite rejection is not replayed as a new command");
+  }
+});
 test("a lost command survives reload and reuses the exact receipt body", async () => {
   const store = storage(), calls: {url:string,init?:RequestInit}[] = [];
   let failed = true;
