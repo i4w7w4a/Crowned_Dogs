@@ -1,6 +1,7 @@
 import { callRust } from "../../../../packages/runtime/src/index.ts";
 import { OnlineError, OnlineTransport } from "./transport.ts";
 import { RemoteDuel } from "./remote-duel.ts";
+import { isLoginExpired, onlineErrorMessage as message } from "./errors.ts";
 import "./online.css";
 
 const inviteKey="cd:online:invite";
@@ -16,10 +17,6 @@ function button(el:HTMLElement,label:string,action:()=>void): HTMLButtonElement 
   const b=document.createElement("button"); b.type="button"; b.className="glass"; b.textContent=label; b.onclick=action; el.append(b); return b;
 }
 const delay=(ms:number)=>new Promise<void>(r=>setTimeout(r,ms));
-const message=(error:unknown):string=>error instanceof OnlineError && error.status===401?"Сессия истекла. Обновите страницу и войдите через Telegram.":
-  error instanceof OnlineError && error.message==="busy"?"Профиль закреплён за вызовом или боем. Сначала завершите бой или отмените вызов.":
-  error instanceof OnlineError && error.message==="login_expired"?"Время подтверждения истекло. Начните вход заново.":
-  error instanceof OnlineError && error.status===409?"Состояние уже изменилось. Данные обновлены; повторите выбор.":"Сервер недоступен. Проверьте соединение и повторите.";
 
 export class OnlineSession {
   api: OnlineTransport;
@@ -76,7 +73,8 @@ export class OnlineSession {
         el.remove(); tg?.ready?.(); return;
       } catch(e) {
         words(el,"Не удалось войти",message(e));
-        await new Promise<void>(r=>button(el,"Повторить",r));
+        // Keep inviteKey: the next iteration includes the same invite in the new challenge.
+        await new Promise<void>(r=>button(el,isLoginExpired(e)?"Начать вход заново":"Повторить",r));
       }
     }
   }
