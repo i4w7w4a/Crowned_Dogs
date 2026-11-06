@@ -21,3 +21,14 @@ test("backup fingerprint detects changed values even when row counts and migrati
   await db.query("ALTER TABLE empty_table RENAME COLUMN value TO other");
   assert.notDeepEqual(await db.transaction(snapshotData), withEmpty);
 });
+
+test("backup fingerprint includes user schemas whose names start with pg without an underscore", async t => {
+  const fixture = await embeddedDatabase();
+  t.after(() => fixture.close());
+  const db = fixture.database;
+  await db.query("CREATE TABLE online_schema_migrations(version integer PRIMARY KEY); INSERT INTO online_schema_migrations VALUES (1); CREATE SCHEMA pgcustom; CREATE TABLE pgcustom.probe(value integer); INSERT INTO pgcustom.probe VALUES (7)");
+  const before = await db.transaction(snapshotData);
+  assert.equal(before.tables.find(table => table.schema === "pgcustom" && table.name === "probe")?.rows, 1);
+  await db.query("UPDATE pgcustom.probe SET value=8");
+  assert.notDeepEqual(await db.transaction(snapshotData), before);
+});

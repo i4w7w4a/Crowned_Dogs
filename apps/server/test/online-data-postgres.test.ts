@@ -22,6 +22,39 @@ const sample = [
   { telegramId: "702", tag: "K-001-041", name: "Synthetic Two", signedAt: clock },
 ];
 
+test("native import CLI ignores inherited PGOPTIONS and writes only the public registry", { skip: !connectionString, timeout: 60_000 }, async t => {
+  const suffix = randomUUID().replaceAll("-", "");
+  const config = nativePoolConfigs(connectionString!, "online_test_" + suffix);
+  const admin = new Pool(config.admin);
+  const databaseName = "crowned_dogs_test_import_" + suffix;
+  const targetUrl = new URL(connectionString!); targetUrl.pathname = "/" + databaseName;
+  const pool = new Pool({ ...dataTarget(targetUrl.href, databaseName), max: 1 });
+  const parent = await realpath(tmpdir());
+  const directory = await mkdtemp(join(parent, "crowned-dogs-data-test-"));
+  t.after(async () => {
+    await pool.end();
+    try { await admin.query(`DROP DATABASE IF EXISTS ${databaseName}`); } finally { await admin.end(); }
+    const actual = await realpath(directory);
+    if (actual !== resolve(directory) || !actual.startsWith(parent + sep) || !actual.slice(parent.length + 1).startsWith("crowned-dogs-data-test-")) throw new Error("Unsafe test cleanup");
+    await rm(actual, { recursive: true });
+  });
+  await admin.query(`CREATE DATABASE ${databaseName} TEMPLATE template0`);
+  const db = new PgDatabase(pool);
+  await migrate(db);
+  await db.query(`CREATE SCHEMA import_shadow;
+    CREATE TABLE import_shadow.online_operators (LIKE public.online_operators INCLUDING ALL);
+    CREATE TABLE import_shadow.online_tag_counters (LIKE public.online_tag_counters INCLUDING ALL);
+    INSERT INTO import_shadow.online_tag_counters(id) VALUES (1)`);
+  const file = join(directory, "synthetic-operators.json");
+  await writeFile(file, JSON.stringify(sample));
+  const result = await run(process.execPath, ["apps/server/src/online/import-cli.ts", "--file", file,
+    "--database-env", "IMPORT_TEST_URL", "--expect-database", databaseName, "--apply"],
+  { env: { ...process.env, IMPORT_TEST_URL: targetUrl.href, PGOPTIONS: "-c search_path=import_shadow" } });
+  assert.equal(JSON.parse(result.stdout).created, 2);
+  assert.equal((await db.query("SELECT count(*)::int n FROM public.online_operators")).rows[0]?.n, 2);
+  assert.equal((await db.query("SELECT count(*)::int n FROM import_shadow.online_operators")).rows[0]?.n, 0);
+});
+
 test("native import holds the registration allocator and rolls back late SQL failure", { skip: !connectionString, timeout: 60_000 }, async t => {
   const schema = "online_test_" + randomUUID().replaceAll("-", "");
   const config = nativePoolConfigs(connectionString!, schema);
@@ -120,6 +153,13 @@ test("native PG18 backup restores accounts, sessions, migration metadata and fut
   await assert.rejects(verifyRestore({ target, directory: backup, pgBin: process.env.PG_BIN }), /integrity/);
   assert.equal((await dst.query("SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='public'")).rows[0]?.n, 0);
   await writeFile(archivePath, archive);
+  await t.test("restore refuses a database occupied only by a pgcustom schema", async () => {
+    await dst.query("CREATE SCHEMA pgcustom; CREATE TABLE pgcustom.keep(value integer); INSERT INTO pgcustom.keep VALUES (71)");
+    await assert.rejects(verifyRestore({ target, directory: backup, pgBin: process.env.PG_BIN }), /empty/);
+    assert.equal((await dst.query("SELECT value FROM pgcustom.keep")).rows[0]?.value, 71);
+    assert.equal((await dst.query("SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='public'")).rows[0]?.n, 0);
+    await dst.query("DROP SCHEMA pgcustom CASCADE");
+  });
   // Post-backup writes do not change the restored snapshot.
   await db.query("UPDATE online_operators SET profile=jsonb_set(profile,'{xp}','999') WHERE telegram_id=701");
   const targetUrl = new URL(connectionString!); targetUrl.pathname = "/" + targetName;

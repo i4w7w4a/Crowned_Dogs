@@ -88,10 +88,10 @@ export async function verifyRestore(options: { target: DataTarget; directory: st
     await requirePg18(pool);
     const occupied = (await pool.query(`SELECT
       EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-        WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema')
+        WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema')
       OR EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-        WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema')
-      OR EXISTS(SELECT 1 FROM pg_namespace WHERE nspname NOT LIKE 'pg_%' AND nspname NOT IN ('public','information_schema'))
+        WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema')
+      OR EXISTS(SELECT 1 FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname NOT IN ('public','information_schema'))
       OR EXISTS(SELECT 1 FROM pg_extension WHERE extname <> 'plpgsql') AS occupied`)).rows[0]?.occupied;
     if (occupied) throw new Error("Restore target must be empty");
     const input = await open(archive, "r");
@@ -124,7 +124,7 @@ export async function snapshotData(sql: Sql): Promise<DataSnapshot> {
   const tables: DataSnapshot["tables"] = [];
   const names = (await sql.query(`SELECT n.nspname AS schema, c.relname AS name FROM pg_class c
     JOIN pg_namespace n ON n.oid=c.relnamespace
-    WHERE c.relkind IN ('r','p') AND n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema'
+    WHERE c.relkind IN ('r','p') AND n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'
     ORDER BY n.nspname COLLATE "C", c.relname COLLATE "C"`)).rows;
   for (const { schema, name } of names) {
     const columns = (await sql.query(`SELECT column_name, data_type, udt_schema, udt_name, is_nullable,
