@@ -1,6 +1,6 @@
 # Проверка постоянного PvP (#18)
 
-Дата: 6 ноября 2026. Базовый кандидат сервера: `4f2fa83`; защита квот за proxy проверяется отдельным следующим коммитом.
+Дата: 6 ноября 2026. Базовый кандидат сервера: `4f2fa83`; защита квот за proxy — `3369a75`.
 Зависимости: основа #17 (`155ee2e`), PostgreSQL CI #21 (`fd30e07`), Telegram #20 (`eaed518`, `65b7770`, `da79f79`).
 Клиент #19 и выпуск #21 проверяются координатором отдельно.
 
@@ -22,10 +22,11 @@
 
 ## Выполненные проверки кандидата
 
-- `npm run check`: **272 passed, 0 failed**, всего 275; пропущены два opt-in native файла без переменной БД и штатный GC-тест. Types и render/motion/scene orchestration пройдены.
+- Финальный `npm run check` с локальным native PostgreSQL: **275 passed, 0 failed**, всего 276; единственный skip — штатный GC-тест. Types и render/motion/scene orchestration пройдены. Предыдущий кандидат без test DB давал 272 passed и два дополнительных opt-in native skip.
 - Оба native-файла отдельно на настоящем PostgreSQL **18.6**: **2 passed, 0 failed, 0 skipped**. Только изолированная loopback БД `crowned_dogs_test` и собственные случайные schema.
 - Native проверяет несколько реальных соединений: конкурентное принятие, восемь повторов команды, новый pool после сохранения первого приказа, гонку submit/timeout, rollback ledger, восемь consume одного challenge, fencing истёкшей аренды.
 - `npm run web:build`: production-сборка успешна.
+- Limiter: 6 сфокусированных config/HTTP сценариев прошли. Два verified аккаунта не делят socket-квоту; spoof заголовка от недоверенного peer не обходит auth limit, CIDR-конфигурация отвергается.
 - Полный `cargo test -p game-client -p game-core` пройден при первом reducer; после основы и укрепления проекции повторены затронутые `online` и `sync_cap`.
 
 Для воспроизведения native-проверки использовать отдельную `ONLINE_TEST_DATABASE_URL`, не production-переменную:
