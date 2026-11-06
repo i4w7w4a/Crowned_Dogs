@@ -10,7 +10,7 @@ test("SQL accounts preserve server progress, permanent tags and revocable hashed
   const db = fixture.database;
   await migrate(db);
   await migrate(db);
-  assert.equal((await db.query("SELECT count(*)::int AS count FROM online_schema_migrations")).rows[0]?.count, 1);
+  assert.equal((await db.query("SELECT count(*)::int AS count FROM online_schema_migrations")).rows[0]?.count, 3);
   const store = new OnlineStore(db);
   const identity = { id: "123", firstName: "Арт", lastName: null, username: "old" };
   const first = await store.login(identity, clock);

@@ -10,7 +10,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "node --test \"packages/*/test/*.test.ts\" \"apps/*/test/*.test.ts\"",
+    "test": "node --test --test-concurrency=2 \"packages/*/test/*.test.ts\" \"apps/*/test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json && tsc -p apps/web/tsconfig.json",
     "check": "npm run typecheck && npm test && npm run test:render",
     "test:render": "node tools/test-render-orchestration.mjs && node tools/test-motion-orchestration.mjs && node tools/test-scene-orchestration.mjs",
