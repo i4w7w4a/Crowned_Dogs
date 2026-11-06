@@ -13,6 +13,8 @@
 
 Полные локальные логи лежат в игнорируемых `target/online-check-final.log` и `target/online-build-final.log`.
 
+Дополнение ревью: `1db3796` распознаёт backend `browser_login_expired`, полный check после этой правки — 247 passed / 2 skipped, build зелёный. `f31123a` проверяет настоящий `OnlineSession.login()` через status confirmed → consume410 → видимый текст/кнопку → явный restart → второй start с тем же inviteToken → consume200. Два узких теста зелёные; независимая проверка направления #20 также 2/2. Типы web и web build после переноса CSS/baseURL прошли. Fixtures используют валидные 32-символьные synthetic tokens. Live Telegram в этих тестах не участвует.
+
 ## Видимые результаты
 
 | Сценарий | Снимок |

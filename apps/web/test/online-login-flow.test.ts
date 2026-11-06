@@ -28,7 +28,7 @@ test("confirmed then consume410 restarts real login with the same invitation",{t
   t.after(()=>{for(const [key,descriptor] of previous){if(descriptor)Object.defineProperty(world,key,descriptor);else delete world[key];}});
   const body=new Element("body"), values=new Map<string,string>();
   world.document={body,createElement:(tag:string)=>new Element(tag)};
-  world.window=new EventTarget(); world.location={search:"?invite=unchanged_invite"};
+  world.window=new EventTarget(); world.location={search:"?invite=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"};
   world.sessionStorage={getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>values.set(k,v),removeItem:(k:string)=>values.delete(k)};
   const requests:{path:string,body:any}[]=[];
   let consumes=0, signedIn=false;
@@ -37,11 +37,11 @@ test("confirmed then consume410 restarts real login with the same invitation",{t
     const path=new URL(url,"https://game.test").pathname;
     requests.push({path,body:init?.body?JSON.parse(String(init.body)):null});
     if(path.endsWith("/me"))return Response.json(signedIn?{account,maxLevel:4}:{error:"unauthorized"},{status:signedIn?200:401});
-    if(path.endsWith("/start"))return Response.json({challengeId:"synthetic",botUrl:"https://t.me/synthetic_bot?start=login_synthetic",expiresAt:Date.now()+300000});
+    if(path.endsWith("/start"))return Response.json({challengeId:"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",botUrl:"https://t.me/synthetic_bot?start=login_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",expiresAt:Date.now()+300000});
     if(path.endsWith("/status"))return Response.json({status:"confirmed",expiresAt:Date.now()+100});
     if(path.endsWith("/consume")) {
       if(++consumes===1)return Response.json({error:"browser_login_expired"},{status:410});
-      signedIn=true;return Response.json({account,maxLevel:4,inviteToken:"unchanged_invite"});
+      signedIn=true;return Response.json({account,maxLevel:4,inviteToken:"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"});
     }
     if(path.endsWith("/activity"))return Response.json({invite:null,battle:null});
     throw Error(`Unexpected request ${path}`);
@@ -58,7 +58,7 @@ test("confirmed then consume410 restarts real login with the same invitation",{t
   button("Начать вход заново")!.onclick!();
   await until(()=>requests.filter(r=>r.path.endsWith("/start")).length===2,1500);
   await running;
-  assert.deepEqual(requests.filter(r=>r.path.endsWith("/start")).map(r=>r.body),[{inviteToken:"unchanged_invite"},{inviteToken:"unchanged_invite"}]);
+  assert.deepEqual(requests.filter(r=>r.path.endsWith("/start")).map(r=>r.body),[{inviteToken:"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},{inviteToken:"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}]);
   assert.equal(consumes,2); assert.equal(session.account.id,"synthetic-operator");
-  assert.equal(values.get("cd:online:invite"),"unchanged_invite","login itself does not consume the invitation");
+  assert.equal(values.get("cd:online:invite"),"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","login itself does not consume the invitation");
 });
