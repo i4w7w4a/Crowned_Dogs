@@ -101,9 +101,7 @@ pub fn set_on(on: bool) {
 
 /// The arena tells which renderer and quality it draws with; a new renderer is probed again.
 pub fn battle(renderer: &JsValue, quality: &str) {
-    if !on() {
-        return;
-    }
+    // Remember the renderer even while the meter is off: enabling it mid-battle must work too.
     METER.with(|m| {
         let mut m = m.borrow_mut();
         if m.renderer != *renderer {
