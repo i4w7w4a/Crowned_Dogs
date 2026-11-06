@@ -81,3 +81,35 @@ test("confirmed then consume410 restarts real login with the same invitation",{t
   assert.equal(consumes,2); assert.equal(session.account.id,"synthetic-operator");
   assert.equal(values.get("cd:online:invite"),"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","login itself does not consume the invitation");
 });
+
+test("malformed URL and stored invitation do not poison the browser login challenge",{timeout:15000},async(t)=>{
+  const world=globalThis as any,keys=["document","window","location","sessionStorage","fetch"];
+  const previous=keys.map(key=>[key,Object.getOwnPropertyDescriptor(world,key)] as const);
+  t.after(()=>{for(const [key,descriptor] of previous){if(descriptor)Object.defineProperty(world,key,descriptor);else delete world[key];}});
+  const body=new Element("body"),values=new Map([["cd:online:invite","old-invalid-token"]]);
+  world.document={body,createElement:(tag:string)=>new Element(tag)};
+  world.window=new EventTarget();world.location={search:"?invite=short"};
+  world.sessionStorage={getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>values.set(k,v),removeItem:(k:string)=>values.delete(k)};
+  const starts:unknown[]=[];let signedIn=false;
+  const account={id:"synthetic-operator",version:1,appearance:{},loadout:{},profile:{},telegram:{firstName:"Тест"}};
+  world.fetch=async(url:string,init?:RequestInit)=>{
+    const path=new URL(url,"https://game.test").pathname;
+    if(path.endsWith("/me"))return Response.json(signedIn?{account}:{error:"unauthorized"},{status:signedIn?200:401});
+    if(path.endsWith("/start")) {
+      const input=JSON.parse(String(init?.body));starts.push(input);
+      if(input.inviteToken && !/^[A-Za-z0-9_-]{32}$/.test(input.inviteToken))return Response.json({error:"invalid_invite"},{status:400});
+      return Response.json({challengeId:"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",botUrl:"https://t.me/synthetic_bot?start=login_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",expiresAt:Date.now()+300000});
+    }
+    if(path.endsWith("/status"))return Response.json({status:"confirmed",expiresAt:Date.now()+100});
+    if(path.endsWith("/consume")){signedIn=true;return Response.json({account});}
+    if(path.endsWith("/activity"))return Response.json({invite:null,battle:null});
+    throw Error(`Unexpected request ${path}`);
+  };
+  const session=new OnlineSession("/api/online"),running=session.login();
+  const button=(label:string)=>body.all().find(el=>el.tag==="button" && el.textContent===label);
+  await until(()=>!!button("Войти через Telegram"));button("Войти через Telegram")!.onclick!();
+  await until(()=>signedIn || !!button("Повторить"));
+  assert.deepEqual(starts,[{}],"invalid invitation must not reach browser/start");
+  await running;assert.equal(session.account.id,"synthetic-operator");
+  assert.equal(values.has("cd:online:invite"),false);
+});

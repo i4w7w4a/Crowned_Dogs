@@ -6,6 +6,13 @@ import { telegramSession } from "./telegram-session.ts";
 
 const inviteKey="cd:online:invite";
 const matchKey="cd:online:match";
+function invitation(incoming?:unknown):string|null {
+  const valid=(value:unknown):value is string=>typeof value==="string" && /^[A-Za-z0-9_-]{32}$/.test(value);
+  if(valid(incoming))sessionStorage.setItem(inviteKey,incoming);
+  const saved=sessionStorage.getItem(inviteKey);
+  if(valid(saved))return saved;
+  sessionStorage.removeItem(inviteKey);return null;
+}
 const panel=(): HTMLElement => {
   const el=document.createElement("section"); el.className="cd-online"; el.setAttribute("role","dialog"); el.setAttribute("aria-modal","true");
   document.body.append(el); return el;
@@ -36,8 +43,8 @@ export class OnlineSession {
     const tg=(window as any).Telegram?.WebApp;
     const search=new URLSearchParams(location.search);
     const start=search.get("tgWebAppStartParam") ?? tg?.initDataUnsafe?.start_param ?? "";
-    const token=search.get("invite") ?? (start.startsWith("duel_")?start.slice(5):null);
-    if (token && /^[A-Za-z0-9_-]{1,128}$/.test(token)) sessionStorage.setItem(inviteKey,token);
+    const token=search.get("invite") ?? (typeof start==="string" && start.startsWith("duel_")?start.slice(5):null);
+    invitation(token);
     // initDataUnsafe is used only for routing; identity always comes from the signed server login.
     const el=panel();
     let restartBrowserLogin=false;
@@ -53,7 +60,7 @@ export class OnlineSession {
             words(el,"Вход через Telegram","Подтвердите вход в боте. Этот браузер получит тот же профиль и жетон.");
             if(!restartBrowserLogin) await new Promise<void>(r=>button(el,"Войти через Telegram",r));
             restartBrowserLogin=false;
-            const inviteToken=sessionStorage.getItem(inviteKey);
+            const inviteToken=invitation();
             const challenge=await this.api.post("/auth/browser/start",inviteToken?{inviteToken}:{});
             words(el,"Подтвердите вход","Откройте бота, нажмите «Подтвердить вход» и вернитесь сюда.");
             const link=document.createElement("a"); link.textContent="Открыть Telegram"; link.className="glass";
@@ -66,7 +73,7 @@ export class OnlineSession {
               if (status.status==="confirmed") break;
             }
             data=await this.api.post("/auth/browser/consume",{});
-            if (data.inviteToken) sessionStorage.setItem(inviteKey,data.inviteToken);
+            invitation(data.inviteToken);
           }
         }
         this.api.bindAccount(data.account.id);
@@ -145,7 +152,7 @@ export class OnlineSession {
               sessionStorage.removeItem(inviteKey);
               return new RemoteDuel(this.api,{...this.activity.battle,serverNow:this.activity.serverNow??this.activity.battle.serverNow});
             }
-            const token=sessionStorage.getItem(inviteKey);
+            const token=invitation();
             const invite=token?(await this.api.get(`/invites/${encodeURIComponent(token)}`)).invite:this.activity.invite;
             if (!invite) {
               words(el,"Вызов на дуэль",failure || "Бот опубликует приглашение в подключённом игровом чате.");
