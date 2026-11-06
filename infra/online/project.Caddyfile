@@ -1,0 +1,31 @@
+# Environment belongs to the project web container. Never edit the shared gateway.
+{
+	servers {
+		# One verified gateway peer IP; never private_ranges or a catch-all CIDR.
+		trusted_proxies static {$SHARED_GATEWAY_PEER}
+		trusted_proxies_strict
+		client_ip_headers X-Forwarded-For
+	}
+}
+:{$PROJECT_WEB_PORT} {
+	@online path /r2/api/online /r2/api/online/*
+	handle @online {
+		# An explicitly reachable address from INSIDE this container, not host localhost.
+		reverse_proxy {$ONLINE_UPSTREAM} {
+			# Replace any incoming client-controlled value, including on direct requests.
+			header_up X-Crowned-Client-IP {client_ip}
+			health_uri /r2/api/online/health
+			health_interval 10s
+			health_timeout 2s
+		}
+	}
+	handle {
+		root * /srv
+		encode zstd gzip
+		@wasm path *.wasm
+		header @wasm Content-Type application/wasm
+		@mp3 path *.mp3
+		header @mp3 Content-Type audio/mpeg
+		file_server
+	}
+}

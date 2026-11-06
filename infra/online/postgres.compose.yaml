@@ -1,0 +1,40 @@
+name: crowned-dogs-online
+services:
+  postgres:
+    image: ${ONLINE_POSTGRES_IMAGE:?Set an approved postgres 18 image digest}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${ONLINE_PG_OWNER:?Set the dedicated database owner}
+      POSTGRES_DB: ${ONLINE_PG_DATABASE:?Set the dedicated database name}
+      POSTGRES_PASSWORD_FILE: /run/secrets/online_pg_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=scram-sha-256
+    secrets:
+      - online_pg_password
+    ports:
+      - "127.0.0.1:${ONLINE_PG_PORT:?Set a verified free loopback port}:5432"
+    volumes:
+      # PostgreSQL 18 official image uses versioned PGDATA below this directory.
+      - online_pg_data:/var/lib/postgresql
+    networks: [online_database]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 60s
+    shm_size: 128mb
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+volumes:
+  online_pg_data:
+    name: ${ONLINE_PG_VOLUME:?Set a new project-only volume name}
+networks:
+  online_database:
+    name: ${ONLINE_PG_NETWORK:?Set a new project-only network name}
+secrets:
+  online_pg_password:
+    file: ${ONLINE_PG_PASSWORD_FILE:?Set an absolute protected password file}
