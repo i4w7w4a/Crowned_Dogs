@@ -7,6 +7,7 @@ import { CALIBRATION_FRAME, FRAMES } from "./arena/frames.ts";
 import { startQuality } from "./arena/quality.ts";
 import { gameAudio } from "./audio/arena-audio.ts";
 import { online } from "./online/session.ts";
+import type { RemoteDuel } from "./online/remote-duel.ts";
 import { FightLog, icon } from "./hud/log.ts";
 import { liquidGlass } from "./hud/liquid.ts";
 import { store } from "./store.ts";
@@ -23,9 +24,10 @@ const bindings = {
 let battle: RustBattle | undefined;
 
 export async function startBattle(
-  kit: Loadout, onExit: () => void, beforeEnter: () => Promise<void> = async () => {}, signal?: AbortSignal,
+  kit: Loadout, onExit: () => void, beforeEnter: () => Promise<void> = async () => {}, signal?: AbortSignal, remote?: RemoteDuel,
 ): Promise<void> {
-  bindings.remote = await online.openBattle(signal);
+  if (!remote) throw Error("missing_online_battle");
+  bindings.remote = remote;
   battle ??= new RustBattle(bindings);
-  return battle.start(kit, () => { online.leaveBattle(bindings.remote); onExit(); }, beforeEnter, signal) as Promise<void>;
+  return battle.start(kit, () => { online.leaveBattle(remote); onExit(); }, beforeEnter, signal) as Promise<void>;
 }

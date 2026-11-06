@@ -12,5 +12,6 @@ import "./online/online.css";
 
 const online = await connectOnline();
 mount_application({ BaseScreen, MawLoader, gameAudio,
+  selectBattle: (signal: AbortSignal) => online.openBattle(signal),
   loadLocalLoadout, mountSoundSettings, showSoundSettings, resumeOnline: !!online.activity?.battle, loadBattle: () => import("./main.ts") });
 if (import.meta.hot) import.meta.hot.dispose(unmount_application);
