@@ -34,11 +34,31 @@ jobs:
       - run: npm run rust:build
       - run: cargo test --locked --release -p game-core -p game-client -p game-motion -p game-graphics -p game-ui
       - run: npm run typecheck
+      - name: Инструменты резервирования PostgreSQL 18
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/crowned-dogs-pg18"
+          cat > "$RUNNER_TEMP/crowned-dogs-pg18/pg_dump" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          tool="${0##*/}"
+          case "$tool" in pg_dump|pg_restore) ;; *) exit 2 ;; esac
+          exec docker exec -i \
+            -e PGHOST=127.0.0.1 -e PGPORT=5432 \
+            -e PGUSER -e PGPASSWORD -e PGDATABASE \
+            -e PGCONNECT_TIMEOUT=5 \
+            "$CI_PG_CONTAINER" "$tool" "$@"
+          SH
+          cp "$RUNNER_TEMP/crowned-dogs-pg18/pg_dump" "$RUNNER_TEMP/crowned-dogs-pg18/pg_restore"
+          chmod 700 "$RUNNER_TEMP/crowned-dogs-pg18/pg_dump" "$RUNNER_TEMP/crowned-dogs-pg18/pg_restore"
       - name: Тесты игры и транзакций PostgreSQL
         run: npm test
         env:
           # Disposable service container only; never a production connection.
           ONLINE_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/crowned_dogs_test
+          # Match pg_dump/pg_restore to the disposable PostgreSQL 18 server.
+          PG_BIN: ${{ runner.temp }}/crowned-dogs-pg18
+          CI_PG_CONTAINER: ${{ job.services.postgres.id }}
       - run: npm run test:render
       - run: npm run web:build
 
