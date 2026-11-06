@@ -2,7 +2,6 @@ import { callRust } from "../../../../packages/runtime/src/index.ts";
 import { OnlineError, OnlineTransport } from "./transport.ts";
 import { RemoteDuel } from "./remote-duel.ts";
 import { isLoginExpired, onlineErrorMessage as message } from "./errors.ts";
-import "./online.css";
 
 const inviteKey="cd:online:invite";
 const matchKey="cd:online:match";
@@ -24,8 +23,7 @@ export class OnlineSession {
   activity: any;
   saving=false;
   private status: HTMLElement;
-  constructor() {
-    const base=import.meta.env.VITE_ONLINE_API ?? `${import.meta.env.BASE_URL}api/online`;
+  constructor(base: string) {
     this.api=new OnlineTransport(base,fetch.bind(globalThis),sessionStorage);
     this.status=document.createElement("p"); this.status.className="cd-online-save"; this.status.setAttribute("role","status"); this.status.hidden=true; document.body.append(this.status);
   }
@@ -39,6 +37,7 @@ export class OnlineSession {
     if (token && /^[A-Za-z0-9_-]{1,128}$/.test(token)) sessionStorage.setItem(inviteKey,token);
     // initDataUnsafe is used only for routing; identity always comes from the signed server login.
     const el=panel();
+    let restartBrowserLogin=false;
     for (;;) {
       words(el,"Crowned Dogs","Входим в общий профиль…");
       try {
@@ -49,7 +48,8 @@ export class OnlineSession {
           if (tg?.initData) throw e;
           {
             words(el,"Вход через Telegram","Подтвердите вход в боте. Этот браузер получит тот же профиль и жетон.");
-            await new Promise<void>(r=>button(el,"Войти через Telegram",r));
+            if(!restartBrowserLogin) await new Promise<void>(r=>button(el,"Войти через Telegram",r));
+            restartBrowserLogin=false;
             const inviteToken=sessionStorage.getItem(inviteKey);
             const challenge=await this.api.post("/auth/browser/start",inviteToken?{inviteToken}:{});
             words(el,"Подтвердите вход","Откройте бота, нажмите «Подтвердить вход» и вернитесь сюда.");
@@ -75,6 +75,7 @@ export class OnlineSession {
         words(el,"Не удалось войти",message(e));
         // Keep inviteKey: the next iteration includes the same invite in the new challenge.
         await new Promise<void>(r=>button(el,isLoginExpired(e)?"Начать вход заново":"Повторить",r));
+        restartBrowserLogin=isLoginExpired(e);
       }
     }
   }
@@ -166,7 +167,7 @@ export class OnlineSession {
 
 export let online: OnlineSession;
 export async function connectOnline(): Promise<OnlineSession> {
-  online=new OnlineSession();
+  online=new OnlineSession(import.meta.env.VITE_ONLINE_API ?? `${import.meta.env.BASE_URL}api/online`);
   (globalThis as any).__cdOnline=online;
   await online.login();
   return online;

@@ -8,6 +8,7 @@ import { MawLoader } from "./loading/maw-loader.ts";
 import { gameAudio } from "./audio/arena-audio.ts";
 import { mountSoundSettings, showSoundSettings } from "./base/sound-settings.ts";
 import { connectOnline } from "./online/session.ts";
+import "./online/online.css";
 
 const online = await connectOnline();
 mount_application({ BaseScreen, MawLoader, gameAudio,
