@@ -79,7 +79,6 @@ fn public_weapon(v: &Value) -> Value {
             "accuracy",
             "falloff",
             "needsStance",
-            "splash",
             "doubleShot",
             "nightAcc",
             "tracking",
@@ -189,10 +188,13 @@ fn public_hazard(v: &Value) -> Value {
     if v.is_null() {
         return Value::Null;
     }
-    let mut out = pick(v, &["kind", "name", "turn", "at", "radius", "hpBefore"]);
+    let mut out = pick(
+        v,
+        &["kind", "name", "turn", "at", "radius", "hpBefore", "toxic"],
+    );
     if v["hits"].is_array() {
         out["hits"] = list(&v["hits"], |x| {
-            pick(x, &["side", "damage", "shieldOff", "stunned"])
+            pick(x, &["side", "damage", "shieldOff", "stun"])
         });
     }
     out
@@ -426,7 +428,13 @@ fn project(s: &Value, id: &str) -> Result<Value, String> {
     out["eventCursor"] = json!(m["history"].as_array().map_or(0, Vec::len));
     out["result"] = m["result"].clone();
     out["match"] = m;
-    out["own"] = json!({"draft":s["drafts"][i],"order":s["orders"][i],"submitted":!s["orders"][i].is_null()});
+    let draft = pick(&s["drafts"][i], &["kind", "move", "zone", "defend"]);
+    let order = if s["orders"][i].is_null() {
+        Value::Null
+    } else {
+        json!({"action":public_action(&s["orders"][i]["action"]),"defend":s["orders"][i]["defend"]})
+    };
+    out["own"] = json!({"draft":draft,"order":order,"submitted":!s["orders"][i].is_null()});
     out["submitted"] = json!([!s["orders"][0].is_null(), !s["orders"][1].is_null()]);
     out["reward"] = Value::Null;
     Ok(out)
@@ -443,6 +451,9 @@ fn profile(mut p: Value, a: &Value) -> Result<Value, String> {
         }
         "appearance" if exact(a, &["type", "value"]) => {
             let mut v = a["value"].clone();
+            if !v.is_object() {
+                return Err("invalid_command".into());
+            }
             if let Some(tag) = v.get("tag") {
                 if tag != &p["tag"] {
                     return Err("invalid_command".into());

@@ -1,0 +1,22 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
+import { periodic } from "../src/online/lifecycle.ts";
+test("periodic work never overlaps and shutdown drains the current transaction", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(r => { release = r; });
+    let started = 0;
+    let done = false;
+    const worker = periodic(async () => { started++; await gate; done = true; }, 5, () => { });
+    await delay(30);
+    assert.equal(started, 1);
+    let stopped = false;
+    const stopping = worker.stop().then(() => { stopped = true; });
+    await delay(10);
+    assert.equal(stopped, false);
+    release();
+    await stopping;
+    assert.equal(done, true);
+    await delay(15);
+    assert.equal(started, 1);
+});

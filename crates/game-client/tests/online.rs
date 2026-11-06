@@ -77,6 +77,9 @@ fn projection_hides_entropy_and_opponent_intent_even_for_future_fields() {
     s["match"]["fighters"][0]["futurePrivate"] = json!("hidden");
     s["match"]["config"]["fighters"][0]["kit"]["weapon"]["futurePrivate"] = json!("hidden");
     s["match"]["history"] = json!([{"turn":0,"attacks":[{"futurePrivate":"hidden","damage":1}]}]);
+    s["drafts"][0]["futurePrivate"] = json!("hidden");
+    s["orders"][0] = json!({"action":{"type":"shoot","zone":"head","move":0,"futurePrivate":"hidden"},"defend":["head","body"],"futurePrivate":"hidden"});
+    s["match"]["hazard"] = json!({"kind":"lightning","futurePrivate":"hidden","toxic":1,"hits":[{"side":0,"stun":true,"futurePrivate":"hidden"}]});
     let view = call("project", json!([s, "a"]));
     let wire = serde_json::to_string(&view).unwrap();
     assert!(!wire.contains("private-seed"));
@@ -86,6 +89,8 @@ fn projection_hides_entropy_and_opponent_intent_even_for_future_fields() {
     assert!(view.get("drafts").is_none());
     assert!(view["own"]["draft"]["zone"].is_null());
     assert_eq!(view["side"], 0);
+    assert_eq!(view["match"]["hazard"]["hits"][0]["stun"], true);
+    assert_eq!(view["match"]["hazard"]["toxic"], 1);
     assert_eq!(call("project", json!([s, "b"]))["side"], 1);
     assert!(dispatch("server.online.project", json!([s, "stranger"])).is_err());
 }
@@ -154,6 +159,11 @@ fn surrender_finishes_and_rewards_are_derived_only_for_finished_battles() {
 #[test]
 fn profile_accepts_intentions_and_rejects_forged_stats_tag_and_items() {
     let p = player("a");
+    assert!(dispatch(
+        "server.online.profile",
+        json!([p,{"type":"appearance","value":"invalid"}])
+    )
+    .is_err());
     let next = call("profile", json!([p,{"type":"spend","stat":"power"}]));
     assert_eq!(next["profile"]["stats"]["power"].as_f64(), Some(1.0));
     assert!(dispatch(

@@ -1,0 +1,83 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { test } from "node:test";
+import { Pool } from "pg";
+import { PgDatabase } from "../src/online/database.ts";
+import { OnlineGameService } from "../src/online/game-service.ts";
+import { BrowserLoginService } from "../src/online/browser-login.ts";
+import { OnlineStore } from "../src/online/storage.ts";
+import { SqlTelegramOutbox } from "../src/online/outbox.ts";
+import { nativePoolConfigs } from "./online-native-config.ts";
+import { seedGame } from "./online-game-fixtures.ts";
+import { clock } from "./online-fixtures.ts";
+const connectionString = process.env.ONLINE_TEST_DATABASE_URL;
+test("native PostgreSQL PvP races, durable orders, final rewards and browser consumption", { skip: !connectionString, timeout: 60000 }, async (t) => {
+    const schema = "online_test_" + randomUUID().replaceAll("-", "");
+    const config = nativePoolConfigs(connectionString!, schema);
+    const admin = new Pool(config.admin);
+    let pool = new Pool(config.application);
+    t.after(async () => { await pool.end(); try {
+        await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+    }
+    finally {
+        await admin.end();
+    } });
+    await admin.query(`CREATE SCHEMA ${schema}`);
+    let db = new PgDatabase(pool);
+    const f = await seedGame(db);
+    const [a, b, c] = f.accounts;
+    let game = f.game;
+    const inv = (await game.createInvite(a!.id, { commandId: randomUUID() }, clock)).body.invite;
+    const races = await Promise.all([b!, c!, b!, c!].map(p => game.acceptInvite(p.id, inv.token, { commandId: randomUUID(), expectedVersion: 1 }, clock + 1)));
+    assert.equal(races.filter(r => r.status === 200).length, 1);
+    let s = races.find(r => r.status === 200)!.body.battle;
+    const guest = s.players[1].id;
+    const cmd = (action: unknown) => ({ commandId: randomUUID(), expectedVersion: s.version, turn: s.match.turn, action });
+    for (const id of [a!.id, guest])
+        s = (await game.command(id, s.id, cmd({ type: "ready" }), clock + 2)).body.battle;
+    const first = cmd({ type: "press", command: { type: "zone", zone: "head" } });
+    const repeats = await Promise.all(Array.from({ length: 8 }, () => game.command(a!.id, s.id, first, clock + 3)));
+    for (const r of repeats)
+        assert.deepEqual(r, repeats[0]);
+    s = repeats[0]!.body.battle;
+    for (const zone of ["head", "body"])
+        s = (await game.command(a!.id, s.id, cmd({ type: "press", command: { type: "guard", zone } }), clock + 4)).body.battle;
+    s = (await game.command(a!.id, s.id, cmd({ type: "submit" }), clock + 5)).body.battle;
+    await pool.end();
+    pool = new Pool(config.application);
+    db = new PgDatabase(pool);
+    game = new OnlineGameService(db, { chatId: "-1001", threadId: 566, clock: () => clock });
+    s = (await game.match(a!.id, s.id, clock + 6)).body.battle;
+    assert.equal(s.own.order.action.zone, "head");
+    const now = clock + 3600000;
+    await Promise.all([game.tick(now), game.tick(now), game.command(guest, s.id, cmd({ type: "submit" }), now)]);
+    s = (await game.match(a!.id, s.id, now)).body.battle;
+    assert.equal(s.match.history.length, 1);
+    assert.equal(s.match.turn, 2);
+    assert.ok(s.deadline > now);
+    await db.query("ALTER TABLE online_reward_ledger ADD CONSTRAINT reject_rewards CHECK(false) NOT VALID");
+    const finish = cmd({ type: "surrender" });
+    await assert.rejects(game.command(guest, s.id, finish, now + 1));
+    assert.equal((await game.match(a!.id, s.id, now + 1)).body.battle.phase, "active");
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM online_player_slots")).rows[0]!.n, 2);
+    await db.query("ALTER TABLE online_reward_ledger DROP CONSTRAINT reject_rewards");
+    const done = await Promise.all(Array.from({ length: 8 }, () => game.command(guest, s.id, finish, now + 2)));
+    assert.ok(done.every(r => r.status === 200));
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM online_reward_ledger")).rows[0]!.n, 2);
+    const login = new BrowserLoginService(new OnlineStore(db), { origin: "https://example.test", botUsername: "GameTestBot", clock: () => clock });
+    const challenge = await login.start({ inviteToken: inv.token }, now);
+    await login.confirm(challenge.challengeId, { id: "91", firstName: "Тест", lastName: null, username: null }, now);
+    const consume = await Promise.allSettled(Array.from({ length: 8 }, () => login.consume(challenge.cookie, now + 1)));
+    assert.equal(consume.filter(r => r.status === "fulfilled").length, 1);
+    let deliveryNow = now;
+    const outbox = new SqlTelegramOutbox(db, () => deliveryNow);
+    const lease = await outbox.claimDue(now, 1000);
+    assert.ok(lease);
+    deliveryNow += 1000;
+    const replacement = await outbox.claimDue(deliveryNow, 1000);
+    assert.ok(replacement);
+    assert.notEqual(replacement.leaseId, lease.leaseId);
+    assert.equal(await outbox.complete(lease.leaseId, 100), false);
+    assert.equal(await outbox.complete(replacement.leaseId, 101), true);
+    assert.equal(pool.waitingCount, 0);
+});
