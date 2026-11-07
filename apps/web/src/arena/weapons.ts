@@ -15,6 +15,7 @@ export class Hand {
     this.mount = this.controller.mount;
   }
   fit(mods: Partial<Record<string, string>> = {}): void { if (!this.disposed) this.controller.fit(mods); }
+  upgradeGuns(): void { if (!this.disposed) this.controller.upgradeGuns(); }
   hold(what: Held | null): void { if (!this.disposed) this.controller.hold(what); }
   muzzle(out: THREE.Vector3): boolean { return !this.disposed && this.controller.muzzle(out); }
   get held(): Held | null { return this.disposed ? null : (this.controller.held as Held | null) ?? null; }

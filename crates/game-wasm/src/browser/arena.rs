@@ -860,6 +860,16 @@ impl RustArena {
             match result {
                 Ok(loaded) => {
                     let _: js_sys::Object = js_sys::Object::assign(guns.unchecked_ref(), loaded.unchecked_ref());
+                    let hands = [
+                        s.me.as_ref().map(|figure| figure.hand.clone()),
+                        s.enemy.as_ref().map(|figure| figure.hand.clone()),
+                        Some(s.in_water.clone()),
+                    ];
+                    for hand in hands.into_iter().flatten() {
+                        if get(&hand, "upgradeGuns").is_function() {
+                            call(&hand, "upgradeGuns", &[]);
+                        }
+                    }
                     s.remaining_guns.clear();
                     Ok(JsValue::UNDEFINED)
                 }

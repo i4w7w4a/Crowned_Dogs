@@ -344,6 +344,7 @@ function arenaHost() {
     constructor(model, _grip, _steel, opts) { this.mount = new Three.Group(); model.add(this.mount); this.opts = opts; }
     hold(kind) { events.push(["hold", kind]); }
     fit(mods) { events.push(["fit", mods]); }
+    upgradeGuns() { events.push(["upgradeGuns"]); }
   }
   class Flash {
     constructor() { this.sprite = new Three.Sprite(); this.life = 0; }
@@ -695,7 +696,7 @@ async function testBattleAssetPriority() {
     };
     const arena = new RustArena(h, fakeCanvas(), { wide: .62, fpkey: 2.5 });
     arena.setFrame(frame);
-    return { arena, requests, shared };
+    return { arena, requests, shared, events: h.events };
   };
   try {
     Object.defineProperty(globalThis, "navigator", { configurable: true, value: { connection: { saveData: false } } });
@@ -707,6 +708,7 @@ async function testBattleAssetPriority() {
     assert.equal(first.requests.length, 2);
     assert.deepEqual([...first.requests[1]].sort(), ["pistol", "shotgun", "sniper"]);
     assert.deepEqual(Object.keys(first.shared).sort(), [...all].sort(), "late guns join the collection held by both Hands");
+    assert.equal(first.events.filter(([name]) => name === "upgradeGuns").length, 3, "both Hands and the reflection replace their placeholders");
     first.arena.free();
 
     Object.defineProperty(globalThis, "navigator", { configurable: true, value: { connection: { saveData: true } } });
