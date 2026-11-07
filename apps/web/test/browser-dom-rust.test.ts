@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { getEventListeners } from "node:events";
-import { BrowserBase, BrowserScroll, BrowserWeapon, equipment_icon, equipment_item_icon } from "../../../packages/runtime/src/index.ts";
+import { BrowserBase, BrowserScroll, BrowserWeapon, callRust, equipment_icon, equipment_item_icon } from "../../../packages/runtime/src/index.ts";
 import type { GearSlot } from "@crowned-dogs/core";
 
 test("Rust equipment slots draw each item, fall back per slot and keep unknown items blank", () => {
@@ -172,33 +172,51 @@ test("free without dispose removes the weapon workshop and its event handlers", 
   assert.ok(Observer.all.every(observer => observer.disconnected));
 }));
 
-test("free without dispose cancels base RAF, global tilt listeners and owned viewers", () => withDom(() => {
-  const globals = ["requestAnimationFrame", "cancelAnimationFrame", "matchMedia", "addEventListener", "removeEventListener"];
+test("base defers fitting resources until shown and frees them without dispose", () => withDom(() => {
+  const globals = ["requestAnimationFrame", "cancelAnimationFrame", "matchMedia", "addEventListener", "removeEventListener", "localStorage"];
   const old = globals.map(key => Object.getOwnPropertyDescriptor(globalThis, key));
   const events = new EventTarget();
   const frames = new Map<number, (at: number) => void>();
-  let nextFrame = 0, workshopDisposals = 0, depthDisposals = 0;
+  let nextFrame = 0, workshopDisposals = 0, depthStarts = 0, depthDisposals = 0;
+  const savedLook = callRust("client.look.save", [callRust("client.look.normalize", [{ sex: "male", callsign: "Сокол", tag: "K-053-243" }])]);
   Object.assign(globalThis, {
     requestAnimationFrame: (callback: (at: number) => void) => { const id = ++nextFrame; frames.set(id, callback); return id; },
     cancelAnimationFrame: (id: number) => { frames.delete(id); },
     matchMedia: () => ({ matches: true }),
     addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events),
+    localStorage: { getItem: (key: string) => key === "crowned-dogs:persona:v1" ? JSON.stringify(savedLook) : null, setItem() {} },
   });
   try {
     const parent = new Element(), root = new SelectorElement(); parent.append(root);
     class Workshop { dispose() { workshopDisposals++; } }
-    class Depth { ready = Promise.resolve(); dispose() { depthDisposals++; } }
+    class Depth { constructor() { depthStarts++; } ready = Promise.resolve(); dispose() { depthDisposals++; } }
     const base = new BrowserBase(root, async () => {}, {
       baseUrl: "/", backArrow: "", GEAR_SLOT_NAMES: {}, GEAR_SLOTS: [], ITEM_BY_ID: new Map(),
       loadLocalLoadout: () => ({ weapon1: { item: "rifle-ak" } }),
       compileKit: () => ({ armor: { head: 0, body: 0, legs: 0 } }),
-      WeaponScreen: Workshop, DepthBackdrop: Depth, liquidGlass() {},
+      WeaponScreen: Workshop, DepthBackdrop: Depth, liquidGlass() {}, gameAudio: { screen() {}, stopVoice() {} },
     });
     const back = root.querySelector(".cd-fitting .cd-back");
+    const fitting = root.querySelector(".cd-fitting");
+    const fittingImage = fitting.querySelector("img.cd-backdrop:not(.cd-create-backdrop)");
+    const createImage = fitting.querySelector(".cd-create-backdrop");
     assert.equal(frames.size, 1);
+    assert.equal(depthStarts, 0, "the base must not construct the fitting depth renderer");
+    assert.equal(fittingImage.getAttribute("src"), null, "the fitting image must not download at home");
+    assert.equal(createImage.getAttribute("src"), null, "the creation image must not download at home");
     // Only the fitting room follows device tilt; the base photograph stays fixed.
     assert.equal(getEventListeners(events, "deviceorientation").length, 1);
     assert.equal(getEventListeners(back, "click").length, 1);
+    base.show("fitting");
+    assert.equal(depthStarts, 1, "the first fitting view initializes its depth renderer");
+    assert.match(fittingImage.getAttribute("src") ?? "", /img\//);
+    assert.equal(createImage.getAttribute("src"), null, "the fitting room must not download the creation image");
+    base.show("persona");
+    assert.match(createImage.getAttribute("src") ?? "", /img\//);
+    assert.equal(depthStarts, 1, "the creation screen must not replace the fitting renderer");
+    base.show("base");
+    base.show("fitting");
+    assert.equal(depthStarts, 1, "reopening the fitting room reuses its renderer");
     base.free();
     assert.equal(frames.size, 0);
     assert.equal(getEventListeners(events, "deviceorientation").length, 0);

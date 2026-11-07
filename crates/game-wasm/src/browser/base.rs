@@ -122,6 +122,7 @@ impl Base {
             call(&self.dialog, "close", &[]);
         }
         let was = std::mem::replace(&mut self.view, view.into());
+        self.dress();
         hidden(&self.home, view != "base");
         if view == "base" {
             // the fight's models download quietly while the player looks round the base
@@ -169,6 +170,9 @@ impl Base {
             call(&self.workshop, "show", &[self.loadout.clone()]);
         } else {
             call(&self.workshop, "hide", &[]);
+        }
+        if self.view == "fitting" {
+            self.ensure_depth(weak.clone());
         }
         if self.staged() {
             self.ensure_viewer(weak);
@@ -256,6 +260,11 @@ impl Base {
         }
     }
     fn render_briefing(&mut self) {
+        let portrait = query(&self.fitting, ".cd-briefing-portrait img");
+        if call(&portrait, "getAttribute", &[js("src")]).as_string().is_none() {
+            let base = text(&get(&self.host, "baseUrl"));
+            attr(&portrait, "src", &format!("{base}img/base/instructor.webp"));
+        }
         let (line, button) = creation::BRIEFING[self.brief];
         let tag = text(&get(&self.look, "tag"));
         let line = line.replace("{tag}", &tag);
@@ -516,6 +525,46 @@ impl Base {
         let h = num(&self.canvas, "clientHeight");
         if w > 0.0 && h > 0.0 {
             call_optional(&self.viewer, "resize", &[number(w), number(h)]);
+        }
+    }
+    fn ensure_depth(&mut self, weak: Weak<RefCell<Self>>) {
+        if exists(&self.depth) {
+            return;
+        }
+        let canvas = query(&self.fitting, ".cd-backdrop-depth");
+        let image = query(&self.fitting, "img.cd-backdrop");
+        let base = text(&get(&self.host, "baseUrl"));
+        let picture = if platform::sharp_pictures() {
+            self.region.fitting_sharp.to_string()
+        } else {
+            img_picture(self.region.fitting)
+        };
+        let result = construct(
+            &self.host,
+            "DepthBackdrop",
+            &[
+                canvas.clone(),
+                js(&format!("{base}img/{picture}")),
+                js(&format!("{base}img/{}", self.region.fitting_depth)),
+                number(941.0 / 1672.0),
+                number(1.1),
+            ],
+        );
+        if let Ok(depth) = result {
+            let ready = get(&depth, "ready");
+            self.depth = depth.clone();
+            spawn_local(async move {
+                if JsFuture::from(Promise::resolve(&ready)).await.is_ok() {
+                    if let Some(state) = weak.upgrade() {
+                        let mut s = state.borrow_mut();
+                        if !s.disposed && s.depth == depth {
+                            s.depth_ready = true;
+                            hidden(&canvas, false);
+                            hidden(&image, true);
+                        }
+                    }
+                }
+            });
         }
     }
     fn ensure_viewer(&mut self, weak: Weak<RefCell<Self>>) {
@@ -905,12 +954,18 @@ impl Base {
         let base = text(&get(&self.host, "baseUrl"));
         attr(&self.home, "aria-label", &format!("База {}", region.title()));
         content(&query(&self.home, ".cd-home-title h1"), region.base);
-        for (image, picture, alt) in [
+        let mut pictures = vec![
             (query(&self.home, "img.cd-backdrop"), region.home_picture.to_string(), region.home_alt),
             (query(&self.root, ".cd-sync img.cd-backdrop"), region.home_picture.to_string(), ""),
-            (query(&self.fitting, "img.cd-backdrop:not(.cd-create-backdrop)"), img_picture(region.fitting), region.fitting_alt),
-            (query(&self.fitting, ".cd-create-backdrop"), format!("{}.webp", region.bay.photo), ""),
-        ] {
+        ];
+        // Hidden screens must not start image downloads while the player is elsewhere.
+        if self.view == "fitting" {
+            pictures.push((query(&self.fitting, "img.cd-backdrop:not(.cd-create-backdrop)"), img_picture(region.fitting), region.fitting_alt));
+        }
+        if self.view == "persona" {
+            pictures.push((query(&self.fitting, ".cd-create-backdrop"), format!("{}.webp", region.bay.photo), ""));
+        }
+        for (image, picture, alt) in pictures {
             let url = format!("{base}img/{picture}");
             if call(&image, "getAttribute", &[js("src")]).as_string().as_deref() != Some(&url) {
                 attr(&image, "src", &url);
@@ -1450,7 +1505,6 @@ impl BrowserBase {
         setup_drift(&state, &home, 1882.0 / 3344.0, true);
         setup_drift(&state, &fitting, 941.0 / 1672.0, false);
         setup_home_stage(&state);
-        setup_depth(&state);
         let weak = Rc::downgrade(&state);
         let callback = Closure::wrap(Box::new(move |_: JsValue| {
             if let Some(state) = weak.upgrade() {
@@ -1848,8 +1902,10 @@ fn sync_region(state: &Rc<RefCell<Base>>) {
     }
     bind_canvas(state);
     setup_home_stage(state);
-    setup_depth(state);
     let mut s = state.borrow_mut();
+    if s.view == "fitting" {
+        s.ensure_depth(Rc::downgrade(state));
+    }
     if s.staged() {
         s.ensure_viewer(Rc::downgrade(state));
         let active = s.active;
@@ -2051,47 +2107,6 @@ fn enter_battle(state: &Rc<RefCell<Base>>) {
 fn img_picture(path: &str) -> String {
     let picked = platform::picture(&format!("img/{path}"));
     picked.strip_prefix("img/").unwrap_or(path).to_string()
-}
-fn setup_depth(state: &Rc<RefCell<Base>>) {
-    let fitting = state.borrow().fitting.clone();
-    let canvas = query(&fitting, ".cd-backdrop-depth");
-    let image = query(&fitting, "img.cd-backdrop");
-    let host = state.borrow().host.clone();
-    let base = text(&get(&host, "baseUrl"));
-    let region = state.borrow().region;
-    let picture = if platform::sharp_pictures() {
-        region.fitting_sharp.to_string()
-    } else {
-        img_picture(region.fitting)
-    };
-    let result = construct(
-        &host,
-        "DepthBackdrop",
-        &[
-            canvas.clone(),
-            js(&format!("{base}img/{picture}")),
-            js(&format!("{base}img/{}", region.fitting_depth)),
-            number(941.0 / 1672.0),
-            number(1.1),
-        ],
-    );
-    if let Ok(depth) = result {
-        let ready = get(&depth, "ready");
-        state.borrow_mut().depth = depth.clone();
-        let weak = Rc::downgrade(state);
-        spawn_local(async move {
-            if JsFuture::from(Promise::resolve(&ready)).await.is_ok() {
-                if let Some(state) = weak.upgrade() {
-                    let mut s = state.borrow_mut();
-                    if !s.disposed && s.depth == depth {
-                        s.depth_ready = true;
-                        hidden(&canvas, false);
-                        hidden(&image, true);
-                    }
-                }
-            }
-        });
-    }
 }
 fn setup_drift(state: &Rc<RefCell<Base>>, home: &JsValue, ratio: f64, flat: bool) {
     let index = state.borrow().drifts.len();
