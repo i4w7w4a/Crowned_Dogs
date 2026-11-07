@@ -314,6 +314,10 @@ struct ArenaState {
     arms_only: JsValue,
     viewmodel: JsValue,
     in_water: JsValue,
+    /// Both Hands share this collection; deferred classes are assigned into the same object.
+    guns: JsValue,
+    remaining_guns: Vec<String>,
+    guns_loading: JsValue,
     ready: bool,
     running: bool,
     fp: bool,
@@ -624,6 +628,9 @@ impl RustArena {
             arms_only: JsValue::NULL,
             viewmodel: JsValue::NULL,
             in_water: JsValue::NULL,
+            guns: JsValue::NULL,
+            remaining_guns: vec![],
+            guns_loading: JsValue::NULL,
             ready: false,
             running: false,
             fp: false,
@@ -731,13 +738,31 @@ impl RustArena {
         self.state.borrow().textures_done.clone()
     }
 
-    pub fn load(&self, me_url: String, enemy_url: String, distance: f64) -> Promise {
+    pub fn load(&self, me_url: String, enemy_url: String, distance: f64, priority: Option<JsValue>) -> Promise {
         let state = self.state.clone();
         if state.borrow().disposed {
             return Promise::resolve(&JsValue::UNDEFINED);
         }
         let host = state.borrow().host.clone();
         let same = me_url == enemy_url;
+        let priority = priority.filter(present);
+        let all = super::scene_assets::gun_classes();
+        let wanted = priority.as_ref().map(|value| {
+            let names = values(value);
+            all.iter()
+                .filter(|class| names.iter().any(|name| string(name) == **class))
+                .map(|class| class.to_string())
+                .collect::<Vec<_>>()
+        });
+        let remaining = wanted
+            .as_ref()
+            .map(|picked| {
+                all.iter()
+                    .filter(|class| !picked.iter().any(|name| name.as_str() == **class))
+                    .map(|class| class.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
         let requests = array(&[
             sdk(&host, "loadModel", &[me_url.clone().into()]),
             if same {
@@ -745,7 +770,7 @@ impl RustArena {
             } else {
                 sdk(&host, "loadModel", &[enemy_url.clone().into()])
             },
-            sdk(&host, "loadGuns", &[]),
+            sdk(&host, "loadGuns", &[priority.unwrap_or(JsValue::UNDEFINED)]),
             state.borrow().stage_loading.clone().into(),
         ]);
         future_to_promise(async move {
@@ -774,6 +799,9 @@ impl RustArena {
             invoke(&s.arms_only, &[s.fp.into()]);
             s.apply_lighting();
             s.mirror = Some(s.make_mirror(&foe));
+            s.guns = guns.clone();
+            s.remaining_guns = remaining;
+            s.guns_loading = JsValue::NULL;
             s.give_weapons(&mine, &foe, &guns);
             let own = s.me.as_ref().unwrap().model.clone();
             let enemy = s.enemy.as_ref().unwrap().model.clone();
@@ -807,6 +835,49 @@ impl RustArena {
             }
             Ok(JsValue::UNDEFINED)
         })
+    }
+    #[wasm_bindgen(js_name=loadRemainingGuns)]
+    pub fn load_remaining_guns(&self) -> Promise {
+        let (request, guns, state) = {
+            let s = self.state.borrow_mut();
+            if present(&s.guns_loading) {
+                return s.guns_loading.clone().unchecked_into();
+            }
+            if s.disposed || s.remaining_guns.is_empty() || !present(&s.guns) {
+                return Promise::resolve(&JsValue::UNDEFINED);
+            }
+            let classes = array(&s.remaining_guns.iter().map(|name| name.as_str().into()).collect::<Vec<_>>());
+            let request = sdk(&s.host, "loadGuns", &[classes.into()]);
+            (request, s.guns.clone(), self.state.clone())
+        };
+        let promise = future_to_promise(async move {
+            let result = JsFuture::from(Promise::resolve(&request)).await;
+            let mut s = state.borrow_mut();
+            if s.guns != guns || s.disposed {
+                return Ok(JsValue::UNDEFINED);
+            }
+            s.guns_loading = JsValue::NULL;
+            match result {
+                Ok(loaded) => {
+                    let _: js_sys::Object = js_sys::Object::assign(guns.unchecked_ref(), loaded.unchecked_ref());
+                    let hands = [
+                        s.me.as_ref().map(|figure| figure.hand.clone()),
+                        s.enemy.as_ref().map(|figure| figure.hand.clone()),
+                        Some(s.in_water.clone()),
+                    ];
+                    for hand in hands.into_iter().flatten() {
+                        if get(&hand, "upgradeGuns").is_function() {
+                            call(&hand, "upgradeGuns", &[]);
+                        }
+                    }
+                    s.remaining_guns.clear();
+                    Ok(JsValue::UNDEFINED)
+                }
+                Err(error) => Err(error),
+            }
+        });
+        self.state.borrow_mut().guns_loading = promise.clone().into();
+        promise
     }
     pub fn resume(&self) {
         self.state.borrow_mut().resume();

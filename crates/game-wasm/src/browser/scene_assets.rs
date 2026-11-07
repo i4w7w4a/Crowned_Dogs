@@ -163,13 +163,24 @@ const HELD_MODELS: &[(&str, &str)] = &[("knife", "knife"), ("grenade", "grenade"
 /// where the throw's half-closed fingers wrap it (2026-11-02).
 const HOLDS: &[(&str, f64, [f64; 3])] =
     &[("pistol", 1.2, [0.03, 0.02, 0.]), ("grenade", 1., [0., -0.01, -0.045])];
+pub(super) fn gun_classes() -> Vec<&'static str> {
+    GUN_MODELS.iter().chain(HELD_MODELS).map(|(held, _)| *held).collect()
+}
 #[wasm_bindgen(js_name = sceneLoadGuns)]
-pub fn load_guns(host: JsValue) -> Promise {
+pub fn load_guns(host: JsValue, priority: Option<JsValue>) -> Promise {
     future_to_promise(async move {
         let guns = Object::new();
-        let loads: Vec<_> = GUN_MODELS
+        let wanted = priority.filter(present).map(|value| {
+            values(&value).into_iter().map(|name| string(&name)).collect::<Vec<_>>()
+        });
+        let models: Vec<_> = GUN_MODELS
             .iter()
             .chain(HELD_MODELS)
+            .filter(|(held, _)| wanted.as_ref().map_or(true, |classes| classes.iter().any(|name| name == held)))
+            .copied()
+            .collect();
+        let loads: Vec<_> = models
+            .iter()
             .map(|(_, model)| {
                 await_value(invoke(
                     &get(&host, "loadModel"),
@@ -177,7 +188,7 @@ pub fn load_guns(host: JsValue) -> Promise {
                 ))
             })
             .collect();
-        for ((held, _), load) in GUN_MODELS.iter().chain(HELD_MODELS).zip(loads) {
+        for ((held, _), load) in models.iter().zip(loads) {
             if let Ok(model) = load.await {
                 let gun = get(&model, "scene");
                 prepare_varyag(&gun);
@@ -251,6 +262,12 @@ pub struct RustSceneHand {
     host: JsValue,
     mount: JsValue,
     items: Vec<(String, JsValue)>,
+    /// Late models replace only placeholder groups; already drawn real guns stay untouched.
+    guns: JsValue,
+    look: JsValue,
+    layer: f64,
+    real: HashSet<String>,
+    mods: JsValue,
     shown: Option<String>,
     /// The guns that wear the vertical foregrip now; the support hand holds it instead of the forend.
     foregrip: HashSet<String>,
@@ -289,6 +306,7 @@ impl RustSceneHand {
         let look = get(&options, "look");
         let mut looks: Vec<(JsValue, JsValue)> = vec![];
         let mut items = vec![];
+        let mut real = HashSet::new();
         let boxes: serde_json::Value =
             serde_json::from_str(include_str!("held-boxes.json")).unwrap();
         for held in ["pistol", "rifle", "shotgun", "sniper", "knife", "grenade"] {
@@ -322,6 +340,7 @@ impl RustSceneHand {
                     call(&get(&group, "scale"), "setScalar", &[(*scale).into()]);
                     call(&get(&group, "position"), "set", &[(*x).into(), (*y).into(), (*z).into()]);
                 }
+                real.insert(held.to_owned());
             } else {
                 for b in boxes[held].as_array().unwrap() {
                     let d = b
@@ -367,6 +386,11 @@ impl RustSceneHand {
             host,
             mount,
             items,
+            guns,
+            look,
+            layer,
+            real,
+            mods: JsValue::NULL,
             shown: None,
             foregrip: HashSet::new(),
             muzzles: HashMap::new(),
@@ -391,6 +415,7 @@ impl RustSceneHand {
         self.shown.as_ref().is_some_and(|held| self.foregrip.contains(held))
     }
     pub fn fit(&mut self, mods: JsValue) {
+        self.mods = mods.clone();
         self.muzzles.clear();
         self.foregrip.clear();
         for (held, group) in &self.items {
@@ -421,6 +446,65 @@ impl RustSceneHand {
                     );
                 }
             }
+        }
+    }
+    #[wasm_bindgen(js_name=upgradeGuns)]
+    pub fn upgrade_guns(&mut self) {
+        let mut upgraded = false;
+        let mut looks: Vec<(JsValue, JsValue)> = vec![];
+        for (held, group) in &self.items {
+            if self.real.contains(held) {
+                continue;
+            }
+            let gun = get(&self.guns, held);
+            if !present(&gun) {
+                continue;
+            }
+            for child in values(&get(group, "children")) {
+                if boolean(&get(&child, "isMesh")) {
+                    call(&get(&child, "geometry"), "dispose", &[]);
+                }
+                call(group, "remove", &[child]);
+            }
+            call(group, "add", &[call(&gun, "clone", &[])]);
+            for node in nodes(group) {
+                if !boolean(&get(&node, "isMesh")) {
+                    continue;
+                }
+                let source = get(&node, "material");
+                let replacement = if let Some((_, replacement)) =
+                    looks.iter().find(|(material, _)| Object::is(material, &source))
+                {
+                    replacement.clone()
+                } else {
+                    let replacement = if present(&self.look) {
+                        invoke(&self.look, &[source.clone()])
+                    } else {
+                        source.clone()
+                    };
+                    looks.push((source, replacement.clone()));
+                    replacement
+                };
+                set(&node, "material", &replacement);
+            }
+            pull_stocks(&self.host, group);
+            if let Some((_, scale, [x, y, z])) = HOLDS.iter().find(|(name, ..)| *name == held) {
+                call(&get(group, "scale"), "setScalar", &[(*scale).into()]);
+                call(&get(group, "position"), "set", &[(*x).into(), (*y).into(), (*z).into()]);
+            }
+            for node in nodes(group) {
+                if boolean(&get(&node, "isMesh")) {
+                    set(&node, "castShadow", &true.into());
+                    set(&node, "frustumCulled", &false.into());
+                    call(&get(&node, "layers"), "set", &[self.layer.into()]);
+                }
+            }
+            self.real.insert(held.clone());
+            upgraded = true;
+        }
+        if upgraded {
+            let mods = self.mods.clone();
+            self.fit(mods);
         }
     }
     pub fn hold(&mut self, what: JsValue) {
