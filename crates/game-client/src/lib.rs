@@ -114,7 +114,7 @@ fn guess_quality(device: &Value) -> &'static str {
     {
         "medium"
     } else {
-        "high"
+        "medium"
     }
 }
 

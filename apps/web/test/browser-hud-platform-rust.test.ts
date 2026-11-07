@@ -263,7 +263,8 @@ test("Rust quality selection retains GPU, mobile, preference and URL behavior", 
       Object.defineProperty(globalThis, "matchMedia", { configurable: true, value: () => ({ matches: coarse }) });
       for (const debug of [false, true]) {
         const gl = { RENDERER: 1, getExtension: () => debug ? { UNMASKED_RENDERER_WEBGL: 2 } : null, getParameter: (key: number) => { assert.equal(key, debug ? 2 : 1); return gpu; } };
-        assert.equal(guess_quality(gl), reference.guessQuality(gl));
+        const expected = !mobile && !coarse && gpu !== "SwiftShader" ? "medium" : reference.guessQuality(gl);
+        assert.equal(guess_quality(gl), expected);
       }
     }
   }
@@ -301,4 +302,18 @@ test("Backend selection uses the quality detected on a new device", async () => 
   } });
   const { arena_backend } = await import("../../../packages/runtime/src/index.ts");
   assert.equal(arena_backend(true), "webgpu");
+}));
+
+test("A new desktop starts with medium graphics", async () => globals({
+  location: { search: "" },
+  navigator: { userAgent: "Desktop", deviceMemory: 16, hardwareConcurrency: 12 },
+  matchMedia: () => ({ matches: false }),
+  localStorage: { getItem: () => null, setItem: () => { throw new Error("default selection must not write"); } },
+}, async () => {
+  const gl = {
+    RENDERER: 1,
+    getExtension: () => null,
+    getParameter: (key: number) => { assert.equal(key, 1); return "NVIDIA RTX 4070"; },
+  };
+  assert.deepEqual(start_quality(gl), { id: "medium", picked: false });
 }));
