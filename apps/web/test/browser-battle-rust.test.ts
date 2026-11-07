@@ -88,7 +88,8 @@ function createHarness(options: HarnessOptions = {}) {
   class FakeArena {
     ready = false; gl = {}; onFrame?: () => void; texturesDone = textures.promise;
     constructor() { arena = this; }
-    async load() { record("arena.load"); await loading(); this.ready = true; }
+    async load(...args: unknown[]) { record("arena.load", args); await loading(); this.ready = true; }
+    loadRemainingGuns() { record("arena.remaining"); return Promise.resolve(); }
     drawn() { return Promise.resolve(); }
     applyLooks() {}
     setFirstPerson(...args: unknown[]) { record("arena.camera", args); }
@@ -199,6 +200,27 @@ test("Rust battle never activates after cancellation during arena load or overla
     assert.equal([...h.clock.tasks.values()].some(t => t.interval), false);
   });
 });
+
+test("battle passes both fighters' current and secondary weapon classes to arena loading", async () => harness(async h => {
+  const start = h.battle!.start(VETERAN_KITS.sniper, () => {}, async () => {}, undefined);
+  await settle();
+  const args = h.calls.find(c => c.name === "arena.load")!.args;
+  assert.ok(Array.isArray(args[3]), "arena.load receives a priority list");
+  const foe = h.duel().match.fighters[1].weapon;
+  const expected = [...new Set(["sniper", "pistol", foe, "knife", "grenade"])].sort();
+  assert.deepEqual([...(args[3] as string[])].sort(), expected);
+  await h.ready(); await start;
+}));
+
+test("battle defers unused gun classes until model and texture readiness", async () => harness(async h => {
+  const start = h.battle!.start(starterLoadout("rifle"), () => {}, async () => {}, undefined);
+  await settle();
+  assert.equal(h.calls.filter(c => c.name === "arena.remaining").length, 0);
+  h.load.resolve(); await settle();
+  assert.equal(h.calls.filter(c => c.name === "arena.remaining").length, 0, "unused guns must not compete with battle textures");
+  h.textures.resolve(); await start; await settle();
+  assert.equal(h.calls.filter(c => c.name === "arena.remaining").length, 1);
+}));
 
 test("Rust battle waits for texture readiness, pauses the turn clock in menus, and exits cleanly", async () => harness(async h => {
   let exits = 0; const start = h.battle!.start(starterLoadout("rifle"), () => exits++, async () => {}, undefined);

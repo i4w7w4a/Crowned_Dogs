@@ -362,7 +362,7 @@ impl RustBattle {
                 return Err(js_sys::Error::new("Некорректный комплект").into());
             }
             abort_check(&signal)?;
-            JsFuture::from(prepare_arena(&s)).await?;
+            JsFuture::from(prepare_arena(&s, selected.clone())).await?;
             abort_check(&signal)?;
             // The fight is drawn under the loader first; the loader lifts and the clock starts after that.
             set(&s, "fitted", &selected);
@@ -1183,6 +1183,37 @@ fn log_turn(s: &JsValue, r: JsValue) {
             .into(),
         ],
     );
+}
+fn battle_gun_priority(s: &JsValue, selected: JsValue) -> JsValue {
+    let classes = super::scene_assets::gun_classes();
+    let mut picked: Vec<String> = vec![];
+    let mut add = |name: String| {
+        if classes.contains(&name.as_str()) && !picked.contains(&name) {
+            picked.push(name);
+        }
+    };
+    for side in 0..2 {
+        let own_selection = side == 0 && present(&selected);
+        let kit = if own_selection {
+            selected.clone()
+        } else {
+            get(&at(&get(&duel(s), "fighters"), side), "kit")
+        };
+        if own_selection {
+            let item = word(&get(&kit, "weapon1"), "item");
+            add(item.split('-').next().unwrap_or("").to_string());
+        } else {
+            let fighter = at(&get(&match_(s), "fighters"), side);
+            add(word(&fighter, "weapon"));
+        }
+        for slot in ["weapon1", "weapon2"] {
+            let item = word(&get(&kit, slot), "item");
+            add(item.split('-').next().unwrap_or("").to_string());
+        }
+    }
+    add("knife".into());
+    add("grenade".into());
+    array(&picked.iter().map(|name| name.as_str().into()).collect::<Vec<_>>()).into()
 }
 fn arm_both(s: &JsValue) {
     for side in 0..2 {
@@ -2063,7 +2094,7 @@ fn wire(s: &JsValue) {
         audio(&state, "play", &["ui.tap".into()])
     });
 }
-fn prepare_arena(s: &JsValue) -> Promise {
+fn prepare_arena(s: &JsValue, selected: JsValue) -> Promise {
     let mut a = get(s, "arena");
     if !present(&a) {
         return Promise::reject(&js_sys::Error::new("3D не запустилось на этом устройстве"));
@@ -2103,7 +2134,7 @@ fn prepare_arena(s: &JsValue) -> Promise {
         let mine_url=get(&bindings,if sex=="female" {"foeModel"} else {"myModel"});
         let foe_url=get(&bindings,if foe_sex=="female" {"foeModel"} else {"myModel"});
         let result = async {
-            let loading = try_call(&a, "load", &[mine_url, foe_url, get(&match_(s), "distance")])?;
+            let loading = try_call(&a, "load", &[mine_url, foe_url, get(&match_(s), "distance"), battle_gun_priority(s, selected)])?;
             JsFuture::from(Promise::resolve(&loading)).await?;
             if !flag(&a, "ready") {
                 return Err(js_sys::Error::new("Арена ещё не готова").into());
@@ -2125,6 +2156,8 @@ fn prepare_arena(s: &JsValue) -> Promise {
             hide(&id("status"), true);
             layout(s);
             render(s);
+            // The fight is ready: the classes needed by later fights may now join the shared Hands collection.
+            let _ = try_call(&a, "loadRemainingGuns", &[]);
             Ok(JsValue::UNDEFINED)
         }
         .await;

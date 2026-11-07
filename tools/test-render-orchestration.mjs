@@ -682,6 +682,46 @@ async function testBackendTrialIntegration() {
   }
 }
 
+async function testBattleAssetPriority() {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const all = ["pistol", "shotgun", "rifle", "sniper", "knife", "grenade"];
+  const make = () => {
+    const h = arenaHost(), requests = [], shared = {};
+    h.loadGuns = async priority => {
+      requests.push(priority);
+      const loaded = Object.fromEntries((priority === undefined ? all : priority).map(name => [name, new Three.Group()]));
+      if (requests.length === 1) { Object.assign(shared, loaded); return shared; }
+      return loaded;
+    };
+    const arena = new RustArena(h, fakeCanvas(), { wide: .62, fpkey: 2.5 });
+    arena.setFrame(frame);
+    return { arena, requests, shared };
+  };
+  try {
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: { connection: { saveData: false } } });
+    const first = make();
+    await first.arena.load("same.glb", "same.glb", 7, ["rifle", "knife", "grenade"]);
+    assert.deepEqual(first.requests[0], ["rifle", "knife", "grenade"]);
+    assert.deepEqual(Object.keys(first.shared).sort(), ["grenade", "knife", "rifle"]);
+    await first.arena.loadRemainingGuns();
+    assert.equal(first.requests.length, 2);
+    assert.deepEqual([...first.requests[1]].sort(), ["pistol", "shotgun", "sniper"]);
+    assert.deepEqual(Object.keys(first.shared).sort(), [...all].sort(), "late guns join the collection held by both Hands");
+    first.arena.free();
+
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: { connection: { saveData: true } } });
+    const second = make();
+    await second.arena.load("same.glb", "same.glb", 7, ["rifle", "knife", "grenade"]);
+    await second.arena.loadRemainingGuns();
+    assert.equal(second.requests.length, 2, "classes required by later fights still load after readiness");
+    assert.deepEqual(Object.keys(second.shared).sort(), [...all].sort());
+    second.arena.free();
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "navigator", previous);
+    else Reflect.deleteProperty(globalThis, "navigator");
+  }
+}
+
 async function benchmarkArena(useRust) {
   const h = arenaHost();
   const Old = useRust ? null : (await original("arena.ts", { ...h, callRust, motionCompute, SkeletonUtils: { clone: h.clone }, QUALITY: quality })).Arena;
@@ -707,6 +747,7 @@ try {
   await testTimePresentation();
   await testProjectedSideLighting();
   await testBackendTrialIntegration();
+  await testBattleAssetPriority();
   console.log("PASS Rust lens: identical shaders, quality targets, passes, uniforms, projection, async backdrop cancellation");
   console.log("PASS Rust texture tiers: shared maps, shrink, stale completion, failed tier fallback, atomic restoration");
   console.log("PASS Rust arena: lifecycle, quality, first-person framing, walking, firing, hit/fall, reflection, callback reentry");

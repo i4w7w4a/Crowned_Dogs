@@ -4,7 +4,7 @@ import { loadModel } from "./load-model.ts";
 export type Held = "pistol" | "rifle" | "shotgun" | "sniper" | "knife" | "grenade";
 export type Guns = Partial<Record<Held, THREE.Object3D>>;
 const host = { THREE, loadModel };
-export function loadGuns(): Promise<Guns> { return sceneLoadGuns(host); }
+export function loadGuns(priority?: Held[]): Promise<Guns> { return sceneLoadGuns(host, priority); }
 export function gripOf(scene: THREE.Object3D, side: "l" | "r" = "r"): THREE.Matrix4 | null { return sceneGripOf(host, scene, side); }
 export class Hand {
   private readonly controller: RustSceneHand;
