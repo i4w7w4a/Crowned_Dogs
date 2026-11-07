@@ -7,7 +7,7 @@ use std::{
     rc::Rc,
 };
 use wasm_bindgen::{UnwrapThrowExt, prelude::*};
-use wasm_bindgen_futures::{JsFuture, future_to_promise};
+use wasm_bindgen_futures::{JsFuture, future_to_promise, spawn_local};
 
 pub(super) fn make(host: &JsValue, name: &str, args: &[JsValue]) -> JsValue {
     construct(&get(&get(host, "THREE"), name), args)
@@ -71,7 +71,11 @@ pub fn load_model(host: JsValue, url: String) -> Promise {
             }
         }
         super::beards::install(&host, &get(&gltf, "scene"), &url).await;
-        let _ = install_relief_async(host, get(&gltf, "scene"), url).await;
+        // The figure can draw now; optional relief joins its materials when it is ready.
+        let scene = get(&gltf, "scene");
+        spawn_local(async move {
+            let _ = install_relief_async(host, scene, url).await;
+        });
         Ok(gltf)
     })
 }
@@ -821,6 +825,10 @@ pub fn install_relief(host: JsValue, root: JsValue, url: String) -> Promise {
     })
 }
 async fn install_relief_async(host: JsValue, root: JsValue, url: String) -> Result<(), JsValue> {
+    // These presets never use the shader effect, so do not even fetch its manifest.
+    if matches!(super::platform::quality_id().as_str(), "minimal" | "low") {
+        return Ok(());
+    }
     let path = url.split('?').next().unwrap_or("");
     let filename = path.rsplit('/').next().unwrap_or("");
     let name = filename
